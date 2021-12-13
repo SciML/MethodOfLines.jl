@@ -48,7 +48,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         allindvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
         allnottime = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
         if isempty(allnottime)
-            push!(alleqs, eq)
+            push!(alleqs, pde)
             push!(alldepvarsdisc, depvars)
             for bc in bcs
                 if any(u->isequal(bc.lhs, operation(u)(tspan[1])), depvars)
