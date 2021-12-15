@@ -24,7 +24,7 @@ This provides higher accuracy with neumann/robin boundary conditions.
 
 Currently boundary conditions defined in terms of derivatives at the boundary are unsupported above 1 discretized dimension. Periodic conditions are also unsupported.
 
-# Coming soon:
+## Coming soon:
 - Arbitrary approximation order
 - Above mentioned unsupported boundary conditions supported
 - Staggered grids
