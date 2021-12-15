@@ -1,7 +1,7 @@
 # 1D diffusion problem
 
 # Packages and inclusions
-using ModelingToolkit,MethodOfLines,LinearAlgebra,Test,DomainSets, OrdinaryDiffEq
+using ModelingToolkit,MethodOfLines,LinearAlgebra,Test,OrdinaryDiffEq, DomainSets
 using ModelingToolkit: Differential
 
 # Beam Equation
@@ -77,6 +77,7 @@ end
 @testset "KdV Single Soliton equation" begin
     @parameters x, t
     @variables u(..)
+    Dt = Differential(t)
     Dx = Differential(x)
     Dx2 = Differential(x)^2
     Dx3 = Differential(x)^3

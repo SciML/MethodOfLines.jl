@@ -11,7 +11,7 @@ struct MOLFiniteDifference{T,T2} <: DiffEqBase.AbstractDiscretization
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-MOLFiniteDifference(dxs, time; upwind_order = 1, centered_order = 2, grid_align=center_align) =
+MOLFiniteDifference(dxs, time=nothing; upwind_order = 1, centered_order = 2, grid_align=center_align) =
     MOLFiniteDifference(dxs, time, upwind_order, centered_order, grid_align)
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference)
@@ -63,7 +63,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             indvars = first(allindvars)
             nspace = length(nottime)
 
-            s = DiscreteSpace(pdesys.domain, depvars, nottime, grid_align, discretization)
+            s = DiscreteSpace(pdesys.domain, depvars, indvars, nottime, grid_align, discretization)
 
             #---- Count Boundary Equations --------------------
             # Count the number of boundary equations that lie at the spatial boundary on
@@ -97,7 +97,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             
             
             # Calculate buffers
-            I1 = oneunit(first(s.Igrid))
             #TODO: Update this when allowing higher order derivatives to correctly deal with boundary upwinding
             interior = s.Igrid[[let bcs = get_bc_counts(i)
                                     (1 + first(bcs)):length(g)-last(bcs)
@@ -112,11 +111,11 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             end
             # For all cartesian indices in the interior, generate finite difference rules
             eqs = vec(map(interior) do II
-                rules = generate_finite_difference_rules(II, I1, s, pde, discretization)
+                rules = generate_finite_difference_rules(II, s, pde, discretization)
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             
-            generate_u0_and_bceqs!!(u0, bceqs, pdesys.bcs, t, s, depvar_ops, tspan, discretization)
+            generate_u0_and_bceqs!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, discretization)
             push!(alleqs,eqs)
             push!(alldepvarsdisc, reduce(vcat, s.discvars))
         end

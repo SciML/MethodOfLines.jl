@@ -18,12 +18,12 @@ function generate_maps(bcs, t, s, tspan, grid_align)
         depvarbcmaps = reduce(vcat,[subvar(depvar, edgevals(s)) .=> edgevar for (depvar, edgevar) in zip(s.vars, edgevars(s))])
     end
     # depvarderivbcmaps will dictate what to replace the Differential terms with in the bcs
-    if length(s.params) == 1
+    if length(s.nottime) == 1
         # 1D system
-        bc_der_orders = filter(!iszero,sort(unique([count_differentials(bc.lhs, s.params[1]) for bc in bcs])))
+        bc_der_orders = filter(!iszero,sort(unique([count_differentials(bc.lhs, s.nottime[1]) for bc in bcs])))
         left_weights(d_order,j) = calculate_weights(d_order, s.grid[j][1], s.grid[j][1:1+d_order])
         right_weights(d_order,j) = calculate_weights(d_order, s.grid[j][end], s.grid[j][end-d_order:end])
-        # central_neighbor_idxs(II,j) = [II-CartesianIndex((1:length(s.params).==j)...),II,II+CartesianIndex((1:length(s.params).==j)...)]
+        # central_neighbor_idxs(II,j) = [II-CartesianIndex((1:length(s.nottime).==j)...),II,II+CartesianIndex((1:length(s.nottime).==j)...)]
         left_idxs(d_order) = CartesianIndices(s.grid[1])[1:1+d_order]
         right_idxs(d_order,j) = CartesianIndices(s.grid[j])[end-d_order:end]
         # Constructs symbolic spatially discretized terms of the form e.g. au₂ - bu₁
@@ -32,7 +32,7 @@ function generate_maps(bcs, t, s, tspan, grid_align)
         subderivar(depvar,d_order,x) = substitute.(((Differential(x)^d_order)(depvar),), edgevals(s))
         # Create map of symbolic Differential terms with symbolic spatially discretized terms
         depvarderivbcmaps = []
-        for x in s.params
+        for x in s.nottime
             rs = (subderivar(depvar,bc_der_orders[j],x) .=> derivars[i][j] for j in 1:length(bc_der_orders), (i,depvar) in enumerate(s.vars))
             for r in rs
                 push!(depvarderivbcmaps, r)
@@ -45,7 +45,7 @@ function generate_maps(bcs, t, s, tspan, grid_align)
                     for depvar in s.discvars]
             # replace u(t,0) with (u₁ + u₂) / 2, etc
             depvarbcmaps = reduce(vcat,[subvar(depvar, edgevals(s)) .=> bcvars[i]
-                                for (i, depvar) in enumerate(s.vars) for param in s.params])
+                                for (i, depvar) in enumerate(s.vars) for param in s.nottime])
 
         end
     else
@@ -62,7 +62,7 @@ function generate_maps(bcs, t, s, tspan, grid_align)
     end
 
     # All unique order of derivates in BCs
-    bc_der_orders = filter(!iszero,sort(unique([count_differentials(bc.lhs, s.params[1]) for bc in bcs])))
+    bc_der_orders = filter(!iszero,sort(unique([count_differentials(bc.lhs, s.nottime[1]) for bc in bcs])))
     # no. of different orders in BCs
     n = length(bc_der_orders)
     return BoundaryMap(depvarbcmaps, DerivativeMap{n}(depvarderivbcmaps, bc_der_orders), initmaps)
@@ -72,8 +72,9 @@ end
 """
 Mutates bceqs and u0 by finding relevant equations and discretizing them
 """
-function generate_u0_and_bceqs!!(u0, bceqs, bcs, t, s, depvar_ops, tspan, discretization)
+function generate_u0_and_bceqs!!(u0, bceqs, bcs, s, depvar_ops, tspan, discretization)
     grid_align = discretization.grid_align
+    t=discretization.time
     boundarymap = generate_maps(bcs, t, s, tspan, grid_align)
       # Generate initial conditions and bc equations
     for bc in bcs
@@ -94,11 +95,11 @@ function generate_u0_and_bceqs!!(u0, bceqs, bcs, t, s, depvar_ops, tspan, discre
                     # Replace Differential terms in the bc lhs with the symbolic spatially discretized terms
                     # TODO: Fix Neumann and Robin on higher dimension
                     # Update: Fixed for 1D systems
-                    derivativecount = count_differentials(bc.lhs, s.params[1])
+                    derivativecount = count_differentials(bc.lhs, s.nottime[1])
                     derivativeindex = findfirst(isequal(derivativecount), boundarymap.derivatives.orders)
                     k = initindex%2 == 0 ? 2 : 1
 
-                    if (length(s.params) == 1) && (derivativeindex !== nothing)
+                    if (length(s.nottime) == 1) && (derivativeindex !== nothing)
                         lhs = substitute(bc.lhs, boundarymap.derivatives.map[derivativeindex + count(boundarymap.derivatives)*Int(floor((initindex-1)/2))][k]) 
                     else
                         lhs = bc.lhs
@@ -106,7 +107,7 @@ function generate_u0_and_bceqs!!(u0, bceqs, bcs, t, s, depvar_ops, tspan, discre
                         
                     # Replace symbol in the bc lhs with the spatial discretized term
                     lhs = substitute(lhs,boundarymap.vars[initindex])
-                    rhs = substitute.((bc.rhs,), edgemaps(t, s)[bcargs])
+                    rhs = substitute.((bc.rhs,), edgemaps(s)[bcargs])
                     lhs = lhs isa Vector ? lhs : [lhs] # handle 1D
                     push!(bceqs,lhs .~ rhs)
                 end

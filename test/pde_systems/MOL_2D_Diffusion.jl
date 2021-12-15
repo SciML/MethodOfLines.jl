@@ -19,6 +19,8 @@ using ModelingToolkit: Differential
     x_max = 2.
     y_min = 0.
     y_max = 2.
+    dx = 0.1; dy = 0.2
+    order = 2
 
     # Analytic solution
     analytic_sol_func(t,x,y) = exp(x+y)*cos(x+y+4t)
@@ -41,7 +43,6 @@ using ModelingToolkit: Differential
     # Space and time domains
     @named pdesys = PDESystem([eq],bcs,domains,[t,x,y],[u(t,x,y)])
 
-    dx = 0.1; dy = 0.2
     
     # Test against exact solution
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
@@ -51,7 +52,6 @@ using ModelingToolkit: Differential
     r_space_y = y_min:dy:y_max
     asf = reshape([analytic_sol_func(t_max,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
     # Method of lines discretization
-    order = 2
     discretization = MOLFiniteDifference([x=>dx,y=>dy],t;centered_order=order)
     prob = ModelingToolkit.discretize(pdesys,discretization)
     

@@ -28,7 +28,7 @@ using ModelingToolkit,MethodOfLines,DiffEqBase,LinearAlgebra,Test, DomainSets
     # Method of lines discretization
     dx = 2/80
     order = 1
-    discretization = MOLFiniteDifference(dx,order)
+    discretization = MOLFiniteDifference(dx,t)
     # explicitly specify upwind order
     discretization_upwind = MOLFiniteDifference(dx; upwind_order=order)
 
@@ -84,7 +84,7 @@ end
     # Method of lines discretization
     dx = 2/80
     order = 1
-    discretization = MOLFiniteDifference(dx,order)
+    discretization = MOLFiniteDifference(dx,t)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys,discretization)
@@ -136,7 +136,7 @@ end
     # Method of lines discretization
     dx = 2/80
     order = 1
-    discretization = MOLFiniteDifference(dx,order)
+    discretization = MOLFiniteDifference(dx,t)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys,discretization)
@@ -190,7 +190,7 @@ end
     # Method of lines discretization
     dx = 2/80
     order = 1
-    discretization = MOLFiniteDifference(dx,order)
+    discretization = MOLFiniteDifference(dx,t)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys,discretization)
@@ -244,7 +244,7 @@ end
     # Method of lines discretization
     dx = 2/80
     order = 1
-    discretization = MOLFiniteDifference(dx,order)
+    discretization = MOLFiniteDifference(dx,t)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys,discretization)
