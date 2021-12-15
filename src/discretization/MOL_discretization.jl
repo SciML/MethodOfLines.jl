@@ -87,16 +87,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
                 end
                 return [left, right]
             end
-            #--------------------------------------------------
-            # * The stencil is the tappoints of the finite difference operator, relative to the current index
-            stencil(j, order) = CartesianIndices(Tuple(map(x -> -x:x, (1:nspace.==j) * (order÷2))))
+           
             
-            # TODO: Generalize central difference handling to allow higher even order derivatives
-            # The central neighbour indices should add the stencil to II, unless II is too close
-            # to an edge in which case we need to shift away from the edge
-            
-            
-            # Calculate buffers
             #TODO: Update this when allowing higher order derivatives to correctly deal with boundary upwinding
             interior = s.Igrid[[let bcs = get_bc_counts(i)
                                     (1 + first(bcs)):length(g)-last(bcs)
