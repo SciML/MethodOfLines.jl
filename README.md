@@ -34,6 +34,10 @@ Currently boundary conditions defined in terms of derivatives at the boundary ar
 ```
 ## 2D Diffusion
 
+# Dependencies
+using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq, DomainSets
+using ModelingToolkit: Differential
+
 # Variables, parameters, and derivatives
 @parameters t x y
 @variables u(..)
