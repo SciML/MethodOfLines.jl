@@ -2,7 +2,7 @@
 
 Provides automatic discretization of symbolic PDE systems as defined with ModelingToolkit.jl
 
-Usage:
+## Usage:
 ```
 discretization = MOLFiniteDifference(dxs, 
                                       <your choice of continuous variable, usually time>; 
