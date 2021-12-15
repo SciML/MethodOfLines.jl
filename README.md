@@ -14,7 +14,9 @@ prob = discretize(pdesys, discretization)
 Where dxs is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`
 
 Currently supported grid types: `center_align` and `edge_align`
+
 center_align: naive grid, starting from lower boundary, ending on upper boundary with step of dx
+
 edge_align: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by dx/2.
 This provides higher accuracy with neumann/robin boundary conditions.
 
