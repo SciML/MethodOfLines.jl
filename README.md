@@ -1,6 +1,8 @@
 # MethodOfLines.jl
 
-Provides automatic discretization of symbolic PDE systems as defined with ModelingToolkit.jl
+Provides automatic discretization of symbolic PDE systems as defined with ModelingToolkit.jl.
+
+Feature requests and issues welcome.
 
 ## Usage:
 ```
@@ -11,15 +13,15 @@ discretization = MOLFiniteDifference(dxs,
                                       grid_align = your grid type choice>)
 prob = discretize(pdesys, discretization)
 ```
-Where dxs is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`
+Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`
 
 Note that the second argument to `MOLFiniteDifference` is optional, all parameters can be discretized if all boundary conditions are specified
 
 Currently supported grid types: `center_align` and `edge_align`
 
-center_align: naive grid, starting from lower boundary, ending on upper boundary with step of dx
+`center_align`: naive grid, starting from lower boundary, ending on upper boundary with step of `dx`
 
-edge_align: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by dx/2.
+`edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`.
 This provides higher accuracy with neumann/robin boundary conditions.
 
 Currently boundary conditions defined in terms of derivatives at the boundary are unsupported above 1 discretized dimension. Periodic conditions are also unsupported.
@@ -27,8 +29,6 @@ Currently boundary conditions defined in terms of derivatives at the boundary ar
 ## Coming soon:
 - Arbitrary approximation order
 - Above mentioned unsupported boundary conditions supported
-- Staggered grids
-- More types of domain
 
 ## Full Example:
 ```
