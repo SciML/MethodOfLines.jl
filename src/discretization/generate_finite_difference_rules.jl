@@ -24,8 +24,7 @@ end
 function generate_finite_difference_rules(II, s, pde, discretization)
     approx_order = discretization.centered_order
     I1 = oneunit(first(s.Igrid))
-    Imin(order) = first(s.Igrid) + I1 * (order ÷ 2)
-    Imax(order) = last(s.Igrid) - I1 * (order ÷ 2)
+
     stencil(j, order) = CartesianIndices(Tuple(map(x -> -x:x, (1:length(s.nottime) .== j) * (order ÷ 2))))
     # Use max and min to apply buffers
     central_neighbor_idxs(II,j,order) = stencil(j,order) .+ max(Imin(order),min(II,Imax(order)))
