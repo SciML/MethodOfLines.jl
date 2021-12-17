@@ -24,16 +24,16 @@ using ModelingToolkit: Differential
 
     # Analytic solution
     analytic_sol_func(t,x,y) = exp(x+y)*cos(x+y+4t)
-    
+
     # Equation
     eq  = Dt(u(t,x,y)) ~ Dxx(u(t,x,y)) + Dyy(u(t,x,y))
 
     # Initial and boundary conditions
     bcs = [u(t_min,x,y) ~ analytic_sol_func(t_min,x,y),
-           u(t,x_min,y) ~ analytic_sol_func(t,x_min,y),
-           u(t,x_max,y) ~ analytic_sol_func(t,x_max,y),
-           u(t,x,y_min) ~ analytic_sol_func(t,x,y_min),
-           u(t,x,y_max) ~ analytic_sol_func(t,x,y_max)]
+            u(t,x_min,y) ~ analytic_sol_func(t,x_min,y),
+            u(t,x_max,y) ~ analytic_sol_func(t,x_max,y),
+            u(t,x,y_min) ~ analytic_sol_func(t,x,y_min),
+            u(t,x,y_max) ~ analytic_sol_func(t,x,y_max)]
 
     # Space and time domains
     domains = [t ∈ Interval(t_min,t_max),
@@ -43,7 +43,7 @@ using ModelingToolkit: Differential
     # Space and time domains
     @named pdesys = PDESystem([eq],bcs,domains,[t,x,y],[u(t,x,y)])
 
-    
+
     # Test against exact solution
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
     Ny = floor(Int64, (y_max - y_min) / dy) + 1
@@ -54,10 +54,10 @@ using ModelingToolkit: Differential
     # Method of lines discretization
     discretization = MOLFiniteDifference([x=>dx,y=>dy],t;centered_order=order)
     prob = ModelingToolkit.discretize(pdesys,discretization)
-    
+
     # Solution of the ODE system
     sol = solve(prob,Tsit5())
-    
+
     # Test against exact solution
     sol′ = reshape([sol[u[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
     @test asf ≈ sol′ atol=0.4
