@@ -83,3 +83,12 @@ prob = ModelingToolkit.discretize(pdesys,discretization)
 # Solution of the ODE system
 sol = solve(prob,Tsit5())
 ```
+
+## Credit 
+The basis for this package was provided by the following contributors:
+- Valentin Sulzer @tinosulzer
+- Akash Garg @akashgarg
+- Emmanuel Luján @emmanuellujan
+- Christopher Rackauckas @ChrisRackauckas
+- @mjsheikh
+- Yingbo Ma @YingboMa
