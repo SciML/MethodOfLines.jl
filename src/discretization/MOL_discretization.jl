@@ -24,7 +24,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Get tspan
     tspan = nothing
     if t !== nothing
-        tdomain = pdesys.domain[findfirst(d->isequal(t.val, d.variables), pdesys.domain)]
+        tdomain = domain[findfirst(d->isequal(t.val, d.variables), domain)]
         @assert tdomain.domain isa DomainSets.Interval
         tspan = (DomainSets.infimum(tdomain.domain), DomainSets.supremum(tdomain.domain))
     end
@@ -63,7 +63,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             indvars = first(allindvars)
             nspace = length(nottime)
 
-            s = DiscreteSpace(pdesys.domain, depvars, indvars, nottime, grid_align, discretization)
+            s = DiscreteSpace(domain, depvars, indvars, nottime, grid_align, discretization)
 
             #---- Count Boundary Equations --------------------
             # Count the number of boundary equations that lie at the spatial boundary on
