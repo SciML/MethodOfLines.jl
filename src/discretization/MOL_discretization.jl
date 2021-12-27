@@ -5,24 +5,29 @@
 struct MOLFiniteDifference{T,T2} <: DiffEqBase.AbstractDiscretization
     dxs::T
     time::T2
-    upwind_order::Int
-    centered_order::Int
+    approx_order::Int
     grid_align::GridAlign
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-MOLFiniteDifference(dxs, time=nothing; upwind_order = 1, centered_order = 2, grid_align=center_align) =
-    MOLFiniteDifference(dxs, time, upwind_order, centered_order, grid_align)
+function MOLFiniteDifference(dxs, time=nothing; upwind_order = 1, centered_order = 2, grid_align=center_align)
+    
+    if discretization.centered_order % 2 != 0
+        throw(ArgumentError("Discretization centered_order must be even, given $(discretization.centered_order)"))
+    end
+    return MOLFiniteDifference(dxs, time, approx_order, grid_align)
+end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference)
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs
     domain = pdesys.domain
-
+    
     grid_align = discretization.grid_align
     t = discretization.time
     # Get tspan
     tspan = nothing
+    # Check that inputs make sense
     if t !== nothing
         tdomain = pdesys.domain[findfirst(d->isequal(t.val, d.variables), pdesys.domain)]
         @assert tdomain.domain isa DomainSets.Interval
@@ -65,50 +70,19 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             s = DiscreteSpace(pdesys.domain, depvars, indvars, nottime, grid_align, discretization)
 
-            #---- Count Boundary Equations --------------------
-            # Count the number of boundary equations that lie at the spatial boundary on
-            # both the left and right side. This will be used to determine number of
-            # interior equations s.t. we have a balanced system of equations.
-            
-            # get the depvar boundary terms for given depvar and indvar index.
-            get_depvarbcs(depvar, i) = substitute.((depvar,),get_edgevals(s, i))
-
-            # return the counts of the boundary-conditions that reference the "left" and
-            # "right" edges of the given independent variable. Note that we return the
-            # max of the count for each depvar in the system of equations.
-            @inline function get_bc_counts(i)
-                left = 0
-                right = 0
-                for depvar in s.vars
-                    depvaredges = get_depvarbcs(depvar, i)
-                    counts = [map(x->occursin(x, bc.lhs), depvaredges) for bc in pdesys.bcs]
-                    left = max(left, sum([c[1] for c in counts]))
-                    right = max(right, sum([c[2] for c in counts]))
-                end
-                return [left, right]
-            end
-           
-            
-            #TODO: Update this when allowing higher order derivatives to correctly deal with boundary upwinding
-            interior = s.Igrid[[let bcs = get_bc_counts(i)
-                                    (1 + first(bcs)):length(g)-last(bcs)
-                                    end
-                                    for (i,g) in enumerate(s.grid)]...]
+            interior = s.Igrid[[2:(length(grid[x])-1) for x in s.nottime]
 
             ### PDE EQUATIONS ###
             # Create a stencil in the required dimension centered around 0
             # e.g. (-1,0,1) for 2nd order, (-2,-1,0,1,2) for 4th order, etc
-            if discretization.centered_order % 2 != 0
-                throw(ArgumentError("Discretization centered_order must be even, given $(discretization.centered_order)"))
-            end
             # For all cartesian indices in the interior, generate finite difference rules
-            eqs = vec(map(interior) do II
+            pdeeqs = vec(map(interior) do II
                 rules = generate_finite_difference_rules(II, s, pde, discretization)
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             
             generate_u0_and_bceqs!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, discretization)
-            push!(alleqs,eqs)
+            push!(alleqs,pdeeqs)
             push!(alldepvarsdisc, reduce(vcat, s.discvars))
         end
     end

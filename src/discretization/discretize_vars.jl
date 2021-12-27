@@ -32,10 +32,10 @@ function DiscreteSpace(domain, depvars, indvars, nottime, grid_align, discretiza
     axies = map(nottime) do x
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
         dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
-        dx isa Number ? (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : dx
+        dx isa Number ? x => (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : x => dx
     end
     dxs = map(nottime) do x
-        dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
+        x => discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
     end
 
     # Define the grid on which the dependent variables will be evaluated (see #378)
@@ -48,32 +48,37 @@ function DiscreteSpace(domain, depvars, indvars, nottime, grid_align, discretiza
         @assert discretization.centered_order == 2
         # construct grid including ghost nodes beyond outer edges
         # e.g. space 0:dx:1 goes to grid -dx/2:dx:1+dx/2
-        space_ext = map(s -> vcat(2s[1] - s[2], s, 2s[end] - s[end-1]), axies)
-        grid = map(s -> (s[1:end-1] + s[2:end]) / 2, space_ext)
+        grid =  map(nottime) do x
+            xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
+            dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
+            dx isa Number ? x => ((DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2) : x => dx
+        end 
         # TODO: allow depvar-specific center/edge choice?
     end
 
     # Build symbolic variables
-    Iaxies = CartesianIndices(((axes(s)[1] for s in axies)...,))
-    Igrid = CartesianIndices(((axes(g)[1] for g in grid)...,))
+    Iaxies = CartesianIndices(((axes(s.second)[1] for s in axies)...,))
+    Igrid = CartesianIndices(((axes(g.second)[1] for g in grid)...,))
     depvarsdisc = map(depvars) do u
         if t === nothing
             sym = nameof(operation(u))
-            collect(first(@variables $sym[collect(axes(g)[1] for g in grid)...]))
+            u => collect(first(@variables $sym[collect(axes(g.second)[1] for g in grid)...]))
         elseif isequal(arguments(u), [t])
-            [u for II in s.Igrid]
+            u => [u for II in s.Igrid]
         else
             sym = nameof(operation(u))
-            collect(first(@variables $sym[collect(axes(g)[1] for g in grid)...](t)))
+            u => collect(first(@variables $sym[collect(axes(g.second)[1] for g in grid)...](t)))
         end
     end
 
 
     # Build symbolic maps for boundaries
     Iedge = reduce(vcat, [[vcat([Colon() for j = 1:i-1], 1, [Colon() for j = i+1:nspace]),
-        vcat([Colon() for j = 1:i-1], length(axies[i]), [Colon() for j = i+1:nspace])] for i = 1:nspace])
+        vcat([Colon() for j = 1:i-1], length(axies[i].second), [Colon() for j = i+1:nspace])] for i = 1:nspace])
 
-    return DiscreteSpace{nspace,length(depvars)}(depvars, depvarsdisc, nottime, indvars, axies, grid, dxs, Iaxies, Igrid, Iedge)
+    nottime2dim = [nottime[i] => i for i in 1:nspace]
+    dim2nottime = [i => nottime[i] for i in 1:nspace]
+    return DiscreteSpace{nspace,length(depvars)}(depvars, Dict(depvarsdisc), nottime, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedge)
 end
 
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
@@ -100,17 +105,3 @@ map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} 
 
 #varmap(s::DiscreteSpace{N,M}) where {N,M} = [s.vars[i] => i for i = 1:M]
 
-"""
-Returns a list of index offsets from the boundary, where 1 means that the index is on the lower boundary, and a value of 0 means that the index is on the interior. Likewise, -1 means that the index is on the upper boundary. -2 would be 1 index off of the boundary etc. The list is of length N, where N is the number of dimensions. 
-"""
-function edgeoffset(s::DiscreteSpace{N}, I::CartesianIndex{N}, padding::T) where {N,T<:Integer}
-    Ioffset = zeros(T, N)
-    for (i, x) in s.grid
-        if I[i] <= padding
-            Ioffset[i] = padding - I[i] + 1
-        elseif I[i] > length(x) - padding
-            Ioffset[i] = I[i] - length(x) - 1
-        end
-    end
-    return Ioffset
-end
