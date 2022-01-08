@@ -1,5 +1,7 @@
-# Counts the Differential operators for given variable x. This is used to determine
-# the order of a PDE.
+"""
+Counts the Differential operators for given variable x. This is used to determine
+the order of a PDE.
+"""
 function count_differentials(term, x::Symbolics.Symbolic)
     S = Symbolics
     SU = SymbolicUtils
@@ -15,7 +17,9 @@ function count_differentials(term, x::Symbolics.Symbolic)
     end
 end
 
-# return list of differential orders in the equation
+"""
+return list of differential orders in the equation
+"""
 function differential_order(eq, x::Symbolics.Symbolic)
     S = Symbolics
     SU = SymbolicUtils
@@ -33,7 +37,9 @@ function differential_order(eq, x::Symbolics.Symbolic)
     return filter(!iszero, orders)
 end
 
-# find all the dependent variables given by depvar_ops in an expression
+"""
+find all the dependent variables given by depvar_ops in an expression
+"""
 function get_depvars(eq,depvar_ops)
     S = Symbolics
     SU = SymbolicUtils
@@ -52,3 +58,5 @@ function get_depvars(eq,depvar_ops)
     end
     return depvars
 end
+
+half_range(x) = -div(x,2):div(x,2)

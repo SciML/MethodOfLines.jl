@@ -9,7 +9,7 @@ module MethodOfLines
     include("MOL_utils.jl")
     include("discretization/fornberg.jl")
     include("discretization/discretize_vars.jl")
-    include("equation_types.jl")
+    include("discretization/differential_discretizer.jl")
     include("discretization/generate_finite_difference_rules.jl")
     include("bcs/generate_bc_eqs.jl")
 

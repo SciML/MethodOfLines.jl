@@ -25,6 +25,8 @@ struct DiscreteSpace{N,M}
     Iedge
 end
 
+# TODO: Allow other grids
+
 function DiscreteSpace(domain, depvars, indvars, nottime, grid_align, discretization)
     t = discretization.time
     nspace = length(nottime)
