@@ -1,10 +1,14 @@
 #Base.getindex(s::DiscreteSpace, i::Integer) = DiscreteVar(vars[i], ...)
-
+"""
+Return a map of of variables to the gridpoints at the edge of the domain
+"""
 @inline function get_edgevals(params, axies, i)
     return [params[i] => first(axies[i]), params[i] => last(axies[i])]
 end
 
-
+"""
+Return a map of of variables to the gridpoints at the edge of the domain
+"""
 @inline function get_edgevals(s, i)
     return [s.nottime[i] => first(s.axies[i]), s.nottime[i] => last(s.axies[i])]
 end
@@ -24,6 +28,27 @@ struct DiscreteSpace{N,M}
     Igrid
     Iedge
 end
+
+nparams(::DiscreteSpace{N,M}) where {N,M} = N
+nvars(::DiscreteSpace{N,M}) where {N,M} = M
+
+grid_idxs(s::DiscreteSpace) = CartesianIndices(((axes(g)[1] for g in s.grid)...,))
+edge_idxs(s::DiscreteSpace{N}) where {N} = reduce(vcat, [[vcat([Colon() for j = 1:i-1], 1, [Colon() for j = i+1:N]), vcat([Colon() for j = 1:i-1], length(s.axies[i]), [Colon() for j = i+1:N])] for i = 1:N])
+
+axiesvals(s::DiscreteSpace{N}) where {N} = map(y -> [s.nottime[i] => s.axies[i][y.I[i]] for i = 1:N], s.Iaxies)
+gridvals(s::DiscreteSpace{N}) where {N} = map(y -> [s.nottime[i] => s.grid[i][y.I[i]] for i = 1:N], s.Igrid)
+
+## Boundary methods ##
+edgevals(s::DiscreteSpace{N}) where {N} = reduce(vcat, [get_edgevals(s.nottime, s.axies, i) for i = 1:N])
+edgevars(s::DiscreteSpace) = [[d[e...] for e in s.Iedge] for d in s.discvars]
+
+@inline function edgemaps(s::DiscreteSpace)
+    bclocs(s::DiscreteSpace) = map(e -> substitute.(s.params, e), edgevals(s))
+    return Dict(bclocs(s) .=> [axiesvals(s)[e...] for e in s.Iedge])
+end
+
+map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} = vcat([s.vars[k] => s.discvars[k][II] for k = 1:M], [s.nottime[j] => s.grid[j][II[j]] for j = 1:N])
+
 
 # TODO: Allow other grids
 
@@ -83,26 +108,6 @@ function DiscreteSpace(domain, depvars, indvars, nottime, grid_align, discretiza
     return DiscreteSpace{nspace,length(depvars)}(depvars, Dict(depvarsdisc), nottime, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedge)
 end
 
-nparams(::DiscreteSpace{N,M}) where {N,M} = N
-nvars(::DiscreteSpace{N,M}) where {N,M} = M
-
-grid_idxs(s::DiscreteSpace) = CartesianIndices(((axes(g)[1] for g in s.grid)...,))
-edge_idxs(s::DiscreteSpace{N}) where {N} = reduce(vcat, [[vcat([Colon() for j = 1:i-1], 1, [Colon() for j = i+1:N]),
-    vcat([Colon() for j = 1:i-1], length(s.axies[i]), [Colon() for j = i+1:N])] for i = 1:N])
-
-axiesvals(s::DiscreteSpace{N}) where {N} = map(y -> [s.nottime[i] => s.axies[i][y.I[i]] for i = 1:N], s.Iaxies)
-gridvals(s::DiscreteSpace{N}) where {N} = map(y -> [s.nottime[i] => s.grid[i][y.I[i]] for i = 1:N], s.Igrid)
-
-## Boundary methods ##
-edgevals(s::DiscreteSpace{N}) where {N} = reduce(vcat, [get_edgevals(s.nottime, s.axies, i) for i = 1:N])
-edgevars(s::DiscreteSpace) = [[d[e...] for e in s.Iedge] for d in s.discvars]
-
-@inline function edgemaps(s::DiscreteSpace)
-    bclocs(s::DiscreteSpace) = map(e -> substitute.(s.params, e), edgevals(s))
-    return Dict(bclocs(s) .=> [axiesvals(s)[e...] for e in s.Iedge])
-end
-
-map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} = vcat([s.vars[k] => s.discvars[k][II] for k = 1:M], [s.nottime[j] => s.grid[j][II[j]] for j = 1:N])
 
 
 #varmap(s::DiscreteSpace{N,M}) where {N,M} = [s.vars[i] => i for i = 1:M]
