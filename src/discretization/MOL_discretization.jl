@@ -70,6 +70,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             s = DiscreteSpace(pdesys.domain, depvars, indvars, nottime, grid_align, discretization)
 
+            derivweights = DifferentialDiscretizer(pde, s, discretization)
+
             interior = s.Igrid[[2:(length(grid[x])-1) for x in s.nottime]
 
             ### PDE EQUATIONS ###
@@ -77,7 +79,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # e.g. (-1,0,1) for 2nd order, (-2,-1,0,1,2) for 4th order, etc
             # For all cartesian indices in the interior, generate finite difference rules
             pdeeqs = vec(map(interior) do II
-                rules = generate_finite_difference_rules(II, s, pde, discretization)
+                rules = generate_finite_difference_rules(II, s, pde, derivweights)
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             

@@ -27,6 +27,7 @@ struct DiscreteSpace{N,M}
     Iaxies
     Igrid
     Iedge
+    x2i
 end
 
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
@@ -52,7 +53,8 @@ map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} 
 
 # TODO: Allow other grids
 
-function DiscreteSpace(domain, depvars, indvars, nottime, grid_align, discretization)
+function DiscreteSpace(domain, depvars, indvars, nottime, discretization)
+    grid_align = discretization.grid_align
     t = discretization.time
     nspace = length(nottime)
     # Discretize space
@@ -78,7 +80,7 @@ function DiscreteSpace(domain, depvars, indvars, nottime, grid_align, discretiza
         grid =  map(nottime) do x
             xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
             dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
-            dx isa Number ? x => ((DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2) : x => dx
+            dx isa Number ? (x => ((DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2))) : x => dx
         end 
         # TODO: allow depvar-specific center/edge choice?
     end
@@ -94,18 +96,18 @@ function DiscreteSpace(domain, depvars, indvars, nottime, grid_align, discretiza
             u => [u for II in s.Igrid]
         else
             sym = nameof(operation(u))
-            u => collect(first(@variables $sym[collect(axes(g.second)[1] for g in grid)...](t)))
+            u => collect(first(@variables $sym[collect(axes(g.second)[1] for g in grid)...](t))) 
         end
     end
 
 
     # Build symbolic maps for boundaries
-    Iedge = reduce(vcat, [[vcat([Colon() for j = 1:i-1], 1, [Colon() for j = i+1:nspace]),
-        vcat([Colon() for j = 1:i-1], length(axies[i].second), [Colon() for j = i+1:nspace])] for i = 1:nspace])
+    Iedge = reduce(vcat, [[Igrid[vcat([Colon() for j = 1:i-1], 1, [Colon() for j = i+1:nspace])],
+        Igrid[vcat([Colon() for j = 1:i-1], length(axies[i].second), [Colon() for j = i+1:nspace])]] for i = 1:nspace])
 
     nottime2dim = [nottime[i] => i for i in 1:nspace]
     dim2nottime = [i => nottime[i] for i in 1:nspace]
-    return DiscreteSpace{nspace,length(depvars)}(depvars, Dict(depvarsdisc), nottime, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedge)
+    return DiscreteSpace{nspace,length(depvars)}(depvars, Dict(depvarsdisc), nottime, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedge, nottime2dim)
 end
 
 
