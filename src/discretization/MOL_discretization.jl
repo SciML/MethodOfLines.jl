@@ -68,11 +68,11 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             indvars = first(allindvars)
             nspace = length(nottime)
 
-            s = DiscreteSpace(pdesys.domain, depvars, indvars, nottime, grid_align, discretization)
+            s = DiscreteSpace(pdesys.domain, depvars, indvars, nottime, discretization)
 
             derivweights = DifferentialDiscretizer(pde, s, discretization)
 
-            interior = s.Igrid[[2:(length(grid[x])-1) for x in s.nottime]
+            interior = s.Igrid[[2:(length(grid[x])-1) for x in s.nottime]]
 
             ### PDE EQUATIONS ###
             # Create a stencil in the required dimension centered around 0
