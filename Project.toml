@@ -17,6 +17,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+SafeTestsets = "0.0.1"
 DomainSets = "0.5"
 NonlinearSolve = "0.3"
 SciMLBase = "1"
