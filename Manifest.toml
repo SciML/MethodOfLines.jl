@@ -31,6 +31,12 @@ git-tree-sha1 = "265b06e2b1f6a216e0e8f183d28e4d354eab3220"
 uuid = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
 version = "3.2.1"
 
+[[ArrayLayouts]]
+deps = ["FillArrays", "LinearAlgebra", "SparseArrays"]
+git-tree-sha1 = "e1ba79094cae97b688fb42d31cbbfd63a69706e4"
+uuid = "4c555306-a7a7-4459-81d9-ec55ddd5c99a"
+version = "0.7.8"
+
 [[Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
@@ -38,6 +44,12 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 git-tree-sha1 = "45bb6705d93be619b81451bb2006b7ee5d4e4453"
 uuid = "15f4f7f2-30c1-5605-9d31-71845cf9641f"
 version = "0.2.0"
+
+[[BandedMatrices]]
+deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra", "Random", "SparseArrays"]
+git-tree-sha1 = "ce68f8c2162062733f9b4c9e3700d5efc4a8ec47"
+uuid = "aae01518-5342-5314-be14-df237901396f"
+version = "0.16.11"
 
 [[BangBang]]
 deps = ["Compat", "ConstructionBase", "Future", "InitialValues", "LinearAlgebra", "Requires", "Setfield", "Tables", "ZygoteRules"]
@@ -63,6 +75,18 @@ deps = ["Static"]
 git-tree-sha1 = "bc1317f71de8dce26ea67fcdf7eccc0d0693b75b"
 uuid = "62783981-4cbd-42fc-bca8-16325de8dc4b"
 version = "0.1.1"
+
+[[BlockArrays]]
+deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra"]
+git-tree-sha1 = "5524e27323cf4c4505699c3fb008c3f772269945"
+uuid = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
+version = "0.16.9"
+
+[[BlockBandedMatrices]]
+deps = ["ArrayLayouts", "BandedMatrices", "BlockArrays", "FillArrays", "LinearAlgebra", "MatrixFactorizations", "SparseArrays", "Statistics"]
+git-tree-sha1 = "b1db5b5daca19070297580e1c5b5095e7ada6792"
+uuid = "ffab5731-97b5-5995-9138-79e8c1846df0"
+version = "0.11.1"
 
 [[CPUSummary]]
 deps = ["Hwloc", "IfElse", "Static"]
@@ -205,6 +229,12 @@ deps = ["ArrayInterface", "Compat", "DataStructures", "DiffEqBase", "FunctionWra
 git-tree-sha1 = "0aa2d003ec9efe2a93f93ae722de05a870ffc0b2"
 uuid = "c894b116-72e5-5b58-be3c-e6d8d4ac2b12"
 version = "8.0.0"
+
+[[DiffEqOperators]]
+deps = ["BandedMatrices", "BlockBandedMatrices", "DiffEqBase", "DomainSets", "ForwardDiff", "LazyArrays", "LazyBandedMatrices", "LinearAlgebra", "LoopVectorization", "ModelingToolkit", "NNlib", "NonlinearSolve", "Requires", "RuntimeGeneratedFunctions", "SciMLBase", "SparseArrays", "SparseDiffTools", "StaticArrays", "SuiteSparse", "SymbolicUtils"]
+git-tree-sha1 = "141f8a6df78585f64a1c739bb350cfabe83ae9e1"
+uuid = "9fdde737-9c7f-55bf-ade8-46b3f136cc48"
+version = "4.36.0"
 
 [[DiffResults]]
 deps = ["StaticArrays"]
@@ -429,6 +459,18 @@ git-tree-sha1 = "83b56449c39342a47f3fcdb3bc782bd6d66e1d97"
 uuid = "10f19ff3-798f-405d-979b-55457f8fc047"
 version = "0.1.4"
 
+[[LazyArrays]]
+deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra", "MacroTools", "MatrixFactorizations", "SparseArrays", "StaticArrays"]
+git-tree-sha1 = "6dfb5dc9426e0cb7e237a71aa78c6b8c3e78a7fc"
+uuid = "5078a376-72f3-5289-bfd5-ec5146d43c02"
+version = "0.22.4"
+
+[[LazyBandedMatrices]]
+deps = ["ArrayLayouts", "BandedMatrices", "BlockArrays", "BlockBandedMatrices", "FillArrays", "LazyArrays", "LinearAlgebra", "MatrixFactorizations", "SparseArrays", "StaticArrays"]
+git-tree-sha1 = "8f4c427f6b505294dfefd343c8373b8c74e09973"
+uuid = "d7e5e226-e90b-4449-9968-0f923699bf6f"
+version = "0.7.6"
+
 [[LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]
 uuid = "b27032c2-a3e7-50c8-80cd-2d36dbcbfd21"
@@ -487,6 +529,12 @@ version = "0.1.6"
 [[Markdown]]
 deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+
+[[MatrixFactorizations]]
+deps = ["ArrayLayouts", "LinearAlgebra", "Printf", "Random"]
+git-tree-sha1 = "1a0358d0283b84c3ccf9537843e3583c3b896c59"
+uuid = "a3b82374-2e81-5b9e-98ce-41277c0e4c87"
+version = "0.8.5"
 
 [[MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -550,6 +598,12 @@ deps = ["Distances", "LineSearches", "LinearAlgebra", "NLSolversBase", "Printf",
 git-tree-sha1 = "019f12e9a1a7880459d0173c182e6a99365d7ac1"
 uuid = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
 version = "4.5.1"
+
+[[NNlib]]
+deps = ["Adapt", "ChainRulesCore", "Compat", "LinearAlgebra", "Pkg", "Requires", "Statistics"]
+git-tree-sha1 = "afcfd88042cc5a62743c98ca311668ff5c03148a"
+uuid = "872c559c-99b0-510c-b3b7-b6c96a88d5cd"
+version = "0.7.32"
 
 [[NaNMath]]
 git-tree-sha1 = "bfe47e760d60b82b66b61d2d44128b62e3a369fb"
