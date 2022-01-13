@@ -18,3 +18,10 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 OrdinaryDiffEq = "6"
+ModelingToolkit = "8"
+SymbolicUtils = "0.19"
+SafeTestsets = "0.0.1"
+DomainSets = "0.5"
+NonlinearSolve = "0.3"
+SciMLBase = "1"
+Symbolics = "4"
