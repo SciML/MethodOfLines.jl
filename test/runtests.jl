@@ -17,6 +17,7 @@ if GROUP == "All" || GROUP == "MOLFiniteDifference"
     @time @safetestset "MOLFiniteDifference Interface: 1D HigherOrder" begin include("pde_systems/MOL_1D_HigherOrder.jl") end
     @time @safetestset "MOLFiniteDifference Interface: 1D Partial DAE" begin include("pde_systems/MOL_1D_PDAE.jl") end
     @time @safetestset "MOLFiniteDifference Interface: Stationary Nonlinear Problems" begin include("pde_systems/MOL_NonlinearProblem.jl") end
+    @time @safetestset "MOLFiniteDifference Utils" begin include("utils_test.jl") end
 end
 
 end
