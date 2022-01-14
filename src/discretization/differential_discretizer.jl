@@ -1,8 +1,8 @@
 # Use DiffEqOperators to generate weights and calculate derivative orders
 struct DifferentialDiscretizer{T}
     approx_order
-    map::Dict{Num, DerivativeOperator}
-    nonlinlapmap::Tuple{DerivativeOperator, DerivativeOperator}
+    map::Dict{Num, DiffEqOperators.DerivativeOperator}
+    nonlinlapmap::Dict{Num, NTuple{2, DiffEqOperators.DerivativeOperator}}
     orders::Vector{T}
 end
 
@@ -11,8 +11,8 @@ function DifferentialDiscretizer(pde, s, discretization)
     d_orders(x) = reverse(sort(collect(union(differential_order(pde.rhs, x), differential_order(pde.lhs, x)))))
 
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.nottime), (k,u) in enumerate(s.vars)]
-    differentialmap = Array{Pair{Num,DerivativeOperator},1}()
-    nonlinlap = Array{Pair{Num, NTuple{2,DerivativeOperator}}}(undef, nparams(s))
+    differentialmap = Array{Pair{Num,DiffEqOperators.DerivativeOperator},1}()
+    nonlinlap = Array{Pair{Num, NTuple{2,DiffEqOperators.DerivativeOperator}}}(undef, nparams(s))
     orders = Int[]
     # Hardcoded to centered difference, generate weights for each differential
     # TODO: Add handling for upwinding

@@ -2,6 +2,7 @@ module MethodOfLines
     using LinearAlgebra
     using SciMLBase
     using DiffEqBase
+    using DiffEqOperators
     using ModelingToolkit
     using SymbolicUtils, Symbolics
     import DomainSets
