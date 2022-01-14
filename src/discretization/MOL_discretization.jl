@@ -12,10 +12,10 @@ end
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
 function MOLFiniteDifference(dxs, time=nothing; upwind_order = 1, centered_order = 2, grid_align=center_align)
     
-    if discretization.centered_order % 2 != 0
-        throw(ArgumentError("Discretization centered_order must be even, given $(discretization.centered_order)"))
+    if centered_order % 2 != 0
+        warn("Discretization centered_order must be even, rounding up to $(centered_order+1)")
     end
-    return MOLFiniteDifference(dxs, time, approx_order, grid_align)
+    return MOLFiniteDifference(dxs, time, centered_order, grid_align)
 end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference)
@@ -66,10 +66,10 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             nottime = first(allnottime)
             @assert length(allindvars) == 1
             indvars = first(allindvars)
-            nspace = length(nottime)
-
-            s = DiscreteSpace(pdesys.domain, depvars, indvars, nottime, discretization)
-
+            
+            # Get the grid
+            s = DiscreteSpace(domain, depvars, indvars, nottime, discretization)
+            
             derivweights = DifferentialDiscretizer(pde, s, discretization)
 
             interior = s.Igrid[[2:(length(grid[x])-1) for x in s.nottime]]

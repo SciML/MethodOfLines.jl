@@ -4,6 +4,7 @@ module MethodOfLines
     using DiffEqBase
     using DiffEqOperators
     using ModelingToolkit
+    using ModelingToolkit: operation, istree, arguments, variable
     using SymbolicUtils, Symbolics
     import DomainSets
 

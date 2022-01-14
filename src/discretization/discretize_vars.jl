@@ -73,8 +73,6 @@ function DiscreteSpace(domain, depvars, indvars, nottime, discretization)
     if grid_align == center_align
         grid = axies
     elseif grid_align == edge_align
-        # boundary conditions implementation assumes centered_order=2
-        @assert discretization.centered_order == 2
         # construct grid including ghost nodes beyond outer edges
         # e.g. space 0:dx:1 goes to grid -dx/2:dx:1+dx/2
         grid =  map(nottime) do x

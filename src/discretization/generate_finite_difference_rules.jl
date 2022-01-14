@@ -120,7 +120,7 @@ function spherical_diffusion(innerexpr, II, derivweights, s, r, u)
     if substitute(r, _rsubs(r, II)) ≈ 0
         D_2_u = central_difference(D_2, II, s, (s.x2i(r), r), u, ufunc_u)
         return 3exprhere*D_2_u # See appendix B of the paper
-
+    end
     D_1_u = central_difference(D_1, II, s, (s.x2i[r], r), u, ufunc_u)
     # See scheme 1 in appendix A of the paper
     
@@ -186,20 +186,22 @@ function generate_finite_difference_rules(II, s, pde, derivweights)
 
     rhs_arg = istree(pde.rhs) && (SymbolicUtils.operation(pde.rhs) == +) ? SymbolicUtils.arguments(pde.rhs) : [pde.rhs]
     lhs_arg = istree(pde.lhs) && (SymbolicUtils.operation(pde.lhs) == +) ? SymbolicUtils.arguments(pde.lhs) : [pde.lhs]
+    #These have to be done seperately to ensure that the spherical rules are applied first.
     nonlinlap_rules = []
     for t in vcat(lhs_arg,rhs_arg)
-        for r in cartesian_deriv_rules
-            if r(t) !== nothing
-                push!(nonlinlap_rules, t => r(t))
-            end
-        end
         for r in spherical_deriv_rules
             if r(t) !== nothing
                 push!(nonlinlap_rules, t => r(t))
             end
         end
     end
-
+    for t in vcat(lhs_arg,rhs_arg)
+        for r in cartesian_deriv_rules
+            if r(t) !== nothing
+                push!(nonlinlap_rules, t => r(t))
+            end
+        end
+    end
     rules = vcat(vec(nonlinlap_rules),
                 vec(central_deriv_rules_cartesian),
                 vec(central_deriv_rules_spherical),
