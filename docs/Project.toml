@@ -1,0 +1,6 @@
+[deps]
+MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+
+[compat]
+Documenter = "0.27"

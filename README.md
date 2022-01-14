@@ -22,7 +22,6 @@ Currently supported grid types: `center_align` and `edge_align`
 `center_align`: naive grid, starting from lower boundary, ending on upper boundary with step of `dx`
 
 `edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`.
-This provides higher accuracy with neumann/robin boundary conditions.
 
 Currently boundary conditions defined in terms of derivatives at the boundary are unsupported above 1 discretized dimension. Periodic conditions are also unsupported.
 
