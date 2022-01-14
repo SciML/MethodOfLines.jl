@@ -13,13 +13,13 @@ function DifferentialDiscretizer(pde, s, discretization)
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.nottime), (k,u) in enumerate(s.vars)]
     differentialmap = Array{Pair{Num,DiffEqOperators.DerivativeOperator},1}()
     nonlinlap = Array{Pair{Num, NTuple{2,DiffEqOperators.DerivativeOperator}}}(undef, nparams(s))
-    orders = Int[]
+    orders = []
     # Hardcoded to centered difference, generate weights for each differential
     # TODO: Add handling for upwinding
     for x in s.nottime
         push!(orders, x => d_orders(x))
         # TODO: Only generate weights for derivatives that are actually used and avoid redundant calculations
-        rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.dxs[x],length(s.grid[x])) for d in last(orders).val]
+        rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.dxs[x],length(s.grid[x])) for d in last(orders).second]
 
         differentialmap = vcat(differentialmap, rs)
         nonlinlap[j] = (x => (CompleteHalfCenteredDifference(0, approx_order, s.dxs[x]), CompleteHalfCenteredDifference(1, approx_order, s.dxs[x])))

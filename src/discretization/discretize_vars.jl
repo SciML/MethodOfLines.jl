@@ -86,14 +86,15 @@ function DiscreteSpace(domain, depvars, indvars, nottime, discretization)
     # Build symbolic variables
     Iaxies = CartesianIndices(((axes(s.second)[1] for s in axies)...,))
     Igrid = CartesianIndices(((axes(g.second)[1] for g in grid)...,))
+    @show depvars
     depvarsdisc = map(depvars) do u
         if t === nothing
-            sym = nameof(operation(u))
+            sym = nameof(SymbolicUtils.operation(u))
             u => collect(first(@variables $sym[collect(axes(g.second)[1] for g in grid)...]))
-        elseif isequal(arguments(u), [t])
+        elseif isequal(SymbolicUtils.arguments(u), [t])
             u => [u for II in s.Igrid]
         else
-            sym = nameof(operation(u))
+            sym = nameof(SymbolicUtils.operation(u))
             u => collect(first(@variables $sym[collect(axes(g.second)[1] for g in grid)...](t))) 
         end
     end

@@ -6,6 +6,7 @@ module MethodOfLines
     using ModelingToolkit
     using ModelingToolkit: operation, istree, arguments, variable
     using SymbolicUtils, Symbolics
+    using SymbolicUtils: operation, arguments
     import DomainSets
 
     include("MOL_utils.jl")
