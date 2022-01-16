@@ -70,20 +70,21 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # Get the grid
             s = DiscreteSpace(domain, depvars, indvars, nottime, discretization)
             
+            # Get the finite difference weights
             derivweights = DifferentialDiscretizer(pde, s, discretization)
 
-            interior = s.Igrid[[2:(length(s, x)-1) for x in s.nottime]]
+            # Get the boundary conditions
+            generate_u0_and_bceqs!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
 
-            ### PDE EQUATIONS ###
-            # Create a stencil in the required dimension centered around 0
-            # e.g. (-1,0,1) for 2nd order, (-2,-1,0,1,2) for 4th order, etc
-            # For all cartesian indices in the interior, generate finite difference rules
+            # Find the indexes on the interior
+            interior = Iinterior(s)
+
+            # Discretize the equation on the interior
             pdeeqs = vec(map(interior) do II
                 rules = generate_finite_difference_rules(II, s, pde, derivweights)
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             
-            generate_u0_and_bceqs!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, discretization)
             push!(alleqs,pdeeqs)
             push!(alldepvarsdisc, reduce(vcat, s.discvars))
         end
@@ -107,6 +108,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         return sys, nothing
     else
         # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by the `solve` method.
+        println(alleqs, bceqs)
         sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
         return sys, tspan
     end

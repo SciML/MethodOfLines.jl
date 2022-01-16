@@ -149,7 +149,7 @@ There are of course more specific schemes that are used to improve stability/spe
 Please submit an issue if you know of any special cases that are not implemented, with links to papers and/or code that demonstrates the special case.
 """
 function generate_finite_difference_rules(II, s, pde, derivweights)
-
+    @show II
     valrules = vcat([u => s.discvars[u][II] for u in s.vars],
                     [x => s.grid[x][II[j]] for (j,x) in enumerate(s.nottime)])
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.nottime), (k,u) in enumerate(s.vars)]

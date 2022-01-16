@@ -28,20 +28,22 @@ function DifferentialDiscretizer(pde, s, discretization)
     return DifferentialDiscretizer{eltype(orders), typeof(Dict(differentialmap))}(approx_order, Dict(differentialmap), Dict(nonlinlap), Dict(orders))
 end
 
+
 # ufunc is a function that returns the correct discretization indexed at Itap, it is designed this way to allow for central differences of arbitrary expressions which may be needed in some schemes 
 function central_difference(D, II, s, jx, u, ufunc)
     j, x = jx
     # unit index in direction of the derivative
     I1 = unitindices(nparams(s))[j] 
     # offset is important due to boundary proximity
+
     if II[j] <= D.boundary_point_count
         weights = D.low_boundary_coefs[II[j]]    
-        offset = D.boundary_point_count - II[j] + 1
-        Itap = [II + (i+offset)*I1 for i in half_range(D.boundary_stencil_length)]
+        offset = 1 - II[j]
+        Itap = [II + (i+offset)*I1 for i in 0:(D.boundary_stencil_length-1)]
     elseif II[j] > (length(s, x) - D.boundary_point_count)
         weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
-        offset = length(s, x) - II[j] - D.boundary_point_count
-        Itap = [II + (i+offset)*I1 for i in half_range(D.boundary_stencil_length)]
+        offset = length(s, x) - II[j]
+        Itap = [II + (i+offset)*I1 for i in (-D.boundary_stencil_length+1):1:0]
     else
         weights = D.stencil_coefs
         Itap = [II + i*I1 for i in half_range(D.stencil_length)]
@@ -60,13 +62,12 @@ function _get_weights_and_stencil(D, II, I1, s, k, j, x)
     # The low boundary coeffs has a heirarchy of coefficients following: number of indices from boundary -> which half offset point does it correspond to -> weights
     if II[j] <= (D.boundary_point_count-1)
         weights = D.low_boundary_coefs[II[j]][k]    
-        offset = D.boundary_point_count - II[j] + 1
-        # ? Is this offset correct?
-        Itap = [II + (i+offset)*I1 for i in half_range(D.boundary_stencil_length)]
+        offset = 1 - II[j]
+        Itap = [II + (i+offset)*I1 for i in 0:(D.boundary_stencil_length-1)]
     elseif II[j] > (length(s, x) - D.boundary_point_count - 1)
         weights = D.high_boundary_coefs[length(s,x)-II[j]+1][k]
-        offset = length(s, x) - II[j] - D.boundary_point_count
-        Itap = [II + (i+offset)*I1 for i in half_range(D.boundary_stencil_length)]
+        offset = length(s, x) - II[j]
+        Itap = [II + (i+offset)*I1 for i in (-D.boundary_stencil_length+1):1:0]
     else
         weights = D.stencil_coefs
         Itap = [II + (i+1)*I1 for i in half_range(D.stencil_length)]
