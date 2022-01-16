@@ -59,4 +59,18 @@ function get_depvars(eq,depvar_ops)
     return depvars
 end
 
+"""
+A function that creates a tuple of CartesianIndices of unit length and `N` dimensions, one pointing along each dimension.
+"""
+function unitindices(N::Int) #create unit CartesianIndex for each dimension
+    out = Vector{CartesianIndex{N}}(undef, N)
+    null = zeros(Int, N)
+    for i in 1:N
+        unit_i = copy(null)
+        unit_i[i] = 1
+        out[i] = CartesianIndex(Tuple(unit_i))
+    end
+    Tuple(out)
+end
+
 half_range(x) = -div(x,2):div(x,2)

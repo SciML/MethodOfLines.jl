@@ -33,6 +33,11 @@ end
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
 nvars(::DiscreteSpace{N,M}) where {N,M} = M
 
+Base.length(s::DiscreteSpace, x) = length(s.grid[x])
+Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.nottime)
+
+params(s::DiscreteSpace{N,M}) where {N,M}= s.params
+
 grid_idxs(s::DiscreteSpace) = CartesianIndices(((axes(g)[1] for g in s.grid)...,))
 edge_idxs(s::DiscreteSpace{N}) where {N} = reduce(vcat, [[vcat([Colon() for j = 1:i-1], 1, [Colon() for j = i+1:N]), vcat([Colon() for j = 1:i-1], length(s.axies[i]), [Colon() for j = i+1:N])] for i = 1:N])
 
@@ -106,7 +111,7 @@ function DiscreteSpace(domain, depvars, indvars, nottime, discretization)
 
     nottime2dim = [nottime[i] => i for i in 1:nspace]
     dim2nottime = [i => nottime[i] for i in 1:nspace]
-    return DiscreteSpace{nspace,length(depvars)}(depvars, Dict(depvarsdisc), nottime, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedge, nottime2dim)
+    return DiscreteSpace{nspace,length(depvars)}(depvars, Dict(depvarsdisc), nottime, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedge, Dict(nottime2dim))
 end
 
 

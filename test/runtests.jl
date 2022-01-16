@@ -8,10 +8,10 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
 
 @time begin
     
-    if GROUP == "All" || GROUP == "Component Tests"
-        @time @safetestset "Test for regression against original code" begin include("regression_test.jl") end
-        @time @safetestset "MOLFiniteDifference Utils" begin include("utils_test.jl") end
-    end
+    # if GROUP == "All" || GROUP == "Component Tests"
+    #     @time @safetestset "Test for regression against original code" begin include("regression_test.jl") end
+    #     @time @safetestset "MOLFiniteDifference Utils" begin include("utils_test.jl") end
+    # end
 
     if GROUP == "All" || GROUP == "Integration Tests"
         @time @safetestset "MOLFiniteDifference Interface" begin include("pde_systems/MOLtest.jl") end

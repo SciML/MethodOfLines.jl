@@ -151,17 +151,14 @@ Please submit an issue if you know of any special cases that are not implemented
 function generate_finite_difference_rules(II, s, pde, derivweights)
 
     valrules = vcat([u => s.discvars[u][II] for u in s.vars],
-                    [x => s.grid[x][II[s.x2i[x]]] for x in params(s)])
+                    [x => s.grid[x][II[j]] for (j,x) in enumerate(s.nottime)])
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.nottime), (k,u) in enumerate(s.vars)]
 
     central_ufunc(u, I, x) = s.discvars[u][I]
-    central_deriv_rules_cartesian = Array{Pair{Num,Num},1}()
-    for x in s.nottime
-        j = s.x2i[x]
-        rs = [(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], II, s, (j,x), u, central_ufunc) for d in derivweights.orders[x], u in s.vars]
+    
+    central_deriv_rules_cartesian = reduce(vcat, [[(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], II, s, (j,x), u, central_ufunc) for d in derivweights.orders[x], u in s.vars] for (j,x) in enumerate(s.nottime)])
 
-        central_deriv_rules_cartesian = vcat(central_deriv_rules_cartesian, rs)
-    end
+
 
     # TODO: upwind rules needs interpolation into `@rule`
     #forward_weights(II,j) = calculate_weights(discretization.upwind_order, 0.0, s.grid[j][[II[j],II[j]+1]])
@@ -204,7 +201,6 @@ function generate_finite_difference_rules(II, s, pde, derivweights)
     end
     rules = vcat(vec(nonlinlap_rules),
                 vec(central_deriv_rules_cartesian),
-                vec(central_deriv_rules_spherical),
                 valrules)
     return rules
 end
