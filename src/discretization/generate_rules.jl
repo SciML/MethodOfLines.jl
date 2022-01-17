@@ -47,7 +47,8 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s, x, u)
     # See scheme 1, namely the term without the 1/r dependence. See also #354 and #371 in DiffEqOperators, the previous home of this package.
 
     jx = j, x = (s.x2i(x), x)
-    inner_interpolater, D_inner = derivweights.nonlinlapmap[x]
+    D_inner = derivweights.halfoffsetmap[x]
+    inner_interpolater = derivweights.interpmap[x]
 
     # Get the outer weights and stencil to generate the required 
     outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II, s, 0, jx)
@@ -149,7 +150,6 @@ There are of course more specific schemes that are used to improve stability/spe
 Please submit an issue if you know of any special cases that are not implemented, with links to papers and/or code that demonstrates the special case.
 """
 function generate_finite_difference_rules(II, s, pde, derivweights)
-    @show II
     valrules = vcat([u => s.discvars[u][II] for u in s.vars],
                     [x => s.grid[x][II[j]] for (j,x) in enumerate(s.nottime)])
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.nottime), (k,u) in enumerate(s.vars)]
@@ -205,3 +205,19 @@ function generate_finite_difference_rules(II, s, pde, derivweights)
     return rules
 end
 
+function generate_bc_rules(II, dim, s, bc, edgemaps)
+    # ! Recognise which dim a BC is on, and use that to get the axiesvals at the boundary
+    # ! loop through the Iedge at that boundary
+    # ! replace the symbolic variables at either end of the boundary with the appropriate discvars, interpolated if nessecary
+    # ! eventually move to multi dim interpolations to improve validity
+
+    # depvarbcmaps will dictate what to replace the variable terms with in the bcs
+    # replace u(t,0) with u₁, etc
+    if grid_align == center_align
+        depvarbcmaps = reduce(vcat,[substitute(depvar, edgevals(s)) .=> edgevar for (depvar, edgevar) in zip(s.vars, edgevars(s, II))])
+    elseif grid_align == edge_align
+        
+    end
+
+    varrules = edgemaps(s)
+    rules = vcat(depvarbcmaps, edgemaps)

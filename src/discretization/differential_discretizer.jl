@@ -2,7 +2,8 @@
 struct DifferentialDiscretizer{T, D1}
     approx_order::Int
     map::D1
-    nonlinlapmap::Dict{Num, NTuple{2, DiffEqOperators.DerivativeOperator}}
+    halfoffsetmap::Dict{Num, DiffEqOperators.DerivativeOperator}
+    interpmap::Dict{Num, DiffEqOperators.DerivativeOperator}
     orders::Dict{Num, Vector{Int}}
 end
 
@@ -13,6 +14,7 @@ function DifferentialDiscretizer(pde, s, discretization)
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.nottime), (k,u) in enumerate(s.vars)]
     differentialmap = Array{Pair{Num,DiffEqOperators.DerivativeOperator},1}()
     nonlinlap = []
+    interp = []
     orders = []
     # Hardcoded to centered difference, generate weights for each differential
     # TODO: Add handling for upwinding
@@ -22,10 +24,11 @@ function DifferentialDiscretizer(pde, s, discretization)
         rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.dxs[x] ) for d in last(orders).second]
 
         differentialmap = vcat(differentialmap, rs)
-        push!(nonlinlap, x => (CompleteHalfCenteredDifference(0, approx_order, s.dxs[x]), CompleteHalfCenteredDifference(1, approx_order, s.dxs[x])))
+        push!(nonlinlap, x => CompleteHalfCenteredDifference(0, approx_order, s.dxs[x])
+        push!(interp, x => CompleteHalfCenteredDifference(1, approx_order, s.dxs[x]))
     end
 
-    return DifferentialDiscretizer{eltype(orders), typeof(Dict(differentialmap))}(approx_order, Dict(differentialmap), Dict(nonlinlap), Dict(orders))
+    return DifferentialDiscretizer{eltype(orders), typeof(Dict(differentialmap))}(approx_order, Dict(differentialmap), Dict(nonlinlap), Dict(interp), Dict(orders))
 end
 
 
