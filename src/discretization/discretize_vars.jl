@@ -42,7 +42,7 @@ params(s::DiscreteSpace{N,M}) where {N,M}= s.params
 grid_idxs(s::DiscreteSpace) = CartesianIndices(((axes(g)[1] for g in s.grid)...,))
 edge_idxs(s::DiscreteSpace{N}) where {N} = reduce(vcat, [[vcat([Colon() for j = 1:i-1], 1, [Colon() for j = i+1:N]), vcat([Colon() for j = 1:i-1], length(s.axies[i]), [Colon() for j = i+1:N])] for i = 1:N])
 
-axiesvals(s::DiscreteSpace{N}, I) where {N} = [x => s.axies[x][I[j]] for (j,x) in enumerate(s.nottime)]
+axiesvals(s::DiscreteSpace{N}, x_, I) where {N} = [x => (x == x_ ? s.axies[x][I[j]] : s.grid[x][I[j]]) for (j,x) in enumerate(s.nottime)]
 gridvals(s::DiscreteSpace{N}, I) where {N} = [x => s.grid[x][I[j]] for (j,x) in enumerate(s.nottime)]
 
 ## Boundary methods ##

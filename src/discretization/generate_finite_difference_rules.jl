@@ -148,7 +148,7 @@ There are of course more specific schemes that are used to improve stability/spe
 ##Planned special cases include:
     - Up/Downwind schemes to be used for odd ordered derivatives multiplied by a coefficient, downwinding when the coefficient is positive, and upwinding when the coefficient is negative.
 
-Please submit an issue if you know of any special cases that are not implemented, with links to papers and/or code that demonstrates the special case.
+Please submit an issue if you know of any special cases which impact stability or accuracy that are not implemented, with links to papers and/or code that demonstrates the special case.
 """
 function generate_finite_difference_rules(II, s, pde, derivweights)
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.nottime), (k,u) in enumerate(s.vars)]
