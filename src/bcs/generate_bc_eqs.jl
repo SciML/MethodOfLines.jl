@@ -2,13 +2,17 @@
 
 abstract type AbstractBoundary end
 
-struct LowerBoundary <: AbstractBoundary
+abstract type AbstractTruncatingBoundary <: AbstractBoundary end
+
+abstract type AbstractExtendingBoundary <: AbstractBoundary end
+
+struct LowerBoundary <: AbstractTruncatingBoundary
 end
 
-struct UpperBoundary<: AbstractBoundary
+struct UpperBoundary<: AbstractTruncatingBoundary
 end
 
-struct CompleteBoundary <: AbstractBoundary
+struct CompleteBoundary <: AbstractTruncatingBoundary
 end#
 
 struct PeriodicBoundary <: AbstractBoundary
@@ -20,7 +24,7 @@ end
 
 """
 Mutates bceqs and u0 by finding relevant equations and discretizing them.
-TODO: return a handler for use with generate_finite_difference_rules
+TODO: return a handler for use with generate_finite_difference_rules and pull out initial condition
 """
 function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
     
@@ -63,7 +67,7 @@ function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
                 for term in terms, r in lower_boundary_rules
                     if r(term) !== nothing
                         u_, x_ = (term, r(term))
-                        boundary = :lower
+                        boundary = LowerBoundary()
                         for term_ in setdiff(terms, term)
                             for r in upper_boundary_rules
                                 if r(term_) !== nothing
@@ -77,7 +81,7 @@ function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
                 for term in terms, r in upper_boundary_rules
                     if r(term) !== nothing
                         u_, x_ = (term, r(term))
-                        boundary = :upper
+                        boundary = UpperBoundary()
                         break
                     end
                 end
@@ -86,7 +90,7 @@ function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
                 
                 push!(bceqs, vec(map(s.Iedge[x_][boundary]) do II
                     rules = generate_bc_rules(II, s, bc, u_, boundary, derivweights)
-                    rules = vcat(rules, generate_finite_difference_rules(II, s, bc, derivweights))
+                    rules = vcat(rules, )
                     
                     substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
                 end))
@@ -96,17 +100,45 @@ function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
     end
 end
 
-function get_active_variable(bc, s, depvar_ops)
-    bcdepvar = first(get_depvars(bc.lhs, depvar_ops))
-    out = Array{typeof(operation(s.vars[1]))}()
+function generate_bc_rules(II, dim, s, bc, u_, x_, boundary::AbstractTruncatingBoundary, derivweights, G::CenterAlignedGrid) 
+    # depvarbcmaps will dictate what to replace the variable terms with in the bcs
+    # replace u(t,0) with u₁, etc
+    ufunc(v, I, x) = s.discvars[v][I]
+
     for u in s.vars
-        if u isa Sym && isequal(operation(u), operation(bcdepvar))
-            push!(out, u)   
+        if isequal(operation(u), operation(u_))
+            # What to replace derivatives at the boundary with
+            depvarderivbcmaps = [(Differential(x)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, (s.x2i[x_],x_), u, ufunc) for d in derivweights.orders[x_]]
+            # ? Does this need to be done for all variables at the boundary?
+            depvarbcmaps = [u_ => s.discvars[u][II]]
         end
     end
-    return out
-end
     
+    fd_rules = generate_finite_difference_rules(II, s, bc, derivweights)
+    varrules = axiesvals(s, II)
+    
+    return vcat(depvarderivbcmaps, depvarbcmaps, fd_rules, varrules)
+end
 
+function generate_bc_rules(II, dim, s, bc, u_, x_, boundary::AbstractTruncatingBoundary, derivweights, G::EdgeAlignedGrid) 
+    
+    boundaryoffset(::LowerBoundary) = 1/2
+    boundaryoffset(::UpperBoundary) = -1/2
+    ufunc(v, I, x) = s.discvars[v][I]
 
-#function generate_u0_and_bceqs_with_rules!!(u0, bceqs, bcs, t, s, depvar_ops)
+    # depvarbcmaps will dictate what to replace the variable terms with in the bcs
+    # replace u(t,0) with u₁, etc
+    for u in s.vars
+        if isequal(operation(u), operation(u_))
+            depvarderivbcmaps = [(Differential(x)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II, s, offset(boundary), (s.x2i[x_],x_), u, ufunc) for d in derivweights.orders[x_]]
+    
+            depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II, s, offset(boundary), (s.x2i[x_],x_), u, ufunc)]
+        end
+    end
+    
+    fd_rules = generate_finite_difference_rules(II, s, bc, derivweights)
+    varrules = axiesvals(s, II)
+    valr = valrules(s, II)
+    
+    return vcat(depvarderivbcmaps, depvarbcmaps, fd_rules, varrules)
+end

@@ -9,6 +9,7 @@ end
 
 function DifferentialDiscretizer(pde, s, discretization)
     approx_order = discretization.approx_order
+    # TODO: Include bcs in this calculation
     d_orders(x) = reverse(sort(collect(union(differential_order(pde.rhs, x), differential_order(pde.lhs, x)))))
 
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.nottime), (k,u) in enumerate(s.vars)]
@@ -23,16 +24,18 @@ function DifferentialDiscretizer(pde, s, discretization)
         # TODO: Only generate weights for derivatives that are actually used and avoid redundant calculations
         rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.dxs[x] ) for d in last(orders).second]
 
+        nonlinlap = vcat(nonlinlap, [Differential(x)^d => CompleteHalfCenteredDifference(d, approx_order, s.dxs[x]) for d in last(orders).second])
         differentialmap = vcat(differentialmap, rs)
-        push!(nonlinlap, x => CompleteHalfCenteredDifference(0, approx_order, s.dxs[x])
-        push!(interp, x => CompleteHalfCenteredDifference(1, approx_order, s.dxs[x]))
+        push!(interp, x => CompleteHalfCenteredDifference(0, approx_order, s.dxs[x])
     end
 
     return DifferentialDiscretizer{eltype(orders), typeof(Dict(differentialmap))}(approx_order, Dict(differentialmap), Dict(nonlinlap), Dict(interp), Dict(orders))
 end
 
-
-# ufunc is a function that returns the correct discretization indexed at Itap, it is designed this way to allow for central differences of arbitrary expressions which may be needed in some schemes 
+"""
+Performs a centered difference in `x` centered at index `II` of `u`
+ufunc is a function that returns the correct discretization indexed at Itap, it is designed this way to allow for central differences of arbitrary expressions which may be needed in some schemes 
+"""
 function central_difference(D, II, s, jx, u, ufunc)
     j, x = jx
     # unit index in direction of the derivative
@@ -88,10 +91,9 @@ TODO: consider refactoring this to harmonize with centered difference
 function get_half_offset_weights_and_stencil(D, II, s, offset, jx)
     j, x = jx
     I1 = unitindices(nparams(s))[j]
-
     # Shift the current index to the correct offset
-    II_prime = II + offset*I1
-    
+    II_prime = II + Int(offset-0.5)*I1
+    @assert all(i-> 0<i<=length(s,x), II_prime) "Index out of bounds"
     return _get_weights_and_stencil(D, II_prime, I1, s, offset, j, x)
 end
 

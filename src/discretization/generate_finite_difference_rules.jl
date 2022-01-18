@@ -5,7 +5,6 @@ Interpolate gridpoints by taking the average of the values of the discrete point
 """
 function interpolate_discrete_param(II, s, itap, j, x)
     # * This will need to be updated to dispatch on grid type when grids become more general
-    offset = itap+1/2
     if (II[j]+itap) < 1
         return s.grid[x][1]+s.dxs[x]*offset
     elseif (II[j]+itap) > (length(x) -  1)
@@ -47,13 +46,14 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s, x, u)
     # See scheme 1, namely the term without the 1/r dependence. See also #354 and #371 in DiffEqOperators, the previous home of this package.
 
     jx = j, x = (s.x2i(x), x)
-    D_inner = derivweights.halfoffsetmap[x]
+    D_inner = derivweights.halfoffsetmap[Differential(x)]
     inner_interpolater = derivweights.interpmap[x]
 
-    # Get the outer weights and stencil to generate the required 
-    outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II, s, 0, jx)
+    # Get the outer weights and stencil. 
+    # ! The offset should eliminate the need for bounds checking, the inner function ensuring that the taps lie inbounds.
+    outerweights, outerstencil = _get_weights_and_stencil(D_inner, II, s, 1/2, jx)
     # Index offsets of each stencil in the inner finite difference to get the correct stencil for each needed half grid point, 0 corresopnds to x+1/2
-    itaps = getindex.(outerstencil, (j,))
+    itaps = getindex.(outerstencil .- II, (j,)) .+ 0.5
     
     # Get the correct weights and stencils for this II
     inner_deriv_weights_and_stencil = [get_half_offset_weights_and_stencil(D_inner, II, s, itap, jx) for itap in itaps]
@@ -128,6 +128,7 @@ function spherical_diffusion(innerexpr, II, derivweights, s, r, u)
     return exprhere*(D_1_u/substitute(r, _rsubs(r, II)) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, r, u))
 end
 
+
 """
 `generate_finite_difference_rules`
 
@@ -150,8 +151,6 @@ There are of course more specific schemes that are used to improve stability/spe
 Please submit an issue if you know of any special cases that are not implemented, with links to papers and/or code that demonstrates the special case.
 """
 function generate_finite_difference_rules(II, s, pde, derivweights)
-    valrules = vcat([u => s.discvars[u][II] for u in s.vars],
-                    [x => s.grid[x][II[j]] for (j,x) in enumerate(s.nottime)])
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.nottime), (k,u) in enumerate(s.vars)]
 
     central_ufunc(u, I, x) = s.discvars[u][I]
@@ -177,9 +176,9 @@ function generate_finite_difference_rules(II, s, pde, derivweights)
     cartesian_deriv_rules = vcat(vec(cartesian_deriv_rules),vec(
                             [@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, II, derivweights, s, x, u) for x in s.nottime, u in s.vars]))
 
-    spherical_deriv_rules = [@rule *(~~a, (r^-2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) =>
+    spherical_deriv_rules = vec([@rule *(~~a, (r^-2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) =>
             *(~a..., spherical_diffusion(*(~c..., ~d..., ~e...), II, derivweights, s, r, u), ~b...)
-            for r in s.nottime, u in s.vars]
+            for r in s.nottime, u in s.vars])
 
     rhs_arg = istree(pde.rhs) && (SymbolicUtils.operation(pde.rhs) == +) ? SymbolicUtils.arguments(pde.rhs) : [pde.rhs]
     lhs_arg = istree(pde.lhs) && (SymbolicUtils.operation(pde.lhs) == +) ? SymbolicUtils.arguments(pde.lhs) : [pde.lhs]
@@ -200,24 +199,7 @@ function generate_finite_difference_rules(II, s, pde, derivweights)
         end
     end
     rules = vcat(vec(nonlinlap_rules),
-                vec(central_deriv_rules_cartesian),
-                valrules)
+                vec(central_deriv_rules_cartesian))
     return rules
 end
 
-function generate_bc_rules(II, dim, s, bc, edgemaps)
-    # ! Recognise which dim a BC is on, and use that to get the axiesvals at the boundary
-    # ! loop through the Iedge at that boundary
-    # ! replace the symbolic variables at either end of the boundary with the appropriate discvars, interpolated if nessecary
-    # ! eventually move to multi dim interpolations to improve validity
-
-    # depvarbcmaps will dictate what to replace the variable terms with in the bcs
-    # replace u(t,0) with u₁, etc
-    if grid_align == center_align
-        depvarbcmaps = reduce(vcat,[substitute(depvar, edgevals(s)) .=> edgevar for (depvar, edgevar) in zip(s.vars, edgevars(s, II))])
-    elseif grid_align == edge_align
-        
-    end
-
-    varrules = edgemaps(s)
-    rules = vcat(depvarbcmaps, edgemaps)

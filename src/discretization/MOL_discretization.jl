@@ -1,21 +1,29 @@
 # Method of lines discretization scheme
+abstract type AbstractGrid end
 
-@enum GridAlign center_align edge_align
+struct CenterAlignedGrid <: AbstractGrid 
+end
 
-struct MOLFiniteDifference{T,T2} <: DiffEqBase.AbstractDiscretization
-    dxs::T
-    time::T2
+struct EdgeAlignedGrid <: AbstractGrid 
+end
+
+const center_align=CenterAlignedGrid()
+const edge_align=EdgeAlignedGrid()
+
+struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
+    dxs
+    time
     approx_order::Int
-    grid_align::GridAlign
+    grid_align::G
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-function MOLFiniteDifference(dxs, time=nothing; upwind_order = 1, centered_order = 2, grid_align=center_align)
+function MOLFiniteDifference(dxs, time=nothing; upwind_order = 1, centered_order = 2, grid_align=CenterAlignedGrid())
     
     if centered_order % 2 != 0
         warn("Discretization centered_order must be even, rounding up to $(centered_order+1)")
     end
-    return MOLFiniteDifference(dxs, time, centered_order, grid_align)
+    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, centered_order, grid_align)
 end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference)
@@ -81,7 +89,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             # Discretize the equation on the interior
             pdeeqs = vec(map(interior) do II
-                rules = generate_finite_difference_rules(II, s, pde, derivweights)
+                rules = vcat(generate_finite_difference_rules(II, s, pde, derivweights), valrules(s, II))
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             
