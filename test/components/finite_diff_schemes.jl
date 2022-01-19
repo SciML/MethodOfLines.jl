@@ -28,7 +28,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
             @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x)])
 
             # Test centered order 
-            disc = MOLFiniteDifference([x=>dx], t; centered_order=a)
+            disc = MOLFiniteDifference([x=>dx], t; approx_order=a)
 
             depvar_ops = map(x->operation(x.val),pdesys.depvars)
 

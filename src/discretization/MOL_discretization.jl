@@ -1,32 +1,6 @@
 # Method of lines discretization scheme
-abstract type AbstractGrid end
 
-struct CenterAlignedGrid <: AbstractGrid 
-end
-
-struct EdgeAlignedGrid <: AbstractGrid 
-end
-
-const center_align=CenterAlignedGrid()
-const edge_align=EdgeAlignedGrid()
-
-struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
-    dxs
-    time
-    approx_order::Int
-    grid_align::G
-end
-
-# Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-function MOLFiniteDifference(dxs, time=nothing; upwind_order = 1, centered_order = 2, grid_align=CenterAlignedGrid())
-    
-    if centered_order % 2 != 0
-        warn("Discretization centered_order must be even, rounding up to $(centered_order+1)")
-    end
-    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, centered_order, grid_align)
-end
-
-function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference)
+function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where G
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs
     domain = pdesys.domain
@@ -56,6 +30,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         depvars_lhs = get_depvars(pde.lhs, depvar_ops)
         depvars_rhs = get_depvars(pde.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
+
         # Read the independent variables,
         # ignore if the only argument is [t]
         allindvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
@@ -82,7 +57,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             derivweights = DifferentialDiscretizer(pde, s, discretization)
 
             # Get the boundary conditions
-            generate_u0_and_bceqs!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
+            BoundaryHandler!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
 
             # Find the indexes on the interior
             interior = Iinterior(s)

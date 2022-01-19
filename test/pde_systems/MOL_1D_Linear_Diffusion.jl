@@ -34,11 +34,11 @@ using ModelingToolkit: Differential
     discretization = MOLFiniteDifference([x=>dx],t)
     discretization_edge = MOLFiniteDifference([x=>dx],t;grid_align=edge_align)
     # Explicitly specify order of centered difference
-    discretization_centered = MOLFiniteDifference([x=>dx],t;centered_order=order)
+    discretization_centered = MOLFiniteDifference([x=>dx],t;approx_order=order)
     # Higher order centered difference
-    discretization_centered_order4 = MOLFiniteDifference([x=>dx],t;centered_order=4)
+    discretization_approx_order4 = MOLFiniteDifference([x=>dx],t;approx_order=4)
 
-    for disc in [discretization, discretization_edge, discretization_centered, discretization_centered_order4]
+    for disc in [discretization, discretization_edge, discretization_centered, discretization_approx_order4]
         # Convert the PDE problem into an ODE problem
         prob = discretize(pdesys,disc)
 
@@ -300,7 +300,7 @@ end
     end
 end
 
-@testset "Test 05: Dt(u(t,x)) ~ Dxx(u(t,x)), Robin BCs" begin
+@testset "Test 05: Dt(u(t,x)) ~ Dxx(u(t,x)), Robin BCs, Order 4" begin
     # Method of Manufactured Solutions
     u_exact = (x,t) -> exp.(-t) * sin.(x)
 
@@ -326,9 +326,9 @@ end
 
     # Method of lines discretization
     dx = 0.01
-    order = 2
-    discretization = MOLFiniteDifference([x=>dx],t)
-    discretization_edge = MOLFiniteDifference([x=>dx],t;grid_align=edge_align)
+    order = 4
+    discretization = MOLFiniteDifference([x=>dx],t; approx_order=order)
+    discretization_edge = MOLFiniteDifference([x=>dx],t;approx_order=order)
 
     for disc ∈ [discretization, discretization_edge]
         # Convert the PDE problem into an ODE problem
@@ -354,7 +354,7 @@ end
 end
 
 
-@testset "Test 06: Dt(u(t,x)) ~ Dxx(u(t,x)), time-dependent Robin BCs" begin
+@testset "Test 06: Dt(u(t,x)) ~ Dxx(u(t,x)), time-dependent Robin BCs, Order 6" begin
     # Method of Manufactured Solutions
     u_exact = (x,t) -> exp.(-t) * sin.(x)
 
@@ -380,7 +380,7 @@ end
 
     # Method of lines discretization
     dx = 0.01
-    order = 2
+    order = 6
     discretization = MOLFiniteDifference([x=>dx],t)
 
     # Convert the PDE problem into an ODE problem
@@ -433,7 +433,7 @@ end
     # Method of lines discretization
     dr = 0.1
     order = 2
-    discretization = MOLFiniteDifference([r=>dr],t)
+    discretization = MOLFiniteDifference([r=>dr],t,approx_order=4)
     prob = discretize(pdesys,discretization)
 
     # Solve ODE problem
@@ -705,7 +705,7 @@ end
 
     # Explicitly specify and invalid order of centered difference
     for order in 1:6
-        discretization = MOLFiniteDifference([x=>dx],t;centered_order=order)
+        discretization = MOLFiniteDifference([x=>dx],t;approx_order=order)
         if order % 2 != 0
             @test_throws ArgumentError discretize(pdesys,discretization)
         else

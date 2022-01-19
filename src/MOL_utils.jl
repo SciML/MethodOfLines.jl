@@ -73,6 +73,13 @@ function unitindices(N::Int) #create unit CartesianIndex for each dimension
     Tuple(out)
 end
 
+function split_additive_terms(eq)
+    rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
+                lhs_arg = istree(eq.lhs) && (SymbolicUtils.operation(eq.lhs) == +) ? SymbolicUtils.arguments(eq.lhs) : [eq.lhs]
+
+    return vcat(lhs_arg,rhs_arg)
+end
+
 half_range(x) = -div(x,2):div(x,2)
 
 

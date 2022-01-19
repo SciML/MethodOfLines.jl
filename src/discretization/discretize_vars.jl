@@ -16,7 +16,7 @@ end
 @inline function subvar(depvar, edge_vals)
     return substitute.((depvar,), edge_vals)
 end
-struct DiscreteSpace{N,M}
+struct DiscreteSpace{N,M,G}
     vars
     discvars
     time
@@ -43,8 +43,7 @@ grid_idxs(s::DiscreteSpace) = CartesianIndices(((axes(g)[1] for g in s.grid)...,
 edge_idxs(s::DiscreteSpace{N}) where {N} = reduce(vcat, [[vcat([Colon() for j = 1:i-1], 1, [Colon() for j = i+1:N]), vcat([Colon() for j = 1:i-1], length(s.axies[i]), [Colon() for j = i+1:N])] for i = 1:N])
 
 axiesvals(s::DiscreteSpace{N}, x_, I) where {N} = [x => (x == x_ ? s.axies[x][I[j]] : s.grid[x][I[j]]) for (j,x) in enumerate(s.nottime)]
-gridvals(s::DiscreteSpace{N}, I) where {N} = [x => s.grid[x][I[j]] for (j,x) in enumerate(s.nottime)]
-
+gridvals(s::DiscreteSpace{N}) where N = map(y-> [Pair(x, s.grid[x][y.I[j]]) for (j,x) in enumerate(s.nottime)],s.Igrid)
 ## Boundary methods ##
 edgevals(s::DiscreteSpace{N}) where {N} = reduce(vcat, [get_edgevals(s.nottime, s.axies, i) for i = 1:N])
 edgevars(s::DiscreteSpace, I) = [u => s.discvars[u][I] for u in s.vars]
@@ -55,7 +54,7 @@ Generate a map of variables to the gridpoints at the edge of the domain
 @inline function edgemaps(s::DiscreteSpace, ::LowerBoundary)
     return [x => first(s.axies[x]) for x in s.nottime]
 end
-@inline function edgemaps(s::DiscreteSpace, ::LowerBoundary)
+@inline function edgemaps(s::DiscreteSpace, ::UpperBoundary)
     return [x => last(s.axies[x]) for x in s.nottime]
 end
 
@@ -72,9 +71,21 @@ map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} 
 # ? How rude is this? Makes Iedge work
 
 # TODO: Allow other grids
+# TODO: allow depvar-specific center/edge choice?
+ 
+@inline function generate_grid(nottime, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:CenterAlignedGrid}
+    return axies    
+end
+
+@inline function generate_grid(nottime, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:EdgeAlignedGrid}
+    return map(nottime) do x
+        xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
+        dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
+        dx isa Number ? (x => ((DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2))) : x => dx
+    end
+end
 
 function DiscreteSpace(domain, depvars, indvars, nottime, discretization)
-    grid_align = discretization.grid_align
     t = discretization.time
     nspace = length(nottime)
     # Discretize space
@@ -90,23 +101,13 @@ function DiscreteSpace(domain, depvars, indvars, nottime, discretization)
     # Define the grid on which the dependent variables will be evaluated (see #378)
     # center_align is recommended for Dirichlet BCs
     # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
-    if grid_align == center_align
-        grid = axies
-    elseif grid_align == edge_align
-        # construct grid including ghost nodes beyond outer edges
-        # e.g. space 0:dx:1 goes to grid -dx/2:dx:1+dx/2
-        grid =  map(nottime) do x
-            xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
-            dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
-            dx isa Number ? (x => ((DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2))) : x => dx
-        end 
-        # TODO: allow depvar-specific center/edge choice?
-    end
+
+    grid = generate_grid(nottime, axies, domain, discretization)
 
     # Build symbolic variables
     Iaxies = CartesianIndices(((axes(s.second)[1] for s in axies)...,))
     Igrid = CartesianIndices(((axes(g.second)[1] for g in grid)...,))
-
+    
     depvarsdisc = map(depvars) do u
         if t === nothing
             sym = nameof(SymbolicUtils.operation(u))
@@ -120,11 +121,11 @@ function DiscreteSpace(domain, depvars, indvars, nottime, discretization)
     end
 
     # Build symbolic maps for boundaries
-    Iedge = Dict([x => Dict([LowerBoundary() => vec(selectdim(Igrid, dim, 1)), UpperBoundary() => vec(selectdim(Igrid, dim, length(grid[dim].second)))]) for (dim, x) in enumerate(s.nottime)])
+    Iedge = Dict([x => [vec(selectdim(Igrid, dim, 1)), vec(selectdim(Igrid, dim, length(grid[dim].second)))] for (dim, x) in enumerate(nottime)])
 
     nottime2dim = [nottime[i] => i for i in 1:nspace]
     dim2nottime = [i => nottime[i] for i in 1:nspace]
-    return DiscreteSpace{nspace,length(depvars)}(depvars, Dict(depvarsdisc), discretization.time, nottime, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedge, Dict(nottime2dim))
+    return DiscreteSpace{nspace,length(depvars), discretization.grid_align}(depvars, Dict(depvarsdisc), discretization.time, nottime, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedge, Dict(nottime2dim))
 end
 
 

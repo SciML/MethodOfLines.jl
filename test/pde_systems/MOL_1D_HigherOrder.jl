@@ -34,7 +34,7 @@ using ModelingToolkit: Differential
                x ∈ Interval(0.0,L)]
 
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
-    discretization = MOLFiniteDifference([x=>dx],t, centered_order=4)
+    discretization = MOLFiniteDifference([x=>dx],t, approx_order=4)
     prob = discretize(pdesys,discretization)
 end
 
@@ -70,7 +70,7 @@ end
                x ∈ Interval(0.0,L)]
 
     @named pdesys = PDESystem(eqs,bcs,domains,[t,x],[u(t,x),v(t,x)])
-    discretization = MOLFiniteDifference([x=>dx],t, centered_order=4)
+    discretization = MOLFiniteDifference([x=>dx],t, approx_order=4)
     prob = discretize(pdesys,discretization)
 end
 
@@ -103,7 +103,7 @@ end
     # Discretization
     dx = 0.4; dt = 0.2
 
-    discretization = MOLFiniteDifference([x=>dx],t;centered_order=4,grid_align=center_align)
+    discretization = MOLFiniteDifference([x=>dx],t;approx_order=4,grid_align=center_align)
     @named pdesys = PDESystem(eq,bcs,domains,[x,t],[u(x,t)])
     prob = discretize(pdesys,discretization)
 

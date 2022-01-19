@@ -2,7 +2,7 @@
 struct DifferentialDiscretizer{T, D1}
     approx_order::Int
     map::D1
-    halfoffsetmap::Dict{Num, DiffEqOperators.DerivativeOperator}
+    halfoffsetmap::Dict
     interpmap::Dict{Num, DiffEqOperators.DerivativeOperator}
     orders::Dict{Num, Vector{Int}}
 end
@@ -26,7 +26,8 @@ function DifferentialDiscretizer(pde, s, discretization)
 
         nonlinlap = vcat(nonlinlap, [Differential(x)^d => CompleteHalfCenteredDifference(d, approx_order, s.dxs[x]) for d in last(orders).second])
         differentialmap = vcat(differentialmap, rs)
-        push!(interp, x => CompleteHalfCenteredDifference(0, approx_order, s.dxs[x])
+        # A 0th order derivative off the grid is an interpolation
+        push!(interp, x => CompleteHalfCenteredDifference(0, approx_order, s.dxs[x]))
     end
 
     return DifferentialDiscretizer{eltype(orders), typeof(Dict(differentialmap))}(approx_order, Dict(differentialmap), Dict(nonlinlap), Dict(interp), Dict(orders))
@@ -98,12 +99,12 @@ function get_half_offset_weights_and_stencil(D, II, s, offset, jx)
 end
 
 # i is the index of the offset, assuming that there is one precalculated set of weights for each offset required for a first order finite difference
-function half_offset_centered_difference(D, II, s, offset, i, jx, u, ufunc)
+function half_offset_centered_difference(D, II, s, offset, jx, u, ufunc)
     j, x = jx
     I1 = unitindices(nparams(s))[j]
     # Shift the current index to the correct offset
-    II_prime = II + offset*I1
+    II_prime = II + Int(offset-0.5)*I1
     # Get the weights and stencil
-    (weights, Itap) = _get_weights_and_stencil(D, II_prime, I1, s, i, j, x)
+    (weights, Itap) = _get_weights_and_stencil(D, II_prime, I1, s, offset, j, x)
     return dot(weights, ufunc(u, Itap, x))
 end

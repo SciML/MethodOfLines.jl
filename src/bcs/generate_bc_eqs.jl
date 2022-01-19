@@ -1,32 +1,36 @@
-### INITIAL AND BOUNDARY CONDITIONS ###
+function _boundary_rules(s, orders, val)
+    args = copy(s.params)
 
-abstract type AbstractBoundary end
+    if isequal(val, floor(val))
+        args = [substitute.(args, (x=>val,)), substitute.(args, (x=>Int(val),))]
+    else
+        args = [substitute.(args, (x=>val,))]
+    end
+    substitute.(args, (x=>lowerboundary(x),))
+    
+    rules = [@rule operation(u)(arg...) => (u, x) for u in s.vars, arg in args]
 
-abstract type AbstractTruncatingBoundary <: AbstractBoundary end
-
-abstract type AbstractExtendingBoundary <: AbstractBoundary end
-
-struct LowerBoundary <: AbstractTruncatingBoundary
+    return vcat(rules, vec([@rule (Differential(x)^d)(operation(u)(arg...)) => (u, x) for d in orders[x], u in s.vars, arg in args]))
 end
 
-struct UpperBoundary<: AbstractTruncatingBoundary
-end
+function generate_boundary_matching_rules(s, orders)
+    # TODO: Check for bc equations of multiple variables
+    lowerboundary(x) = first(s.axies[x])
+    upperboundary(x) = last(s.axies[x])
 
-struct CompleteBoundary <: AbstractTruncatingBoundary
-end
+    # Rules to match boundary conditions on the lower boundaries
+    lower = reduce(vcat, [_boundary_rules(s, orders, lowerboundary(x)) for x in s.vars])
 
-struct PeriodicBoundary <: AbstractBoundary
-end
+    upper = reduce(vcat, [_boundary_rules(s, orders, upperboundary(x)) for x in s.vars])
 
-struct BoundaryHandler{hasperiodic}
-    boundaries::Dict{Num, AbstractBoundary}
+    return (lower, upper)
 end
 
 """
 Mutates bceqs and u0 by finding relevant equations and discretizing them.
-TODO: return a handler for use with generate_finite_difference_rules and pull out initial condition
+TODO: return a handler for use with generate_finite_difference_rules and pull out initial condition. Important to remember that BCs can have 
 """
-function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
+function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights::DifferentialDiscretizer) 
     
     t=s.time
     
@@ -38,18 +42,23 @@ function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
 
     # Create some rules to match which bundary/variable a bc concerns
     # * Assume that the term of the condition is applied additively and has no multiplier/divisor/power etc.
-    # ? Is it nessecary to check whether all other args are present?
-    lower_boundary_rules = vec([@rule operation(u)(~~a, lowerboundary(x), ~~b) => IfElse.ifelse(all(y-> y in vcat(~~a, ~~b), setdiff(x, arguments(u))), x, nothing) for x in setdiff(arguments(u), t), u in s.vars])
+    
+    ## BC matching rules, returns the variable and parameter the bc concerns
 
-    upper_boundary_rules = vec([@rule operation(u)(~~a, upperboundary(x), ~~b) => IfElse.ifelse(all(y-> y in vcat(~~a, ~~b), setdiff(x, arguments(u))), x, nothing) for x in setdiff(arguments(u), t), u in s.vars])
+    lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(s, derivweights.orders)
+
+    # indexes for Iedge depending on boundary type
+    idx(::LowerBoundary) = 1
+    idx(::UpperBoundary) = 2
 
     # Generate initial conditions and bc equations
     for bc in bcs
+        # * Assume in the form `u(...) ~ ...` for now
         bcdepvar = first(get_depvars(bc.lhs, depvar_ops))
+        
         if any(u -> isequal(operation(u), operation(bcdepvar)), s.vars)
             if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))
                 # initial condition
-                # * Assume in the form `u(...) ~ ...` for now
                 # * Assume that the initial condition is not in terms of the initial derivative
                 initindex = findfirst(isequal(bc.lhs), initmaps) 
                 if initindex !== nothing
@@ -57,11 +66,9 @@ function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
                 end
             else
                 # Split out additive terms
-                rhs_arg = istree(pde.rhs) && (SymbolicUtils.operation(pde.rhs) == +) ? SymbolicUtils.arguments(pde.rhs) : [pde.rhs]
-                lhs_arg = istree(pde.lhs) && (SymbolicUtils.operation(pde.lhs) == +) ? SymbolicUtils.arguments(pde.lhs) : [pde.lhs]
+                terms = split_additive_terms(bc)
 
                 u_, x_ = (nothing, nothing)
-                terms = vcat(lhs_arg,rhs_arg)
                 boundary = nothing
                 # Check whether the bc is on the lower boundary, or periodic
                 for term in terms, r in lower_boundary_rules
@@ -75,6 +82,7 @@ function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
                                     #TODO: Add handling for perioodic boundary conditions here
                                 end
                             end
+                        end
                         break
                     end
                 end
@@ -86,24 +94,26 @@ function BoundaryHandler!!(u0, bceqs, bcs, s, depvar_ops, tspan, derivweights)
                     end
                 end
 
-                @assert boundary !== nothing "Boundary condition ${bc} is not on a boundary of the domain, or is not a valid boundary condition"
+                @assert boundary !== nothing "Boundary condition $bc is not on a boundary of the domain, or is not a valid boundary condition"
                 
-                push!(bceqs, vec(map(s.Iedge[x_][boundary]) do II
-                    rules = generate_bc_rules(II, s, bc, u_, boundary, derivweights)
-                    rules = vcat(rules, )
+                push!(bceqs, vec(map(s.Iedge[x_][idx(boundary)]) do II
+                    rules = generate_bc_rules(II, derivweights, s, bc, u_, x_, boundary)
                     
                     substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
                 end))
             end
-        else 
-            throw(ArgumentError("No active variables in boundary condition $bc lhs, please ensure that bcs are "))
+        end
     end
 end
 
-function generate_bc_rules(II, dim, s, bc, u_, x_, boundary::AbstractTruncatingBoundary, derivweights, G::CenterAlignedGrid) 
+function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_, ::AbstractTruncatingBoundary) where {N, M, G<:CenterAlignedGrid}
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
     ufunc(v, I, x) = s.discvars[v][I]
+
+    depvarderivbcmaps = []
+    depvarbcmaps = []
+
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
     for u in s.vars
         if isequal(operation(u), operation(u_))
@@ -124,11 +134,14 @@ function generate_bc_rules(II, dim, s, bc, u_, x_, boundary::AbstractTruncatingB
     return vcat(depvarderivbcmaps, depvarbcmaps, fd_rules, varrules)
 end
 
-function generate_bc_rules(II, dim, s, bc, u_, x_, boundary::AbstractTruncatingBoundary, derivweights, G::EdgeAlignedGrid) 
+function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_, boundary::AbstractTruncatingBoundary) where {N, M, G<:EdgeAlignedGrid}
     
     offset(::LowerBoundary) = 1/2
     offset(::UpperBoundary) = -1/2
     ufunc(v, I, x) = s.discvars[v][I]
+
+    depvarderivbcmaps = []
+    depvarbcmaps = []
 
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
@@ -144,7 +157,7 @@ function generate_bc_rules(II, dim, s, bc, u_, x_, boundary::AbstractTruncatingB
     
     fd_rules = generate_finite_difference_rules(II, s, bc, derivweights)
     varrules = axiesvals(s, x_, II)
-    
+
     # valrules should be caught by depvarbcmaps and varrules if the above assumption holds
     #valr = valrules(s, II)
     
