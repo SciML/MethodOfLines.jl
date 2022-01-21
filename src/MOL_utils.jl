@@ -74,11 +74,22 @@ function unitindices(N::Int) #create unit CartesianIndex for each dimension
 end
 
 function split_additive_terms(eq)
+    # Calling the methods from symbolicutils matches the expressions
     rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
-                lhs_arg = istree(eq.lhs) && (SymbolicUtils.operation(eq.lhs) == +) ? SymbolicUtils.arguments(eq.lhs) : [eq.lhs]
+    lhs_arg = istree(eq.lhs) && (SymbolicUtils.operation(eq.lhs) == +) ? SymbolicUtils.arguments(eq.lhs) : [eq.lhs]
 
     return vcat(lhs_arg,rhs_arg)
 end
+
+function clip(I::CartesianIndex, s::DiscreteSpace{N}, j::Int) where N
+    # Clip the index by 1 at each end of the dimension
+    I1 = unitindices(N)[j]
+    return I[j] > length(s, j) ? I-I1 : I+I1
+end
+    
+subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
+
+    
 
 half_range(x) = -div(x,2):div(x,2)
 

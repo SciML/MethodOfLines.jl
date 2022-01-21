@@ -32,11 +32,11 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
     # Read the independent variables,
     # ignore if the only argument is [t]
     indvars = first(Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
-    nottime = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
+    x̄ = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
 
     disc = MOLFiniteDifference([x=>dx, y=>dy], t; approx_order=order)
 
-    s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, nottime, disc)
+    s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, x̄, disc)
 
     discx = x_min:dx:x_max
     discy = y_min:dy:y_max
@@ -84,11 +84,11 @@ end
     # Read the independent variables,
     # ignore if the only argument is [t]
     indvars = first(Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
-    nottime = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
+    x̄ = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
 
     disc = MOLFiniteDifference([x=>dx, y=>dy], t; approx_order=order, grid_align=edge_align)
 
-    s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, nottime, disc)
+    s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, x̄, disc)
 
     discx = (x_min-dx/2): dx : (x_max+dx/2)
     discy = (y_min-dy/2): dy : (y_max+dy/2)

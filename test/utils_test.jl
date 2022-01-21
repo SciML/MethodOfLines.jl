@@ -1,4 +1,4 @@
-using MethodOfLines, Test, ModelingToolkit
+using MethodOfLines, Test, ModelingToolkit, SymbolicUtils
 
 @testset "count differentials 1D" begin
     @parameters t x
@@ -71,4 +71,40 @@ end
     γ = 1
     eq = Dt(u(x,t)) + u(x,t)*Dx(u(x,t)) + α*Dx2(u(x,t)) + β*Dx3(u(x,t)) + γ*Dx4(u(x,t)) ~ 0
     @test MethodOfLines.differential_order(eq.lhs, x.val) == Set([4, 3, 2, 1])
+end
+
+@testset "Split additive terms" begin 
+    @parameters t x y r
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dr = Differential(r)
+    Dxx = Differential(x)^2
+
+    t_min= 0.
+    t_max = 2.0
+    x_min = 0.
+    x_max = 2.
+    y_min = 0.
+    y_max = 2.
+
+    analytic_sol_func(t,x,y) = exp(x+y)*cos(x+y+4t)
+    
+    bcs = [u(0,x) ~ - x * (x-1) * sin(x),
+       v(0,x) ~ - x * (x-1) * sin(x),
+       u(t,0) ~ 0.0, u(t,1) ~ 0.0,
+       v(t,0) ~ 0.0, v(t,1) ~ 0.0,
+       u(t_min,x,y) ~ analytic_sol_func(t_min,x,y),
+       u(t,x_min,y) ~ analytic_sol_func(t,x_min,y),
+       u(t,x_max,y) ~ analytic_sol_func(t,x_max,y),
+       u(t,x,y_min) ~ analytic_sol_func(t,x,y_min),
+       u(t,x,y_max) ~ analytic_sol_func(t,x,y_max),
+       u(0,r) ~ - r * (r-1) * sin(r),
+       Dr(u(t,0)) ~ 0.0, u(t,1) ~ sin(1)]
+
+    for bc in bcs
+        terms = MethodOfLines.split_additive_terms(bc)
+        @test terms isa Vector
+        
+    end
 end

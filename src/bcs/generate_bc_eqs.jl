@@ -1,16 +1,12 @@
-function _boundary_rules(s, orders, val)
-    args = copy(s.params)
+function _boundary_rules(s, orders, x, val)
+    #TODO: Change this around to detect boundary variables anywhere in the eq
+   args = copy(s.params)
 
-    if isequal(val, floor(val))
-        args = [substitute.(args, (x=>val,)), substitute.(args, (x=>Int(val),))]
-    else
-        args = [substitute.(args, (x=>val,))]
-    end
-    substitute.(args, (x=>lowerboundary(x),))
-    
-    rules = [@rule operation(u)(arg...) => (u, x) for u in s.vars, arg in args]
+    args = substitute.(args, (x=>val,))
 
-    return vcat(rules, vec([@rule (Differential(x)^d)(operation(u)(arg...)) => (u, x) for d in orders[x], u in s.vars, arg in args]))
+    rules = [operation(u)(args...) => (operation(u)(args...), x) for u in ū]
+
+    return vcat(rules, vec([(Differential(x)^d)(operation(u)(args...)) => (operation(u)(args...), x) for d in orders[x], u in ū]))
 end
 
 function generate_boundary_matching_rules(s, orders)
@@ -19,9 +15,9 @@ function generate_boundary_matching_rules(s, orders)
     upperboundary(x) = last(s.axies[x])
 
     # Rules to match boundary conditions on the lower boundaries
-    lower = reduce(vcat, [_boundary_rules(s, orders, lowerboundary(x)) for x in s.vars])
+    lower = reduce(vcat, [_boundary_rules(s, orders, x, lowerboundary(x)) for x in s.x̄])
 
-    upper = reduce(vcat, [_boundary_rules(s, orders, upperboundary(x)) for x in s.vars])
+    upper = reduce(vcat, [_boundary_rules(s, orders, x, upperboundary(x)) for x in s.x̄])
 
     return (lower, upper)
 end
@@ -35,9 +31,9 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
     t=s.time
     
     if t === nothing
-        initmaps = s.vars
+        initmaps = ū
     else
-        initmaps = substitute.(s.vars,[t=>tspan[1]])
+        initmaps = substitute.(ū,[t=>tspan[1]])
     end
 
     # Create some rules to match which bundary/variable a bc concerns
@@ -56,13 +52,13 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
         # * Assume in the form `u(...) ~ ...` for now
         bcdepvar = first(get_depvars(bc.lhs, depvar_ops))
         
-        if any(u -> isequal(operation(u), operation(bcdepvar)), s.vars)
+        if any(u -> isequal(operation(u), operation(bcdepvar)), ū)
             if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))
                 # initial condition
                 # * Assume that the initial condition is not in terms of the initial derivative
                 initindex = findfirst(isequal(bc.lhs), initmaps) 
                 if initindex !== nothing
-                    push!(u0,vec(s.discvars[s.vars[initindex]] .=> substitute.((bc.rhs,),gridvals(s))))
+                    push!(u0,vec(s.discvars[ū[initindex]] .=> substitute.((bc.rhs,),gridvals(s))))
                 end
             else
                 # Split out additive terms
@@ -72,23 +68,26 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
                 boundary = nothing
                 # Check whether the bc is on the lower boundary, or periodic
                 for term in terms, r in lower_boundary_rules
-                    if r(term) !== nothing
-                        u_, x_ = (term, r(term))
+                    #Check if the rule changes the expression
+                    if subsmatch(term, r)
+                        # Get the matched variables from the rule
+                        u_, x_ = r.second
+                        # Mark the boundary                        
                         boundary = LowerBoundary()
-                        for term_ in setdiff(terms, term)
-                            for r in upper_boundary_rules
-                                if r(term_) !== nothing
-                                    # boundary = PeriodicBoundary()
-                                    #TODO: Add handling for perioodic boundary conditions here
-                                end
-                            end
-                        end
+                        # for term_ in setdiff(terms, term)
+                        #     for r_ in upper_boundary_rules
+                        #         if subsmatch(term_, r_) !== nothing
+                        #             boundary = PeriodicBoundary()
+                        #             #TODO: Add handling for perioodic boundary conditions here
+                        #         end
+                        #     end
+                        # end
                         break
                     end
                 end
                 for term in terms, r in upper_boundary_rules
-                    if r(term) !== nothing
-                        u_, x_ = (term, r(term))
+                    if subsmatch(term, r)
+                        u_, x_ = r.second 
                         boundary = UpperBoundary()
                         break
                     end
@@ -115,10 +114,10 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_
     depvarbcmaps = []
 
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
-    for u in s.vars
+    for u in ū
         if isequal(operation(u), operation(u_))
             # What to replace derivatives at the boundary with
-            depvarderivbcmaps = [(Differential(x)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, (s.x2i[x_], x_), u, ufunc) for d in derivweights.orders[x_]]
+            depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, (s.x2i[x_], x_), u, ufunc) for d in derivweights.orders[x_]]
             # ? Does this need to be done for all variables at the boundary?
             depvarbcmaps = [u_ => s.discvars[u][II]]
             break
@@ -136,8 +135,6 @@ end
 
 function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_, boundary::AbstractTruncatingBoundary) where {N, M, G<:EdgeAlignedGrid}
     
-    offset(::LowerBoundary) = 1/2
-    offset(::UpperBoundary) = -1/2
     ufunc(v, I, x) = s.discvars[v][I]
 
     depvarderivbcmaps = []
@@ -146,11 +143,11 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
-    for u in s.vars
+    for u in ū
         if isequal(operation(u), operation(u_))
-            depvarderivbcmaps = [(Differential(x)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II, s, offset(boundary), (s.x2i[x_],x_), u, ufunc) for d in derivweights.orders[x_]]
+            depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II, s, (s.x2i[x_],x_), u, ufunc) for d in derivweights.orders[x_]]
     
-            depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II, s, offset(boundary), (s.x2i[x_],x_), u, ufunc)]
+            depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II, s, (s.x2i[x_],x_), u, ufunc)]
             break
         end
     end

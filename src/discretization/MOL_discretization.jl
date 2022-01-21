@@ -34,8 +34,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         # Read the independent variables,
         # ignore if the only argument is [t]
         allindvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
-        allnottime = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
-        if isempty(allnottime)
+        allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
+        if isempty(allx̄)
             push!(alleqs, pde)
             push!(alldepvarsdisc, depvars)
             for bc in bcs
@@ -45,13 +45,13 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             end
         else
             # make sure there is only one set of independent variables per equation
-            @assert length(allnottime) == 1
-            nottime = first(allnottime)
+            @assert length(allx̄) == 1
+            x̄ = first(allx̄)
             @assert length(allindvars) == 1
             indvars = first(allindvars)
             
             # Get the grid
-            s = DiscreteSpace(domain, depvars, indvars, nottime, discretization)
+            s = DiscreteSpace(domain, depvars, indvars, x̄, discretization)
             
             # Get the finite difference weights
             derivweights = DifferentialDiscretizer(pde, s, discretization)
@@ -64,12 +64,12 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             # Discretize the equation on the interior
             pdeeqs = vec(map(interior) do II
-                rules = vcat(generate_finite_difference_rules(II, s, pde, derivweights), valrules(s, II))
+                rules = vcat(generate_finite_difference_rules(II, s, pde, derivweights), valmaps(s, II))
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             
             push!(alleqs,pdeeqs)
-            push!(alldepvarsdisc, reduce(vcat, s.discvars))
+            push!(alldepvarsdisc, reduce(vcat, values(s.discvars)))
         end
     end
     

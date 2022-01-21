@@ -70,8 +70,8 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
         # Read the independent variables,
         # ignore if the only argument is [t]
         allindvars = Set(filter(xs->!isequal(xs,[t]),map(arguments,depvars)))
-        allnottime = Set(filter(!isempty,map(u->filter(x-> t == nothing || !isequal(x,t.val),arguments(u)),depvars)))
-        if isempty(allnottime)
+        allx̄ = Set(filter(!isempty,map(u->filter(x-> t == nothing || !isequal(x,t.val),arguments(u)),depvars)))
+        if isempty(allx̄)
             push!(alleqs,eq)
             push!(alldepvarsdisc,depvars)
             for bc in pdesys.bcs
@@ -81,19 +81,19 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
             end
         else
             # make sure there is only one set of independent variables per equation
-            @assert length(allnottime) == 1
-            nottime = first(allnottime)
+            @assert length(allx̄) == 1
+            x̄ = first(allx̄)
             @assert length(allindvars) == 1
             indvars = first(allindvars)
-            nspace = length(nottime)
+            nspace = length(x̄)
 
             # Discretize space
-            space = map(nottime) do x
+            space = map(x̄) do x
                 xdomain = pdesys.domain[findfirst(d->isequal(x, d.variables),pdesys.domain)]
                 dx = discretization.dxs[findfirst(dxs->isequal(x, dxs[1].val),discretization.dxs)][2]
                 dx isa Number ? (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : dx
             end
-            dxs = map(nottime) do x
+            dxs = map(x̄) do x
                 dx = discretization.dxs[findfirst(dxs->isequal(x, dxs[1].val),discretization.dxs)][2]
             end
 
@@ -126,8 +126,8 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
                     collect(first(@variables $sym[collect(axes(g)[1] for g in grid)...](t)))
                 end
             end
-            spacevals = map(y->[Pair(nottime[i],space[i][y.I[i]]) for i in 1:nspace],space_indices)
-            gridvals = map(y->[Pair(nottime[i],grid[i][y.I[i]]) for i in 1:nspace],grid_indices)
+            spacevals = map(y->[Pair(x̄[i],space[i][y.I[i]]) for i in 1:nspace],space_indices)
+            gridvals = map(y->[Pair(x̄[i],grid[i][y.I[i]]) for i in 1:nspace],grid_indices)
 
 
             ### INITIAL AND BOUNDARY CONDITIONS ###
@@ -136,7 +136,7 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
                                 vcat([Colon() for j in 1:i-1],length(space[i]),[Colon() for j in i+1:nspace])] for i in 1:nspace])
 
             #edgeindices = [indices[e...] for e in edges]
-            get_edgevals(i) = [nottime[i]=>first(space[i]),nottime[i]=>last(space[i])]
+            get_edgevals(i) = [x̄[i]=>first(space[i]),x̄[i]=>last(space[i])]
             edgevals = reduce(vcat,[get_edgevals(i) for i in 1:length(space)])
             edgevars = [[d[e...] for e in edges] for d in depvarsdisc]
 
@@ -157,7 +157,7 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
             # depvarderivbcmaps will dictate what to replace the Differential terms with in the bcs
             if nspace == 1
                 # 1D system
-                bc_der_orders = filter(!iszero,sort(unique([count_differentials(bc.lhs, nottime[1]) for bc in pdesys.bcs])))
+                bc_der_orders = filter(!iszero,sort(unique([count_differentials(bc.lhs, x̄[1]) for bc in pdesys.bcs])))
                 left_weights(d_order,j) = MethodOfLines.calculate_weights(d_order, grid[j][1], grid[j][1:1+d_order])
                 right_weights(d_order,j) = MethodOfLines.calculate_weights(d_order, grid[j][end], grid[j][end-d_order:end])
                 # central_neighbor_idxs(II,j) = [II-CartesianIndex((1:nspace.==j)...),II,II+CartesianIndex((1:nspace.==j)...)]
@@ -170,7 +170,7 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
                 subderivar(depvar,d,s) = substitute.(((Differential(s)^d)(depvar),),edgevals)
                 # Create map of symbolic Differential terms with symbolic spatially discretized terms
                 depvarderivbcmaps = []
-                for (k,s) in enumerate(nottime)
+                for (k,s) in enumerate(x̄)
                     rs = (subderivar(depvar,bc_der_orders[j],s) .=> derivars[i][j] for j in 1:length(bc_der_orders), (i,depvar) in enumerate(depvars))
                     for r in rs
                         push!(depvarderivbcmaps, r)
@@ -183,7 +183,7 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
                             for depvar in depvarsdisc]
                     # replace u(t,0) with (u₁ + u₂) / 2, etc
                     depvarbcmaps = reduce(vcat,[subvar(depvar) .=> bcvars[i]
-                                        for (i, depvar) in enumerate(depvars) for s in nottime])
+                                        for (i, depvar) in enumerate(depvars) for s in x̄])
 
                 end
             else
@@ -192,7 +192,7 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
                 depvarderivbcmaps = []
             end
             # All unique order of derivates in BCs
-            bc_der_orders = filter(!iszero,sort(unique([count_differentials(bc.lhs, nottime[1]) for bc in pdesys.bcs])))
+            bc_der_orders = filter(!iszero,sort(unique([count_differentials(bc.lhs, x̄[1]) for bc in pdesys.bcs])))
             # no. of different orders in BCs
             n = length(bc_der_orders)
             # Generate initial conditions and bc equations
@@ -214,7 +214,7 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
                             # Replace Differential terms in the bc lhs with the symbolic spatially discretized terms
                             # TODO: Fix Neumann and Robin on higher dimension
                             # Update: Fixed for 1D systems
-                            j = findfirst(isequal(count_differentials(bc.lhs, nottime[1])),bc_der_orders)
+                            j = findfirst(isequal(count_differentials(bc.lhs, x̄[1])),bc_der_orders)
                             k = i%2 == 0 ? 2 : 1
                             lhs = nspace == 1 ? (j isa Nothing ? bc.lhs : substitute(bc.lhs,depvarderivbcmaps[j + n*Int(floor((i-1)/2))][k])) : bc.lhs
 
@@ -293,9 +293,9 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
                 # starting from highest to lowest order.
                 d_orders(s) = reverse(sort(collect(union(differential_order(eq.rhs, s), differential_order(eq.lhs, s)))))
 
-                # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(nottime), (k,u) in enumerate(depvars)]
+                # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(x̄), (k,u) in enumerate(depvars)]
                 central_deriv_rules_cartesian = Array{Pair{Num,Num},1}()
-                for (j,s) in enumerate(nottime)
+                for (j,s) in enumerate(x̄)
                     rs = [(Differential(s)^d)(u) => central_deriv_cartesian(d,II,j,k) for d in d_orders(s), (k,u) in enumerate(depvars)]
                     for r in rs
                         push!(central_deriv_rules_cartesian, r)
@@ -303,15 +303,15 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
                 end
 
                 central_deriv_rules_spherical = [Differential(s)(s^2*Differential(s)(u))/s^2 => central_deriv_spherical(II,j,k)
-                                                for (j,s) in enumerate(nottime), (k,u) in enumerate(depvars)]
+                                                for (j,s) in enumerate(x̄), (k,u) in enumerate(depvars)]
 
                 valrules = vcat([depvars[k] => depvarsdisc[k][II] for k in 1:length(depvars)],
-                                [nottime[j] => grid[j][II[j]] for j in 1:nspace])
+                                [x̄[j] => grid[j][II[j]] for j in 1:nspace])
 
                 # TODO: upwind rules needs interpolation into `@rule`
                 forward_weights(II,j) = MethodOfLines.calculate_weights(discretization.upwind_order, 0.0, grid[j][[II[j],II[j]+1]])
                 reverse_weights(II,j) = MethodOfLines.calculate_weights(discretization.upwind_order, 0.0, grid[j][[II[j]-1,II[j]]])
-                # upwinding_rules = [@rule(*(~~a,$(Differential(nottime[j]))(u),~~b) => IfElse.ifelse(*(~~a..., ~~b...,)>0,
+                # upwinding_rules = [@rule(*(~~a,$(Differential(x̄[j]))(u),~~b) => IfElse.ifelse(*(~~a..., ~~b...,)>0,
                 #                         *(~~a..., ~~b..., dot(reverse_weights(II,j),depvars[k][central_neighbor_idxs(II,j)[1:2]])),
                 #                         *(~~a..., ~~b..., dot(forward_weights(II,j),depvars[k][central_neighbor_idxs(II,j)[2:3]]))))
                 #                         for j in 1:nspace, k in 1:length(pdesys.depvars)]
@@ -327,30 +327,30 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
                 # Dependent variable rules
                 r_mid_dep(II, j, k, l) = [depvars[k] => g(II, j, k, l) for k in 1:length(depvars)]
                 # Independent variable rules
-                r_mid_indep(II, j, l) = [nottime[j] => iv_mid(II, j, l) for j in 1:length(nottime)]
+                r_mid_indep(II, j, l) = [x̄[j] => iv_mid(II, j, l) for j in 1:length(x̄)]
                 # Replacement rules: new approach
                 cartesian_deriv_rules = [@rule ($(Differential(iv))(*(~~a, $(Differential(iv))(dv), ~~b))) =>
                                         dot([Num(substitute(substitute(*(~~a..., ~~b...), r_mid_dep(II, j, k, -1)), r_mid_indep(II, j, -1))),
                                             Num(substitute(substitute(*(~~a..., ~~b...), r_mid_dep(II, j, k, 1)), r_mid_indep(II, j, 1)))],
                                             [-b1(II, j, k), b2(II, j, k)])
-                                        for (j, iv) in enumerate(nottime) for (k, dv) in enumerate(depvars)]
+                                        for (j, iv) in enumerate(x̄) for (k, dv) in enumerate(depvars)]
 
                 cartesian_deriv_rules = vcat(vec(cartesian_deriv_rules),vec(
                                         [@rule ($(Differential(iv))($(Differential(iv))(dv)/~a)) =>
                                         dot([Num(substitute(substitute(1/~a, r_mid_dep(II, j, k, -1)), r_mid_indep(II, j, -1))),
                                             Num(substitute(substitute(1/~a, r_mid_dep(II, j, k, 1)), r_mid_indep(II, j, 1)))],
                                             [-b1(II, j, k), b2(II, j, k)])
-                                        for (j, iv) in enumerate(nottime) for (k, dv) in enumerate(depvars)]))
+                                        for (j, iv) in enumerate(x̄) for (k, dv) in enumerate(depvars)]))
 
                 spherical_deriv_rules = [@rule *(~~a, ($(Differential(iv))((iv^2)*$(Differential(iv))(dv))), ~~b) / (iv^2) =>
                                          *(~a..., central_deriv_spherical(II, j, k), ~b...)
-                                         for (j, iv) in enumerate(nottime) for (k, dv) in enumerate(depvars)]
+                                         for (j, iv) in enumerate(x̄) for (k, dv) in enumerate(depvars)]
 
                 # r^-2 needs to be handled separately
                 spherical_deriv_rules = vcat(vec(spherical_deriv_rules),vec(
                                         [@rule *(~~a, (iv^-2) * ($(Differential(iv))((iv^2)*$(Differential(iv))(dv))), ~~b) =>
                                          *(~a..., central_deriv_spherical(II, j, k), ~b...)
-                                         for (j, iv) in enumerate(nottime) for (k, dv) in enumerate(depvars)]))
+                                         for (j, iv) in enumerate(x̄) for (k, dv) in enumerate(depvars)]))
 
                 rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
                 lhs_arg = istree(eq.lhs) && (SymbolicUtils.operation(eq.lhs) == +) ? SymbolicUtils.arguments(eq.lhs) : [eq.lhs]

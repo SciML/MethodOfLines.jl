@@ -51,7 +51,6 @@ domains = [t ∈ Interval(t_min,t_max),
            x ∈ Interval(x_min,x_max),
            y ∈ Interval(y_min,y_max)]
 @named pdesys = PDESystem([eq],bcs,domains,[t,x,y],[u(t,x,y)])
-println("ping")
 # Method of lines discretization
 dx = 0.1; dy = 0.2
 discretization = MOLFiniteDifference([x=>dx,y=>dy],t)
@@ -75,3 +74,5 @@ domains = [t ∈ Interval(0.0,1.0),
 discretization = MOLFiniteDifference([r=>0.1],t)
 prob = discretize(pdesys,discretization) # This gives an ODEProblem since it's time-dependent
 sol = solve(prob,Tsit5())
+
+@println("\n\n\n\nDone!\n\n\n\n")

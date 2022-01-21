@@ -38,9 +38,9 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
             # Read the independent variables,
             # ignore if the only argument is [t]
             indvars = first(Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
-            nottime = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
+            x̄ = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
 
-            s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, nottime, disc)
+            s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, x̄, disc)
 
             derivweights = MethodOfLines.DifferentialDiscretizer(pde, s, disc)
             
