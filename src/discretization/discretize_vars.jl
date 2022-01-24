@@ -17,7 +17,7 @@ end
     return substitute.((depvar,), edge_vals)
 end
 struct DiscreteSpace{N,M,G}
-    vars
+    ū
     discvars
     time
     x̄ # Note that these aren't necessarily @parameters
@@ -35,6 +35,7 @@ nparams(::DiscreteSpace{N,M}) where {N,M} = N
 nvars(::DiscreteSpace{N,M}) where {N,M} = M
 
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])
+Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])
 Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 
 params(s::DiscreteSpace{N,M}) where {N,M}= s.params
@@ -57,7 +58,7 @@ gridvals(s::DiscreteSpace{N}, I::CartesianIndex) where N = [Pair(x, s.grid[x][I[
 
 ## Boundary methods ##
 edgevals(s::DiscreteSpace{N}) where {N} = reduce(vcat, [get_edgevals(s.x̄, s.axies, i) for i = 1:N])
-edgevars(s::DiscreteSpace, I) = [u => s.discvars[u][I] for u in ū]
+edgevars(s::DiscreteSpace, I) = [u => s.discvars[u][I] for u in s.ū]
 
 """
 Generate a map of variables to the gridpoints at the edge of the domain
@@ -69,7 +70,7 @@ end
     return [x => last(s.axies[x]) for x in s.x̄]
 end
 
-varmaps(s::DiscreteSpace, II) = [u => s.discvars[u][II] for u in ū]
+varmaps(s::DiscreteSpace, II) = [u => s.discvars[u][II] for u in s.ū]
 
 valmaps(s::DiscreteSpace, II) = vcat(varmaps(s,II), gridvals(s,II))
 
@@ -77,7 +78,7 @@ valmaps(s::DiscreteSpace, II) = vcat(varmaps(s,II), gridvals(s,II))
 
 Iinterior(s::DiscreteSpace) = s.Igrid[[2:(length(s, x)-1) for x in s.x̄]...]
 
-map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} = vcat([ū[k] => s.discvars[k][II] for k = 1:M], [s.x̄[j] => s.grid[j][II[j]] for j = 1:N])
+map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} = vcat([s.ū[k] => s.discvars[k][II] for k = 1:M], [s.x̄[j] => s.grid[j][II[j]] for j = 1:N])
 
 # ? How rude is this? Makes Iedge work
 
@@ -141,5 +142,5 @@ end
 
 
 
-#varmap(s::DiscreteSpace{N,M}) where {N,M} = [ū[i] => i for i = 1:M]
+#varmap(s::DiscreteSpace{N,M}) where {N,M} = [s.ū[i] => i for i = 1:M]
 

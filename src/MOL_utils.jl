@@ -81,10 +81,10 @@ function split_additive_terms(eq)
     return vcat(lhs_arg,rhs_arg)
 end
 
-function clip(I::CartesianIndex, s::DiscreteSpace{N}, j::Int) where N
-    # Clip the index by 1 at each end of the dimension
+@inline function clip(I::CartesianIndex, s::DiscreteSpace{N}, j::Int, bpc::Int) where N
     I1 = unitindices(N)[j]
-    return I[j] > length(s, j) ? I-I1 : I+I1
+    return I-I1
+ 
 end
     
 subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true

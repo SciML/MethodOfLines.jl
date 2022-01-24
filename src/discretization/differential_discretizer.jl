@@ -7,24 +7,28 @@ struct DifferentialDiscretizer{T, D1}
     orders::Dict{Num, Vector{Int}}
 end
 
-function DifferentialDiscretizer(pde, s, discretization)
+function DifferentialDiscretizer(pde, bcs, s, discretization)
     approx_order = discretization.approx_order
     # TODO: Include bcs in this calculation
-    d_orders(x) = reverse(sort(collect(union(differential_order(pde.rhs, x), differential_order(pde.lhs, x)))))
+    d_orders(x) = reverse(sort(collect(union(differential_order(pde.rhs, x), differential_order(pde.lhs, x), (differential_order(bc.rhs, x) for bc in bcs)..., (differential_order(bc.lhs, x) for bc in bcs)...))))
 
-    # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.x̄), (k,u) in enumerate(ū)]
+    # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.x̄), (k,u) in enumerate(s.ū)]
     differentialmap = Array{Pair{Num,DiffEqOperators.DerivativeOperator},1}()
     nonlinlap = []
     interp = []
     orders = []
     # Hardcoded to centered difference, generate weights for each differential
     # TODO: Add handling for upwinding
-    for x in s.x̄
-        push!(orders, x => d_orders(x))
-        # TODO: Only generate weights for derivatives that are actually used and avoid redundant calculations
-        rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.dxs[x] ) for d in last(orders).second]
 
-        nonlinlap = vcat(nonlinlap, [Differential(x)^d => CompleteHalfCenteredDifference(d, approx_order, s.dxs[x]) for d in last(orders).second])
+    for x in s.x̄
+        orders_ = d_orders(x)
+        push!(orders, x => orders_)
+        _orders = Set(vcat(orders_, [1,2]))
+        # TODO: Only generate weights for derivatives that are actually used and avoid redundant calculations
+        rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.dxs[x] ) for d in _orders]
+        
+
+        nonlinlap = vcat(nonlinlap, [Differential(x)^d => CompleteHalfCenteredDifference(d, approx_order, s.dxs[x]) for d in _orders])
         differentialmap = vcat(differentialmap, rs)
         # A 0th order derivative off the grid is an interpolation
         push!(interp, x => CompleteHalfCenteredDifference(0, approx_order, s.dxs[x]))
@@ -92,7 +96,7 @@ end
 
 # i is the index of the offset, assuming that there is one precalculated set of weights for each offset required for a first order finite difference
 function half_offset_centered_difference(D, II, s, jx, u, ufunc)
-
-    (weights, Itap) = get_half_offset_weights_and_stencil(D, II, s, jx)
+    j, x = jx
+    weights, Itap = get_half_offset_weights_and_stencil(D, II, s, jx)
     return dot(weights, ufunc(u, Itap, x))
 end

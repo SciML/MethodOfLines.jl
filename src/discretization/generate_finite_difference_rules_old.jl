@@ -43,28 +43,28 @@ function generate_finite_difference_rules(II, s, pde, discretization)
     # starting from highest to lowest order.
     d_orders(order) = reverse(sort(collect(union(differential_order(pde.rhs, order), differential_order(pde.lhs, order)))))
 
-    # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.x̄), (k,u) in enumerate(ū)]
+    # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.x̄), (k,u) in enumerate(s.ū)]
     central_deriv_rules_cartesian = Array{Pair{Num,Num},1}()
     for (j,x) in enumerate(s.x̄)
-        rs = [(Differential(x)^d)(u) => central_deriv_cartesian(d,II,j,k) for d in d_orders(x), (k,u) in enumerate(ū)]
+        rs = [(Differential(x)^d)(u) => central_deriv_cartesian(d,II,j,k) for d in d_orders(x), (k,u) in enumerate(s.ū)]
         for r in rs
             push!(central_deriv_rules_cartesian, r)
         end
     end
 
     central_deriv_rules_spherical = [Differential(x)(x^2*Differential(x)(u))/x^2 => central_deriv_spherical(II,j,k)
-                                    for (j,x) in enumerate(s.x̄), (k,u) in enumerate(ū)]
+                                    for (j,x) in enumerate(s.x̄), (k,u) in enumerate(s.ū)]
 
-    valrules = vcat([ū[k] => s.discvars[k][II] for k in 1:length(ū)],
+    valrules = vcat([s.ū[k] => s.discvars[k][II] for k in 1:length(s.ū)],
                     [s.x̄[j] => s.grid[j][II[j]] for j in 1:nparams(s)])
 
     # TODO: upwind rules needs interpolation into `@rule`
     forward_weights(II,j) = calculate_weights(discretization.upwind_order, 0.0, s.grid[j][[II[j],II[j]+1]])
     reverse_weights(II,j) = calculate_weights(discretization.upwind_order, 0.0, s.grid[j][[II[j]-1,II[j]]])
     # upwinding_rules = [@rule(*(~~a,$(Differential(s.x̄[j]))(u),~~b) => IfElse.ifelse(*(~~a..., ~~b...,)>0,
-    #                         *(~~a..., ~~b..., dot(reverse_weights(II,j),ū[k][central_neighbor_idxs(II,j)[1:2]])),
-    #                         *(~~a..., ~~b..., dot(forward_weights(II,j),ū[k][central_neighbor_idxs(II,j)[2:3]]))))
-    #                         for j in 1:nparams(s), k in 1:length(pdesys.ū)]
+    #                         *(~~a..., ~~b..., dot(reverse_weights(II,j),s.ū[k][central_neighbor_idxs(II,j)[1:2]])),
+    #                         *(~~a..., ~~b..., dot(forward_weights(II,j),s.ū[k][central_neighbor_idxs(II,j)[2:3]]))))
+    #                         for j in 1:nparams(s), k in 1:length(pdesys.s.ū)]
 
     ## Discretization of non-linear laplacian.
     # d/dx( a du/dx ) ~ (a(x+1/2) * (u[i+1] - u[i]) - a(x-1/2) * (u[i] - u[i-1]) / dx^2
@@ -75,7 +75,7 @@ function generate_finite_difference_rules(II, s, pde, discretization)
     # iv_mid returns middle space values. E.g. x(i-1/2) or y(i+1/2).
     interpolate_discrete_indvar(II, j, l) = (s.grid[j][II[j]] + s.grid[j][II[j]+l]) / 2.0
     # Dependent variable rules
-    map_vars_to_discrete(II, j, k, l) = [ū[k] => interpolate_discrete_depvar(II, s, j, k, l) for k in 1:length(ū)]
+    map_vars_to_discrete(II, j, k, l) = [s.ū[k] => interpolate_discrete_depvar(II, s, j, k, l) for k in 1:length(s.ū)]
     # Independent variable rules
     map_params_to_discrete(II, j, l) = [s.x̄[j] => interpolate_discrete_indvar(II, j, l) for j in 1:length(s.x̄)]
     # Replacement rules: new approach
@@ -87,22 +87,22 @@ function generate_finite_difference_rules(II, s, pde, discretization)
                    [reverse_finite_difference(II, j, k), forward_finite_difference(II, j, k)])
     end
 
-    cartesian_deriv_rules = [@rule ($(Differential(iv))(*(~~a, $(Differential(iv))(dv), ~~b))) => discrete_cartesian(*(a..., b...),j,k) for (j, iv) in enumerate(s.x̄) for (k, dv) in enumerate(ū)]
+    cartesian_deriv_rules = [@rule ($(Differential(iv))(*(~~a, $(Differential(iv))(dv), ~~b))) => discrete_cartesian(*(a..., b...),j,k) for (j, iv) in enumerate(s.x̄) for (k, dv) in enumerate(s.ū)]
 
     cartesian_deriv_rules = vcat(vec(cartesian_deriv_rules),vec(
                             [@rule ($(Differential(iv))($(Differential(iv))(dv)/~a)) =>
                             discrete_cartesian(1/~a,j,k)
-                            for (j, iv) in enumerate(s.x̄) for (k, dv) in enumerate(ū)]))
+                            for (j, iv) in enumerate(s.x̄) for (k, dv) in enumerate(s.ū)]))
 
     spherical_deriv_rules = [@rule *(~~a, ($(Differential(iv))((iv^2)*$(Differential(iv))(dv))), ~~b) / (iv^2) =>
                                 *(~a..., central_deriv_spherical(II, j, k), ~b...)
-                                for (j, iv) in enumerate(s.x̄) for (k, dv) in enumerate(ū)]
+                                for (j, iv) in enumerate(s.x̄) for (k, dv) in enumerate(s.ū)]
 
     # r^-2 needs to be handled separately
     spherical_deriv_rules = vcat(vec(spherical_deriv_rules),vec(
                             [@rule *(~~a, (iv^-2) * ($(Differential(iv))((iv^2)*$(Differential(iv))(dv))), ~~b) =>
                                 *(~a..., central_deriv_spherical(II, j, k), ~b...)
-                                for (j, iv) in enumerate(s.x̄) for (k, dv) in enumerate(ū)]))
+                                for (j, iv) in enumerate(s.x̄) for (k, dv) in enumerate(s.ū)]))
 
     rhs_arg = istree(pde.rhs) && (SymbolicUtils.operation(pde.rhs) == +) ? SymbolicUtils.arguments(pde.rhs) : [pde.rhs]
     lhs_arg = istree(pde.lhs) && (SymbolicUtils.operation(pde.lhs) == +) ? SymbolicUtils.arguments(pde.lhs) : [pde.lhs]

@@ -4,9 +4,9 @@ function _boundary_rules(s, orders, x, val)
 
     args = substitute.(args, (x=>val,))
 
-    rules = [operation(u)(args...) => (operation(u)(args...), x) for u in ū]
+    rules = [operation(u)(args...) => (operation(u)(args...), x) for u in s.ū]
 
-    return vcat(rules, vec([(Differential(x)^d)(operation(u)(args...)) => (operation(u)(args...), x) for d in orders[x], u in ū]))
+    return vcat(rules, vec([(Differential(x)^d)(operation(u)(args...)) => (operation(u)(args...), x) for d in orders[x], u in s.ū]))
 end
 
 function generate_boundary_matching_rules(s, orders)
@@ -31,9 +31,9 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
     t=s.time
     
     if t === nothing
-        initmaps = ū
+        initmaps = s.ū
     else
-        initmaps = substitute.(ū,[t=>tspan[1]])
+        initmaps = substitute.(s.ū,[t=>tspan[1]])
     end
 
     # Create some rules to match which bundary/variable a bc concerns
@@ -52,13 +52,13 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
         # * Assume in the form `u(...) ~ ...` for now
         bcdepvar = first(get_depvars(bc.lhs, depvar_ops))
         
-        if any(u -> isequal(operation(u), operation(bcdepvar)), ū)
+        if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
             if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))
                 # initial condition
                 # * Assume that the initial condition is not in terms of the initial derivative
                 initindex = findfirst(isequal(bc.lhs), initmaps) 
                 if initindex !== nothing
-                    push!(u0,vec(s.discvars[ū[initindex]] .=> substitute.((bc.rhs,),gridvals(s))))
+                    push!(u0,vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,),gridvals(s))))
                 end
             else
                 # Split out additive terms
@@ -94,7 +94,7 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
                 end
 
                 @assert boundary !== nothing "Boundary condition $bc is not on a boundary of the domain, or is not a valid boundary condition"
-                
+                @show bc
                 push!(bceqs, vec(map(s.Iedge[x_][idx(boundary)]) do II
                     rules = generate_bc_rules(II, derivweights, s, bc, u_, x_, boundary)
                     
@@ -112,9 +112,9 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_
 
     depvarderivbcmaps = []
     depvarbcmaps = []
-
+    
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
-    for u in ū
+    for u in s.ū
         if isequal(operation(u), operation(u_))
             # What to replace derivatives at the boundary with
             depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, (s.x2i[x_], x_), u, ufunc) for d in derivweights.orders[x_]]
@@ -123,7 +123,7 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_
             break
         end
     end
-    
+    @show depvarderivbcmaps
     fd_rules = generate_finite_difference_rules(II, s, bc, derivweights)
     varrules = axiesvals(s, x_, II)
 
@@ -143,7 +143,8 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
-    for u in ū
+    
+    for u in s.ū
         if isequal(operation(u), operation(u_))
             depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II, s, (s.x2i[x_],x_), u, ufunc) for d in derivweights.orders[x_]]
     

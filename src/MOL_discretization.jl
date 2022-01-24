@@ -54,7 +54,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             s = DiscreteSpace(domain, depvars, indvars, x̄, discretization)
             
             # Get the finite difference weights
-            derivweights = DifferentialDiscretizer(pde, s, discretization)
+            derivweights = DifferentialDiscretizer(pde, pdesys.bcs, s, discretization)
 
             # Get the boundary conditions
             BoundaryHandler!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
