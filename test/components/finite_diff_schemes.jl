@@ -80,7 +80,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 
     s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, x̄, disc)
 
-    derivweights = MethodOfLines.DifferentialDiscretizer(pde, s, disc)
+    derivweights = MethodOfLines.DifferentialDiscretizer(pde, bcs, s, disc)
     
     II = s.Igrid[10]
 
@@ -118,7 +118,7 @@ end
 
     s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, x̄, disc)
 
-    derivweights = MethodOfLines.DifferentialDiscretizer(pde, s, disc)
+    derivweights = MethodOfLines.DifferentialDiscretizer(pde, bcs, s, disc)
     
     for II in s.Igrid[2:end-1]
         #TODO Test Interpolation of params

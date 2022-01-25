@@ -94,7 +94,6 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
                 end
 
                 @assert boundary !== nothing "Boundary condition $bc is not on a boundary of the domain, or is not a valid boundary condition"
-                @show bc
                 push!(bceqs, vec(map(s.Iedge[x_][idx(boundary)]) do II
                     rules = generate_bc_rules(II, derivweights, s, bc, u_, x_, boundary)
                     
@@ -123,7 +122,6 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_
             break
         end
     end
-    @show depvarderivbcmaps
     fd_rules = generate_finite_difference_rules(II, s, bc, derivweights)
     varrules = axiesvals(s, x_, II)
 

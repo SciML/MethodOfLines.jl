@@ -9,7 +9,7 @@ end
 function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, grid_align=CenterAlignedGrid())
     
     if approx_order % 2 != 0
-        warn("Discretization approx_order must be even, rounding up to $(approx_order+1)")
+        @warn "Discretization approx_order must be even, rounding up to $(approx_order+1)"
     end
     return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order, grid_align)
 end

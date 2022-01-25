@@ -4,7 +4,12 @@
 Interpolate gridpoints by taking the average of the values of the discrete points, or if the offset is outside the grid, extrapolate the value with dx.
 """
 @inline function interpolate_discrete_param(i, s, itap, x, bpc)
-    return s.grid[x][i+itap]+s.dxs[x]*.5
+    if i+itap > (length(s, x) - bpc)
+        return s.grid[x][i+itap]-s.dxs[x]*.5        
+
+    else
+        return s.grid[x][i+itap]+s.dxs[x]*.5        
+    end   
 end
 
 """
@@ -46,7 +51,7 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s, x, u)
     inner_interpolater = derivweights.interpmap[x]
 
     # Get the outer weights and stencil. clip() essentially removes a point from either end of the grid, for this reason this function is only defined on the interior, not in bcs
-    outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, clip(II, s, j, D_inner.boundary_point_count), s, jx)
+    outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, clip(II, s, j, D_inner.boundary_point_count), s, jx, length(s, x) - 1)
 
     # Get the correct weights and stencils for this II
     inner_deriv_weights_and_stencil = [get_half_offset_weights_and_stencil(D_inner, I, s, jx) for I in outerstencil]

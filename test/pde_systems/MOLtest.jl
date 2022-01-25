@@ -75,4 +75,3 @@ discretization = MOLFiniteDifference([r=>0.1],t)
 prob = discretize(pdesys,discretization) # This gives an ODEProblem since it's time-dependent
 sol = solve(prob,Tsit5())
 
-println("\n\n\n\nDone!\n\n\n\n")
