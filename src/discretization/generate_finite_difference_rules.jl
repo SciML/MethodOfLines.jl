@@ -142,14 +142,15 @@ end
 end
 
 @inline function generate_nonlinlap_rules(II, s, derivweights, terms)
-    cartesian_deriv_rules = [@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, x, u) for x in s.x̄, u in s.ū]
+    rules = [@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, x, u) for x in s.x̄, u in s.ū]
 
-    cartesian_deriv_rules = vcat(vec(cartesian_deriv_rules),vec(
-                            [@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, II, derivweights, s, x, u) for x in s.x̄, u in s.ū]))
+    rules = [@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, x, u) for x in s.x̄, u in s.ū]
+
+    rules = vcat(vec(rules), vec([@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, II, derivweights, s, x, u) for x in s.x̄, u in s.ū]))
     
     nonlinlap_rules = []
     for t in terms
-        for r in cartesian_deriv_rules
+        for r in rules
             if r(t) !== nothing
                 push!(nonlinlap_rules, t => r(t))
             end
