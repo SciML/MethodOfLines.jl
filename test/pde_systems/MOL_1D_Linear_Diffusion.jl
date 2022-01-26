@@ -231,7 +231,7 @@ end
     discretization_edge = MOLFiniteDifference([x=>dx_],t;grid_align=edge_align, approx_order=6)
 
     # Convert the PDE problem into an ODE problem
-    for disc ∈ [discretization, discretization_edge]
+    for (j,disc) ∈ enumerate([discretization, discretization_edge])
         prob = discretize(pdesys,disc)
 
         # Solve ODE problem
@@ -243,7 +243,15 @@ end
             x = ((0.0-dx_/2): dx_ : (Float64(π)+dx_/2))[2:end-1]
         end
         t = sol.t
-
+        # Plots
+        using Plots
+        anim = @animate for (i,T) in enumerate(t) 
+            exact = u_exact(x, T)
+            plot(x, exact, seriestype = :scatter,label="Analytic solution")
+            plot!(x, sol.u[i], label="Numeric solution")
+            plot!(x, log.(abs.(exact-sol.u[i])), label="Error at t = $(t[i])")
+        end
+        gif(anim, "plots/MOL_Linear_Diffusion_1D_Test03a_$disc.gif", fps = 5)
         # Test against exact solution
         # exact integral based on Neumann BCs
         integral_u_exact = t -> sum(sol.u[1] * dx[2]) + 2 * (exp(-t) - 1)
@@ -328,7 +336,8 @@ end
     # PDE system
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
 
-    # Method of lines discretization
+    # Method of lines discretizationinclusions
+
     dx = 0.01
     order = 4
     discretization = MOLFiniteDifference([x=>dx],t; approx_order=order)

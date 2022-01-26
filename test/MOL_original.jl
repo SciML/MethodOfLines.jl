@@ -1,11 +1,12 @@
 using ModelingToolkit: operation, istree, arguments, variable
 import DomainSets
+using DiffEqOperators, DiffEqBase, SciMLBase
 
 # Method of lines discretization scheme
 
 @enum GridAlign center_align edge_align
 
-struct MOLFiniteDifference_origial{T,T2} <: DiffEqBase.AbstractDiscretization
+struct MOLFiniteDifference_original{T,T2} <: DiffEqBase.AbstractDiscretization
     dxs::T
     time::T2
     upwind_order::Int
@@ -41,7 +42,7 @@ function calculate_weights_spherical_original(order::Int, x0::T, x::AbstractVect
 end
 
 
-function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discretization::DiffEqOperators.MOLFiniteDifference)
+function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discretization::MOLFiniteDifference_original)
     grid_align = discretization.grid_align
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     t = discretization.time
@@ -398,11 +399,13 @@ function symbolic_discretize_original(pdesys::ModelingToolkit.PDESystem,discreti
         return sys, nothing
     else
         sys = ODESystem(vcat(alleqs,unique(bceqs)),t,vec(reduce(vcat,vec(alldepvarsdisc))),ps,defaults=Dict(defaults),name=pdesys.name)
+        @show alleqs
+        @show bceqs
         return sys, tspan
     end
 end
 
-function discretize_original(pdesys::ModelingToolkit.PDESystem,discretization::DiffEqOperators.MOLFiniteDifference)
+function discretize_original(pdesys::ModelingToolkit.PDESystem,discretization::MOLFiniteDifference_original)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys,discretization)
     if tspan == nothing
         return prob = NonlinearProblem(sys, ones(length(sys.states)))

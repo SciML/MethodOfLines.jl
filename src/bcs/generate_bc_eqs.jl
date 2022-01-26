@@ -4,9 +4,9 @@ function _boundary_rules(s, orders, x, val)
 
     args = substitute.(args, (x=>val,))
 
-    rules = [operation(u)(args...) => (operation(u)(args...), x) for u in s.ū]
+    rules = [operation(u)(args...) => [operation(u)(args...), x] for u in s.ū]
 
-    return vcat(rules, vec([(Differential(x)^d)(operation(u)(args...)) => (operation(u)(args...), x) for d in orders[x], u in s.ū]))
+    return vcat(rules, vec([(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x] for d in orders[x], u in s.ū]))
 end
 
 function generate_boundary_matching_rules(s, orders)
