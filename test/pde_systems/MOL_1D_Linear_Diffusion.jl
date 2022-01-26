@@ -243,15 +243,17 @@ end
             x = ((0.0-dx_/2): dx_ : (Float64(π)+dx_/2))[2:end-1]
         end
         t = sol.t
+        
         # Plots
-        using Plots
-        anim = @animate for (i,T) in enumerate(t) 
-            exact = u_exact(x, T)
-            plot(x, exact, seriestype = :scatter,label="Analytic solution")
-            plot!(x, sol.u[i], label="Numeric solution")
-            plot!(x, log.(abs.(exact-sol.u[i])), label="Error at t = $(t[i])")
-        end
-        gif(anim, "plots/MOL_Linear_Diffusion_1D_Test03a_$disc.gif", fps = 5)
+        # using Plots
+        # anim = @animate for (i,T) in enumerate(t) 
+        #     exact = u_exact(x, T)
+        #     plot(x, exact, seriestype = :scatter,label="Analytic solution")
+        #     plot!(x, sol.u[i], label="Numeric solution")
+        #     plot!(x, log.(abs.(exact-sol.u[i])), label="Log Error at t = $(t[i])")
+        # end
+        # gif(anim, "plots/MOL_Linear_Diffusion_1D_Test03a_$disc.gif", fps = 5)
+
         # Test against exact solution
         # exact integral based on Neumann BCs
         integral_u_exact = t -> sum(sol.u[1] * dx[2]) + 2 * (exp(-t) - 1)
