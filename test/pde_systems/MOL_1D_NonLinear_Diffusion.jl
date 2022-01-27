@@ -153,7 +153,7 @@ end
 
     # Method of lines discretization
     dx = 0.01
-    discretization = MOLFiniteDifference([x=>dx],t)
+    discretization = MOLFiniteDifference([x=>dx],t, approx_order = 2)
     prob = ModelingToolkit.discretize(pdesys,discretization)
 
     #disco = MOLFiniteDifference_origial([x=>dx],t)
@@ -180,7 +180,7 @@ end
 
 end
 
-@testset "Test 01b: Dt(u(t,x)) ~ Dx(u(t,x)^2 * Dx(u(t,x))), order 6" begin
+@testset "Test 01b: Dt(u(t,x)) ~ Dx(u(t,x)^2 * Dx(u(t,x))), order 4" begin
 
     # Variables, parameters, and derivatives
     @parameters t x
@@ -214,7 +214,7 @@ end
 
     # Method of lines discretization
     dx = 0.01
-    discretization = MOLFiniteDifference([x=>dx],t, approx_order = 6)
+    discretization = MOLFiniteDifference([x=>dx],t, approx_order = 4)
     prob = ModelingToolkit.discretize(pdesys,discretization)
 
     #disco = MOLFiniteDifference_origial([x=>dx],t)

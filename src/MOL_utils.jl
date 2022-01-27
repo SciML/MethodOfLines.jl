@@ -63,14 +63,16 @@ end
 A function that creates a tuple of CartesianIndices of unit length and `N` dimensions, one pointing along each dimension.
 """
 function unitindices(N::Int) #create unit CartesianIndex for each dimension
-    out = Vector{CartesianIndex{N}}(undef, N)
     null = zeros(Int, N)
-    for i in 1:N
+    return map(1:N) do i
         unit_i = copy(null)
         unit_i[i] = 1
-        out[i] = CartesianIndex(Tuple(unit_i))
+        CartesianIndex(Tuple(unit_i))
     end
-    Tuple(out)
+end
+
+@inline function unitindex(N, j)
+    unitindices(N)[j]
 end
 
 function split_additive_terms(eq)
@@ -80,13 +82,7 @@ function split_additive_terms(eq)
 
     return vcat(lhs_arg,rhs_arg)
 end
-
-@inline function clip(I::CartesianIndex, s::DiscreteSpace{N}, j::Int, bpc::Int) where N
-    I1 = unitindices(N)[j]
-    return I-I1
- 
-end
-    
+@inline clip(II::CartesianIndex{M}, j, N) where M = II[j] > N ? II - unitindices(M)[j] : II
 subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
 
     

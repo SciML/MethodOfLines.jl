@@ -1,9 +1,10 @@
 # 1D diffusion problem
 
 # Packages and inclusions
-using ModelingToolkit,MethodOfLines,LinearAlgebra,Test,OrdinaryDiffEq, DomainSets
+using ModelingToolkit,MethodOfLines,LinearAlgebra,Test,OrdinaryDiffEq, DomainSets, Plots
 using ModelingToolkit: Differential
 
+const shouldplot = true
 # Tests
 @testset "Test 00: Dt(u(t,x)) ~ Dxx(u(t,x))" begin
     # Method of Manufactured Solutions
@@ -173,7 +174,7 @@ end
     dx_ = dx[2]-dx[1]#range(0.0,Float64(π),length=300)
     order = 8
     discretization = MOLFiniteDifference([x=>dx_],t)
-    discretization_edge = MOLFiniteDifference([x=>dx_],t;grid_align=center_align)
+    discretization_edge = MOLFiniteDifference([x=>dx_],t;grid_align=edge_align)
     # Convert the PDE problem into an ODE problem
     for disc in [discretization, discretization_edge]
         prob = discretize(pdesys,disc)
@@ -189,6 +190,17 @@ end
         end
         t_sol = sol.t
 
+        # Plots
+        if shouldplot
+            anim = @animate for (i,T) in enumerate(t_sol) 
+                exact = u_exact(x_sol, T)
+                plot(x_sol, exact, seriestype = :scatter,label="Analytic solution")
+                plot!(x_sol, sol.u[i], label="Numeric solution")
+                plot!(x_sol, log.(abs.(exact-sol.u[i])), label="Log Error at t = $(t[i])")
+            end
+            gif(anim, "plots/MOL_Linear_Diffusion_1D_Test03_$disc.gif", fps = 5)
+        end
+
         # Test against exact solution
         for i in 1:length(sol)
             exact = u_exact(x_sol, t_sol[i])
@@ -199,7 +211,7 @@ end
     end
 end
 
-@testset "Test 03a: Dt(u(t,x)) ~ Dxx(u(t,x)), Neumann BCs order 6" begin
+@testset "Test 03a: Dt(u(t,x)) ~ Dxx(u(t,x)), Neumann BCs order 4" begin
     # Method of Manufactured Solutions
     u_exact = (x,t) -> exp.(-t) * sin.(x)
 
@@ -227,8 +239,8 @@ end
     dx = range(0.0,Float64(π),length=30)
     dx_ = dx[2]-dx[1]
     order = 2
-    discretization = MOLFiniteDifference([x=>dx_],t, approx_order=6)
-    discretization_edge = MOLFiniteDifference([x=>dx_],t;grid_align=edge_align, approx_order=6)
+    discretization = MOLFiniteDifference([x=>dx_],t, approx_order=2)
+    discretization_edge = MOLFiniteDifference([x=>dx_],t;grid_align=edge_align, approx_order=2)
 
     # Convert the PDE problem into an ODE problem
     for (j,disc) ∈ enumerate([discretization, discretization_edge])
@@ -245,15 +257,15 @@ end
         t = sol.t
         
         # Plots
-        # using Plots
-        # anim = @animate for (i,T) in enumerate(t) 
-        #     exact = u_exact(x, T)
-        #     plot(x, exact, seriestype = :scatter,label="Analytic solution")
-        #     plot!(x, sol.u[i], label="Numeric solution")
-        #     plot!(x, log.(abs.(exact-sol.u[i])), label="Log Error at t = $(t[i])")
-        # end
-        # gif(anim, "plots/MOL_Linear_Diffusion_1D_Test03a_$disc.gif", fps = 5)
-
+        if shouldplot 
+            anim = @animate for (i,T) in enumerate(t) 
+                exact = u_exact(x, T)
+                plot(x, exact, seriestype = :scatter,label="Analytic solution")
+                plot!(x, sol.u[i], label="Numeric solution")
+                plot!(x, log.(abs.(exact-sol.u[i])), label="Log Error at t = $(t[i])")
+            end
+            gif(anim, "plots/MOL_Linear_Diffusion_1D_Test03a_$disc.gif", fps = 5)
+        end
         # Test against exact solution
         # exact integral based on Neumann BCs
         integral_u_exact = t -> sum(sol.u[1] * dx[2]) + 2 * (exp(-t) - 1)
@@ -457,6 +469,16 @@ end
 
     r = (0:dr:1)[2:end-1]
     t = sol.t
+    if shouldplot
+        anim = @animate for (i,T) in enumerate(t) 
+            exact = u_exact(r, T)
+            plot(r, exact, seriestype = :scatter,label="Analytic solution")
+            plot!(r, sol.u[i], label="Numeric solution")
+            plot!(r, log.(abs.(exact-sol.u[i])), label="Log Error at t = $(t[i])")
+        end
+        gif(anim, "plots/MOL_Linear_Diffusion_1D_Test07.gif", fps = 5)
+    end
+
 
     # Test against exact solution
     for i in 1:length(sol)

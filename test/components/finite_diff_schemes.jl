@@ -123,7 +123,7 @@ end
     for II in s.Igrid[2:end-1]
         #TODO Test Interpolation of params
         expr = MethodOfLines.spherical_diffusion(1, II, derivweights, s, x, u(t,x))
-        @show II, expr
+        #@show II, expr
     end
 
 end

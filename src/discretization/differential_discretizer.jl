@@ -71,29 +71,28 @@ Get the weights and stencil for the inner half offset centered difference for th
 Does not discretize so that the weights can be used in a replacement rule
 TODO: consider refactoring this to harmonize with centered difference
 """
-function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::CartesianIndex, s::DiscreteSpace, jx, len::Int = 0)
+function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::CartesianIndex, s::DiscreteSpace, jx, len = 0)
     j, x = jx
-    # Check if the index is clipped because we need the outerweights
-    if len == 0
-        len = length(s, x)
-        clip = false
-    else
-        clip = true
-    end
+    len = len == 0 ? length(s, x) : len
+    @assert II[j] != length(s, x)
+
     # unit index in direction of the derivative
     I1 = unitindices(nparams(s))[j] 
     # offset is important due to boundary proximity
 
-    if II[j] <= D.boundary_point_count
+    if II[j] < D.boundary_point_count
         weights = D.low_boundary_coefs[II[j]]    
         offset = 1 - II[j]
         Itap = [II + (i+offset)*I1 for i in 0:(D.boundary_stencil_length-1)]
     elseif II[j] > (len - D.boundary_point_count)
-        # we need !clip to shift the index, as unclipped indices start from 1 not 2
-        weights = D.high_boundary_coefs[len-II[j] + !clip]
+        try
+            weights = D.high_boundary_coefs[len-II[j]]
+        catch e
+            print(II, len, D.high_boundary_coefs)
+            throw(e)
+        end
         offset = len - II[j]
-        #use clip to shift the stencil to the right place
-        Itap = [II + (i+offset+clip)*I1 for i in (-D.boundary_stencil_length+1):1:0]
+        Itap = [II + (i+offset)*I1 for i in (-D.boundary_stencil_length+1):0]
     else
         weights = D.stencil_coefs
         Itap = [II + i*I1 for i in (1-div(D.stencil_length,2)):(div(D.stencil_length,2))]

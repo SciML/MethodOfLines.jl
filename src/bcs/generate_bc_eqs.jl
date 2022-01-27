@@ -141,12 +141,14 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
-    
+    j = s.x2i[x_]
+    shift(::LowerBoundary) = zero(II)
+    shift(::UpperBoundary) = -unitindex(N, j)
     for u in s.ū
         if isequal(operation(u), operation(u_))
-            depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II, s, (s.x2i[x_],x_), u, ufunc) for d in derivweights.orders[x_]]
+            depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II+shift(boundary), s, (j,x_), u, ufunc) for d in derivweights.orders[x_]]
     
-            depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II, s, (s.x2i[x_],x_), u, ufunc)]
+            depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II+shift(boundary), s, (j,x_), u, ufunc)]
             break
         end
     end
