@@ -53,8 +53,8 @@ edge_idxs(s::DiscreteSpace{N}) where {N} = reduce(vcat, [[vcat([Colon() for j = 
     end
 end
 
-gridvals(s::DiscreteSpace{N}) where N = map(y-> [Pair(x, s.grid[x][y.I[j]]) for (j,x) in enumerate(s.x̄)],s.Igrid)
-gridvals(s::DiscreteSpace{N}, I::CartesianIndex) where N = [Pair(x, s.grid[x][I[j]]) for (j,x) in enumerate(s.x̄)]
+gridvals(s::DiscreteSpace{N}) where N = map(y-> [x => s.grid[x][y.I[j]] for (j,x) in enumerate(s.x̄)],s.Igrid)
+gridvals(s::DiscreteSpace{N}, I::CartesianIndex) where N = [x => s.grid[x][I[j]] for (j,x) in enumerate(s.x̄)]
 
 ## Boundary methods ##
 edgevals(s::DiscreteSpace{N}) where {N} = reduce(vcat, [get_edgevals(s.x̄, s.axies, i) for i = 1:N])
@@ -162,12 +162,12 @@ edges(s::DiscreteSpace) = s.Iedges
 
 #varmap(s::DiscreteSpace{N,M}) where {N,M} = [s.ū[i] => i for i = 1:M]
 
-@inline function removecorners(s::DiscreteSpace{N,M}) where {N,M}
+@inline function cornereqs(s::DiscreteSpace{N,M}) where {N,M}
     Iedges = edges(s)
     # Flatten Iedges
     Iedges = mapreduce(x->mapreduce(i -> vec(Iedges[x][i]), vcat, 1:2), vcat, s.x̄)
     Iinterior = interior(s.Igrid, nparams(s))
-    Ivalid = vcat(vec(Iinterior), vec(Iedges))
+    Ivalid = setdiff(s.Igrid, vcat(vec(Iinterior), vec(Iedges)))
     #TODO: change this when vars have different domains
-    return mapreduce(u -> vec(s.discvars[u][Ivalid]), vcat, s.ū)::Vector
+    return mapreduce(u -> vec(s.discvars[u][Ivalid]) .~ 0., vcat, s.ū)::Vector
 end

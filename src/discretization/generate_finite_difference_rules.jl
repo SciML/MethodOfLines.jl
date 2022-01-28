@@ -60,14 +60,18 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace{
     map_vars_to_interpolated(stencil, weights) = [v => dot(weights, s.discvars[v][stencil]) for v in s.ū]
 
     # Map parameters to interpolated values. Using simplistic extrapolation/interpolation for now as grids are uniform
-    map_params_to_interpolated(I) = x => interpolate_discrete_param(II[j], s, I[j]-II[j], x, D_inner.boundary_point_count)
+    #TODO: make this more efficient
+    map_params_to_interpolated(stencil, weights) = vcat([x => dot(weights, getindex.((s.grid[x],), getindex.(stencil, (j,))))], [s.x̄[k] => s.grid[s.x̄[k]][II[k]] for k in setdiff(1:N, [j])])
 
     # Take the inner finite difference
     inner_difference = [dot(inner_weights, s.discvars[u][inner_stencil]) for (inner_weights, inner_stencil) in inner_deriv_weights_and_stencil]
     
     # Symbolically interpolate the multiplying expression
-    interpolated_expr = [Num(substitute(substitute(expr, map_vars_to_interpolated(interpstencil, interpweights)), map_params_to_interpolated.(interpstencil))) 
-                        for (interpweights, interpstencil) in interp_weights_and_stencil]
+
+    
+    interpolated_expr = map(interp_weights_and_stencil) do (weights, stencil)
+        Num(substitute(substitute(expr, map_vars_to_interpolated(stencil, weights)), map_params_to_interpolated(stencil, weights)))
+    end
  
     # multiply the inner finite difference by the interpolated expression, and finally take the outer finite difference
     return dot(outerweights, inner_difference .* interpolated_expr)
