@@ -9,7 +9,6 @@ end
 
 function DifferentialDiscretizer(pde, bcs, s, discretization)
     approx_order = discretization.approx_order
-    # TODO: Include bcs in this calculation
     d_orders(x) = reverse(sort(collect(union(differential_order(pde.rhs, x), differential_order(pde.lhs, x), (differential_order(bc.rhs, x) for bc in bcs)..., (differential_order(bc.lhs, x) for bc in bcs)...))))
 
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.x̄), (k,u) in enumerate(s.ū)]
@@ -70,6 +69,8 @@ Get the weights and stencil for the inner half offset centered difference for th
 
 Does not discretize so that the weights can be used in a replacement rule
 TODO: consider refactoring this to harmonize with centered difference
+
+Each index corresponds to the weights and index for the derivative at index i+1/2
 """
 function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::CartesianIndex, s::DiscreteSpace, jx, len = 0)
     j, x = jx

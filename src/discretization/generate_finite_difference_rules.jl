@@ -121,20 +121,11 @@ end
 end
 
 @inline function generate_nonlinlap_rules(II, s, derivweights, terms)
-    # Since rules don't test for equivalence of multiplication/ division, we need to do it manually
-    rules = [@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~~c,cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, x, u), ~~d) for x in s.x̄, u in s.ū]
+    rules = vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~~c,cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, x, u), ~~d) for x in s.x̄, u in s.ū])
 
-    rules = vcat(rules, [@rule /(*(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d), ~f) => *(~~c,cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, x, u), ~~d)/~f for x in s.x̄, u in s.ū])
+    rules = vcat(rules, vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, x, u) for x in s.x̄, u in s.ū]))
 
-    rules = vcat(rules, [@rule /(*(~~c, $(Differential(x))(/(*(~~a, $(Differential(x))(u), ~~b), ~g)), ~~d), ~f) => *(~~c,cartesian_nonlinear_laplacian(*(a..., b...)/~g, II, derivweights, s, x, u), ~~d)/~f for x in s.x̄, u in s.ū])
-
-    rules = vcat(rules, [@rule $(Differential(x))(/(*(~~a, $(Differential(x))(u), ~~b), ~d)) => cartesian_nonlinear_laplacian(*(a..., b...)/~d, II, derivweights, s, x, u) for x in s.x̄, u in s.ū])
-
-    rules = vcat(vec(rules), vec([@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, II, derivweights, s, x, u) for x in s.x̄, u in s.ū]))
-
-    rules = vcat(rules, [@rule /(*(~~c, $(Differential(x))(/($(Differential(x))(u), ~g)), ~~d), ~f) => *(~~c,cartesian_nonlinear_laplacian(1/~g, II, derivweights, s, x, u), ~~d)/~f for x in s.x̄, u in s.ū])
-    
-    rules = vcat(rules, [@rule *(~~c, $(Differential(x))(/($(Differential(x))(u), ~g)), ~~d) => *(~~c,cartesian_nonlinear_laplacian(1/~g, II, derivweights, s, x, u), ~~d) for x in s.x̄, u in s.ū])
+    rules = vcat(rules, vec([@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, II, derivweights, s, x, u) for x in s.x̄, u in s.ū]))
     
     nonlinlap_rules = []
     for t in terms
@@ -148,17 +139,13 @@ end
 end
 
 @inline function generate_spherical_diffusion_rules(II, s, derivweights, terms)
-    # Since rules don't test for equivalence of multiplication/ division, we need to do it manually
-    rules = vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e...), II, derivweights, s, r, u))
-    for r in s.x̄, u in s.ū])
+    rules = vec([@rule *(~~a, 1/(r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e...), II, derivweights, s, r, u), ~b...)
+            for r in s.x̄, u in s.ū])
 
-    rules = vcat(rules, vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), *(~~f, r^2, ~~g)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e...)/*(~f..., g...), II, derivweights, s, r, u))
+    rules = vcat(rules, vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e...), II, derivweights, s, r, u))
     for r in s.x̄, u in s.ū]))
 
     rules = vcat(rules, vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e...), II, derivweights, s, r, u)
-    for r in s.x̄, u in s.ū]))
-
-    rules = vcat(rules, vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), *(~~f, r^2, ~~g)) => spherical_diffusion(*(~c..., ~d..., ~e...)/*(~f...,g...), II, derivweights, s, r, u)
     for r in s.x̄, u in s.ū]))
 
     spherical_diffusion_rules = []

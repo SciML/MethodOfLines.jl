@@ -27,7 +27,7 @@ struct DiscreteSpace{N,M,G}
     dxs
     Iaxies
     Igrid
-    Iedge
+    Iedges
     x2i
 end
 
@@ -76,11 +76,9 @@ valmaps(s::DiscreteSpace, II) = vcat(varmaps(s,II), gridvals(s,II))
 
 
 
-Iinterior(s::DiscreteSpace) = s.Igrid[[2:(length(s, x)-1) for x in s.x̄]...]
+interior(Igrid, N) = Igrid[[2:(size(Igrid, i)-1) for i in 1:N]...]
 
 map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} = vcat([s.ū[k] => s.discvars[k][II] for k = 1:M], [s.x̄[j] => s.grid[j][II[j]] for j = 1:N])
-
-# ? How rude is this? Makes Iedge work
 
 # TODO: Allow other grids
 # TODO: allow depvar-specific center/edge choice?
@@ -119,6 +117,7 @@ function DiscreteSpace(domain, depvars, indvars, x̄, discretization::MOLFiniteD
     # Build symbolic variables
     Iaxies = CartesianIndices(((axes(s.second)[1] for s in axies)...,))
     Igrid = CartesianIndices(((axes(g.second)[1] for g in grid)...,))
+    Iedges = edges(x̄, Igrid, nspace)
     
     depvarsdisc = map(depvars) do u
         if t === nothing
@@ -132,15 +131,43 @@ function DiscreteSpace(domain, depvars, indvars, x̄, discretization::MOLFiniteD
         end
     end
 
-    # Build symbolic maps for boundaries
-    Iedge = Dict([x => [vec(selectdim(Igrid, dim, 1)), vec(selectdim(Igrid, dim, length(grid[dim].second)))] for (dim, x) in enumerate(x̄)])
-
     x̄2dim = [x̄[i] => i for i in 1:nspace]
     dim2x̄ = [i => x̄[i] for i in 1:nspace]
-    return DiscreteSpace{nspace,length(depvars), G}(depvars, Dict(depvarsdisc), discretization.time, x̄, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedge, Dict(x̄2dim))
+    return DiscreteSpace{nspace,length(depvars), G}(depvars, Dict(depvarsdisc), discretization.time, x̄, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedges, Dict(x̄2dim))
 end
 
+@inline function edges(x̄, Igrid, N)
+    sd(A::AbstractArray{T,N}, d, i) where {T,N} = selectdim(interior(A, N), d, i)
+    return Dict(map(enumerate(x̄)) do (dim, x)
+        x =>[sd(Igrid, dim, 1)              .- [unitindex(N, dim)], 
+             sd(Igrid, dim, size(Igrid, dim)-2) .+ [unitindex(N, dim)]]
+    end)
+end
+
+edges(s::DiscreteSpace) = s.Iedges
+
+# """
+# Create a vector containing indices of the corners of the domain.
+# """
+# @inline function removecorners(s::DiscreteSpace{2,M}) where {M}
+    
+#     Icorners = map(0:3) do n
+#         dig = digits(n, base = 2, pad = 2)
+#         CartesianIndex(b == 1 ? length(s, i) : 1 for (i, b) in enumerate(dig))
+#     end
+#     Ivalid = setdiff(s.Igrid, Icorners)
+#     return mapreduce(vcat, u-> vec(s.discvars[u][Ivalid]), s.ū)
+# end
 
 
 #varmap(s::DiscreteSpace{N,M}) where {N,M} = [s.ū[i] => i for i = 1:M]
 
+@inline function removecorners(s::DiscreteSpace{N,M}) where {N,M}
+    Iedges = edges(s)
+    # Flatten Iedges
+    Iedges = mapreduce(x->mapreduce(i -> vec(Iedges[x][i]), vcat, 1:2), vcat, s.x̄)
+    Iinterior = interior(s.Igrid, nparams(s))
+    Ivalid = vcat(vec(Iinterior), vec(Iedges))
+    #TODO: change this when vars have different domains
+    return mapreduce(u -> vec(s.discvars[u][Ivalid]), vcat, s.ū)::Vector
+end

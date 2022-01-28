@@ -171,7 +171,7 @@ end
     
         # Method of lines discretization
         dx = 0.1; dy = 0.2
-        discretization = MOLFiniteDifference([x=>dx,y=>dy],t; approx_order=2)
+        discretization = MOLFiniteDifference([x=>dx,y=>dy],t; approx_order=4)
         prob = ModelingToolkit.discretize(pdesys,discretization)
     
         # Solution of the ODE system

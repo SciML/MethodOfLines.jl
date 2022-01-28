@@ -82,13 +82,10 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 
     derivweights = MethodOfLines.DifferentialDiscretizer(pde, bcs, s, disc)
     
-    II = s.Igrid[10]
-
     ufunc(u, I, x) = s.discvars[u][I]
     #TODO Test Interpolation of params
     # Test simple case
     for II in s.Igrid[2:end-1]
-        @show II
         expr = MethodOfLines.cartesian_nonlinear_laplacian(1, II, derivweights, s, x, u(t,x))
         expr2 = MethodOfLines.central_difference(derivweights.map[Differential(x)^2], II, s, (1,x), u(t,x), ufunc)
         @test isequal(expr, expr2)

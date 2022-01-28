@@ -46,7 +46,7 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
     # indexes for Iedge depending on boundary type
     idx(::LowerBoundary) = 1
     idx(::UpperBoundary) = 2
-
+    Iedge = edges(s)
     # Generate initial conditions and bc equations
     for bc in bcs
         # * Assume in the form `u(...) ~ ...` for now
@@ -94,7 +94,7 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
                 end
 
                 @assert boundary !== nothing "Boundary condition $bc is not on a boundary of the domain, or is not a valid boundary condition"
-                push!(bceqs, vec(map(s.Iedge[x_][idx(boundary)]) do II
+                push!(bceqs, vec(map(Iedge[x_][idx(boundary)]) do II
                     rules = generate_bc_rules(II, derivweights, s, bc, u_, x_, boundary)
                     
                     substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
@@ -143,12 +143,12 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, u_, x_
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
     j = s.x2i[x_]
     shift(::LowerBoundary) = zero(II)
-    shift(::UpperBoundary) = -unitindex(N, j)
+    shift(::UpperBoundary) = unitindex(N, j)
     for u in s.ū
         if isequal(operation(u), operation(u_))
-            depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II+shift(boundary), s, (j,x_), u, ufunc) for d in derivweights.orders[x_]]
+            depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II-shift(boundary), s, (j,x_), u, ufunc) for d in derivweights.orders[x_]]
     
-            depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II+shift(boundary), s, (j,x_), u, ufunc)]
+            depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II-shift(boundary), s, (j,x_), u, ufunc)]
             break
         end
     end
