@@ -22,6 +22,31 @@ function generate_boundary_matching_rules(s, orders)
     return (lower, upper)
 end
 
+
+#---- Count Boundary Equations --------------------
+# Count the number of boundary equations that lie at the spatial boundary on
+# both the left and right side. This will be used to determine number of
+# interior equations s.t. we have a balanced system of equations.
+
+# get the depvar boundary terms for given depvar and indvar index.
+get_depvarbcs(u, s, i) = substitute.((u,), get_edgevals(s, i))
+
+# return the counts of the boundary-conditions that reference the "left" and
+# "right" edges of the given independent variable. Note that we return the
+# max of the count for each depvar in the system of equations.
+@inline function get_bc_counts(i, s, bcs)
+    left = 0
+    right = 0
+    for u in s.ū
+        depvaredges = get_depvarbcs(u, s, i)
+        counts = [map(u -> occursin(u, bc.lhs), depvaredges) for bc in bcs]
+        left = max(left, sum([c[1] for c in counts]))
+        right = max(right, sum([c[2] for c in counts]))
+    end
+    return [left, right]
+end
+
+
 """
 Mutates bceqs and u0 by finding relevant equations and discretizing them.
 TODO: return a handler for use with generate_finite_difference_rules and pull out initial condition. Important to remember that BCs can have 

@@ -10,7 +10,7 @@ end
 Return a map of of variables to the gridpoints at the edge of the domain
 """
 @inline function get_edgevals(s, i)
-    return [s.x̄[i] => first(s.axies[x̄[i]]), s.x̄[i] => last(s.axies[x̄[i]])]
+    return [s.x̄[i] => first(s.axies[s.x̄[i]]), s.x̄[i] => last(s.axies[s.x̄[i]])]
 end
 
 @inline function subvar(depvar, edge_vals)
@@ -75,8 +75,8 @@ varmaps(s::DiscreteSpace, II) = [u => s.discvars[u][II] for u in s.ū]
 valmaps(s::DiscreteSpace, II) = vcat(varmaps(s,II), gridvals(s,II))
 
 
-
 interior(Igrid, N) = Igrid[[2:(size(Igrid, i)-1) for i in 1:N]...]
+
 
 map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} = vcat([s.ū[k] => s.discvars[k][II] for k = 1:M], [s.x̄[j] => s.grid[j][II[j]] for j = 1:N])
 

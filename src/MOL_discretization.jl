@@ -60,8 +60,15 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             BoundaryHandler!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
 
             # Find the indexes on the interior
-            Iinterior = interior(s.Igrid, nparams(s))
-
+            
+            
+            Iinterior =  s.Igrid[[let bcs = get_bc_counts(i, s, pdesys.bcs)
+                                      (1 + first(bcs)):length(s.grid[x])-last(bcs)
+                                      end
+                                      for (i,x) in enumerate(s.x̄)]...]
+    
+        
+        
             # Discretize the equation on the interior
             pdeeqs = vec(map(Iinterior) do II
                 rules = vcat(generate_finite_difference_rules(II, s, pde, derivweights), valmaps(s, II))
