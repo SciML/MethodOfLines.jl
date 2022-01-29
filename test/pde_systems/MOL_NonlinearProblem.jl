@@ -102,8 +102,8 @@ end
     # test boundary
     @test all(abs.(u_sol[:,1]) .< eps(Float32))
     @test all(abs.(u_sol[1,:]) .< eps(Float32))
-    @test u_sol[:,end] ≈ 0:dy:1.0
-    @test u_sol[end,:] ≈ 0:dx:1.0
+    @test u_sol[2:end-1,end] ≈ (0.0:dy:1.0)[2:end-1]
+    @test u_sol[end,2:end-1] ≈ (0.0:dx:1.0)[2:end-1]
 
     # test interior with finite differences
     interior = CartesianIndices((axes(xs)[1], axes(ys)[1]))[2:end-1,2:end-1]

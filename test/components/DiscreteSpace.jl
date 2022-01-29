@@ -49,7 +49,7 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
     @test s.axies[x] == s.grid[x]
     @test s.axies[y] == s.grid[y]
     
-    @test all([all(I[i] .∈ (collect(s.Igrid),)) for I in values(s.Iedge), i in [1,2]])  
+    @test all([all(I[i] .∈ (collect(s.Igrid),)) for I in values(s.Iedges), i in [1,2]])  
     
     @test s.Iaxies == s.Igrid
     
@@ -101,7 +101,7 @@ end
     @test s.axies[x] != s.grid[x]
     @test s.axies[y] != s.grid[y]
 
-    @test all([all(I[i] .∈ (collect(s.Igrid),)) for I in values(s.Iedge), i in [1,2]])  
+    @test all([all(I[i] .∈ (collect(s.Igrid),)) for I in values(s.Iedges), i in [1,2]])  
     
     @test s.Iaxies != s.Igrid
 
