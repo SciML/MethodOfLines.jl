@@ -1,28 +1,15 @@
 # Method of lines discretization scheme
 
-@enum GridAlign center_align edge_align
-
-struct MOLFiniteDifference{T,T2} <: DiffEqBase.AbstractDiscretization
-    dxs::T
-    time::T2
-    upwind_order::Int
-    centered_order::Int
-    grid_align::GridAlign
-end
-
-# Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-MOLFiniteDifference(dxs, time=nothing; upwind_order = 1, centered_order = 2, grid_align=center_align) =
-    MOLFiniteDifference(dxs, time, upwind_order, centered_order, grid_align)
-
-function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference)
+function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where G
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs
     domain = pdesys.domain
-
+    
     grid_align = discretization.grid_align
     t = discretization.time
     # Get tspan
     tspan = nothing
+    # Check that inputs make sense
     if t !== nothing
         tdomain = pdesys.domain[findfirst(d->isequal(t.val, d.variables), pdesys.domain)]
         @assert tdomain.domain isa DomainSets.Interval
@@ -43,11 +30,12 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         depvars_lhs = get_depvars(pde.lhs, depvar_ops)
         depvars_rhs = get_depvars(pde.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
+
         # Read the independent variables,
         # ignore if the only argument is [t]
         allindvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
-        allnottime = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
-        if isempty(allnottime)
+        allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
+        if isempty(allx̄)
             push!(alleqs, pde)
             push!(alldepvarsdisc, depvars)
             for bc in bcs
@@ -57,59 +45,38 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             end
         else
             # make sure there is only one set of independent variables per equation
-            @assert length(allnottime) == 1
-            nottime = first(allnottime)
+            @assert length(allx̄) == 1
+            x̄ = first(allx̄)
             @assert length(allindvars) == 1
             indvars = first(allindvars)
-            nspace = length(nottime)
-
-            s = DiscreteSpace(pdesys.domain, depvars, indvars, nottime, grid_align, discretization)
-
-            #---- Count Boundary Equations --------------------
-            # Count the number of boundary equations that lie at the spatial boundary on
-            # both the left and right side. This will be used to determine number of
-            # interior equations s.t. we have a balanced system of equations.
+            #TODO: Factor this out of the loop, along with BCs
+            # Get the grid
+            s = DiscreteSpace(domain, depvars, indvars, x̄, discretization)
             
-            # get the depvar boundary terms for given depvar and indvar index.
-            get_depvarbcs(depvar, i) = substitute.((depvar,),get_edgevals(s, i))
+            # Get the finite difference weights
+            derivweights = DifferentialDiscretizer(pde, pdesys.bcs, s, discretization)
 
-            # return the counts of the boundary-conditions that reference the "left" and
-            # "right" edges of the given independent variable. Note that we return the
-            # max of the count for each depvar in the system of equations.
-            @inline function get_bc_counts(i)
-                left = 0
-                right = 0
-                for depvar in s.vars
-                    depvaredges = get_depvarbcs(depvar, i)
-                    counts = [map(x->occursin(x, bc.lhs), depvaredges) for bc in pdesys.bcs]
-                    left = max(left, sum([c[1] for c in counts]))
-                    right = max(right, sum([c[2] for c in counts]))
-                end
-                return [left, right]
-            end
-           
+            # Get the boundary conditions
+            BoundaryHandler!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
+
+            # Find the indexes on the interior
             
-            #TODO: Update this when allowing higher order derivatives to correctly deal with boundary upwinding
-            interior = s.Igrid[[let bcs = get_bc_counts(i)
-                                    (1 + first(bcs)):length(g)-last(bcs)
-                                    end
-                                    for (i,g) in enumerate(s.grid)]...]
-
-            ### PDE EQUATIONS ###
-            # Create a stencil in the required dimension centered around 0
-            # e.g. (-1,0,1) for 2nd order, (-2,-1,0,1,2) for 4th order, etc
-            if discretization.centered_order % 2 != 0
-                throw(ArgumentError("Discretization centered_order must be even, given $(discretization.centered_order)"))
-            end
-            # For all cartesian indices in the interior, generate finite difference rules
-            eqs = vec(map(interior) do II
-                rules = generate_finite_difference_rules(II, s, pde, discretization)
+            
+            Iinterior =  s.Igrid[[let bcs = get_bc_counts(i, s, pdesys.bcs)
+                                      (1 + first(bcs)):length(s.grid[x])-last(bcs)
+                                      end
+                                      for (i,x) in enumerate(s.x̄)]...]
+    
+        
+        
+            # Discretize the equation on the interior
+            pdeeqs = vec(map(Iinterior) do II
+                rules = vcat(generate_finite_difference_rules(II, s, pde, derivweights), valmaps(s, II))
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             
-            generate_u0_and_bceqs!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, discretization)
-            push!(alleqs,eqs)
-            push!(alldepvarsdisc, reduce(vcat, s.discvars))
+            push!(alleqs,pdeeqs)
+            push!(alldepvarsdisc, reduce(vcat, values(s.discvars)))
         end
     end
     
@@ -131,6 +98,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         return sys, nothing
     else
         # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by the `solve` method.
+        #println(alleqs, bceqs)
         sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
         return sys, tspan
     end

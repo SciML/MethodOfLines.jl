@@ -1,5 +1,7 @@
-# Counts the Differential operators for given variable x. This is used to determine
-# the order of a PDE.
+"""
+Counts the Differential operators for given variable x. This is used to determine
+the order of a PDE.
+"""
 function count_differentials(term, x::Symbolics.Symbolic)
     S = Symbolics
     SU = SymbolicUtils
@@ -15,7 +17,9 @@ function count_differentials(term, x::Symbolics.Symbolic)
     end
 end
 
-# return list of differential orders in the equation
+"""
+return list of differential orders in the equation
+"""
 function differential_order(eq, x::Symbolics.Symbolic)
     S = Symbolics
     SU = SymbolicUtils
@@ -33,7 +37,9 @@ function differential_order(eq, x::Symbolics.Symbolic)
     return filter(!iszero, orders)
 end
 
-# find all the dependent variables given by depvar_ops in an expression
+"""
+find all the dependent variables given by depvar_ops in an expression
+"""
 function get_depvars(eq,depvar_ops)
     S = Symbolics
     SU = SymbolicUtils
@@ -52,3 +58,35 @@ function get_depvars(eq,depvar_ops)
     end
     return depvars
 end
+
+"""
+A function that creates a tuple of CartesianIndices of unit length and `N` dimensions, one pointing along each dimension.
+"""
+function unitindices(N::Int) #create unit CartesianIndex for each dimension
+    null = zeros(Int, N)
+    return map(1:N) do i
+        unit_i = copy(null)
+        unit_i[i] = 1
+        CartesianIndex(Tuple(unit_i))
+    end
+end
+
+@inline function unitindex(N, j)
+    unitindices(N)[j]
+end
+
+function split_additive_terms(eq)
+    # Calling the methods from symbolicutils matches the expressions
+    rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
+    lhs_arg = istree(eq.lhs) && (SymbolicUtils.operation(eq.lhs) == +) ? SymbolicUtils.arguments(eq.lhs) : [eq.lhs]
+
+    return vcat(lhs_arg,rhs_arg)
+end
+@inline clip(II::CartesianIndex{M}, j, N) where M = II[j] > N ? II - unitindices(M)[j] : II
+subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
+
+    
+
+half_range(x) = -div(x,2):div(x,2)
+
+

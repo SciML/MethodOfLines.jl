@@ -37,8 +37,9 @@ using ModelingToolkit: Differential
     # Method of lines discretization
     l = 20
     dx = range(0.0,1.0,length=l)
+    dx_ = dx[2] - dx[1]
     order = 2
-    discretization = MOLFiniteDifference([x=>dx],t)
+    discretization = MOLFiniteDifference([x=>dx_],t)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys,discretization)

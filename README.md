@@ -9,7 +9,7 @@ Feature requests and issues welcome.
 discretization = MOLFiniteDifference(dxs, 
                                       <your choice of continuous variable, usually time>; 
                                       upwind_order = <currently hard coded to 1>, 
-                                      centered_order = <currently hard coded to 2>, 
+                                      approx_order = Order of derivative approximation, starting from 2 
                                       grid_align = your grid type choice>)
 prob = discretize(pdesys, discretization)
 ```
@@ -17,16 +17,16 @@ Where `dxs` is a vector of pairs of parameters to the grid step in this dimensio
 
 Note that the second argument to `MOLFiniteDifference` is optional, all parameters can be discretized if all boundary conditions are specified
 
-Currently supported grid types: `center_align` and `edge_align`
+Currently supported grid types: `center_align` and `edge_align`. Edge align will give better accuracy with Neumann Boundary conditions.
 
 `center_align`: naive grid, starting from lower boundary, ending on upper boundary with step of `dx`
 
 `edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`.
 
-Currently boundary conditions defined in terms of derivatives at the boundary are unsupported above 1 discretized dimension. Periodic conditions are also unsupported.
+Currently Periodic boundary conditions are unsupported
 
 ## Coming soon:
-- Arbitrary approximation order
+- Automatic up/downwinding for odd order derivatives
 - Above mentioned unsupported boundary conditions supported
 
 ## Full Example:
