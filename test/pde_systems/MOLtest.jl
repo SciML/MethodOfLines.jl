@@ -51,7 +51,6 @@ domains = [t ∈ Interval(t_min,t_max),
            x ∈ Interval(x_min,x_max),
            y ∈ Interval(y_min,y_max)]
 @named pdesys = PDESystem([eq],bcs,domains,[t,x,y],[u(t,x,y)])
-
 # Method of lines discretization
 dx = 0.1; dy = 0.2
 discretization = MOLFiniteDifference([x=>dx,y=>dy],t)
@@ -64,7 +63,7 @@ sol = solve(prob,Tsit5())
 Dt = Differential(t)
 Dr = Differential(r)
 Drr = Dr^2
-eq  = Dt(u(t,r)) ~ 0.6 * (1/r^2 * Dr(r^2 * Dr(u(t,r))))
+eq  = Dt(u(t,r)) ~ 1/r^2 * Dr(r^2 * Dr(u(t,r)))
 bcs = [u(0,r) ~ - r * (r-1) * sin(r),
        Dr(u(t,0)) ~ 0.0, u(t,1) ~ sin(1)]
 
@@ -75,3 +74,4 @@ domains = [t ∈ Interval(0.0,1.0),
 discretization = MOLFiniteDifference([r=>0.1],t)
 prob = discretize(pdesys,discretization) # This gives an ODEProblem since it's time-dependent
 sol = solve(prob,Tsit5())
+

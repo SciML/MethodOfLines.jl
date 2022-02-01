@@ -37,7 +37,7 @@ end
     domains = [x ∈ Interval(0.0,1.0)]
 
     @named pdesys = PDESystem([eq],bcs,domains,[x],[u(x)])
-    discretization = MOLFiniteDifference([x=>dx], nothing, centered_order=2)
+    discretization = MOLFiniteDifference([x=>dx], nothing, approx_order=2)
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
@@ -60,7 +60,7 @@ end
     domains = [x ∈ Interval(0.0,1.0)]
 
     @named pdesys = PDESystem([eq],bcs,domains,[x],[u(x)])
-    discretization = MOLFiniteDifference([x=>dx], nothing, centered_order=2)
+    discretization = MOLFiniteDifference([x=>dx], nothing, approx_order=2)
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
@@ -92,7 +92,7 @@ end
 
     # Note that we pass in `nothing` for the time variable `t` here since we
     # are creating a stationary problem without a dependence on time, only space.
-    discretization = MOLFiniteDifference([x=>dx,y=>dy], nothing, centered_order=2)
+    discretization = MOLFiniteDifference([x=>dx,y=>dy], nothing, approx_order=2)
 
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
@@ -102,8 +102,8 @@ end
     # test boundary
     @test all(abs.(u_sol[:,1]) .< eps(Float32))
     @test all(abs.(u_sol[1,:]) .< eps(Float32))
-    @test u_sol[:,end] ≈ 0:dy:1.0
-    @test u_sol[end,:] ≈ 0:dx:1.0
+    @test u_sol[2:end-1,end] ≈ (0.0:dy:1.0)[2:end-1]
+    @test u_sol[end,2:end-1] ≈ (0.0:dx:1.0)[2:end-1]
 
     # test interior with finite differences
     interior = CartesianIndices((axes(xs)[1], axes(ys)[1]))[2:end-1,2:end-1]

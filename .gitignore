@@ -1,1 +1,12 @@
-/.vscode
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+Manifest.toml
+.vscode
+.vscode/*
+plots
+plots/*
+src/scratch
+src/scratch/*
+test/plots
+test/plots/*
