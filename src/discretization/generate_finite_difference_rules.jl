@@ -1,3 +1,30 @@
+# abstract type AbstractRule{T} end
+
+# abstract type ConditionalRule{T} <: AbstractRule{T} end
+# struct SimpleRule{T} <: AbstractReplacementRule{T}
+#     r::T
+#     priority::Int
+# end
+
+# struct UpwindRule{T, T2}
+#     r::T
+#     priority::Int
+#     condition::T2
+# end
+# struct RuleSet{T, T2}
+#     derivrules::T
+#     valrules::T2
+# end
+
+# function RuleSet(rules::Vector{T}, conditional_rules::Vector{C}) where {T<:SimpleRule, C<:ConditionalRule}
+#     priorities = vcat(map(r -> r.priority, rules), map(r -> r.priority, conditional_rules))
+
+#     for (i,r) in enumerate(vcat(rules, conditional_rules))
+        
+#     end
+
+# ModelingToolkit.substitute(expr, rule::AbstractRule{T}) where T = substitute(expr, rule.r)
+
 """
 `interpolate_discrete_param`
 
@@ -111,16 +138,77 @@ end
 
 @inline function generate_cartesian_rules(II, s, derivweights, terms)
     central_ufunc(u, I, x) = s.discvars[u][I]
-    return reduce(vcat, [[(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], II, s, (j,x), u, central_ufunc) for d in derivweights.orders[x], u in s.ū] for (j,x) in enumerate(s.x̄)])
+    return vec(mapreduce(vcat, enumerate(s.x̄), s.ū) do (j, x), u
+        let orders = derivweights.orders[x]
+            evenorders = orders[iseven.(orders)]
+            # for all odd orders
+            if length(evenorders) > 0
+                map(evenorders) do d
+                    (Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], II, s, (j,x), u, central_ufunc)
+                end
+            else
+                []
+            end
+        end
+    end)
+    
 end
 
-@inline function generate_upwinding_rules(II, s, derivweights, terms)    
-    #forward_weights(II,j) = calculate_weights(discretization.upwind_order, 0.0, s.grid[j][[II[j],II[j]+1]])
-    #reverse_weights(II,j) = calculate_weights(discretization.upwind_order, 0.0, s.grid[j][[II[j]-1,II[j]]])
-    # upwinding_rules = [@rule(*(~~a, $(Differential(s.x̄[j]))(u),~~b) => IfElse.ifelse(*(~~a..., ~~b...,)>0,
-    #                         *(~~a..., ~~b..., dot(reverse_weights(II,j),s.ū[k][central_neighbor_idxs(II,j)[1:2]])),
-    #                         *(~~a..., ~~b..., dot(forward_weights(II,j),s.ū[k][central_neighbor_idxs(II,j)[2:3]]))))
-    #                         for j in 1:nparams(s), k in 1:length(pdesys.s.ū)]
+@inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, derivweights, (j,x), u, central_ufunc) where N
+    IfElse.ifelse(expr > 0, 
+                  expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, true), 
+                  expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, false))
+end
+                
+@inline function generate_winding_rules(II, s, derivweights, terms)    
+    wind_ufunc(u, I, x) = s.discvars[u][I]
+    # for all independent variables and dependant variables
+    rules = vec(mapreduce(vcat, enumerate(s.x̄), s.ū) do (j, x), u
+        let orders = derivweights.orders[x]
+            oddorders = orders[isodd.(orders)]
+            # for all odd orders
+            if length(oddorders) > 0    
+                mapreduce(vcat, oddorders) do d
+                    #This has to be done with vcat or else rule thinks its a tuple
+                    vcat(#Catch multiplication
+                    [@rule *(~~a, $(Differential(x)^d)(u), ~~b) => upwind_difference(*(~a..., ~b...), d, II, s, derivweights, (j,x), u, wind_ufunc)],
+                    #Catch division and multiplication, see issue #1
+                    [@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(*(~a..., ~b...)/~c, d, II, s, derivweights, (j,x), u, wind_ufunc)])
+                end
+            else
+                []
+            end
+        end
+    end)
+    
+    wind_rules = []
+
+    # wind_exprs = []
+
+    for t in terms
+        for r in rules
+            if r(t) !== nothing
+                #@show t
+                push!(wind_rules, t => r(t)[1])
+            end
+        end
+    end
+
+    
+    return vcat(vec(mapreduce(vcat, enumerate(s.x̄), s.ū) do (j, x), u
+        let orders = derivweights.orders[x]
+            oddorders = orders[isodd.(orders)]
+            # for all odd orders
+            if length(oddorders) > 0
+                map(oddorders) do d
+                    (Differential(x)^d)(u) => upwind_difference(d, II, s, derivweights, (j,x), u, wind_ufunc, true)
+                end
+            else
+                []
+            end
+        end
+    end), wind_rules)
+    
 
 end
 
@@ -194,9 +282,11 @@ function generate_finite_difference_rules(II, s, pde, derivweights)
     # Nonlinear laplacian scheme
     nonlinlap_rules = generate_nonlinlap_rules(II, s, derivweights, terms)
 
+    winding_rules = generate_winding_rules(II, s, derivweights, terms)
+
     # Spherical diffusion scheme
     spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, derivweights, terms)
     
-    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian))
+    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(winding_rules), vec(central_deriv_rules_cartesian))
 end
 

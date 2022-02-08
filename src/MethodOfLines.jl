@@ -7,6 +7,7 @@ module MethodOfLines
     using ModelingToolkit: operation, istree, arguments, variable
     using SymbolicUtils, Symbolics
     using SymbolicUtils: operation, arguments
+    using IfElse
     import DomainSets
 
     include("discretization/fornberg.jl")

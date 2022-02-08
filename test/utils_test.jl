@@ -1,5 +1,6 @@
 using MethodOfLines, Test, ModelingToolkit, SymbolicUtils
 
+
 @testset "count differentials 1D" begin
     @parameters t x
     @variables u(..)

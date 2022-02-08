@@ -1,23 +1,25 @@
 ### INITIAL AND BOUNDARY CONDITIONS ###
 
-abstract type AbstractBoundary end
+abstract type AbstractBoundary{u, x} end
 
 abstract type AbstractTruncatingBoundary <: AbstractBoundary end
 
 abstract type AbstractExtendingBoundary <: AbstractBoundary end
 
-struct LowerBoundary <: AbstractTruncatingBoundary
+struct LowerBoundary{u, x} <: AbstractTruncatingBoundary
 end
 
-struct UpperBoundary<: AbstractTruncatingBoundary
+struct UpperBoundary{u, x} <: AbstractTruncatingBoundary
 end
 
-struct CompleteBoundary <: AbstractTruncatingBoundary
-end
-
-struct PeriodicBoundary <: AbstractBoundary
+struct PeriodicBoundary{u, x} <: AbstractBoundary
 end
 
 struct BoundaryHandler{hasperiodic}
     boundaries::Dict{Num, AbstractBoundary}
 end
+
+# indexes for Iedge depending on boundary type
+idx(::LowerBoundary) = 1
+idx(::UpperBoundary) = 2
+idx(::PeriodicBoundary) = 1

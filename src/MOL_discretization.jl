@@ -55,7 +55,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             
             # Get the finite difference weights
             derivweights = DifferentialDiscretizer(pde, pdesys.bcs, s, discretization)
-
+            #@show derivweights.windmap[Differential(s.x̄[1])]
             # Get the boundary conditions
             BoundaryHandler!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
 
@@ -98,7 +98,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         return sys, nothing
     else
         # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by the `solve` method.
-        #println(alleqs, bceqs)
+        println(alleqs, bceqs)
         sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
         return sys, tspan
     end
