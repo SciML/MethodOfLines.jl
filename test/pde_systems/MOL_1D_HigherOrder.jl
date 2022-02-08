@@ -5,7 +5,7 @@ using ModelingToolkit,MethodOfLines,LinearAlgebra,Test,OrdinaryDiffEq, DomainSet
 using ModelingToolkit: Differential
 
 # Beam Equation
-@test_broken begin
+@testset "Test 00: Beam Equation" begin
     @parameters x, t
     @variables u(..)
     Dt = Differential(t)
@@ -39,7 +39,7 @@ using ModelingToolkit: Differential
 end
 
 # Beam Equation with Velocity
-@test_broken begin
+@testset "Test 01: Beam Equation with velocity" begin
     @parameters x, t
     @variables u(..), v(..)
     Dt = Differential(t)

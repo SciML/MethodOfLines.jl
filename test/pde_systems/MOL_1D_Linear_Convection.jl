@@ -112,7 +112,7 @@ end
     plot!(x_sol, sol.u[end], label="Numeric solution")
     plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    savefig("plots/MOL_Linear_Convection_Test00.png")
+    savefig("plots/MOL_Linear_Convection_Test01.png")
 
 
     @test sol.u[end] ≈ u atol = 0.1;
@@ -178,7 +178,7 @@ end
     plot!(x_sol, sol.u[end], label="Numeric solution")
     plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    savefig("plots/MOL_Linear_Convection_Test00.png")
+    savefig("plots/MOL_1D_Linear_Convection_Test02.png")
 
 
     savefig("plots/MOL_Linear_Convection_Test02.png")
@@ -257,7 +257,7 @@ end
     plot!(x_sol, sol.u[end], label="Numeric solution")
     plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    savefig("plots/MOL_Linear_Convection_Test00.png")
+    savefig("plots/MOL_Linear_Convection_Test03.png")
 
 
     @test sol.u[end] ≈ u atol = 0.1;
@@ -325,7 +325,7 @@ end
     plot!(x_sol, sol.u[end], label="Numeric solution")
     plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    savefig("plots/MOL_Linear_Convection_Test00.png")
+    savefig("plots/MOL_Linear_Convection_Test04.png")
 
 
     @test sol.u[end] ≈ u atol = 0.1;
