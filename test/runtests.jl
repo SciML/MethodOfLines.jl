@@ -13,7 +13,7 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
        #@time @safetestset "Test for regression against original code" begin include("regression_test.jl") end
         #@time @safetestset "MOLFiniteDifference Utils" begin include("utils_test.jl") end
         #@time @safetestset "Discretization of space and grid types" begin include("components/DiscreteSpace.jl") end
-        @time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
+        #@time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
     end
 
     if GROUP == "All" || GROUP == "Integration"

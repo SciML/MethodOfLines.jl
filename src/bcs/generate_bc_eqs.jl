@@ -95,35 +95,36 @@ function BoundaryHandler!!(u0, bceqs, bcs, s::DiscreteSpace, depvar_ops, tspan, 
                     if subsmatch(term, r)
                         # Get the matched variables from the rule
                         u_, x_ = r.second
+                        boundary = LowerBoundary(u_, x_)
                         # Mark the boundary                        
-                        boundary = LowerBoundary{u_, x_}()
-                        for term_ in setdiff(terms, term)
-                            for r_ in upper_boundary_rules
-                                if subsmatch(term_, r_) !== nothing
-                                    boundary = PeriodicBoundary{u_, x_}()
-                                end
+                        for term_ in setdiff(terms, [term]), r_ in upper_boundary_rules
+                            if subsmatch(term_, r_)
+                                boundary = PeriodicBoundary(u_, x_)
                             end
                         end
-                        break
-                    end
-                end
-                for term in terms, r in upper_boundary_rules
-                    if subsmatch(term, r)
-                        u_, x_ = r.second 
-                        boundary = UpperBoundary{u_, x_}()
-                        break
-                    end
-                end
 
+                        break
+                    end
+                end
+                if boundary === nothing
+                    for term in terms, r in upper_boundary_rules
+                        if subsmatch(term, r)
+                            u_, x_ = r.second 
+                            boundary = UpperBoundary(u_, x_)
+                            break
+                        end
+                    end
+                end
                 @assert boundary !== nothing "Boundary condition $bc is not on a boundary of the domain, or is not a valid boundary condition"
-                
+                generate_bc_rules!(bceqs, Iedge, derivweights, s, bc, boundary)
             end
         end
     end
     push!(bceqs, cornereqs(s))
 end
 
-@inline function generate_bc_rules!(bceqs, Iedge, derivweights::DifferentialDiscretizer, s, bc, boundary::AbstractTruncatingBoundary{u_, x_}) where {u_, x_}
+@inline function generate_bc_rules!(bceqs, Iedge, derivweights::DifferentialDiscretizer, s, bc, boundary::AbstractTruncatingBoundary)
+    u_, x_ = getvars(boundary)
     push!(bceqs, vec(map(Iedge[x_][idx(boundary)]) do II
         rules = generate_bc_rules(II, derivweights, s, bc, boundary)
         
@@ -132,9 +133,10 @@ end
 end
 
 
-function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, boundary::AbstractTruncatingBoundary{u_, x_}) where {N, M, G<:CenterAlignedGrid, u_, x_}
+function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, boundary::AbstractTruncatingBoundary) where {N, M, G<:CenterAlignedGrid}
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
+    u_, x_ = getvars(boundary)
     ufunc(v, I, x) = s.discvars[v][I]
 
     depvarderivbcmaps = []
@@ -159,8 +161,9 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, bounda
     return vcat(depvarderivbcmaps, depvarbcmaps, fd_rules, varrules)
 end
 
-function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, boundary::AbstractTruncatingBoundary{u_, x_}) where {N, M, G<:EdgeAlignedGrid, u_, x_}
+function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, boundary::AbstractTruncatingBoundary) where {N, M, G<:EdgeAlignedGrid}
     
+    u_, x_ = getvars(boundary)
     ufunc(v, I, x) = s.discvars[v][I]
 
     depvarderivbcmaps = []
@@ -190,12 +193,13 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, bounda
     return vcat(depvarderivbcmaps, depvarbcmaps, fd_rules, varrules)
 end
 
-function generate_bc_rules!(bceqs, Iedge, derivweights, s::DiscreteSpace, bc, boundary::PeriodicBoundary{u_, x_}) where {u_, x_}
+function generate_bc_rules!(bceqs, Iedge, derivweights, s::DiscreteSpace{N}, bc, boundary::PeriodicBoundary) where N
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
+    u_, x_ = getvars(boundary)
     j = s.x2i[x_]
     # * Assume that the periodic BC is of the simple form u(t,0) ~ u(t,1)
-    Ioffset = unitindex(N, j)*(length(s, x_) - 2)
+    Ioffset = unitindex(N, j)*(length(s, x_) - 1)
     local disc
     for u in s.ū
         if isequal(operation(u), operation(u_))
@@ -204,9 +208,9 @@ function generate_bc_rules!(bceqs, Iedge, derivweights, s::DiscreteSpace, bc, bo
         end
     end
 
-    for (i, sign) in zip(1:2, [1, -1])
-    push!(bceqs, vec(map(Iedge[x_][i]) do II
-        disc[II] ~ disc[II + sign*Ioffset]
+    
+    push!(bceqs, vec(map(Iedge[x_][1]) do II
+        disc[II] ~ disc[II + Ioffset]
     end))
 
 end

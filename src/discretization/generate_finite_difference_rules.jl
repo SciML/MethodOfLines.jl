@@ -155,41 +155,33 @@ end
 end
 
 @inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, derivweights, (j,x), u, central_ufunc) where N
+    # TODO: Allow derivatives in expr
+    expr = substitute(expr, valmaps(s, II))
     IfElse.ifelse(expr > 0, 
                   expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, true), 
                   expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, false))
 end
                 
 @inline function generate_winding_rules(II, s, derivweights, terms)    
-    wind_ufunc(u, I, x) = s.discvars[u][I]
+    wind_ufunc(v, I, x) = s.discvars[v][I]
     # for all independent variables and dependant variables
-    rules = vec(mapreduce(vcat, enumerate(s.x̄), s.ū) do (j, x), u
-        let orders = derivweights.orders[x]
-            oddorders = orders[isodd.(orders)]
-            # for all odd orders
-            if length(oddorders) > 0    
-                mapreduce(vcat, oddorders) do d
-                    #This has to be done with vcat or else rule thinks its a tuple
-                    vcat(#Catch multiplication
-                    [@rule *(~~a, $(Differential(x)^d)(u), ~~b) => upwind_difference(*(~a..., ~b...), d, II, s, derivweights, (j,x), u, wind_ufunc)],
-                    #Catch division and multiplication, see issue #1
-                    [@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(*(~a..., ~b...)/~c, d, II, s, derivweights, (j,x), u, wind_ufunc)])
-                end
-            else
-                []
-            end
-        end
-    end)
+    rules = vcat(#Catch multiplication
+                reduce(vcat, [[@rule *(~~a, $(Differential(x)^d)(u), ~~b) => upwind_difference(*(~a..., ~b...), d, II, s, derivweights, (j,x), u, wind_ufunc) for d in (let orders = derivweights.orders[x]; orders[isodd.(orders)] end)] for (j,x) in enumerate(s.x̄), u in s.ū]),
+
+                #Catch division and multiplication, see issue #1
+                reduce(vcat, [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(*(~a..., ~b...)/~c, d, II, s, derivweights, (j, x), u, wind_ufunc) for d in (let orders = derivweights.orders[x]; orders[isodd.(orders)] end)] for (j,x) in enumerate(s.x̄), u in s.ū])
+                )
     
     wind_rules = []
 
     # wind_exprs = []
-
+    #@show rules
     for t in terms
+        #@show t
         for r in rules
             if r(t) !== nothing
                 #@show t
-                push!(wind_rules, t => r(t)[1])
+                push!(wind_rules, t => r(t))
             end
         end
     end

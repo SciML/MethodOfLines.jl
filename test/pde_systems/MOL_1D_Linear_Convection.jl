@@ -14,11 +14,13 @@ using Plots
 
     # 1D PDE and boundary conditions
     eq  = Dt(u(t,x)) ~ -Dx(u(t,x))
-    bcs = [u(0,x) ~ (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x  -0.75)^2/(2.0*0.2^2)),
-           u(t,0) ~ u(t,2)]
 
+    asf(x) = (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x-1.0)^2/(2.0*0.2^2))
+    bcs = [u(0,x) ~ asf(x),
+    u(t,0) ~ u(t,2)]
+    
     # Space and time domains
-    domains = [t ∈ Interval(0.0,0.6),
+    domains = [t ∈ Interval(0.0,2.0),
                x ∈ Interval(0.0,2.0)]
 
     # PDE system
@@ -40,8 +42,8 @@ using Plots
     sol = solve(prob,Euler(),dt=.025,saveat=0.1)
     sol_upwind = solve(prob_upwind,Euler(),dt=.025,saveat=0.1)
 
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)-dx
-    u = @. (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x_interval-(0.75-0.6))^2/(2.0*0.2^2))
+    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
+    u = asf.(x_interval)
     # Plot and save results
 
     # Test
@@ -51,17 +53,17 @@ using Plots
     t_f = size(sol,3)
     exact = u
     plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
-    plot!(x_sol, sol[:,1,t_f], label="Numeric solution")
-    plot!(x_sol, u.-sol[:,1,t_f], label="Differential Error")
+    plot!(x_sol, sol.u[end], label="Numeric solution")
+    plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
     savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol[:,1,t_f] ≈ u atol = 0.1;
-    @test sol_upwind[:,1,t_f] ≈ u atol = 0.1;
+    @test sol.u[end] ≈ u atol = 0.1;
+    @test sol_upwind.u[end] ≈ u atol = 0.1;
 end
 
-@testset "Test 01: Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.01" begin
+@testset "Test 01: Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.001" begin
 
     # Parameters, variables, and derivatives
     @parameters t x
@@ -70,13 +72,13 @@ end
     Dx = Differential(x)
 
     # 1D PDE and boundary conditions
-    eq  = Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.01
-    bcs = [u(0,x) ~ (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x  -0.75)^2/(2.0*0.2^2)),
-           u(t,0) ~ 0.0,
-           u(t,2) ~ 0.0]
-
+    eq  = Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.001
+    asf(x) = (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x-1.0)^2/(2.0*0.2^2))
+    bcs = [u(0,x) ~ asf(x),
+           u(t,0) ~ u(t,2)]
+    
     # Space and time domains
-    domains = [t ∈ Interval(0.0,0.6),
+    domains = [t ∈ Interval(0.0,2.0),
                x ∈ Interval(0.0,2.0)]
 
     # PDE system
@@ -96,19 +98,24 @@ end
 
 
     # Test
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)-dx
-    u = @. (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x_interval-(0.75-0.6))^2/(2.0*0.2^2))
+    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
+    u = asf.(x_interval)
+    # Plot and save results
+
+    # Test
+    t_f = size(sol,3)
+
     x_sol = x_interval
     t_f = size(sol,3)
     exact = u
     plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
-    plot!(x_sol, sol[:,1,t_f], label="Numeric solution")
-    plot!(x_sol, u.-sol[:,1,t_f], label="Differential Error")
+    plot!(x_sol, sol.u[end], label="Numeric solution")
+    plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    savefig("plots/MOL_Linear_Convection_Test01.png")
+    savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol[:,1,t_f] ≈ u atol = 0.1;
+    @test sol.u[end] ≈ u atol = 0.1;
 
 end
 
@@ -123,12 +130,12 @@ end
 
     # 1D PDE and boundary conditions
     eq  = Dt(u(t,x)) ~ -v*Dx(u(t,x))
-    bcs = [u(0,x) ~ (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x-0.75)^2/(2.0*0.2^2)),
-           u(t,0) ~ 0.0,
-           u(t,2) ~ 0.0]
-
+    asf(x) = (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x-1.0)^2/(2.0*0.2^2))
+    bcs = [u(0,x) ~ asf(x),
+           u(t,0) ~ u(t,2)]
+    
     # Space and time domains
-    domains = [t ∈ Interval(0.0,0.6),
+    domains = [t ∈ Interval(0.0,2.0),
                x ∈ Interval(0.0,2.0)]
 
     # PDE system
@@ -157,16 +164,22 @@ end
     # savefig("MOL_1D_Linear_Convection_Test02.png")
 
     # Test
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)-dx
-    u = @. (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x_interval-(0.75+v*0.6))^2/(2.0*0.2^2))
+    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
+    u = asf.(x_interval)
+    # Plot and save results
 
+    # Test
     t_f = size(sol,3)
+
     x_sol = x_interval
     t_f = size(sol,3)
     exact = u
     plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
-    plot!(x_sol, sol.u[t_f], label="Numeric solution")
-    plot!(x_sol, u.-sol.u[t_f], label="Differential Error")
+    plot!(x_sol, sol.u[end], label="Numeric solution")
+    plot!(x_sol, u.-sol.u[end], label="Differential Error")
+
+    savefig("plots/MOL_Linear_Convection_Test00.png")
+
 
     savefig("plots/MOL_Linear_Convection_Test02.png")
     plot()
@@ -174,8 +187,8 @@ end
         plot!(x_sol, sol.u[i], label="Numeric solution at $(sol.t[i])")
     end
     gif(anim, "plots/MOL_Linear_Convection_Test02.gif", fps = 5)
-
-    @test sol[:,1,t_f] ≈ u atol = 0.1;
+    
+    @test sol.u[end] ≈ u atol = 0.1;
 end
 
 @testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
@@ -186,19 +199,23 @@ end
     Dx = Differential(x)
 
     # 1D PDE and boundary conditions
-    eq  = [ Dt(u(t,x)) ~ -(Dx(v(t,x))*u(t,x)+v(t,x)*Dx(u(t,x))),
+    eq  = [ Dt(u(t,x)) ~ -(u(t,x)*Dx(v(t,x))+v(t,x)*Dx(u(t,x))),
             v(t,x) ~ 1.0 ]
-    bcs = [u(0,x) ~ (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x-0.75)^2/(2.0*0.2^2)),
-           u(t,0) ~ 0.0,
-           u(t,2) ~ 0.0,
+    asf(x) = (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x-1.0)^2/(2.0*0.2^2))
+    bcs = [u(0,x) ~ asf(x),
+           u(t,0) ~ u(t,2),
            v(0,x) ~ 1.0,
            v(t,0) ~ 1.0,
            v(t,2) ~ 1.0
            ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0,0.6),
+
+    
+    # Space and time domains
+    domains = [t ∈ Interval(0.0,2.0),
                x ∈ Interval(0.0,2.0)]
+
 
     # PDE system
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x),v(t,x)])
@@ -227,21 +244,23 @@ end
 
     # Test
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)-dx
-    u = @. (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x_interval-(0.75+1.0*0.6))^2/(2.0*0.2^2))
+    u = asf.(x_interval)
+    # Plot and save results
 
+    # Test
     t_f = size(sol,3)
 
     x_sol = x_interval
     t_f = size(sol,3)
     exact = u
     plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
-    plot!(x_sol, sol[:,1,t_f], label="Numeric solution")
-    plot!(x_sol, u.-sol[:,1,t_f], label="Differential Error")
+    plot!(x_sol, sol.u[end], label="Numeric solution")
+    plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    savefig("plots/MOL_Linear_Convection_Test03.png")
+    savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol[:,1,t_f] ≈ u atol = 0.1;
+    @test sol.u[end] ≈ u atol = 0.1;
 end
 
 @testset "Test 04: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=0.999 + 0.001 * t * x " begin
@@ -254,15 +273,16 @@ end
     # 1D PDE and boundary conditions
     eq  = [ Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)),
             v(t,x) ~ 0.999 + 0.001 * t * x ]
-    bcs = [u(0,x) ~ (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x-0.75)^2/(2.0*0.2^2)),
-           u(t,0) ~ 0.0,
-           u(t,2) ~ 0.0,
+    asf(x) = (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x-1.0)^2/(2.0*0.2^2))
+    
+    bcs = [u(0,x) ~ asf(x),
+           u(t,0) ~ u(t,2),
            v(0,x) ~ 0.999,
            v(t,0) ~ 0.999,
            v(t,2) ~ 0.999 + 0.001 * t * 2.0]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0,0.6),
+    domains = [t ∈ Interval(0.0,2.0),
                x ∈ Interval(0.0,2.0)]
 
     # PDE system
@@ -292,19 +312,21 @@ end
 
     # Test
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)-dx
-    u = @. (0.5/(0.2*sqrt(2.0*3.1415)))*exp(-(x_interval-(0.75+1.0*0.6))^2/(2.0*0.2^2))
+    u = asf.(x_interval)
+    # Plot and save results
 
+    # Test
     t_f = size(sol,3)
 
     x_sol = x_interval
     t_f = size(sol,3)
     exact = u
     plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
-    plot!(x_sol, sol[:,1,t_f], label="Numeric solution")
-    plot!(x_sol, u.-sol[:,1,t_f], label="Differential Error")
+    plot!(x_sol, sol.u[end], label="Numeric solution")
+    plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    savefig("plots/MOL_Linear_Convection_Test04.png")
+    savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol[:,1,t_f] ≈ u atol = 0.1;
+    @test sol.u[end] ≈ u atol = 0.1;
 end

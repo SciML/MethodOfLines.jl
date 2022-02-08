@@ -59,9 +59,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # Get the boundary conditions
             BoundaryHandler!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
 
-            # Find the indexes on the interior
-            
-            
+            # Find the indexes on the interior            
             Iinterior =  s.Igrid[[let bcs = get_bc_counts(i, s, pdesys.bcs)
                                       (1 + first(bcs)):length(s.grid[x])-last(bcs)
                                       end
@@ -98,7 +96,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         return sys, nothing
     else
         # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by the `solve` method.
-        println(alleqs, bceqs)
+        #println(alleqs, bceqs)
         sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
         return sys, tspan
     end

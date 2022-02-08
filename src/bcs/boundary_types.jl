@@ -1,19 +1,27 @@
 ### INITIAL AND BOUNDARY CONDITIONS ###
 
-abstract type AbstractBoundary{u, x} end
+abstract type AbstractBoundary end
 
 abstract type AbstractTruncatingBoundary <: AbstractBoundary end
 
 abstract type AbstractExtendingBoundary <: AbstractBoundary end
 
-struct LowerBoundary{u, x} <: AbstractTruncatingBoundary
+struct LowerBoundary <: AbstractTruncatingBoundary
+    u
+    x
 end
 
-struct UpperBoundary{u, x} <: AbstractTruncatingBoundary
+struct UpperBoundary <: AbstractTruncatingBoundary
+    u
+    x
 end
 
-struct PeriodicBoundary{u, x} <: AbstractBoundary
+struct PeriodicBoundary <: AbstractBoundary
+    u
+    x
 end
+
+getvars(b::AbstractBoundary) = (b.u, b.x)
 
 struct BoundaryHandler{hasperiodic}
     boundaries::Dict{Num, AbstractBoundary}
