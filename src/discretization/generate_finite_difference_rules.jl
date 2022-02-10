@@ -138,20 +138,7 @@ end
 
 @inline function generate_cartesian_rules(II, s, derivweights, terms)
     central_ufunc(u, I, x) = s.discvars[u][I]
-    return vec(mapreduce(vcat, enumerate(s.x̄), s.ū) do (j, x), u
-        let orders = derivweights.orders[x]
-            evenorders = orders[iseven.(orders)]
-            # for all odd orders
-            if length(evenorders) > 0
-                map(evenorders) do d
-                    (Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], II, s, (j,x), u, central_ufunc)
-                end
-            else
-                []
-            end
-        end
-    end)
-    
+    return reduce(vcat, [[(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], II, s, (j,x), u, central_ufunc) for d in (let orders = derivweights.orders[x]; orders[iseven.(orders)] end)] for (j,x) in enumerate(s.x̄), u in s.ū])
 end
 
 @inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, derivweights, (j,x), u, central_ufunc) where N
@@ -180,14 +167,13 @@ end
         #@show t
         for r in rules
             if r(t) !== nothing
-                #@show t
+                #@show t 
                 push!(wind_rules, t => r(t))
             end
         end
     end
 
-    
-    return vcat(vec(mapreduce(vcat, enumerate(s.x̄), s.ū) do (j, x), u
+    return vcat(wind_rules, vec(mapreduce(vcat, enumerate(s.x̄), s.ū) do (j, x), u
         let orders = derivweights.orders[x]
             oddorders = orders[isodd.(orders)]
             # for all odd orders
@@ -199,7 +185,7 @@ end
                 []
             end
         end
-    end), wind_rules)
+    end))
     
 
 end
