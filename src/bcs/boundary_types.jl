@@ -27,7 +27,21 @@ struct BoundaryHandler{hasperiodic}
     boundaries::Dict{Num, AbstractBoundary}
 end
 
+# Which interior end to remove
+whichboundary(::LowerBoundary) = (1, 0)
+whichboundary(::UpperBoundary) = (0, 1)
+whichboundary(::PeriodicBoundary) = (1, 0)
+
+@inline function clip_interior(lower, upper, b::AbstractBoundary, x2i)
+    clip = whichboundary(b)
+    dim = x2i[b.x]
+
+    lower[dim] = lower[dim] + clip[1]
+    upper[dim] = upper[dim] - clip[2]
+end
+
+
 # indexes for Iedge depending on boundary type
-idx(::LowerBoundary) = 1
-idx(::UpperBoundary) = 2
-idx(::PeriodicBoundary) = 1
+isupper(::LowerBoundary) = false
+isupper(::UpperBoundary) = true
+isupper(::PeriodicBoundary) = false

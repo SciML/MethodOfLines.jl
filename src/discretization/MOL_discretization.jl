@@ -4,8 +4,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs
     domain = pdesys.domain
+    depvars = get_dvs(pdesys)
+    indvars = get_ivs(pdesys)
     
-    grid_align = discretization.grid_align
     t = discretization.time
     # Get tspan
     tspan = nothing
@@ -15,13 +16,14 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         @assert tdomain.domain isa DomainSets.Interval
         tspan = (DomainSets.infimum(tdomain.domain), DomainSets.supremum(tdomain.domain))
     end
-
-    depvar_ops = map(x->operation(x.val),pdesys.depvars)
-
+    # TODO: Update this when variables can have different args
+    indvars = filter(x-> t === nothing || !isequal(x, t.val), indvars)
     u0 = []
     bceqs = []
     alleqs = []
-    alldepvarsdisc = []
+
+    s = DiscreteSpace(domain, depvars, indvars, discretization)
+    boundarymap = BoundaryHandler!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
     # Loop over equations: different space, grid, independent variables etc for each equation
     # a slightly more efficient approach would be to group equations that have the same
     # independent variables
@@ -30,7 +32,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         depvars_lhs = get_depvars(pde.lhs, depvar_ops)
         depvars_rhs = get_depvars(pde.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
-
+        
         # Read the independent variables,
         # ignore if the only argument is [t]
         allindvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
@@ -51,13 +53,11 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             indvars = first(allindvars)
             #TODO: Factor this out of the loop, along with BCs
             # Get the grid
-            s = DiscreteSpace(domain, depvars, indvars, x̄, discretization)
             
             # Get the finite difference weights
             derivweights = DifferentialDiscretizer(pde, pdesys.bcs, s, discretization)
             #@show derivweights.windmap[Differential(s.x̄[1])]
             # Get the boundary conditions
-            BoundaryHandler!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
 
             # Find the indexes on the interior            
             Iinterior =  s.Igrid[[let bcs = get_bc_counts(i, s, pdesys.bcs)
@@ -96,7 +96,12 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         return sys, nothing
     else
         # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by the `solve` method.
-        #println(alleqs, bceqs)
+        println(vcat(alleqs, unique(bceqs)))
+         println(Dict(defaults))#
+        # println(vec(reduce(vcat, vec(alldepvarsdisc))))
+        # println(ps)
+        # println(tspan)#
+        # println(typeof.(vcat(alleqs, unique(bceqs))))
         sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
         return sys, tspan
     end

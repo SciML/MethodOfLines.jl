@@ -1,27 +1,8 @@
-#Base.getindex(s::DiscreteSpace, i::Integer) = DiscreteVar(vars[i], ...)
-"""
-Return a map of of variables to the gridpoints at the edge of the domain
-"""
-@inline function get_edgevals(params, axies, i)
-    return [params[i] => first(axies[params[i]]), params[i] => last(axies[params[i]])]
-end
-
-"""
-Return a map of of variables to the gridpoints at the edge of the domain
-"""
-@inline function get_edgevals(s, i)
-    return [s.x̄[i] => first(s.axies[s.x̄[i]]), s.x̄[i] => last(s.axies[s.x̄[i]])]
-end
-
-@inline function subvar(depvar, edge_vals)
-    return substitute.((depvar,), edge_vals)
-end
 struct DiscreteSpace{N,M,G}
     ū
     discvars
     time
     x̄ # Note that these aren't necessarily @parameters
-    params
     axies
     grid
     dxs
@@ -38,11 +19,9 @@ Base.length(s::DiscreteSpace, x) = length(s.grid[x])
 Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])
 Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 
-params(s::DiscreteSpace{N,M}) where {N,M}= s.params
-
-grid_idxs(s::DiscreteSpace) = CartesianIndices(((axes(g)[1] for g in s.grid)...,))
-edge_idxs(s::DiscreteSpace{N}) where {N} = reduce(vcat, [[vcat([Colon() for j = 1:i-1], 1, [Colon() for j = i+1:N]), vcat([Colon() for j = 1:i-1], length(s.axies[i]), [Colon() for j = i+1:N])] for i = 1:N])
-
+"""
+A function that returns wat to replace independent variables with in boundary equations
+"""
 @inline function axiesvals(s::DiscreteSpace{N,M,G}, x_, I) where {N,M,G} 
     map(enumerate(s.x̄)) do (j, x)
         if isequal(x, x_)
@@ -56,19 +35,6 @@ end
 gridvals(s::DiscreteSpace{N}) where N = map(y-> [x => s.grid[x][y.I[j]] for (j,x) in enumerate(s.x̄)],s.Igrid)
 gridvals(s::DiscreteSpace{N}, I::CartesianIndex) where N = [x => s.grid[x][I[j]] for (j,x) in enumerate(s.x̄)]
 
-## Boundary methods ##
-edgevals(s::DiscreteSpace{N}) where {N} = reduce(vcat, [get_edgevals(s.x̄, s.axies, i) for i = 1:N])
-edgevars(s::DiscreteSpace, I) = [u => s.discvars[u][I] for u in s.ū]
-
-"""
-Generate a map of variables to the gridpoints at the edge of the domain
-"""
-@inline function edgemaps(s::DiscreteSpace, ::LowerBoundary)
-    return [x => first(s.axies[x]) for x in s.x̄]
-end
-@inline function edgemaps(s::DiscreteSpace, ::UpperBoundary)
-    return [x => last(s.axies[x]) for x in s.x̄]
-end
 
 varmaps(s::DiscreteSpace, II) = [u => s.discvars[u][II] for u in s.ū]
 
@@ -95,7 +61,7 @@ end
     end
 end
 
-function DiscreteSpace(domain, depvars, indvars, x̄, discretization::MOLFiniteDifference{G}) where {G}
+function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference{G}) where {G}
     t = discretization.time
     nspace = length(x̄)
     # Discretize space
@@ -115,25 +81,26 @@ function DiscreteSpace(domain, depvars, indvars, x̄, discretization::MOLFiniteD
     grid = generate_grid(x̄, axies, domain, discretization)
 
     # Build symbolic variables
-    Iaxies = CartesianIndices(((axes(s.second)[1] for s in axies)...,))
-    Igrid = CartesianIndices(((axes(g.second)[1] for g in grid)...,))
-    Iedges = edges(x̄, Igrid, nspace)
-    
+    Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
+    Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
+
     depvarsdisc = map(depvars) do u
         if t === nothing
             sym = nameof(SymbolicUtils.operation(u))
-            u => collect(first(@variables $sym[collect(axes(g.second)[1] for g in grid)...]))
+            uaxes = collect(axes(grid[x])[1] for x in arguments(u))
+            u => collect(first(@variables $sym[uaxes...]))
         elseif isequal(SymbolicUtils.arguments(u), [t])
-            u => [u for II in s.Igrid]
+            u => [u for II in s.Igrid[u]]
         else
             sym = nameof(SymbolicUtils.operation(u))
+            uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
             u => collect(first(@variables $sym[collect(axes(g.second)[1] for g in grid)...](t))) 
         end
     end
 
     x̄2dim = [x̄[i] => i for i in 1:nspace]
     dim2x̄ = [i => x̄[i] for i in 1:nspace]
-    return DiscreteSpace{nspace,length(depvars), G}(depvars, Dict(depvarsdisc), discretization.time, x̄, indvars, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Iedges, Dict(x̄2dim))
+    return DiscreteSpace{nspace,length(depvars), G}(depvars, Dict(depvarsdisc), discretization.time, x̄, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Dict(x̄2dim))
 end
 
 @inline function edges(x̄, Igrid, N)
@@ -144,8 +111,16 @@ end
     end)
 end
 
-edges(s::DiscreteSpace) = s.Iedges
+@inline function edge(s::Discretespace, u, x, islower)
+    sd(A::AbstractArray{T,N}, x, i) where {T,N} = selectdim(interior(A, N), s.x2i[x], i)
+    if islower
+        return sd(s.Igrid[u], x, 1)
+    else
+        return sd(s.Igrid[u], x, length(s, x))
+    end
+end 
 
+edge(s::Discretespace, b::AbstractBoundary) = edge(s, b.u, b.x, !isupper(b))
 # """
 # Create a vector containing indices of the corners of the domain.
 # """
@@ -161,7 +136,7 @@ edges(s::DiscreteSpace) = s.Iedges
 
 
 #varmap(s::DiscreteSpace{N,M}) where {N,M} = [s.ū[i] => i for i = 1:M]
-
+# ! needs rewrite
 @inline function cornereqs(s::DiscreteSpace{N,M}) where {N,M}
     Iedges = edges(s)
     # Flatten Iedges

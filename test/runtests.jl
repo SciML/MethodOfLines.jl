@@ -17,13 +17,13 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
     end
 
     if GROUP == "All" || GROUP == "Integration"
+        @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin include("pde_systems/MOL_1D_Linear_Convection.jl") end
         @time @safetestset "MOLFiniteDifference Interface" begin include("pde_systems/MOLtest.jl") end
         @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin include("pde_systems/MOL_1D_Linear_Diffusion.jl") end
         @time @safetestset "MOLFiniteDifference Interface: 1D Non-Linear Diffusion" begin include("pde_systems/MOL_1D_NonLinear_Diffusion.jl") end
         @time @safetestset "MOLFiniteDifference Interface: 2D Diffusion" begin include("pde_systems/MOL_2D_Diffusion.jl") end
         @time @safetestset "MOLFiniteDifference Interface: 1D HigherOrder" begin include("pde_systems/MOL_1D_HigherOrder.jl") end
         @time @safetestset "MOLFiniteDifference Interface: 1D Partial DAE" begin include("pde_systems/MOL_1D_PDAE.jl") end
-        @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin include("pde_systems/MOL_1D_Linear_Convection.jl") end
         @time @safetestset "MOLFiniteDifference Interface: Stationary Nonlinear Problems" begin include("pde_systems/MOL_NonlinearProblem.jl") end
     end
 

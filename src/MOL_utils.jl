@@ -83,9 +83,12 @@ function split_additive_terms(eq)
     return vcat(lhs_arg,rhs_arg)
 end
 @inline clip(II::CartesianIndex{M}, j, N) where M = II[j] > N ? II - unitindices(M)[j] : II
+
 subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
 
-    
+substitute(eq::Equation, rules) = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
+
+
 
 half_range(x) = -div(x,2):div(x,2)
 
