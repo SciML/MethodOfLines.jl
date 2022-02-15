@@ -4,8 +4,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs
     domain = pdesys.domain
-    depvars = pdesys.dvs
-    indvars = pdesys.ivs
+    
+    alldepvars = get_all_depvars(pdesys)
+    allindvars = collect(reduce(union, filter(xs->!isequal(xs, [t]), map(arguments, alldepvars))))
     
     t = discretization.time
     # Get tspan
@@ -16,18 +17,15 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         @assert tdomain.domain isa DomainSets.Interval
         tspan = (DomainSets.infimum(tdomain.domain), DomainSets.supremum(tdomain.domain))
     end
-
-    indvars = filter(x-> t === nothing || !isequal(x, t.val), indvars)
-    
     alleqs = []
     bceqs = []
     # Create discretized space and variables
-    s = DiscreteSpace(domain, depvars, indvars, discretization)
+    s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
     # Generate finite difference weights
-    derivweights = DifferentialDiscretizer(pdesys, pdesys.bcs, s, discretization)
-    # Create a map of each variable to their boundary conditions
+    derivweights = DifferentialDiscretizer(pdesys, s, discretization)
+    # Create a map of each variable to their boundary conditions and get the initial condition
     boundarymap, u0 = BoundaryHandler(pdesys.bcs, s, depvar_ops, tspan, derivweights)
-
+    # Get the interior and variable to solve for each equation
     interiormap = InteriorMap(pdeeqs, boundarymap, s)
 
     # Loop over equations: different space, grid, independent variables etc for each equation
@@ -39,9 +37,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         depvars_rhs = get_depvars(pde.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         
-        # Read the independent variables,JZ346595D
+        # Read the independent variables
         # ignore if the only argument is [t]
-        allindvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
+        indvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
         if isempty(allx̄)
             push!(alleqs, pde)
@@ -49,7 +47,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         else
             # make sure there is only one set of independent variables per equation
             @assert length(allx̄) == 1
-            @assert length(allindvars) == 1
+            @assert length(indvars) == 1
             
             # Generate the boundary conditions for the correct variable
             for boundary in boundarymap[operation(interiormap.var[pde])]

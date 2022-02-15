@@ -8,7 +8,9 @@ struct DifferentialDiscretizer{T, D1}
     orders::Dict{Num, Vector{Int}}
 end
 
-function DifferentialDiscretizer(pdeeqs, bcs, s, discretization)
+function DifferentialDiscretizer(pdesys, s, discretization)
+    pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
+    bcs = pdesys.bcs isa Vector ? pdesys.bcs : [pdesys.bcs]
     approx_order = discretization.approx_order
     upwind_order = discretization.upwind_order
     d_orders(x) = reverse(sort(collect(union((differential_order(pde.rhs, x) for pde in pdeeqs)..., (differential_order(pde.lhs, x) for pde in pdeeqs)..., (differential_order(bc.rhs, x) for bc in bcs)..., (differential_order(bc.lhs, x) for bc in bcs)...))))

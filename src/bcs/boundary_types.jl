@@ -117,12 +117,12 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
     # Generate initial conditions and bc equations
     for bc in bcs
         # * Assume in the form `u(...) ~ ...` for now
-        bcdepvar = first(get_depvars(bc.lhs, depvar_ops))
+        #bcdepvar = first(get_depvars(bc.lhs, depvar_ops))
         
-        if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
+        if any(u -> isequal(operation(u), operation(bc.lhs.val)), s.ū)
             if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))
                 # initial condition
-                # * Assume that the initial condition is not in terms of the initial derivative
+                # * Assume that the initial condition is not in terms of the initial derivative i.e. equation is first order in time
                 initindex = findfirst(isequal(bc.lhs), initmaps) 
                 if initindex !== nothing
                     push!(u0,vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,),gridvals(s))))
