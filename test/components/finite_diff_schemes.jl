@@ -23,7 +23,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
     push!(weights, ([1/12, -2/3,0,2/3,-1/12], [-1/12,4/3,-5/2,4/3,-1/12], [1/8,-1.,13/8,0.,-13/8,1.,-1/8]))
     for d in 1:3
         for (i,a) in enumerate([2])
-            pde = Dt(u(t,x)) ~ +Dx(d)(u(t,x))
+            pde = [Dt(u(t,x)) ~ +Dx(d)(u(t,x))]
             bcs = [u(0,x) ~ cos(x), u(t,0) ~ exp(-t), u(t,Float64(π)) ~ -exp(-t)]
 
             @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x)])
@@ -41,7 +41,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
             indvars = first(Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
             x̄ = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
 
-            s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, x̄, disc)
+            s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
 
             derivweights = MethodOfLines.DifferentialDiscretizer(pde, bcs, s, disc)
             
@@ -68,7 +68,7 @@ end
 
 @testset "Test 01: Nonlinear Diffusion discretization" begin
     
-    pde = Dt(u(t,x)) ~ Dx(1)(u(t,x))
+    pde = [Dt(u(t,x)) ~ Dx(1)(u(t,x))]
     bcs = [u(0,x) ~ cos(x), u(t,0) ~ exp(-t), u(t,Float64(π)) ~ -exp(-t)]
 
     @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x)])
@@ -87,7 +87,7 @@ end
     
     for order in [2]
         disc = MOLFiniteDifference([x=>dx], t; approx_order=order)
-        s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, x̄, disc)
+        s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
 
         derivweights = MethodOfLines.DifferentialDiscretizer(pde, bcs, s, disc)
         
@@ -104,7 +104,7 @@ end
 
 @testset "Test 02: Spherical Diffusion discretization" begin
     
-    pde  = Dt(u(t,x)) ~ 1/x^2 * Dx(1)(x^2 * Dx(1)(u(t,x)))
+    pde  = [Dt(u(t,x)) ~ 1/x^2 * Dx(1)(x^2 * Dx(1)(u(t,x)))]
 
     bcs = [u(0,x) ~ cos(x), u(t,0) ~ exp(-t), u(t,Float64(π)) ~ -exp(-t)]
 
@@ -123,7 +123,7 @@ end
     indvars = first(Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
     x̄ = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
 
-    s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, x̄, disc)
+    s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
 
     derivweights = MethodOfLines.DifferentialDiscretizer(pde, bcs, s, disc)
     

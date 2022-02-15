@@ -14,17 +14,19 @@ module MethodOfLines
     
     include("grid_types.jl")
     include("MOLFiniteDifference.jl")
-    include("bcs/boundary_types.jl")
     
     include("discretization/discretize_vars.jl")
     include("MOL_utils.jl")
-
+    include("interiormap.jl")
+    
     include("discretization/differential_discretizer.jl")
+    include("bcs/boundary_types.jl")
+
     include("discretization/generate_finite_difference_rules.jl")
 
     include("bcs/generate_bc_eqs.jl")
 
-    include("MOL_discretization.jl")
+    include("discretization/MOL_discretization.jl")
 
     export MOLFiniteDifference, discretize, symbolic_discretize, grid_align, edge_align, center_align
 end

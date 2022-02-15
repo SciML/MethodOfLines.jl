@@ -88,7 +88,7 @@ subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
 
 substitute(eq::Equation, rules) = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
 
-
+remove(args, t) = filter(x -> !isequal(x, t.val), args)
 
 half_range(x) = -div(x,2):div(x,2)
 

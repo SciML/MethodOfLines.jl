@@ -1,5 +1,6 @@
 struct InteriorMap
     var
+    pde
     I
 end
 
@@ -19,9 +20,11 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
             clip_interior!!(lower, upper, b, s.x2i)
         end           
         args = remove(arguments(u), s.time)
+        # Don't update this x2i, it is correct.
         pde => s.Igrid[u][[(1 + lower[s.x2i[x]] : length(s.grid[x]) - upper[s.x2i[x]]) for x in args]]
     end
-    return InteriorMap(Dict(varmap), Dict(interior))
+    pdemap = [k.second => k.first for k in varmap]
+    return InteriorMap(Dict(varmap), Dict(pdemap), Dict(interior))
 end
 
 
@@ -39,22 +42,24 @@ end
 
 function build_variable_mapping(m, vars, pdes)
     varpdemap = []
+    N = length(pdes)
     rows = sum(m, dims=2)
     cols = sum(m, dims=1)
     i = findfirst(isequal(0), rows)
     j = findfirst(isequal(0), cols)
-    @assert i !== nothing "Equation $(pde[i]) is not an equation for any of the dependent variables."
-    @assert j !== nothing "Variable $(vars[j]) does not appear in any equation, therefore cannot be solved for"
+    @assert i === nothing "Equation $(pdes[i[1]]) is not an equation for any of the dependent variables."
+    @assert j === nothing "Variable $(vars[j[2]]) does not appear in any equation, therefore cannot be solved for"
     for k in 1:N
         # Check if any of the pdes only have one valid variable
         cols = sum(m, dims=1)
-        j = findfirst(isequal(1), cols)#
+        j = findfirst(isequal(1), cols)
         if j !== nothing 
+            j = j[2]
             for i in 1:N
                 if m[i, j] == 1
                     push!(varpdemap, pdes[i] => vars[j])
-                    m[i, :] = 0
-                    m[:, j] = 0
+                    m[i, :] .= 0
+                    m[:, j] .= 0
                     break
                 end
             end
@@ -64,11 +69,12 @@ function build_variable_mapping(m, vars, pdes)
         rows = sum(m, dims=2)
         i = findfirst(isequal(1), rows)
         if i !== nothing
+            i = i[1]
             for j in 1:N
                 if m[i, j] == 1
                     push!(varpdemap, pdes[i] => vars[j])
-                    m[i, :] = 0
-                    m[:, j] = 0
+                    m[i, :] .= 0
+                    m[:, j] .= 0
                     break
                 end
             end
@@ -77,11 +83,12 @@ function build_variable_mapping(m, vars, pdes)
         # Check if any of the variables have more than one valid pde, and pick one
         i = findfirst(x -> x > 1, rows)
         if i !== nothing 
+            i = i[1]
             for j in 1:N
                 if m[i, j] == 1
                     push!(varpdemap, pdes[i] => vars[j])
-                    m[i, :] = 0
-                    m[:, j] = 0
+                    m[i, :] .= 0
+                    m[:, j] .= 0
                     break
                 end
             end
@@ -115,15 +122,17 @@ function get_order_and_depvars(term, x::Symbolics.Symbolic, s)
 end
 
 function getvars(pde, s)
+    ct = 0
+    ut = []
     if s.time !== nothing
         ct, ut = get_order_and_depvars(pde, s.time, s)
         if ct > 0
             return ut
         end
     end
-    countsx = map(s.x̄) do x
+    countsx = vcat(map(s.x̄) do x
         get_order_and_depvars(pde, x, s)
-    end
+    end, (ct, ut))
     counts = [c[1] for c in countsx]
     is = findall(a -> a == max(count), count)
     return reduce(vcat, [c[2] for c in countsx[is]])

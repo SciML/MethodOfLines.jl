@@ -4,8 +4,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs
     domain = pdesys.domain
-    depvars = get_dvs(pdesys)
-    indvars = get_ivs(pdesys)
+    depvars = pdesys.dvs
+    indvars = pdesys.ivs
     
     t = discretization.time
     # Get tspan
@@ -16,14 +16,20 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         @assert tdomain.domain isa DomainSets.Interval
         tspan = (DomainSets.infimum(tdomain.domain), DomainSets.supremum(tdomain.domain))
     end
-    # TODO: Update this when variables can have different args
-    indvars = filter(x-> t === nothing || !isequal(x, t.val), indvars)
-    u0 = []
-    bceqs = []
-    alleqs = []
 
+    indvars = filter(x-> t === nothing || !isequal(x, t.val), indvars)
+    
+    alleqs = []
+    bceqs = []
+    # Create discretized space and variables
     s = DiscreteSpace(domain, depvars, indvars, discretization)
-    boundarymap = BoundaryHandler!!(u0, bceqs, pdesys.bcs, s, depvar_ops, tspan, derivweights)
+    # Generate finite difference weights
+    derivweights = DifferentialDiscretizer(pdesys, pdesys.bcs, s, discretization)
+    # Create a map of each variable to their boundary conditions
+    boundarymap, u0 = BoundaryHandler(pdesys.bcs, s, depvar_ops, tspan, derivweights)
+
+    interiormap = InteriorMap(pdeeqs, boundarymap, s)
+
     # Loop over equations: different space, grid, independent variables etc for each equation
     # a slightly more efficient approach would be to group equations that have the same
     # independent variables
@@ -33,55 +39,41 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         depvars_rhs = get_depvars(pde.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         
-        # Read the independent variables,
+        # Read the independent variables,JZ346595D
         # ignore if the only argument is [t]
         allindvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
         if isempty(allx̄)
             push!(alleqs, pde)
             push!(alldepvarsdisc, depvars)
-            for bc in bcs
-                if any(u->isequal(bc.lhs, operation(u)(tspan[1])), depvars)
-                    push!(u0, operation(bc.lhs)(t) => bc.rhs)
-                end
-            end
         else
             # make sure there is only one set of independent variables per equation
             @assert length(allx̄) == 1
-            x̄ = first(allx̄)
             @assert length(allindvars) == 1
-            indvars = first(allindvars)
-            #TODO: Factor this out of the loop, along with BCs
-            # Get the grid
             
-            # Get the finite difference weights
-            derivweights = DifferentialDiscretizer(pde, pdesys.bcs, s, discretization)
-            #@show derivweights.windmap[Differential(s.x̄[1])]
-            # Get the boundary conditions
+            # Generate the boundary conditions for the correct variable
+            for boundary in boundarymap[operation(interiormap.var[pde])]
+                generate_bc_rules!(bceqs, derivweights, s, interiormap, boundary)
+            end
+            
+            interior = interiormap.I[pde]
+            
+            # Set invalid corner points to zero
+            generate_corner_eqs!(bceqs, s, interior, interiormap.var[pde])
 
-            # Find the indexes on the interior            
-            Iinterior =  s.Igrid[[let bcs = get_bc_counts(i, s, pdesys.bcs)
-                                      (1 + first(bcs)):length(s.grid[x])-last(bcs)
-                                      end
-                                      for (i,x) in enumerate(s.x̄)]...]
-    
-        
-        
-            # Discretize the equation on the interior
-            pdeeqs = vec(map(Iinterior) do II
+            pdeeqs = vec(map(interior) do II
                 rules = vcat(generate_finite_difference_rules(II, s, pde, derivweights), valmaps(s, II))
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             
             push!(alleqs,pdeeqs)
-            push!(alldepvarsdisc, reduce(vcat, values(s.discvars)))
         end
     end
     
     u0 = !isempty(u0) ? reduce(vcat, u0) : u0
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
-    alldepvarsdisc = unique(reduce(vcat, alldepvarsdisc))
+    alldepvarsdisc = reduce(vcat, values(s.discvars))
     
     # Finalize
     defaults = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0,pdesys.ps)

@@ -8,10 +8,10 @@ struct DifferentialDiscretizer{T, D1}
     orders::Dict{Num, Vector{Int}}
 end
 
-function DifferentialDiscretizer(pde, bcs, s, discretization)
+function DifferentialDiscretizer(pdeeqs, bcs, s, discretization)
     approx_order = discretization.approx_order
     upwind_order = discretization.upwind_order
-    d_orders(x) = reverse(sort(collect(union(differential_order(pde.rhs, x), differential_order(pde.lhs, x), (differential_order(bc.rhs, x) for bc in bcs)..., (differential_order(bc.lhs, x) for bc in bcs)...))))
+    d_orders(x) = reverse(sort(collect(union((differential_order(pde.rhs, x) for pde in pdeeqs)..., (differential_order(pde.lhs, x) for pde in pdeeqs)..., (differential_order(bc.rhs, x) for bc in bcs)..., (differential_order(bc.lhs, x) for bc in bcs)...))))
 
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.x̄), (k,u) in enumerate(s.ū)]
     differentialmap = Array{Pair{Num,DiffEqOperators.DerivativeOperator},1}()
@@ -20,7 +20,6 @@ function DifferentialDiscretizer(pde, bcs, s, discretization)
     interp = []
     orders = []
     # Hardcoded to centered difference, generate weights for each differential
-    # TODO: Add handling for upwinding
 
     for x in s.x̄
         orders_ = d_orders(x)

@@ -1,5 +1,6 @@
 struct DiscreteSpace{N,M,G}
     ū
+    args
     discvars
     time
     x̄ # Note that these aren't necessarily @parameters
@@ -8,7 +9,6 @@ struct DiscreteSpace{N,M,G}
     dxs
     Iaxies
     Igrid
-    Iedges
     x2i
 end
 
@@ -80,6 +80,9 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
 
     grid = generate_grid(x̄, axies, domain, discretization)
 
+    axies = Dict(axies)
+    grid = Dict(grid)
+
     # Build symbolic variables
     Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
     Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
@@ -98,10 +101,16 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
         end
     end
 
+    args = [operation(u) => arguments(u) for u in depvars]
+
     x̄2dim = [x̄[i] => i for i in 1:nspace]
     dim2x̄ = [i => x̄[i] for i in 1:nspace]
-    return DiscreteSpace{nspace,length(depvars), G}(depvars, Dict(depvarsdisc), discretization.time, x̄, Dict(axies), Dict(grid), Dict(dxs), Iaxies, Igrid, Dict(x̄2dim))
+    return DiscreteSpace{nspace,length(depvars), G}(depvars, Dict(args), Dict(depvarsdisc), discretization.time, x̄, axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), Dict(x̄2dim))
 end
+
+depvar(u, s) = operation(u)(s.args[operation(u)]...)
+
+x2i(s, u, x) = findfirst(isequal(x), remove(s.args[operation(u)], s.time))
 
 @inline function edges(x̄, Igrid, N)
     sd(A::AbstractArray{T,N}, d, i) where {T,N} = selectdim(interior(A, N), d, i)
@@ -111,16 +120,9 @@ end
     end)
 end
 
-@inline function edge(s::Discretespace, u, x, islower)
-    sd(A::AbstractArray{T,N}, x, i) where {T,N} = selectdim(interior(A, N), s.x2i[x], i)
-    if islower
-        return sd(s.Igrid[u], x, 1)
-    else
-        return sd(s.Igrid[u], x, length(s, x))
-    end
-end 
 
-edge(s::Discretespace, b::AbstractBoundary) = edge(s, b.u, b.x, !isupper(b))
+
+
 # """
 # Create a vector containing indices of the corners of the domain.
 # """
