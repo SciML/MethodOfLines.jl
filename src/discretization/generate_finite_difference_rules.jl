@@ -127,7 +127,7 @@ function spherical_diffusion(innerexpr, II, derivweights, s, r, u)
     exprhere = Num(substitute(innerexpr, rsubs(II)))
     # Catch the r ≈ 0 case
     if Symbolics.unwrap(substitute(r, _rsubs(r, II))) ≈ 0
-        D_2_u = central_difference(D_2, II, s, (s.x2i(r), r), u, ufunc_u)
+        D_2_u = central_difference(D_2, II, s, (s.x2i[r], r), u, ufunc_u)
         return 3exprhere*D_2_u # See appendix B of the paper
     end
     D_1_u = central_difference(D_1, II, s, (s.x2i[r], r), u, ufunc_u)
@@ -143,7 +143,7 @@ end
 
 @inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, derivweights, (j,x), u, central_ufunc) where N
     # TODO: Allow derivatives in expr
-    expr = substitute(expr, valmaps(s, II))
+    expr = substitute(expr, valmaps(s, u, II))
     IfElse.ifelse(expr > 0, 
                   expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, true), 
                   expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, false))

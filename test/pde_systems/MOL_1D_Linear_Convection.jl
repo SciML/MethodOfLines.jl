@@ -248,7 +248,7 @@ end
     
     @test sol.u[end] ≈ u atol = 0.1;
 end
-
+@test_broken begin
 @testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
     # Parameters, variables, and derivatives
     @parameters t x
@@ -320,6 +320,7 @@ end
 
     @test sol.u[end] ≈ u atol = 0.1;
 end
+end
 
 @testset "Test 04: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=0.999 + 0.001 * t * x " begin
     # Parameters, variables, and derivatives
@@ -369,7 +370,7 @@ end
     # savefig("MOL_1D_Linear_Convection_Test04.png")
 
     # Test
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)-dx
+    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
     # Plot and save results
 

@@ -15,6 +15,8 @@ end
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
 nvars(::DiscreteSpace{N,M}) where {N,M} = M
 
+ndims(u,s) = length(remove(arguments(u), s.time))
+
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])
 Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])
 Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
@@ -22,27 +24,23 @@ Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 """
 A function that returns wat to replace independent variables with in boundary equations
 """
-@inline function axiesvals(s::DiscreteSpace{N,M,G}, x_, I) where {N,M,G} 
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I) where {N,M,G} 
     map(enumerate(s.x̄)) do (j, x)
         if isequal(x, x_)
             x => (I[j] == 1 ? first(s.axies[x]) : last(s.axies[x]))
         else
-            x => s.grid[x][I[j]]
+            x => s.grid[x][I[x2i(s, depvar(s,u_), x_)]]
         end
     end
 end
 
-gridvals(s::DiscreteSpace{N}) where N = map(y-> [x => s.grid[x][y.I[j]] for (j,x) in enumerate(s.x̄)],s.Igrid)
-gridvals(s::DiscreteSpace{N}, I::CartesianIndex) where N = [x => s.grid[x][I[j]] for (j,x) in enumerate(s.x̄)]
+gridvals(s::DiscreteSpace{N}, u) where N = map(y-> [x => s.grid[x][y.I[x2i(s, u, x)]] for (j,x) in enumerate(s.x̄)],s.Igrid[u])
+gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where N = [x => s.grid[x][I[x2i(s,u,x)]] for (j,x) in enumerate(s.x̄)]
 
 
 varmaps(s::DiscreteSpace, II) = [u => s.discvars[u][II] for u in s.ū]
 
-valmaps(s::DiscreteSpace, II) = vcat(varmaps(s,II), gridvals(s,II))
-
-
-interior(Igrid, N) = Igrid[[2:(size(Igrid, i)-1) for i in 1:N]...]
-
+valmaps(s::DiscreteSpace, u,  II) = vcat(varmaps(s,II), gridvals(s, u, II))
 
 map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} = vcat([s.ū[k] => s.discvars[k][II] for k = 1:M], [s.x̄[j] => s.grid[j][II[j]] for j = 1:N])
 
@@ -118,33 +116,4 @@ x2i(s, u, x) = findfirst(isequal(x), remove(s.args[operation(u)], s.time))
         x =>[sd(Igrid, dim, 1)              .- [unitindex(N, dim)], 
              sd(Igrid, dim, size(Igrid, dim)-2) .+ [unitindex(N, dim)]]
     end)
-end
-
-
-
-
-# """
-# Create a vector containing indices of the corners of the domain.
-# """
-# @inline function removecorners(s::DiscreteSpace{2,M}) where {M}
-    
-#     Icorners = map(0:3) do n
-#         dig = digits(n, base = 2, pad = 2)
-#         CartesianIndex(b == 1 ? length(s, i) : 1 for (i, b) in enumerate(dig))
-#     end
-#     Ivalid = setdiff(s.Igrid, Icorners)
-#     return mapreduce(vcat, u-> vec(s.discvars[u][Ivalid]), s.ū)
-# end
-
-
-#varmap(s::DiscreteSpace{N,M}) where {N,M} = [s.ū[i] => i for i = 1:M]
-# ! needs rewrite
-@inline function cornereqs(s::DiscreteSpace{N,M}) where {N,M}
-    Iedges = edges(s)
-    # Flatten Iedges
-    Iedges = mapreduce(x->mapreduce(i -> vec(Iedges[x][i]), vcat, 1:2), vcat, s.x̄)
-    Iinterior = interior(s.Igrid, nparams(s))
-    Ivalid = setdiff(s.Igrid, vcat(vec(Iinterior), vec(Iedges)))
-    #TODO: change this when vars have different domains
-    return mapreduce(u -> vec(s.discvars[u][Ivalid]) .~ 0., vcat, s.ū)::Vector
 end

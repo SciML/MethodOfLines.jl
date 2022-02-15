@@ -1,6 +1,4 @@
 using MethodOfLines, Test, ModelingToolkit, SymbolicUtils
-using Combinatorics: permutations
-
 
 @testset "count differentials 1D" begin
     @parameters t x

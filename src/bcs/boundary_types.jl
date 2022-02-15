@@ -15,7 +15,6 @@ end
 struct UpperBoundary <: AbstractTruncatingBoundary
     u
     x
-    count
     eq
 end
 
@@ -35,13 +34,13 @@ whichboundary(::LowerBoundary) = (1, 0)
 whichboundary(::UpperBoundary) = (0, 1)
 whichboundary(::PeriodicBoundary) = (1, 0)
 
-@inline function clip_interior(lower, upper, b::AbstractBoundary, x2i)
+@inline function clip_interior!!(lower, upper, b::AbstractBoundary, x2i)
     clip = whichboundary(b)
     # This x2i is correct
     dim = x2i[b.x]
 
     lower[dim] = lower[dim] + clip[1]
-    upper[dim] = upper[dim] - clip[2]
+    upper[dim] = upper[dim] + clip[2]
 end
 
 
@@ -51,18 +50,20 @@ isupper(::UpperBoundary) = true
 isupper(::PeriodicBoundary) = false
 
 @inline function edge(interiormap, s, u, j, islower)
-    sd(i) where {T,N} = selectdim(interiormap.I[interiormap.pde[depvar(u, s)]], j, i)
+    sd(i) = selectdim(interiormap.I[interiormap.pde[depvar(u, s)]], j, i)
+    I1 = unitindex(ndims(u, s), j)
     if islower
         edge = sd(1)
-        edge = edge .- I1*(edge[1][j]-1)
+        # cast the edge of the interior to the edge of the boundary
+        edge = edge .- [I1*(edge[1][j]-1)]
     else
-        edge = sd(size(interiormap.I[u], j))
-        edge = edge .+ I1*(size(s.discvars[depvar(u, s)], j)-edge[1][j])
+        edge = sd(size(interiormap.I[interiormap.pde[depvar(u,s)]], j))
+        edge = edge .+ [I1*(size(s.discvars[depvar(u, s)], j)-edge[1][j])]
     end
     return edge
 end 
 
-edge(s, b, interiormap) = edge(interiormap, s, b.u, x2i(s, b.u, b.x), isupper(b))
+edge(s, b, interiormap) = edge(interiormap, s, b.u, x2i(s, b.u, b.x), !isupper(b))
 
 function _boundary_rules(s, orders, x, val)
     rules = map(s.ū) do u
@@ -117,15 +118,15 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
     # Generate initial conditions and bc equations
     for bc in bcs
         # * Assume in the form `u(...) ~ ...` for now
-        #bcdepvar = first(get_depvars(bc.lhs, depvar_ops))
+        bcdepvar = first(get_depvars(bc.lhs, depvar_ops))
         
-        if any(u -> isequal(operation(u), operation(bc.lhs.val)), s.ū)
+        if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
             if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))
                 # initial condition
                 # * Assume that the initial condition is not in terms of the initial derivative i.e. equation is first order in time
                 initindex = findfirst(isequal(bc.lhs), initmaps) 
                 if initindex !== nothing
-                    push!(u0,vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,),gridvals(s))))
+                    push!(u0,vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,),gridvals(s, depvar(bcdepvar,s)))))
                 end
             else
                 # Split out additive terms

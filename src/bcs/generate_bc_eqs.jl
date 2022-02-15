@@ -28,7 +28,7 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, bounda
         end
     end
     fd_rules = generate_finite_difference_rules(II, s, bc, derivweights)
-    varrules = axiesvals(s, x_, II)
+    varrules = axiesvals(s, u_, x_, II)
 
     # valrules should be caught by depvarbcmaps and varrules if the above assumption holds
     #valr = valrules(s, II)
@@ -60,7 +60,7 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, bc, bounda
     end
     
     fd_rules = generate_finite_difference_rules(II, s, bc, derivweights)
-    varrules = axiesvals(s, x_, II)
+    varrules = axiesvals(s, u_, x_, II)
 
     # valrules should be caught by depvarbcmaps and varrules if the above assumption holds
     #valr = valrules(s, II)
@@ -93,19 +93,19 @@ end
 @inline function generate_corner_eqs!(bceqs, s, interior, u)
     sd(i, j) = selectdim(interior, j, i)
     domain = vec(copy(interior))
-    N = length(remove(s.args[u], s.time))
+    N = ndims(u, s)
     II1 = unitindices(N)
     for j in 1:N
         I1 = II1[j]
         edge = sd(1, j)
         offset = edge[1][j]-1
         for k in 1:offset
-            vcat(domain, vec(copy(edge).-(I1*k)))
+            vcat(domain, vec(copy(edge).-[I1*k]))
         end
         edge = sd(size(interior, j), j)
         offset = size(s.discvars[u], j) - size(interior, j)
         for k in 1:offset
-            vcat(domain, vec(copy(edge).+(I1*k)))
+            vcat(domain, vec(copy(edge).+[I1*k]))
         end
     end
     corners = setdiff(domain, vec(s.Igrid[u]))

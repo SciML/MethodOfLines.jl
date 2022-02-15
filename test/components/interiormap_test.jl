@@ -30,10 +30,9 @@ using Combinatorics: permutations
     # Test centered order 
     disc = MOLFiniteDifference([x=>dx], t)
     
-    depvars = pdesys.dvs
-    indvars = pdesys.ivs
-    indvars = filter(x-> t === nothing || !isequal(x, t.val), indvars)
-
+    depvar_ops = map(x->operation(x.val),pdesys.depvars)
+    depvars = MethodOfLines.get_all_depvars(pdesys, depvar_ops)
+    indvars = MethodOfLines.remove(collect(reduce(union,filter(xs->!isequal(xs, [t]), map(arguments, depvars)))),t)
 
     s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
 
@@ -68,20 +67,20 @@ end
     @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
 
     # Test centered order 
-    disc = MOLFiniteDifference([x=>dx], t)
+    disc = MOLFiniteDifference([x=>dx, t=>dx])
 
-    depvars = pdesys.dvs
-    indvars = pdesys.ivs
-    indvars = filter(x-> t === nothing || !isequal(x, t.val), indvars)
+    depvar_ops = map(x->operation(x.val),pdesys.depvars)
+    depvars = MethodOfLines.get_all_depvars(pdesys, depvar_ops)
+    indvars = collect(reduce(union,filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
 
      s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
 
-    @test m == hcat([1,0,0],[0,1,0],[0,0,1]) # Test the matrix is the identity matrix
+    @test m == hcat([1,0,1],[0,1,1],[1,1,1]) # Test the matrix is the identity matrix
 end
 
-@testset "Test 00b: recognize relevant variable for equations, time undefined" begin 
+@testset "Test 00b: recognize relevant variable for equations, time undefined, mixed derivatives, multiple choices" begin 
     @parameters x, t 
     @variables u(..), v(..), w(..)
 
@@ -100,24 +99,24 @@ end
 
 
     pde = [Dt(u(t,x)) ~ +Dx(1)(u(t,x))+w(t,x),
-           Dt(v(t,x)) ~ -Dx(2)(v(t,x))+Dx(1)(w(t,x)),
-           Dt(w(t,x)) ~ -Dx(3)(w(t,x))+Dx(u(t,x)+v(t,x))]
+           Dt(v(t,x)) ~ -Dx(2)(v(t,x))+Dx(2)(w(t,x)),
+           Dt(w(t,x)) ~ -Dx(3)(w(t,x))+Dx(3)(u(t,x)+v(t,x))]
     bcs = [u(0,x) ~ 0, u(t,0) ~ 0, u(t,Float64(π)) ~ 0]
 
     @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
 
     # Test centered order 
-    disc = MOLFiniteDifference([x=>dx], t)
+    disc = MOLFiniteDifference([x=>dx, t=>1.0])
 
-    depvars = pdesys.dvs
-    indvars = pdesys.ivs
-    indvars = filter(x-> t === nothing || !isequal(x, t.val), indvars)
+    depvar_ops = map(x->operation(x.val),pdesys.depvars)
+    depvars = MethodOfLines.get_all_depvars(pdesys, depvar_ops)
+    indvars = collect(reduce(union,filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
 
     s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
 
-    @test m == hcat([1,0,0],[0,1,0],[0,0,1]) # Test the matrix is the identity matrix
+    @test m == hcat([1,0,1],[0,1,1],[0,1,1]) # Test the matrix is correct
 end
 
 @testset "Test 01a: Build variable mapping - one right choice simple" begin

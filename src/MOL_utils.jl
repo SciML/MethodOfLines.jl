@@ -59,6 +59,11 @@ function get_depvars(eq,depvar_ops)
     return depvars
 end
 
+@inline function get_all_depvars(pdesys, depvar_ops)
+    pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
+    return collect(mapreduce(x->get_depvars(x.lhs,depvar_ops), union, pdeeqs) ∪ mapreduce(x->get_depvars(x.rhs,depvar_ops), union, pdeeqs))
+end
+
 """
 A function that creates a tuple of CartesianIndices of unit length and `N` dimensions, one pointing along each dimension.
 """
@@ -86,9 +91,9 @@ end
 
 subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
 
-substitute(eq::Equation, rules) = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
+#substitute(eq::Equation, rules) = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
 
-remove(args, t) = filter(x -> !isequal(x, t.val), args)
+remove(args, t) = filter(x -> t === nothing || !isequal(x, t.val), args)
 
 half_range(x) = -div(x,2):div(x,2)
 

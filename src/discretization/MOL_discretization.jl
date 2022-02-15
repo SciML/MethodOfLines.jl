@@ -1,14 +1,28 @@
 # Method of lines discretization scheme
 
+function interface_errors(depvars, indvars, discretization)
+    for x in indvars
+        @assert findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs) !== nothing "Variable $x has no step size"
+    end
+end
+
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where G
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs
     domain = pdesys.domain
     
-    alldepvars = get_all_depvars(pdesys)
-    allindvars = collect(reduce(union, filter(xs->!isequal(xs, [t]), map(arguments, alldepvars))))
-    
     t = discretization.time
+
+    depvar_ops = map(x->operation(x.val),pdesys.depvars)
+    # Get all dependent variables in the correct type
+    alldepvars = get_all_depvars(pdesys, depvar_ops)
+    # Get all independent variables in the correct type, removing time from the list
+    allindvars = remove(collect(reduce(union, filter(xs->!isequal(xs, [t]), map(arguments, alldepvars)))), t)
+    
+    interface_errors(alldepvars, allindvars, discretization)
+    # @show alldepvars
+    # @show allindvars
+    
     # Get tspan
     tspan = nothing
     # Check that inputs make sense
@@ -49,18 +63,19 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             @assert length(allx̄) == 1
             @assert length(indvars) == 1
             
+            interior = interiormap.I[pde]
+            eqvar = interiormap.var[pde]
             # Generate the boundary conditions for the correct variable
-            for boundary in boundarymap[operation(interiormap.var[pde])]
+            for boundary in boundarymap[operation(eqvar)]
                 generate_bc_rules!(bceqs, derivweights, s, interiormap, boundary)
             end
             
-            interior = interiormap.I[pde]
             
             # Set invalid corner points to zero
-            generate_corner_eqs!(bceqs, s, interior, interiormap.var[pde])
+            generate_corner_eqs!(bceqs, s, interior, eqvar)
 
             pdeeqs = vec(map(interior) do II
-                rules = vcat(generate_finite_difference_rules(II, s, pde, derivweights), valmaps(s, II))
+                rules = vcat(generate_finite_difference_rules(II, s, pde, derivweights), valmaps(s, eqvar, II))
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             
@@ -86,8 +101,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         return sys, nothing
     else
         # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by the `solve` method.
-        println(vcat(alleqs, unique(bceqs)))
-         println(Dict(defaults))#
+        #println(vcat(alleqs, unique(bceqs)))
+        #println(Dict(defaults))#
         # println(vec(reduce(vcat, vec(alldepvarsdisc))))
         # println(ps)
         # println(tspan)#

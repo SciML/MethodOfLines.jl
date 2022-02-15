@@ -23,7 +23,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
     push!(weights, ([1/12, -2/3,0,2/3,-1/12], [-1/12,4/3,-5/2,4/3,-1/12], [1/8,-1.,13/8,0.,-13/8,1.,-1/8]))
     for d in 1:3
         for (i,a) in enumerate([2])
-            pde = [Dt(u(t,x)) ~ +Dx(d)(u(t,x))]
+            pde = Dt(u(t,x)) ~ +Dx(d)(u(t,x))
             bcs = [u(0,x) ~ cos(x), u(t,0) ~ exp(-t), u(t,Float64(π)) ~ -exp(-t)]
 
             @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x)])
@@ -43,11 +43,11 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 
             s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
 
-            derivweights = MethodOfLines.DifferentialDiscretizer(pde, bcs, s, disc)
+            derivweights = MethodOfLines.DifferentialDiscretizer(pdesys, s, disc)
             
             #@show pde.rhs, operation(pde.rhs), arguments(pde.rhs)
-            for II in s.Igrid[2:end-1]
-            #II = s.Igrid[end-1]
+            for II in s.Igrid[s.ū[1]][2:end-1]
+                #II = s.Igrid[end-1]
                 I1 = MethodOfLines.unitindices(1)[1]
 
                 rules = MethodOfLines.generate_finite_difference_rules(II, s, pde, derivweights)
@@ -68,7 +68,7 @@ end
 
 @testset "Test 01: Nonlinear Diffusion discretization" begin
     
-    pde = [Dt(u(t,x)) ~ Dx(1)(u(t,x))]
+    pde = Dt(u(t,x)) ~ Dx(1)(u(t,x))
     bcs = [u(0,x) ~ cos(x), u(t,0) ~ exp(-t), u(t,Float64(π)) ~ -exp(-t)]
 
     @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x)])
@@ -89,13 +89,13 @@ end
         disc = MOLFiniteDifference([x=>dx], t; approx_order=order)
         s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
 
-        derivweights = MethodOfLines.DifferentialDiscretizer(pde, bcs, s, disc)
+        derivweights = MethodOfLines.DifferentialDiscretizer(pdesys, s, disc)
         
         ufunc(u, I, x) = s.discvars[u][I]
         #TODO Test Interpolation of params
         # Test simple case
-        for II in s.Igrid[2:end-1]
-            expr = MethodOfLines.cartesian_nonlinear_laplacian(1, II, derivweights, s, x, u(t,x))
+        for II in s.Igrid[s.ū[1]][2:end-1]
+            expr = MethodOfLines.cartesian_nonlinear_laplacian((1~1).lhs, II, derivweights, s, x, u(t,x))
             expr2 = MethodOfLines.central_difference(derivweights.map[Differential(x)^2], II, s, (1,x), u(t,x), ufunc)
             @test isequal(expr, expr2)
         end
@@ -104,7 +104,7 @@ end
 
 @testset "Test 02: Spherical Diffusion discretization" begin
     
-    pde  = [Dt(u(t,x)) ~ 1/x^2 * Dx(1)(x^2 * Dx(1)(u(t,x)))]
+    pde  = Dt(u(t,x)) ~ 1/x^2 * Dx(1)(x^2 * Dx(1)(u(t,x)))
 
     bcs = [u(0,x) ~ cos(x), u(t,0) ~ exp(-t), u(t,Float64(π)) ~ -exp(-t)]
 
@@ -125,11 +125,11 @@ end
 
     s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
 
-    derivweights = MethodOfLines.DifferentialDiscretizer(pde, bcs, s, disc)
+    derivweights = MethodOfLines.DifferentialDiscretizer(pdesys, s, disc)
     
-    for II in s.Igrid[2:end-1]
+    for II in s.Igrid[s.ū[1]][2:end-1]
         #TODO Test Interpolation of params
-        expr = MethodOfLines.spherical_diffusion(1, II, derivweights, s, x, u(t,x))
+        expr = MethodOfLines.spherical_diffusion((1~1).lhs, II, derivweights, s, x, u(t,x))
         #@show II, expr
     end
 
