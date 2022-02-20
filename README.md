@@ -23,6 +23,8 @@ Currently supported grid types: `center_align` and `edge_align`. Edge align will
 
 `edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`. This improves accuracy for neumann BCs.
 
+If you find that your system throws errors, please post an issue with the code and we will endeavor to support it.
+
 ## Assumptions
 - That the term of a boundary condition is defined on the edge of the domain and is applied additively and has no multiplier/divisor/power etc.
 - That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`. Note that this generalises to higher dimensions
@@ -33,8 +35,9 @@ Currently supported grid types: `center_align` and `edge_align`. Edge align will
 If any of these limitations are a problem for you please post an issue and we will prioritize removing them.
 
 ## Coming soon:
-- Fewer Assumptions
-
+- Fewer Assumptions.
+- More robust testing and validation.
+- Benchmarks.
 ## Full Example:
 ```
 ## 2D Diffusion
