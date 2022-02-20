@@ -50,7 +50,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
                 #II = s.Igrid[end-1]
                 I1 = MethodOfLines.unitindices(1)[1]
 
-                rules = MethodOfLines.generate_finite_difference_rules(II, s, pde, derivweights)
+                rules = MethodOfLines.generate_finite_difference_rules(II, s, depvars, pde, derivweights)
 
                 disc_pde=substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
                 #@show disc_pde
@@ -95,7 +95,7 @@ end
         #TODO Test Interpolation of params
         # Test simple case
         for II in s.Igrid[s.ū[1]][2:end-1]
-            expr = MethodOfLines.cartesian_nonlinear_laplacian((1~1).lhs, II, derivweights, s, x, u(t,x))
+            expr = MethodOfLines.cartesian_nonlinear_laplacian((1~1).lhs, II, derivweights, s, depvars, x, u(t,x))
             expr2 = MethodOfLines.central_difference(derivweights.map[Differential(x)^2], II, s, (1,x), u(t,x), ufunc)
             @test isequal(expr, expr2)
         end
@@ -129,7 +129,7 @@ end
     
     for II in s.Igrid[s.ū[1]][2:end-1]
         #TODO Test Interpolation of params
-        expr = MethodOfLines.spherical_diffusion((1~1).lhs, II, derivweights, s, x, u(t,x))
+        expr = MethodOfLines.spherical_diffusion((1~1).lhs, II, derivweights, s, depvars, x, u(t,x))
         #@show II, expr
     end
 

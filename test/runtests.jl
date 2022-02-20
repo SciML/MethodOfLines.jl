@@ -14,7 +14,7 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
        @time @safetestset "MOLFiniteDifference Utils" begin include("utils_test.jl") end
        @time @safetestset "Discretization of space and grid types" begin include("components/DiscreteSpace.jl") end
        @time @safetestset "Variable PDE mapping and interior construction" begin include("components/interiormap_test.jl") end
-       @time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
+       #@time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
     end
 
     if GROUP == "All" || GROUP == "Interface"
@@ -25,7 +25,7 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
         @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin include("pde_systems/MOL_1D_Linear_Diffusion.jl") end
     end
     
-    if GROUP == "All" || GROUP == "Nonliner_Diffusion"
+    if GROUP == "All" || GROUP == "Nonlinear_Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 1D Non-Linear Diffusion" begin include("pde_systems/MOL_1D_NonLinear_Diffusion.jl") end
     end
 

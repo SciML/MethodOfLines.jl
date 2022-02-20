@@ -137,7 +137,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
         # * Assume in the form `u(...) ~ ...` for now
         depvarslhs = get_depvars(bc.lhs, depvar_ops)
         bcdepvar = first(depvarslhs)
-        depvars = unique(depvarslhs, get_depvars(bc.rhs, depvar_ops))
+        depvars = depvar.(collect(union(depvarslhs, get_depvars(bc.rhs, depvar_ops))), (s,))
         
         if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
             if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))

@@ -6,6 +6,14 @@ struct InteriorMap
     upper
 end
 
+#to get an equal mapping, you want to associate every equation to a unique dependent variable that it's solving for
+# this is tearing
+# so there's u and v
+# first equation has second derivative of u so we assign that one to u
+# second equation, assume it has second derivative of both
+# then we assign v to it because u is already assigned somewhere else.
+# and use the interior based on the assignment
+
 function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
