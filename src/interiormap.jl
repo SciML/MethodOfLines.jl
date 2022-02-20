@@ -2,6 +2,8 @@ struct InteriorMap
     var
     pde
     I
+    lower
+    upper
 end
 
 function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
@@ -10,21 +12,27 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
     varmap = build_variable_mapping(m, s.ū, pdes)
 
     # Determine the interiors for each pde
+    vlower = []
+    vupper = []
+
     interior = map(enumerate(pdes)) do (i,pde)
         u = varmap[i].second
         boundaries = boundarymap[operation(u)]
-        lower = zeros(Int, N)
-        upper = zeros(Int, N)
+        n = ndims(u, s)
+        lower = zeros(Int, n)
+        upper = zeros(Int, n)
         # Determine thec number of points to remove from each end of the domain for each dimension
         for b in boundaries
-            clip_interior!!(lower, upper, b, s.x2i)
+            clip_interior!!(lower, upper, s, b)
         end           
+        push!(vlower, pde => lower)
+        push!(vupper, pde => upper)
         args = remove(arguments(u), s.time)
         # Don't update this x2i, it is correct.
-        pde => s.Igrid[u][[(1 + lower[s.x2i[x]] : length(s.grid[x]) - upper[s.x2i[x]]) for x in args]...]
+        pde => s.Igrid[u][[(1 + lower[x2i(s, u, x)] : length(s.grid[x]) - upper[x2i(s, u, x)]) for x in args]...]
     end
     pdemap = [k.second => k.first for k in varmap]
-    return InteriorMap(Dict(varmap), Dict(pdemap), Dict(interior))
+    return InteriorMap(Dict(varmap), Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper))
 end
 
 

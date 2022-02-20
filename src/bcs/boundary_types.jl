@@ -1,5 +1,7 @@
 ### INITIAL AND BOUNDARY CONDITIONS ###
 
+#TODO: Retire DiscreteSpace and move to a DiscreteEquation class with corresponding DiscreteVariables which carry all the required information, define substitute methods for these.
+
 abstract type AbstractBoundary end
 
 abstract type AbstractTruncatingBoundary <: AbstractBoundary end
@@ -9,14 +11,35 @@ abstract type AbstractExtendingBoundary <: AbstractBoundary end
 struct LowerBoundary <: AbstractTruncatingBoundary
     u
     x
+    depvars
+    indvars
     eq
+    function LowerBoundary(u, t, x, eq, s, depvar_ops)
+        depvars_lhs = get_depvars(eq.lhs, depvar_ops)
+        depvars_rhs = get_depvars(eq.rhs, depvar_ops)
+        depvars = collect(depvars_lhs ∪ depvars_rhs)
+        
+        allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
+        return new(u, x, depvar.(depvars, [s]), first(allx̄), eq)
+    end
 end
 
 struct UpperBoundary <: AbstractTruncatingBoundary
     u
     x
+    depvars
+    indvars
     eq
+    function UpperBoundary(u, t, x, eq, s, depvar_ops)
+        depvars_lhs = get_depvars(eq.lhs, depvar_ops)
+        depvars_rhs = get_depvars(eq.rhs, depvar_ops)
+        depvars = collect(depvars_lhs ∪ depvars_rhs)
+        
+        allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
+        return new(u, x, depvar.(depvars, [s]), first(allx̄), eq)
+    end
 end
+
 
 struct PeriodicBoundary <: AbstractBoundary
     u
@@ -29,18 +52,12 @@ struct BoundaryHandler{hasperiodic}
     boundaries::Dict{Num, AbstractBoundary}
 end
 
-# Which interior end to remove
-whichboundary(::LowerBoundary) = (1, 0)
-whichboundary(::UpperBoundary) = (0, 1)
-whichboundary(::PeriodicBoundary) = (1, 0)
-
-@inline function clip_interior!!(lower, upper, b::AbstractBoundary, x2i)
-    clip = whichboundary(b)
+@inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
     # This x2i is correct
-    dim = x2i[b.x]
+    dim = x2i(s, depvar(b.u, s), b.x)
 
-    lower[dim] = lower[dim] + clip[1]
-    upper[dim] = upper[dim] + clip[2]
+    lower[dim] = lower[dim] + !isupper(b)
+    upper[dim] = upper[dim] + isupper(b)
 end
 
 
@@ -118,7 +135,9 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
     # Generate initial conditions and bc equations
     for bc in bcs
         # * Assume in the form `u(...) ~ ...` for now
-        bcdepvar = first(get_depvars(bc.lhs, depvar_ops))
+        depvarslhs = get_depvars(bc.lhs, depvar_ops)
+        bcdepvar = first(depvarslhs)
+        depvars = unique(depvarslhs, get_depvars(bc.rhs, depvar_ops))
         
         if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
             if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))
@@ -126,7 +145,8 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
                 # * Assume that the initial condition is not in terms of the initial derivative i.e. equation is first order in time
                 initindex = findfirst(isequal(bc.lhs), initmaps) 
                 if initindex !== nothing
-                    push!(u0,vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,),gridvals(s, depvar(bcdepvar,s)))))
+                    #@show bcdepvar, bc, depvar(bcdepvar, s)
+                    push!(u0,vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,),valmaps(s, depvar(bcdepvar,s), depvars))))
                 end
             else
                 # Split out additive terms
@@ -142,7 +162,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
                         # Get the matched variables from the rule
                         u_, x_ = r.second
                         # Mark the boundary                        
-                        boundary = LowerBoundary(u_, x_, bc)
+                        boundary = LowerBoundary(u_, s.time, x_, bc, s, depvar_ops)
                         # do it again for the upper end to check for periodic
                         for term_ in setdiff(terms, [term]), r_ in upper_boundary_rules
                             if subsmatch(term_, r_)
@@ -158,7 +178,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
                     for term in terms, r in upper_boundary_rules
                         if subsmatch(term, r)
                             u_, x_ = r.second 
-                            boundary = UpperBoundary(u_, x_, bc)
+                            boundary = UpperBoundary(u_, s.time, x_, bc, s, depvar_ops)
                             break
                         end
                     end

@@ -56,11 +56,13 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         indvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
         if isempty(allx̄)
-            push!(alleqs, pde)
-            push!(alldepvarsdisc, depvars)
+            rules = varmaps(s, depvars, CartesianIndex())
+            
+            push!(alleqs, substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules))
         else
             # make sure there is only one set of independent variables per equation
             @assert length(allx̄) == 1
+            pdex̄ = first(allx̄)
             @assert length(indvars) == 1
             
             interior = interiormap.I[pde]
@@ -69,13 +71,14 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             for boundary in boundarymap[operation(eqvar)]
                 generate_bc_rules!(bceqs, derivweights, s, interiormap, boundary)
             end
-            
+            #@show interior
             
             # Set invalid corner points to zero
-            generate_corner_eqs!(bceqs, s, interior, eqvar)
+            generate_corner_eqs!(bceqs, s, interiormap, pde)
 
             pdeeqs = vec(map(interior) do II
-                rules = vcat(generate_finite_difference_rules(II, s, pde, derivweights), valmaps(s, eqvar, II))
+                #@show II
+                rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights), valmaps(s, eqvar, depvars, II))
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
             
@@ -86,8 +89,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     u0 = !isempty(u0) ? reduce(vcat, u0) : u0
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
-    alldepvarsdisc = reduce(vcat, values(s.discvars))
-    
+    alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))
+        
     # Finalize
     defaults = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0,pdesys.ps)
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
@@ -97,6 +100,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         # 0 ~ ...
         # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
         eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, vcat(alleqs, unique(bceqs)))
+        #getfield.(alldepvarsdisc, [:val])
         sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults),name=pdesys.name)
         return sys, nothing
     else

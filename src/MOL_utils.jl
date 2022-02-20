@@ -69,14 +69,19 @@ A function that creates a tuple of CartesianIndices of unit length and `N` dimen
 """
 function unitindices(N::Int) #create unit CartesianIndex for each dimension
     null = zeros(Int, N)
-    return map(1:N) do i
-        unit_i = copy(null)
-        unit_i[i] = 1
-        CartesianIndex(Tuple(unit_i))
+    if N == 0
+        return CartesianIndex()
+    else
+        return map(1:N) do i
+            unit_i = copy(null)
+            unit_i[i] = 1
+            CartesianIndex(Tuple(unit_i))
+        end
     end
 end
 
 @inline function unitindex(N, j)
+    N == 0  && return CartesianIndex()
     unitindices(N)[j]
 end
 

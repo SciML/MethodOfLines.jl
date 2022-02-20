@@ -49,8 +49,9 @@ ufunc is a function that returns the correct discretization indexed at Itap, it 
 """
 function central_difference(D, II, s, jx, u, ufunc)
     j, x = jx
+    ndims(u,s) == 0 && return Num(0)
     # unit index in direction of the derivative
-    I1 = unitindices(nparams(s))[j] 
+    I1 = unitindex(ndims(u, s), j) 
     # offset is important due to boundary proximity
 
     if II[j] <= D.boundary_point_count
@@ -70,9 +71,9 @@ function central_difference(D, II, s, jx, u, ufunc)
     return dot(weights, ufunc(u, Itap, x))
 end
 
-@inline function _upwind_difference(D, I, s, jx)
+@inline function _upwind_difference(D, I, s, u, jx)
     j, x = jx
-    I1 = unitindices(nparams(s))[j] 
+    I1 = unitindex(ndims(u,s), j)
     if I > (length(s, x) - D.boundary_point_count)
         weights = D.high_boundary_coefs[length(s, x)-I+1]
         offset = length(s, x) - I
@@ -84,18 +85,19 @@ end
     return weights, Itap
 end
 
-function upwind_difference(d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, derivweights, jx, u, ufunc, ispositive) where N
+function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, derivweights, jx, u, ufunc, ispositive) 
     j, x = jx
+    ndims(u,s) == 0 && return Num(0)
     D = derivweights.windmap[Differential(x)^d]
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative
     if !ispositive
-        weights, Itap = _upwind_difference(D, length(s, x) - II[j] +1, s, jx)
+        weights, Itap = _upwind_difference(D, length(s, x) - II[j] +1, s, u, jx)
         #don't need to reverse because it's already reversed by subtracting Itap
         weights = -reverse(weights)
         Itap = (II,) .- reverse(Itap)
     else
-        weights, Itap = _upwind_difference(D, II[j], s, jx)
+        weights, Itap = _upwind_difference(D, II[j], s, u, jx)
         Itap = (II,) .+ Itap
         weights = weights
     end
@@ -111,13 +113,13 @@ TODO: consider refactoring this to harmonize with centered difference
 
 Each index corresponds to the weights and index for the derivative at index i+1/2
 """
-function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::CartesianIndex, s::DiscreteSpace, jx, len = 0)
+function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::CartesianIndex, s::DiscreteSpace, u, jx, len = 0)
     j, x = jx
     len = len == 0 ? length(s, x) : len
     @assert II[j] != length(s, x)
 
     # unit index in direction of the derivative
-    I1 = unitindices(nparams(s))[j] 
+    I1 = unitindex(ndims(u,s),j) 
     # offset is important due to boundary proximity
 
     if II[j] < D.boundary_point_count
@@ -144,7 +146,8 @@ end
 
 # i is the index of the offset, assuming that there is one precalculated set of weights for each offset required for a first order finite difference
 function half_offset_centered_difference(D, II, s, jx, u, ufunc)
+    ndims(u,s) == 0 && return Num(0)
     j, x = jx
-    weights, Itap = get_half_offset_weights_and_stencil(D, II, s, jx)
+    weights, Itap = get_half_offset_weights_and_stencil(D, II, s, u, jx)
     return dot(weights, ufunc(u, Itap, x))
 end
