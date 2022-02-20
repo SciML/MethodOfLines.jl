@@ -26,7 +26,7 @@ Currently supported grid types: `center_align` and `edge_align`. Edge align will
 ## Assumptions
 - That the term of a boundary condition is defined on the edge of the domain and is applied additively and has no multiplier/divisor/power etc.
 - That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`. Note that this generalises to higher dimensions
-- That boundary condition only contain references to the variable on which they are defined at the edge of the domain, i.e. if `u(t,0)` is defined there are no references to `v(t,0)`. Note that references to dependent variables with all of their arguments are allowed such as `w(t)` or `v(t,x)` if the condition is on `u(t,x,y_min)`.
+- That boundary conditions only contain references to the variable on which they are defined at the edge of the domain, i.e. if `u(t,0)` is defined there are no references to `v(t,0)`. Note that references to dependent variables with all of their arguments are allowed such as `w(t)` or `v(t,x)` if the condition is on `u(t,x,y_min)`.
 - That initial conditions are of the form `u(...) ~ ...`, and doesn't reference the initial time derivative.
 - That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))`is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product/chain rules and use the linearity of the derivative operator, or define a new dependant variable equal to the term to be differentiated. Exceptions to this are the nonlinear or spherical laplacian, which have special handling.
 
