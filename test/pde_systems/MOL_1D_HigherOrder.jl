@@ -103,13 +103,13 @@ end
     # Discretization
     dx = 0.4; dt = 0.2
 
-    discretization = MOLFiniteDifference([x=>dx],t;approx_order=4,grid_align=center_align)
+    discretization = MOLFiniteDifference([x=>dx],t;upwind_order=1,grid_align=center_align)
     @named pdesys = PDESystem(eq,bcs,domains,[x,t],[u(x,t)])
     prob = discretize(pdesys,discretization)
 
     sol = solve(prob,Rosenbrock23(),saveat=0.1,dt=dt)
 
-#    @test sol.retcode == :Success
+    @test sol.retcode == :Success
 
     xs = domains[1].domain.lower+dx+dx+dx:dx:domains[1].domain.upper
     ts = sol.t

@@ -64,7 +64,7 @@ nparams(::DiscreteSpace{N,M}) where {N,M} = N
 nvars(::DiscreteSpace{N,M}) where {N,M} = M
 
 params(u,s) = remove(arguments(u), s.time)
-ndims(u,s::DiscreteSpace) = length(params(u,s))
+Base.ndims(u,s::DiscreteSpace) = length(params(u,s))
 
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])
 Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])

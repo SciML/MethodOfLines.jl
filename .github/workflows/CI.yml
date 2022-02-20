@@ -13,7 +13,14 @@ jobs:
       matrix:
         group:
           - Components
-          - Integration
+          - Interface
+          - Diffusion
+          - Nonlinear_Diffusion
+          - 2D_Diffusion
+          - Convection
+          - Higher_Order
+          - Stationary
+          - DAE
         version:
           - '1'
           - '1.6'
