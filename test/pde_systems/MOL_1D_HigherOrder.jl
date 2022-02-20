@@ -103,6 +103,8 @@ end
     # Discretization
     dx = 0.4; dt = 0.2
 
+    fail
+
     discretization = MOLFiniteDifference([x=>dx],t;upwind_order=1,grid_align=center_align)
     @named pdesys = PDESystem(eq,bcs,domains,[x,t],[u(x,t)])
     prob = discretize(pdesys,discretization)
