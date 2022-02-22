@@ -45,6 +45,7 @@ function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, boundary::
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
     u = depvar(u_, s)
     j = x2i(s, u, x_)
+    # Shift depending on the boundary
     shift(::LowerBoundary) = zero(II)
     shift(::UpperBoundary) = unitindex(N, j)
 
