@@ -79,7 +79,7 @@ end
 
     @test m == hcat([1,0,1],[0,1,1],[1,1,1]) # Test the matrix is the identity matrix
 end
-
+#
 @testset "Test 00b: recognize relevant variable for equations, time undefined, mixed derivatives, multiple choices" begin 
     @parameters x, t 
     @variables u(..), v(..), w(..)
