@@ -410,7 +410,7 @@ end
     # Method of lines discretization
     dx = 0.01
     order = 6
-    discretization = MOLFiniteDifference([x=>dx],t)
+    discretization = MOLFiniteDifference([x=>dx],t,approx_order=order)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys,discretization)
@@ -418,17 +418,15 @@ end
     # Solve ODE problem
     sol = solve(prob,Rodas4(),reltol=1e-6,saveat=0.1)
 
-    x = (-1:dx:1)
+    x = (-1:dx:1)[2:end-1]
     t = sol.t
 
     # Test against exact solution
     for i in 1:length(sol)
+      
        exact = u_exact(x, t[i])
-       # Due to structural simplification
-       # [u2 -> u(n-1), u(1), u(n)]
-       # Will be fixed by sol[u]
-       u_approx = [sol.u[i][end-1];sol.u[i][1:end-2];sol.u[i][end]]
-       @test all(isapprox.(u_approx, exact, atol=0.01))
+       u_approx = sol.u[i]
+       @test all(isapprox.(u_approx, exact, atol=0.06))
     end
 end
 
