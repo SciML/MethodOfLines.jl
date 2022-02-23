@@ -55,7 +55,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         # ignore if the only argument is [t]
         indvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
-        if isempty(allx̄)
+        if isempty(allx̄) 
             rules = varmaps(s, depvars, CartesianIndex())
             
             push!(alleqs, substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules))

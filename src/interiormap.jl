@@ -17,14 +17,14 @@ end
 function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
-    varmap = build_variable_mapping(m, s.ū, pdes)
+    varmap = Dict(build_variable_mapping(m, s.ū, pdes))
 
     # Determine the interiors for each pde
     vlower = []
     vupper = []
 
-    interior = map(enumerate(pdes)) do (i,pde)
-        u = varmap[i].second
+    interior = map(pdes) do pde
+        u = varmap[pde]
         boundaries = boundarymap[operation(u)]
         n = ndims(u, s)
         lower = zeros(Int, n)
@@ -40,7 +40,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
         pde => s.Igrid[u][[(1 + lower[x2i(s, u, x)] : length(s.grid[x]) - upper[x2i(s, u, x)]) for x in args]...]
     end
     pdemap = [k.second => k.first for k in varmap]
-    return InteriorMap(Dict(varmap), Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper))
+    return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper))
 end
 
 
