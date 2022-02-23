@@ -37,8 +37,11 @@ using Combinatorics: permutations
     s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
-
-    @test m == hcat([1,0,0],[0,1,0],[0,0,1]) # Test the matrix is the identity matrix
+    if VERSION >= v"1.7"
+        @test m == hcat([1,0,0],[0,1,0],[0,0,1]) # Test the matrix is the identity matrix
+    else
+        @test m == [0 1 0; 0 0 1; 1 0 0] 
+    end
 end
 
 @testset "Test 00a: recognize relevant variable for equations, time undefined, multiple choices" begin 
@@ -77,7 +80,12 @@ end
 
     m = MethodOfLines.buildmatrix(pde, s)
 
-    @test m == hcat([1,0,1],[0,1,1],[1,1,1]) # Test the matrix is the identity matrix
+    if VERSION >= v"1.7"
+        @test m == hcat([1,0,1],[0,1,1],[1,1,1]) # Test the matrix is the identity matrix
+    else
+        @test m == [1 1 0; 1 0 1; 1 1 1]
+    end
+
 end
 #
 @testset "Test 00b: recognize relevant variable for equations, time undefined, mixed derivatives, multiple choices" begin 
@@ -116,7 +124,12 @@ end
 
     m = MethodOfLines.buildmatrix(pde, s)
 
-    @test m == hcat([1,0,1],[0,1,1],[0,1,1]) # Test the matrix is correct
+    if VERSION >= v"1.7"
+        @test m == hcat([1,0,1],[0,1,1],[0,1,1]) # Test the matrix is correct
+    else
+        @test m == [0 1 0; 1 0 1; 1 1 1]
+    end
+
 end
 
 @testset "Test 01a: Build variable mapping - one right choice simple" begin

@@ -48,6 +48,7 @@ function buildmatrix(pdes, s::DiscreteSpace{N,M}) where {N,M}
     m = zeros(Int, M, M)
     elegiblevars = [getvars(pde, s) for pde in pdes]
     u2i = Dict([u => k for (k, u) in enumerate(s.ū)])
+    #@show elegiblevars, s.ū
     for (i, vars) in enumerate(elegiblevars)
         for var in vars
             m[i, u2i[var]] = 1

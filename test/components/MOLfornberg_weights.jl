@@ -16,7 +16,7 @@ using MethodOfLines
 
     # forward-diff of third derivative with order of accuracy == 3
     order = 3; z = 0.0; x = [0,1,2,3,4,5]
-    @test MethodOfLines.calculate_weights(order, z, x) == [-17/4,	71/4	,−59/2,	49/2,	−41/4,	7/4]
+    @test MethodOfLines.calculate_weights(order, z, x) == [-17/4, 71/4, -59/2, 49/2, -41/4, 7/4]
     
     order = 3; z = 0.0; x = collect(-3:3)
     d, e = MethodOfLines.calculate_weights(order, z, x;dfdx = true)
