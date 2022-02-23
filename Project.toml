@@ -22,7 +22,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 DiffEqBase = "6"
-DiffEqOperators = "4.40.0"
+DiffEqOperators = "4.41.0"
 DomainSets = "0.5"
 ModelingToolkit = "8"
 NonlinearSolve = "0.3"

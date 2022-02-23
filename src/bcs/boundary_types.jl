@@ -68,6 +68,7 @@ isupper(::PeriodicBoundary) = false
 
 @inline function edge(interiormap, s, u, j, islower)
     I = interiormap.I[interiormap.pde[depvar(u, s)]]
+    # check needed on v1.6
     length(I) == 0 && return CartesianIndex{0}[]
     sd(i) = selectdim(I, j, i)
     I1 = unitindex(ndims(u, s), j)
