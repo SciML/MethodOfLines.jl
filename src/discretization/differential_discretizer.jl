@@ -3,21 +3,25 @@ struct DifferentialDiscretizer{T, D1}
     approx_order::Int
     map::D1
     halfoffsetmap::Dict
+    windmap::Dict
     interpmap::Dict{Num, DiffEqOperators.DerivativeOperator}
     orders::Dict{Num, Vector{Int}}
 end
 
-function DifferentialDiscretizer(pde, bcs, s, discretization)
+function DifferentialDiscretizer(pdesys, s, discretization)
+    pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
+    bcs = pdesys.bcs isa Vector ? pdesys.bcs : [pdesys.bcs]
     approx_order = discretization.approx_order
-    d_orders(x) = reverse(sort(collect(union(differential_order(pde.rhs, x), differential_order(pde.lhs, x), (differential_order(bc.rhs, x) for bc in bcs)..., (differential_order(bc.lhs, x) for bc in bcs)...))))
+    upwind_order = discretization.upwind_order
+    d_orders(x) = reverse(sort(collect(union((differential_order(pde.rhs, x) for pde in pdeeqs)..., (differential_order(pde.lhs, x) for pde in pdeeqs)..., (differential_order(bc.rhs, x) for bc in bcs)..., (differential_order(bc.lhs, x) for bc in bcs)...))))
 
     # central_deriv_rules = [(Differential(s)^2)(u) => central_deriv(2,II,j,k) for (j,s) in enumerate(s.x̄), (k,u) in enumerate(s.ū)]
     differentialmap = Array{Pair{Num,DiffEqOperators.DerivativeOperator},1}()
     nonlinlap = []
+    wind = []
     interp = []
     orders = []
     # Hardcoded to centered difference, generate weights for each differential
-    # TODO: Add handling for upwinding
 
     for x in s.x̄
         orders_ = d_orders(x)
@@ -25,15 +29,18 @@ function DifferentialDiscretizer(pde, bcs, s, discretization)
         _orders = Set(vcat(orders_, [1,2]))
         # TODO: Only generate weights for derivatives that are actually used and avoid redundant calculations
         rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.dxs[x] ) for d in _orders]
+
+        wind = vcat(wind, [(Differential(x)^d) => CompleteUpwindDifference(d, upwind_order, s.dxs[x], 0) for d in orders_[isodd.(orders_)]])
         
 
         nonlinlap = vcat(nonlinlap, [Differential(x)^d => CompleteHalfCenteredDifference(d, approx_order, s.dxs[x]) for d in _orders])
         differentialmap = vcat(differentialmap, rs)
         # A 0th order derivative off the grid is an interpolation
         push!(interp, x => CompleteHalfCenteredDifference(0, approx_order, s.dxs[x]))
+        
     end
 
-    return DifferentialDiscretizer{eltype(orders), typeof(Dict(differentialmap))}(approx_order, Dict(differentialmap), Dict(nonlinlap), Dict(interp), Dict(orders))
+    return DifferentialDiscretizer{eltype(orders), typeof(Dict(differentialmap))}(approx_order, Dict(differentialmap), Dict(nonlinlap), Dict(wind), Dict(interp), Dict(orders))
 end
 
 """
@@ -42,8 +49,9 @@ ufunc is a function that returns the correct discretization indexed at Itap, it 
 """
 function central_difference(D, II, s, jx, u, ufunc)
     j, x = jx
+    ndims(u,s) == 0 && return Num(0)
     # unit index in direction of the derivative
-    I1 = unitindices(nparams(s))[j] 
+    I1 = unitindex(ndims(u, s), j) 
     # offset is important due to boundary proximity
 
     if II[j] <= D.boundary_point_count
@@ -63,6 +71,39 @@ function central_difference(D, II, s, jx, u, ufunc)
     return dot(weights, ufunc(u, Itap, x))
 end
 
+@inline function _upwind_difference(D, I, s, u, jx)
+    j, x = jx
+    I1 = unitindex(ndims(u,s), j)
+    if I > (length(s, x) - D.boundary_point_count)
+        weights = D.high_boundary_coefs[length(s, x)-I+1]
+        offset = length(s, x) - I
+        Itap = [(i+offset)*I1 for i in (-D.boundary_stencil_length+1):1:0]
+    else
+        weights = D.stencil_coefs
+        Itap = [i*I1 for i in 0:D.stencil_length-1]
+    end   
+    return weights, Itap
+end
+
+function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, derivweights, jx, u, ufunc, ispositive) 
+    j, x = jx
+    ndims(u,s) == 0 && return Num(0)
+    D = derivweights.windmap[Differential(x)^d]
+    #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
+    # unit index in direction of the derivative
+    if !ispositive
+        weights, Itap = _upwind_difference(D, length(s, x) - II[j] +1, s, u, jx)
+        #don't need to reverse because it's already reversed by subtracting Itap
+        weights = -reverse(weights)
+        Itap = (II,) .- reverse(Itap)
+    else
+        weights, Itap = _upwind_difference(D, II[j], s, u, jx)
+        Itap = (II,) .+ Itap
+        weights = weights
+    end
+    return dot(weights, ufunc(u, Itap, x))
+end
+
 
 """
 Get the weights and stencil for the inner half offset centered difference for the nonlinear laplacian for a given index and differentiating variable.
@@ -72,13 +113,13 @@ TODO: consider refactoring this to harmonize with centered difference
 
 Each index corresponds to the weights and index for the derivative at index i+1/2
 """
-function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::CartesianIndex, s::DiscreteSpace, jx, len = 0)
+function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::CartesianIndex, s::DiscreteSpace, u, jx, len = 0)
     j, x = jx
     len = len == 0 ? length(s, x) : len
     @assert II[j] != length(s, x)
 
     # unit index in direction of the derivative
-    I1 = unitindices(nparams(s))[j] 
+    I1 = unitindex(ndims(u,s),j) 
     # offset is important due to boundary proximity
 
     if II[j] < D.boundary_point_count
@@ -105,7 +146,8 @@ end
 
 # i is the index of the offset, assuming that there is one precalculated set of weights for each offset required for a first order finite difference
 function half_offset_centered_difference(D, II, s, jx, u, ufunc)
+    ndims(u,s) == 0 && return Num(0)
     j, x = jx
-    weights, Itap = get_half_offset_weights_and_stencil(D, II, s, jx)
+    weights, Itap = get_half_offset_weights_and_stencil(D, II, s, u, jx)
     return dot(weights, ufunc(u, Itap, x))
 end

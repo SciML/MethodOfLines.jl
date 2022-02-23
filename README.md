@@ -21,14 +21,23 @@ Currently supported grid types: `center_align` and `edge_align`. Edge align will
 
 `center_align`: naive grid, starting from lower boundary, ending on upper boundary with step of `dx`
 
-`edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`.
+`edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`. This improves accuracy for neumann BCs.
 
-Currently Periodic boundary conditions are unsupported
+If you find that your system throws errors, please post an issue with the code and we will endeavor to support it.
+
+## Assumptions
+- That the term of a boundary condition is defined on the edge of the domain and is applied additively and has no multiplier/divisor/power etc.
+- That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`. Note that this generalises to higher dimensions
+- That boundary conditions only contain references to the variable on which they are defined at the edge of the domain, i.e. if `u(t,0)` is defined there are no references to `v(t,0)`. Note that references to dependent variables with all of their arguments are allowed such as `w(t)` or `v(t,x)` if the condition is on `u(t,x,y_min)`.
+- That initial conditions are of the form `u(...) ~ ...`, and doesn't reference the initial time derivative.
+- That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))` is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product/chain rules and use the linearity of the derivative operator, or define a new dependant variable equal to the term to be differentiated. Exceptions to this are the nonlinear or spherical laplacian, which have special handling.
+
+If any of these limitations are a problem for you please post an issue and we will prioritize removing them.
 
 ## Coming soon:
-- Automatic up/downwinding for odd order derivatives
-- Above mentioned unsupported boundary conditions supported
-
+- Fewer Assumptions.
+- More robust testing and validation.
+- Benchmarks.
 ## Full Example:
 ```
 ## 2D Diffusion

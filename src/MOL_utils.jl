@@ -59,19 +59,29 @@ function get_depvars(eq,depvar_ops)
     return depvars
 end
 
+@inline function get_all_depvars(pdesys, depvar_ops)
+    pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
+    return collect(mapreduce(x->get_depvars(x.lhs,depvar_ops), union, pdeeqs) ∪ mapreduce(x->get_depvars(x.rhs,depvar_ops), union, pdeeqs))
+end
+
 """
 A function that creates a tuple of CartesianIndices of unit length and `N` dimensions, one pointing along each dimension.
 """
 function unitindices(N::Int) #create unit CartesianIndex for each dimension
     null = zeros(Int, N)
-    return map(1:N) do i
-        unit_i = copy(null)
-        unit_i[i] = 1
-        CartesianIndex(Tuple(unit_i))
+    if N == 0
+        return CartesianIndex()
+    else
+        return map(1:N) do i
+            unit_i = copy(null)
+            unit_i[i] = 1
+            CartesianIndex(Tuple(unit_i))
+        end
     end
 end
 
 @inline function unitindex(N, j)
+    N == 0  && return CartesianIndex()
     unitindices(N)[j]
 end
 
@@ -83,9 +93,12 @@ function split_additive_terms(eq)
     return vcat(lhs_arg,rhs_arg)
 end
 @inline clip(II::CartesianIndex{M}, j, N) where M = II[j] > N ? II - unitindices(M)[j] : II
+
 subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
 
-    
+#substitute(eq::Equation, rules) = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
+
+remove(args, t) = filter(x -> t === nothing || !isequal(x, t.val), args)
 
 half_range(x) = -div(x,2):div(x,2)
 
