@@ -21,6 +21,7 @@ TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
+Combinatorics = "1"
 DiffEqBase = "6"
 DiffEqOperators = "4.41.0"
 DomainSets = "0.5"
