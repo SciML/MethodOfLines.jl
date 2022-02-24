@@ -1,6 +1,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using ModelingToolkit: operation, istree, arguments
 using DomainSets
+using NonlinearSolve
 
 # # Define some variables
 @testset "Heat Equation 1D 2 variables" begin
@@ -155,7 +156,7 @@ end
        prob = discretize(pdesys,discretization)  
 
        # Solve the ODE problem
-       sol = solve(prob,NewtonRaphson())
+       sol = NonlinearSolve.solve(prob, NewtonRaphson())
 end
 
 @testset "Rearranged Robin" begin
