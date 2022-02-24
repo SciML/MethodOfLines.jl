@@ -103,7 +103,7 @@ end
        Dr(u(t,0)) ~ 0.0, u(t,1) ~ sin(1)]
 
     for bc in bcs
-        terms = MethodOfLines.split_additive_terms(bc)
+        terms = MethodOfLines.split_terms(bc)
         @test terms isa Vector
         
     end

@@ -85,12 +85,21 @@ end
     unitindices(N)[j]
 end
 
-function split_additive_terms(eq)
-    # Calling the methods from symbolicutils matches the expressions
-    rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
-    lhs_arg = istree(eq.lhs) && (SymbolicUtils.operation(eq.lhs) == +) ? SymbolicUtils.arguments(eq.lhs) : [eq.lhs]
+function _split_terms(term)
+    S = Symbolics
+    SU = SymbolicUtils
+    # TODO: Update this to be exclusive of derivatives and depvars rather than inclusive of +-/*
+    if S.istree(term) && ((operation(term) == +) | (operation(term) == -) | (operation(term) == *) | (operation(term) == /))
+        return mapreduce(_split_terms, vcat, SU.arguments(term))
+    else
+        return [term]
+    end
+end
 
-    return vcat(lhs_arg,rhs_arg)
+function split_terms(eq::Equation)
+    lhs = _split_terms(eq.lhs)
+    rhs = _split_terms(eq.rhs)
+    return vcat(lhs,rhs)
 end
 @inline clip(II::CartesianIndex{M}, j, N) where M = II[j] > N ? II - unitindices(M)[j] : II
 
