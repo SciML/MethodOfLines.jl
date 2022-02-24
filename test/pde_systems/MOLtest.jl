@@ -103,8 +103,8 @@ end
               Dx(u(10,t)) ~ du(10,t)]
 
        # Space and time domains
-       domains = [x ∈ IntervalDomain(-10.0,10.0),
-              t ∈ IntervalDomain(0.0,0.5)]
+       domains = [x ∈ Interval(-10.0,10.0),
+              t ∈ Interval(0.0,0.5)]
        # Discretization
        dx = 0.4; dt = 0.2
 
@@ -113,7 +113,7 @@ end
        prob = discretize(pdesys,discretization)
 end
 
-@test_broken begin #@testset "Wave Equation" begin
+@testset "Wave Equation" begin
        # Parameters, variables, and derivatives
        @parameters t x
        @variables u(..)
@@ -139,8 +139,8 @@ end
               Dxx(u(t,5)) ~ 0.]       # for all t > 0,, curvature zero at u=L
 
        # Space and time domains
-       domains = [t ∈ IntervalDomain(0.0,10.0),
-              x ∈ IntervalDomain(0.0, L)]
+       domains = [t ∈ Interval(0.0,10.0),
+              x ∈ Interval(0.0, L)]
 
        dt = 0.1   # dt related to saving the data.. not actual dt
        # PDE sustem
@@ -149,13 +149,13 @@ end
        # Method of lines discretization
        dx = 0.1
        order = 2
-       discretization = MOLFiniteDifference([x=>dx], t, approx_order=order)
+       discretization = MOLFiniteDifference([x=>dx, t=>dt], approx_order=order)
 
        # Convert the PDE problem into an ODE problem
        prob = discretize(pdesys,discretization)  
 
        # Solve the ODE problem
-       sol = solve(prob,Tsit5())
+       sol = solve(prob,NewtonRaphson())
 end
 
 @testset "Rearranged Robin" begin
@@ -179,8 +179,8 @@ end
                   R * (D₀ + α * c(0, t)) * ∂x(c(0, t)) ~ c(0, t) - cₑ, # Robin
                   ∂x(c(ℓ, t)) ~ 0.0]   # no flux
 
-       domains = [t ∈ IntervalDomain(0.0,10.0),
-                  x ∈ IntervalDomain(0.0, ℓ)]
+       domains = [t ∈ Interval(0.0,10.0),
+                  x ∈ Interval(0.0, ℓ)]
 
        @named pdesys = PDESystem(diff_eq,bcs,domains,[t,x],[c(x,t)])
 
