@@ -256,8 +256,7 @@ Please submit an issue if you know of any special cases which impact stability o
 """
 function generate_finite_difference_rules(II, s, depvars, pde, derivweights)
 
-    terms = split_terms(pde)
-    add_terms = split_additive_terms(pde)
+    terms = split_terms(pde, s.x̄)
 
     # Standard cartesian centered difference scheme
     central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, terms)
@@ -265,10 +264,11 @@ function generate_finite_difference_rules(II, s, depvars, pde, derivweights)
     # Nonlinear laplacian scheme
     nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, terms)
 
-    winding_rules = generate_winding_rules(II, s, depvars, derivweights, add_terms)
+    # Because winding needs to know about multiplying terms, we can't split the terms into additive and multiplicative terms.
+    winding_rules = generate_winding_rules(II, s, depvars, derivweights, terms)
 
     # Spherical diffusion scheme
-    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, terms)
+    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, split_additive_terms(pde))
     
     return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(winding_rules), vec(central_deriv_rules_cartesian))
 end

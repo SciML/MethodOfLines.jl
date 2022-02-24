@@ -102,6 +102,49 @@ function split_terms(eq::Equation)
     return vcat(lhs,rhs)
 end
 
+# Additional handling
+function _split_terms(term, x̄)
+    S = Symbolics
+    SU = SymbolicUtils
+    st(t) = _split_terms(t, x̄)
+    # TODO: Update this to handle more ops e.g. exp sin tanh etc.
+    if S.istree(term) 
+        # Additional handling for upwinding
+        if (operation(term) == *)
+            args = SU.arguments(term)
+            for arg in args
+                if S.istree(arg) && operation(arg) isa Differential
+                    if any(map(x -> isodd(count_differentials(arg, x)), x̄))
+                        return [term]
+                    end
+                end
+            end
+            return mapreduce(st, vcat, SU.arguments(term))
+        elseif (operation(term) == /)
+            args = SU.arguments(term)
+            if S.istree(args[1]) && args[1] isa Differential
+                if any(map(x -> isodd(count_differentials(args[1], x)), x̄))
+                    return [term]
+                end
+            else
+                return vcat(st(args[1]), st(args[2]))
+            end
+        elseif (operation(term) == +) | (operation(term) == -)
+            return mapreduce(st, vcat, arguments(term))
+        else
+            return [term]
+        end
+    else
+        return [term]
+    end
+end
+
+function split_terms(eq::Equation, x̄)
+    lhs = _split_terms(eq.lhs, x̄)
+    rhs = _split_terms(eq.rhs, x̄)
+    return vcat(lhs,rhs)
+end
+
 function split_additive_terms(eq)
     # Calling the methods from symbolicutils matches the expressions
     rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
