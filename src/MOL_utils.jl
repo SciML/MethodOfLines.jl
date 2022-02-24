@@ -101,6 +101,15 @@ function split_terms(eq::Equation)
     rhs = _split_terms(eq.rhs)
     return vcat(lhs,rhs)
 end
+
+function split_additive_terms(eq)
+    # Calling the methods from symbolicutils matches the expressions
+    rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
+    lhs_arg = istree(eq.lhs) && (SymbolicUtils.operation(eq.lhs) == +) ? SymbolicUtils.arguments(eq.lhs) : [eq.lhs]
+
+    return vcat(lhs_arg,rhs_arg)
+end
+
 @inline clip(II::CartesianIndex{M}, j, N) where M = II[j] > N ? II - unitindices(M)[j] : II
 
 subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
