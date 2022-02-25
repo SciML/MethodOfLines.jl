@@ -125,9 +125,9 @@ end
        # some parameters
        EI  = 291.6667;
        m = 1.3850;
-       c = 0.01;
-       p = 1.0;
-       L = 5.0;
+       c = 1.;
+       p = 0.01;
+       L = 2.0;
 
        # 1D PDE and boundaru conditions
        eq  = m*Dtt(u(t,x)) + c*Dt(u(t,x)) + EI*Dxxxx(u(t,x)) ~0
@@ -135,12 +135,12 @@ end
        ic_bc = [u(0,x) ~ (p*x*(x^3 + L^3 -2*L*x^2)/(24*EI)), #for all 0 < u < L
               Dt(u(0,x)) ~ 0.,        # for all 0 < u < L
               u(t,0) ~ 0.,            # for all t > 0,, displacement zero at u=0
-              u(t,5) ~ 0.,            # for all t > 0,, displacement zero at u=L
+              u(t,2) ~ 0.,            # for all t > 0,, displacement zero at u=L
               Dxx(u(t,0)) ~ 0.,       # for all t > 0,, curvature zero at u=0
-              Dxx(u(t,5)) ~ 0.]       # for all t > 0,, curvature zero at u=L
+              Dxx(u(t,2)) ~ 0.]       # for all t > 0,, curvature zero at u=L
 
        # Space and time domains
-       domains = [t ∈ Interval(0.0,10.0),
+       domains = [t ∈ Interval(0.0,2.0),
               x ∈ Interval(0.0, L)]
 
        dt = 0.1   # dt related to saving the data.. not actual dt
