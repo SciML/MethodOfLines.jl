@@ -46,7 +46,7 @@ using DomainSets
        dy = 0.05
 
 
-       order = 2
+       order = 4
 
        discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=order)
 
@@ -75,6 +75,6 @@ using DomainSets
    
        mu = max(asfu...)
        mv = max(asfv...)
-       @test asfu / mu ≈ solu′ / mu  atol=0.1 
-       @test asfv / mv ≈ solv′ / mv  atol=0.1 
+       @test asfu / mu ≈ solu′ / mu  atol=0.2 
+       @test asfv / mv ≈ solv′ / mv  atol=0.2 
 end
