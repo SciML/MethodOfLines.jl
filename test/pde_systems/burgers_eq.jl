@@ -12,15 +12,20 @@ using DomainSets
        Dyy = Differential(y)^2
 
        R = 80.0
+
+       x_min = y_min = t_min = 0.0
+       x_max = y_max = 1.0
+       t_max = 0.5
+
        u_exact(x,y,t) = 3/4 - 1/(4*(1+exp(R*(-t-4x+4y)/32)))
        v_exact(x,y,t) = 3/4 + 1/(4*(1+exp(R*(-t-4x+4y)/32)))
 
        eq = [Dt(u(x,y,t)) + u(x,y,t)*Dx(u(x,y,t)) + v(x,y,t)*Dy(u(x,y,t)) ~ 1/R *(Dxx(u(x,y,t)) + Dyy(u(x,y,t))),
              Dt(v(x,y,t)) + u(x,y,t)*Dx(v(x,y,t)) + v(x,y,t)*Dy(v(x,y,t)) ~ 1/R *(Dxx(v(x,y,t)) + Dyy(v(x,y,t)))]
 
-       domains = [x ∈ Interval(0.0,1.0),
-                  y ∈ Interval(0.0,1.0),
-                  t ∈ Interval(0.0,1.0)]
+       domains = [x ∈ Interval(x_min, x_max),
+                  y ∈ Interval(y_min, y_max),
+                  t ∈ Interval(t_min, t_max)]
 
        bcs = [u(x,y,0) ~ u_exact(x,y,0),
               u(0,y,t) ~ u_exact(0,y,t),
@@ -40,9 +45,6 @@ using DomainSets
        dx = 0.05
        dy = 0.05
 
-       x_min = y_min = 0.0
-       x_max = y_max = 1.0
-       t_max = 1.0
 
        order = 2
 
