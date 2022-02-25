@@ -42,6 +42,7 @@ using DomainSets
 
        x_min = y_min = 0.0
        x_max = y_max = 1.0
+       t_max = 1.0
 
        order = 2
 
