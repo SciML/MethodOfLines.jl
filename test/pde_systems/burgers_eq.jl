@@ -45,7 +45,7 @@ using DomainSets
 
        order = 2
 
-       discretization = MOLFiniteDifference([x=>dx, y=>dy], approx_order=order)
+       discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=order)
 
        # Convert the PDE problem into an ODE problem
        prob = discretize(pdesys,discretization)
