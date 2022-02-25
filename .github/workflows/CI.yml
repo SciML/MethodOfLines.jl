@@ -21,6 +21,7 @@ jobs:
           - Higher_Order
           - Stationary
           - DAE
+          - Burgers
         version:
           - '1'
           - '1.6'
