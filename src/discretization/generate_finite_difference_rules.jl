@@ -139,7 +139,6 @@ end
 
 @inline function generate_cartesian_rules(II, s, depvars, derivweights, terms)
     central_ufunc(u, I, x) = s.discvars[u][I]
-
     return reduce(vcat, [reduce(vcat, [[(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], II, s, (x2i(s,u,x),x), u, central_ufunc) for d in (let orders = derivweights.orders[x]; orders[iseven.(orders)] end)] for x in params(u, s)]) for u in depvars])
 end
 
@@ -196,7 +195,7 @@ end
 end
 
 @inline function generate_nonlinlap_rules(II, s, depvars, derivweights, terms)
-    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~~c,cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, depvars, x, u), ~~d) for x in params(u, s)]) for u in depvars])
+    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c...,cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
 
     rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, depvars, x, u) for x in params(u, s)]) for u in depvars]))
     
@@ -212,8 +211,14 @@ end
 end
 
 @inline function generate_spherical_diffusion_rules(II, s, depvars, derivweights, terms)
-    rules = reduce(vcat, [vec([@rule *(~~a, 1/(r^2), ~~f, ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., ~f..., spherical_diffusion(*(~c..., ~d..., ~e...), II, derivweights, s, depvars, r, u), ~b...)
+    rules = reduce(vcat, [vec([@rule *(~~a, 1/(r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e...), II, derivweights, s, depvars, r, u), ~b...)
             for r in params(u,s)]) for u in depvars])
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e...), II, derivweights, s, depvars, r, u))
+    for r in params(u,s)]) for u in depvars]))
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e...), II, derivweights, s, depvars, r, u)
+    for r in params(u, s)]) for u in depvars]))
 
     spherical_diffusion_rules = []
     for t in terms
@@ -241,8 +246,6 @@ There are of course more specific schemes that are used to improve stability/spe
     - Spherical derivatives
     - Nonlinear laplacian uses a half offset centered scheme for the inner derivative to improve stability
     - Spherical nonlinear laplacian.
-
-##Planned special cases include:
     - Up/Downwind schemes to be used for odd ordered derivatives multiplied by a coefficient, downwinding when the coefficient is positive, and upwinding when the coefficient is negative.
 
 Please submit an issue if you know of any special cases which impact stability or accuracy that are not implemented, with links to papers and/or code that demonstrates the special case.
@@ -261,7 +264,7 @@ function generate_finite_difference_rules(II, s, depvars, pde, derivweights)
     winding_rules = generate_winding_rules(II, s, depvars, derivweights, terms)
 
     # Spherical diffusion scheme
-    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, terms)
+    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, split_additive_terms(pde))
     
     return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(winding_rules), vec(central_deriv_rules_cartesian))
 end

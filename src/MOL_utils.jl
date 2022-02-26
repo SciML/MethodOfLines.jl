@@ -184,7 +184,7 @@ function split_additive_terms(eq)
     rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
     lhs_arg = istree(eq.lhs) && (SymbolicUtils.operation(eq.lhs) == +) ? SymbolicUtils.arguments(eq.lhs) : [eq.lhs]
 
-    return flatten_division.(vcat(lhs_arg,rhs_arg))
+    return vcat(lhs_arg,rhs_arg)
 end
 
 # Filthy hack to get around limitations in rules and avoid simplification to a dividing expression

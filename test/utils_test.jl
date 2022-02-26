@@ -75,11 +75,7 @@ end
 
 @testset "Flatten division" begin
     @parameters x y z t
-    Dx = Differential(x)
-    Dy = Differential(y)
-    Dz = Differential(z)
-    Dt = Differential(t)
-    d = 1.0
+    
     @test isequal(operation(((y^(-1.0+eps(Float64)))*x~0).lhs), *)
 
     @test isequal(operation(MethodOfLines.flatten_division((x/z~0).lhs)), *)
