@@ -73,7 +73,23 @@ end
     @test MethodOfLines.differential_order(eq.lhs, x.val) == Set([4, 3, 2, 1])
 end
 
-@testset "Split additive terms" begin 
+@testset "Flatten division" begin
+    @parameters x y z t
+    Dx = Differential(x)
+    Dy = Differential(y)
+    Dz = Differential(z)
+    Dt = Differential(t)
+    d = 1.0
+    @test isequal(operation(((y^(-1.0+eps(Float64)))*x~0).lhs), *)
+
+    @test isequal(operation(MethodOfLines.flatten_division((x/z~0).lhs)), *)
+    @test isequal(operation(MethodOfLines.flatten_division((x*y/z~0).lhs)), *)
+    @test isequal(operation(MethodOfLines.flatten_division((x/(y*z)~0).lhs)), *)
+    @test isequal(operation(MethodOfLines.flatten_division((x*y/(z*t)~0).lhs)), *)
+
+end
+
+@testset "Split terms" begin 
     @parameters t x y r
     @variables u(..) v(..)
     Dt = Differential(t)

@@ -197,4 +197,62 @@ end
 end
 
 
-   
+
+@testset "PDE definition cannot handle simple multiplication by a constant: issue #1" begin
+	@parameters x t
+
+	@variables c(..)
+
+	∂t  = Differential(t)
+	∂x  = Differential(x)
+	∂²x = Differential(x) ^ 2
+	
+	D₀ = 1.5
+	α = 0.15
+	χ = 1.2
+	R = 0.1
+	cₑ = 2.0
+	ℓ = 1.0
+	Δx = 0.01
+	
+	bcs = [
+              # initial condition
+		c(x, 0) ~ 0.0,
+		# Robin BC
+		∂x(c(0.0, t)) / (1 + exp(α * (c(0.0, t) - χ))) * R * D₀ + cₑ - c(0.0, t) ~ 0.0,		  
+		# no flux BC
+		∂x(c(ℓ, t)) ~ 0.0]
+              
+              
+       # define space-time plane
+       domains = [x ∈ Interval(0.0, ℓ), t ∈ Interval(0.0, 5.0)]
+
+       @testset "WAY 1: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
+              fail
+              D = D₀ / (1.0 + exp(α * (c(x, t) - χ)))
+              diff_eq = ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))
+              @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)]);
+              discretization = MOLFiniteDifference([x=>Δx], t)
+       end
+
+       @testset "WAY 2: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
+              D = 1.0 / (1.0 + exp(α * (c(x, t) - χ)))
+              diff_eq = ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))
+              @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)]);
+              discretization = MOLFiniteDifference([x=>Δx], t)
+       end
+       
+       @testset "WAY 3: ∂t(c(x, t)) ~ ∂x(1.0 / (1.0/D₀ + exp(α * (c(x, t) - χ))/D₀) * ∂x(c(x, t)))" begin
+              diff_eq = ∂t(c(x, t)) ~ ∂x(1.0 / (1.0/D₀ + exp(α * (c(x, t) - χ))/D₀) * ∂x(c(x, t)))
+              @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)]);
+              discretization = MOLFiniteDifference([x=>Δx], t)
+       end
+       
+       @testset "WAY 4: ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))" begin
+              diff_eq = ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))
+              @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)]);
+              discretization = MOLFiniteDifference([x=>Δx], t)
+       end
+
+end
+
