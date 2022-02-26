@@ -1,6 +1,5 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using DomainSets
-using Plots
 
 # Exact solutions from: https://www.sciencedirect.com/science/article/pii/S0898122110003883
 @test_broken begin# @testset "Test 01: Burger's Equation 2D" begin
