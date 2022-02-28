@@ -8,9 +8,9 @@ Feature requests and issues welcome.
 ```
 discretization = MOLFiniteDifference(dxs, 
                                       <your choice of continuous variable, usually time>; 
-                                      upwind_order = <currently hard coded to 1>, 
-                                      approx_order = Order of derivative approximation, starting from 2 
-                                      grid_align = your grid type choice>)
+                                      upwind_order = <Currently unstable at any value other than 1>, 
+                                      approx_order = <Order of derivative approximation, starting from 2> 
+                                      grid_align = <your grid type choice>)
 prob = discretize(pdesys, discretization)
 ```
 Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`
@@ -86,8 +86,8 @@ domains = [t ∈ Interval(t_min, t_max),
 @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
 
 # Method of lines discretization
-discretization = MOLFiniteDifference([x=>dx,y=>dy],t;centered_order=order)
-prob = ModelingToolkit.discretize(pdesys,discretization)
+discretization = MOLFiniteDifference([x=>dx, y=>dy], t; approx_order = order)
+prob = ModelingToolkit.discretize(pdesys, discretization)
 
 # Solution of the ODE system
 sol = solve(prob,Tsit5())
