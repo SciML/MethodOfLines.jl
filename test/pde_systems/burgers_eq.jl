@@ -61,12 +61,12 @@ using DomainSets
        @variables u[1:Nx,1:Ny](t)
        @variables v[1:Nx,1:Ny](t)
        t = sol[t]
-       anim = @animate for k in 1:length(t)
-              solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-              solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-              heatmap(solu′)
-       end
-       gif(anim, "plots/Burgers2Dsol.gif", fps = 5)
+       # anim = @animate for k in 1:length(t)
+       #        solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+       #        solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+       #        heatmap(solu′)
+       # end
+       # gif(anim, "plots/Burgers2Dsol.gif", fps = 5)
 
 
        solu′ = reshape([sol[u[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
@@ -81,13 +81,13 @@ using DomainSets
        asfu[1,1] = asfu[1, end] = asfu[end, 1] = asfu[end, end] = 0.
        asfv[1,1] = asfv[1, end] = asfv[end, 1] = asfv[end, end] = 0.
 
-       anim = @animate for T in t
-              asfu = reshape([u_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
-              asfv = reshape([v_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
+       # anim = @animate for T in t
+       #        asfu = reshape([u_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
+       #        asfv = reshape([v_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
               
-              heatmap(asfu)
-       end
-       gif(anim, "plots/Burgers2Dexact.gif", fps = 5)
+       #        heatmap(asfu)
+       # end
+       # gif(anim, "plots/Burgers2Dexact.gif", fps = 5)
 
    
        mu = max(asfu...)

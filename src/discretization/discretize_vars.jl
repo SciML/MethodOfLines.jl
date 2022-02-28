@@ -41,15 +41,18 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
     Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
 
     depvarsdisc = map(depvars) do u
+        op = SymbolicUtils.operation(u)
+        if op isa SymbolicUtils.FnType
+            sym = nameof(op.var)
+        else
+            sym = nameof(op)
+        end
         if t === nothing
-            sym = nameof(SymbolicUtils.operation(u))
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
             u => collect(first(@variables $sym[uaxes...]))
         elseif isequal(SymbolicUtils.arguments(u), [t])
-            sym = nameof(SymbolicUtils.operation(u))
             u => fill(first(@variables($sym(t))),()) #Create a 0-dimensional array
         else
-            sym = nameof(SymbolicUtils.operation(u))
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
             u => collect(first(@variables $sym[uaxes...](t))) 
         end

@@ -73,15 +73,15 @@ end
     @test MethodOfLines.differential_order(eq.lhs, x.val) == Set([4, 3, 2, 1])
 end
 
-@testset "Flatten division" begin
+@test_broken begin #@testset "Flatten division" begin
     @parameters x y z t
     
-    @test isequal(operation(((y^(-1.0+eps(Float64)))*x~0).lhs), *)
+    #@test_broken isequal(operation(((y^(-1.0+eps(Float64)))*x~0).lhs), *)
 
-    @test isequal(operation(MethodOfLines.flatten_division((x/z~0).lhs)), *)
-    @test isequal(operation(MethodOfLines.flatten_division((x*y/z~0).lhs)), *)
-    @test isequal(operation(MethodOfLines.flatten_division((x/(y*z)~0).lhs)), *)
-    @test isequal(operation(MethodOfLines.flatten_division((x*y/(z*t)~0).lhs)), *)
+    @test_broken isequal(operation(MethodOfLines.flatten_division((x/z~0).lhs)), *)
+    @test_broken isequal(operation(MethodOfLines.flatten_division((x*y/z~0).lhs)), *)
+    @test_broken isequal(operation(MethodOfLines.flatten_division((x/(y*z)~0).lhs)), *)
+    @test_broken isequal(operation(MethodOfLines.flatten_division((x*y/(z*t)~0).lhs)), *)
 
 end
 

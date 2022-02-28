@@ -198,6 +198,8 @@ end
     rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c...,cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
 
     rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, depvars, x, u) for x in params(u, s)]) for u in depvars]))
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, II, derivweights, s, depvars, x, u) for x in params(u, s)]) for u in depvars]))
     
     nonlinlap_rules = []
     for t in terms

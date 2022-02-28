@@ -189,16 +189,16 @@ end
 
 # Filthy hack to get around limitations in rules and avoid simplification to a dividing expression
 function flatten_division(term)
-    rules = [@rule(/(~a, ~b) => *(~a, b^(-1.0+eps(Float64)*rand([1,-1])))),
-             @rule(/(*(~~a), ~b) => *(~a..., b^(-1.0+eps(Float64)*rand([1,-1])))),
-             @rule(/(~a, *(~~b)) => *(~a, *(~b...)^(-1.0+eps(Float64)*rand([1,-1])))),
-             @rule(/(*(~~a), *(~~b)) => *(~a..., *(~b...)^(-1.0+eps(Float64)*rand([1,-1]))))]
+    #=rules = [@rule(/(~a, ~b) => *(~a, b^(-1.0))),
+             @rule(/(*(~~a), ~b) => *(~a..., b^(-1.0))),
+             @rule(/(~a, *(~~b)) => *(~a, *(~b...)^(-1.0))),
+             @rule(/(*(~~a), *(~~b)) => *(~a..., *(~b...)^(-1.0)))]
     for r in rules
         if r(term) !== nothing
             return r(term)
         end
     end
-    return term
+    =#return term
 end
 
 @inline clip(II::CartesianIndex{M}, j, N) where M = II[j] > N ? II - unitindices(M)[j] : II

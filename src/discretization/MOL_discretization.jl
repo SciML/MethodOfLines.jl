@@ -33,7 +33,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     end
     alleqs = []
     bceqs = []
-    # Create discretized space and variables
+    # Create discretized space and variables 
     s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization)

@@ -196,6 +196,55 @@ end
        sol = solve(prob,Rodas4())
 end
 
+@test_broken begin # "Array u" begin
+	# Dependencies
+	N = 6 # number of dependent variables
+	
+	# Variables, parameters, and derivatives
+	@parameters x
+	@variables u[1:N](..)
+	Dx = Differential(x)
+	Dxx = Differential(x)^2
+	
+	# Domain edges
+	x_min= 0.
+	x_max = 1.
+
+	# Discretization parameters
+	dx = 0.1
+	order = 2
+
+       #u = collect(u)
+	
+	# Equations
+	eqs  = Vector{ModelingToolkit.Equation}(undef, N)
+	for i = 1:N
+		eqs[i] = Dxx(u[i](x)) ~ u[i](x)
+	end
+
+	# Initial and boundary conditions
+	bcs = Vector{ModelingToolkit.Equation}(undef, 2*N)
+	for i = 1:N
+		bcs[i] = Dx(u[i](x_min)) ~ 0.
+	end	
+	
+	for i = 1:N
+		bcs[i+N] = u[i](x_max) ~ rand()
+	end
+	
+	# Space and time domains
+	domains = [x ∈ Interval(x_min, x_max)]
+	
+	# PDE system
+	@named pdesys = PDESystem(eqs, bcs, domains, [x], collect([u[i](x) for i = 1:N]))
+	
+	# Method of lines discretization
+	discretization = MOLFiniteDifference([x=>dx], nothing, approx_order=order)
+	prob = ModelingToolkit.discretize(pdesys,discretization)
+	
+	# # Solution of the ODE system
+	sol = NonlinearSolve.solve(prob,NewtonRaphson())
+end
 
 
 @testset "Testing discretization of varied systems" begin
