@@ -679,6 +679,64 @@ end
     end
 end
 
+@testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
+    # Method of Manufactured Solutions
+    u_exact = (x,t) -> exp.(-t) * cos.(x)
+    v_exact = (y,t) -> exp.(-t) * sin.(y)
+
+    # Parameters, variables, and derivatives
+    @parameters t x y
+    @variables u[1:2](..) 
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Dx^2
+    Dy = Differential(y)
+    Dyy = Dy^2
+
+    # 1D PDE and boundary conditions
+    eqs = [Dt(u[1](t,x)) ~ Dxx(u[1](t,x)),
+           Dt(u[2](t,y)) ~ Dyy(u[2](t,y))]
+    bcs = [u[1](0,x) ~ cos(x),
+           u[2](0,y) ~ sin(y),
+           u[1](t,0) ~ exp(-t),
+           Dx(u[1](t,1)) ~ -exp(-t) * sin(1),
+           Dy(u[2](t,0)) ~ exp(-t),
+           u[2](t,2) ~ exp(-t) * sin(2)]
+
+    # Space and time domains
+    domains = [t ∈ Interval(0.0,1.0),
+               x ∈ Interval(0.0,1.0),
+               y ∈ Interval(0.0,2.0)]
+
+    # PDE system
+    @named pdesys = PDESystem(eqs,bcs,domains,[t,x,y],[u[1](t,x),u[2](t,y)])
+
+    # Method of lines discretization
+    l = 100
+    dx = range(0.0,1.0,length=l)
+    dx_ = dx[2]-dx[1]
+    dy = range(0.0,2.0,length=l)
+    dy_ = dy[2]-dy[1]
+    order = 2
+    discretization = MOLFiniteDifference([x=>dx_,y=>dy_],t)
+
+    # Convert the PDE problem into an ODE problem
+    prob = discretize(pdesys,discretization)
+
+    # Solve ODE problem
+    sol = solve(prob,Tsit5(),saveat=0.1)
+
+    x_sol = dx[2:end-1]
+    y_sol = dy[2:end-1]
+    t_sol = sol.t
+
+    # Test against exact solution
+    for i in 1:length(sol)
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), sol.u[1][i][1:l-2], atol=0.01))
+        @test all(isapprox.(v_exact(y_sol, t_sol[i]), sol.u[1][i][l-1:end], atol=0.01))
+    end
+end
+
 @testset "Test 13: one linear diffusion with mixed BCs, one ODE" begin
     # Method of Manufactured Solutions
     u_exact = (x,t) -> exp.(-t) * sin.(x)
