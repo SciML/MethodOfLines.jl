@@ -21,8 +21,8 @@ using DomainSets
 
        α = 10.
 
-       u0(x,y,t) = 22(y*(y-1))^(3/2)
-       v0(x,y,t) = 27(x*(x-1))^(3/2)
+       u0(x,y,t) = 22(y*(1-y))^(3/2)
+       v0(x,y,t) = 27(x*(1-x))^(3/2)
 
        eq = [Dt(u(x,y,t)) ~ 1. + v(x,y,t)*u(x,y,t)^2 + 4.4*u(x,y,t) + α*(Dxx(u(x,y,t)) + Dyy(u(x,y,t))) + brusselator_f(x, y, t),
              Dt(v(x,y,t)) ~ 3.4*u(x,y,t) - v(x,y,t)*u(x,y,t)^2 + α*(Dxx(u(x,y,t)) + Dyy(u(x,y,t)))]
@@ -39,7 +39,7 @@ using DomainSets
               v(0,y,t) ~ v(1,y,t),
               v(x,0,t) ~ v(x,1,t)] 
        
-       @named pdesys = PDESystem(eq,bcs,domains,[t,x,y],[u(x,y,t),v(x,y,t)])
+       @named pdesys = PDESystem(eq,bcs,domains,[x,y,t],[u(x,y,t),v(x,y,t)])
 
        # Method of lines discretization
        dx = 1/32
@@ -61,8 +61,8 @@ using DomainSets
        #  @variables v[1:Nx,1:Ny](t)
        #  t = sol[t]
        #   anim = @animate for k in 1:length(t)
-       #          solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-       #          solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+       #          solu′ = real.(reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
+       #          solv′ = real.(reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
        #          heatmap(solu′)
        #   end
        #   gif(anim, "plots/Brusselator2Dsol.gif", fps = 5)

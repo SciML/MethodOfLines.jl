@@ -10,7 +10,7 @@ function count_differentials(term, x::Symbolics.Symbolic)
     else
         op = SU.operation(term)
         count_children = sum(map(arg -> count_differentials(arg, x), SU.arguments(term)))
-        if op isa Differential && op.x === x
+        if op isa Differential && isequal(op.x, x)
             return 1 + count_children
         end
         return count_children

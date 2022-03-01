@@ -53,7 +53,7 @@ using DomainSets
        # Convert the PDE problem into an ODE problem
        prob = discretize(pdesys,discretization)
 
-       sol = solve(prob,Rosenbrock23())
+       sol = solve(prob,Tsit5())
 
        Nx = floor(Int64, (x_max - x_min) / dx) + 1
        Ny = floor(Int64, (y_max - y_min) / dy) + 1
