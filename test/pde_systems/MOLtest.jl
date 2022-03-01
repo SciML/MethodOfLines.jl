@@ -246,6 +246,44 @@ end
 	sol = NonlinearSolve.solve(prob,NewtonRaphson())
 end
 
+@testset "2D variable connected to 1D variable at boundary #33" begin
+       @parameters t x r 
+       @variables u(..) v(..)
+       Dt = Differential(t)
+       Dx = Differential(x)
+       Dxx = Differential(x)^2
+       Dr = Differential(r)
+       Drr = Differential(r)^2
+
+       s = u(t,x) + v(t,x,1)
+
+       eqs  = [Dt(u(t,x)) ~ Dxx(u(t,x)) + s,
+              Dt(v(t,x,r)) ~ Drr(v(t,x,r))]
+       bcs = [u(0,x) ~ 1,
+       v(0,x,r) ~ 1,
+       Dx(u(t,0)) ~ 0.0, Dx(u(t,1)) ~ 0.0,
+       Dr(v(t,x,0)) ~ 0.0, Dr(v(t,x,1)) ~ s]
+
+       domains = [t ∈ Interval(0.0,1.0),
+                  x ∈ Interval(0.0,1.0),
+                  r ∈ Interval(0.0,1.0)]
+       
+       @named pdesys = PDESystem(eqs,bcs,domains,[t,x,r],[u(t,x),v(t,x,r)])
+
+       # Method of lines discretization
+       dx = 0.1
+       dr = 0.1
+       order = 2
+       discretization = MOLFiniteDifference([x=>dx,r=>dr], t, approx_order=order)
+
+       # Convert the PDE problem into an ODE problem
+       prob = discretize(pdesys,discretization)
+
+       sol = solve(prob, Tsit5())
+end
+
+ 
+
 
 @testset "Testing discretization of varied systems" begin
 	@parameters x t

@@ -15,7 +15,7 @@ prob = discretize(pdesys, discretization)
 ```
 Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`
 
-Note that the second argument to `MOLFiniteDifference` is optional, all parameters can be discretized if all boundary conditions are specified
+Note that the second argument to `MOLFiniteDifference` is optional, all parameters can be discretized if all required boundary conditions are specified.
 
 Currently supported grid types: `center_align` and `edge_align`. Edge align will give better accuracy with Neumann Boundary conditions.
 

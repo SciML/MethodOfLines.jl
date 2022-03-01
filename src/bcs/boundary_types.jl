@@ -18,6 +18,7 @@ struct LowerBoundary <: AbstractTruncatingBoundary
         depvars_lhs = get_depvars(eq.lhs, depvar_ops)
         depvars_rhs = get_depvars(eq.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
+        #depvars =  filter(u -> !any(map(x-> x isa Number, arguments(u))), depvars)
         
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [s]), first(allx̄), eq)
@@ -34,6 +35,7 @@ struct UpperBoundary <: AbstractTruncatingBoundary
         depvars_lhs = get_depvars(eq.lhs, depvar_ops)
         depvars_rhs = get_depvars(eq.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
+        #depvars =  filter(u -> !any(map(x-> x isa Number, arguments(u))), depvars)
         
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [s]), first(allx̄), eq)
@@ -55,10 +57,14 @@ end
 @inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
     # This x2i is correct
     dim = x2i(s, depvar(b.u, s), b.x)
-
+    @assert dim !== nothing "Internal Error: Variable $(b.x) not found in $(depvar(b.u, s)), when parsing boundary condition $(b)"
+    
     lower[dim] = lower[dim] + !isupper(b)
     upper[dim] = upper[dim] + isupper(b)
 end
+
+idx(b::LowerBoundary, s) = 1
+idx(b::UpperBoundary, s) = length(s, b.x)
 
 
 # indexes for Iedge depending on boundary type
@@ -85,17 +91,11 @@ end
 
 edge(s, b, interiormap) = edge(interiormap, s, b.u, x2i(s, b.u, b.x), !isupper(b))
 
-function _boundary_rules(s, orders, x, val)
-    rules = map(s.ū) do u
+function _boundary_rules(s, orders, u, x, val)
         args = s.args[operation(u)]
         args = substitute.(args, (x=>val,))
-        operation(u)(args...) => [operation(u)(args...), x]
-    end
-    return vcat(rules, mapreduce(vcat, s.ū) do u
-        args = s.args[operation(u)]
-        args = substitute.(args, (x=>val,))
-        [(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x] for d in orders[x]]
-    end)
+        varrule = operation(u)(args...) => [operation(u)(args...), x]
+        return vcat([(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x] for d in reverse(orders[x])], varrule)
 end
 
 function generate_boundary_matching_rules(s, orders)
@@ -104,16 +104,15 @@ function generate_boundary_matching_rules(s, orders)
     upperboundary(x) = last(s.axies[x])
 
     # Rules to match boundary conditions on the lower boundaries
-    lower = reduce(vcat, [_boundary_rules(s, orders, x, lowerboundary(x)) for x in s.x̄])
+    lower = Dict([operation(u) => Dict([x => _boundary_rules(s, orders, u, x, lowerboundary(x)) for x in params(u, s)]) for u in s.ū])
 
-    upper = reduce(vcat, [_boundary_rules(s, orders, x, upperboundary(x)) for x in s.x̄])
+    upper = Dict([operation(u) => Dict([x => _boundary_rules(s, orders, u, x, upperboundary(x)) for x in params(u, s)]) for u in s.ū])
 
     return (lower, upper)
 end
 
 """
-Mutates bceqs and u0 by finding relevant equations and discretizing them.
-TODO: return a handler for use with generate_finite_difference_rules and pull out initial condition. Important to remember that BCs can have 
+Creates a map of boundaries for each variable to be used later when discretizing the boundary condition equations, and 
 """
 function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights::DifferentialDiscretizer) 
     
@@ -132,6 +131,8 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
     ## BC matching rules, returns the variable and parameter the bc concerns
 
     lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(s, derivweights.orders)
+    # @show lower_boundary_rules
+    # @show upper_boundary_rules
 
     boundarymap = Dict([operation(u)=>[] for u in s.ū])
 
@@ -140,6 +141,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
         # * Assume in the form `u(...) ~ ...` for now
         depvarslhs = get_depvars(bc.lhs, depvar_ops)
         bcdepvar = first(depvarslhs)
+
         depvars = depvar.(collect(union(depvarslhs, get_depvars(bc.rhs, depvar_ops))), (s,))
         if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
             if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))
@@ -148,7 +150,9 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
                 initindex = findfirst(isequal(bc.lhs), initmaps) 
                 if initindex !== nothing
                     #@show bcdepvar, bc, depvar(bcdepvar, s)
-                    push!(u0,vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,),valmaps(s, depvar(bcdepvar,s), depvars))))
+                    args = params(depvar(bcdepvar, s), s)
+                    indexmap = Dict([args[i]=>i for i in 1:length(args)])
+                    push!(u0,vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,),valmaps(s, depvar(bcdepvar,s), depvars, indexmap))))
                 end
             else
                 # Split out additive terms
@@ -157,16 +161,16 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
                 local u_, x_ 
                 boundary = nothing
                 # * Assume that the BC is defined on the edge of the domain
-                # Check whether the bc is on the lower boundary, or periodic
-                for term in terms, r in lower_boundary_rules
+                # Check whether the bc is on the lower boundary, or periodic, we don't care which depvar/var
+                for term in terms, r in reduce(vcat, reduce(vcat, collect.(values.(collect(values(lower_boundary_rules))))))
                     #Check if the rule changes the expression
                     if subsmatch(term, r)
                         # Get the matched variables from the rule
                         u_, x_ = r.second
                         # Mark the boundary                        
                         boundary = LowerBoundary(u_, s.time, x_, bc, s, depvar_ops)
-                        # do it again for the upper end to check for periodic
-                        for term_ in setdiff(terms, [term]), r_ in upper_boundary_rules
+                        # do it again for the upper end to check for periodic, but only check the current depvar and indvar
+                        for term_ in setdiff(terms, [term]), r_ in upper_boundary_rules[operation(u_)][x_]
                             if subsmatch(term_, r_)
                                 boundary = PeriodicBoundary(u_, x_)
                             end
@@ -177,7 +181,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
                 end
                 # repeat for upper boundary
                 if boundary === nothing
-                    for term in terms, r in upper_boundary_rules
+                    for term in terms, r in reduce(vcat, reduce(vcat, collect.(values.(collect(values(upper_boundary_rules))))))
                         if subsmatch(term, r)
                             u_, x_ = r.second 
                             boundary = UpperBoundary(u_, s.time, x_, bc, s, depvar_ops)
