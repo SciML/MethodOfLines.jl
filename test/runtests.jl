@@ -53,4 +53,8 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
     if GROUP == "All" || GROUP == "Burgers"
         @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin include("pde_systems/burgers_eq.jl") end
     end
+
+    if GROUP == "All" || GROUP == "Brusselator"
+        @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin include("pde_systems/brusselator_eq.jl") end
+    end
 end
