@@ -105,7 +105,7 @@ gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where N = ndims(u,s) == 0 ? 
 
 varmaps(s::DiscreteSpace, depvars, II, indexmap) = [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
 
-valmaps(s::DiscreteSpace, u, depvars, II, indexmap) = vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
+valmaps(s::DiscreteSpace, u, depvars, II, indexmap) = length(II) == 0 ? [] : vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
 
 valmaps(s, u, depvars, indexmap) = valmaps.([s], [u], [depvars], s.Igrid[u], [indexmap])
 
