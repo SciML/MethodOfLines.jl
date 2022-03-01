@@ -1,6 +1,8 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using DomainSets
 
+#using Plots
+
 # Exact solutions from: https://www.sciencedirect.com/science/article/pii/S0898122110003883
 @testset "Test 01: Brusselator equation 2D" begin
        @parameters x y t
@@ -19,8 +21,8 @@ using DomainSets
 
        α = 10.
 
-       u0(x,y,t) = 22y*(y-1)^(3/2)
-       v0(x,y,t) = 27x*(x-1)^(3/2)
+       u0(x,y,t) = 22(y*(y-1))^(3/2)
+       v0(x,y,t) = 27(x*(x-1))^(3/2)
 
        eq = [Dt(u(x,y,t)) ~ 1. + v(x,y,t)*u(x,y,t)^2 + 4.4*u(x,y,t) + α*(Dxx(u(x,y,t)) + Dyy(u(x,y,t))) + brusselator_f(x, y, t),
              Dt(v(x,y,t)) ~ 3.4*u(x,y,t) - v(x,y,t)*u(x,y,t)^2 + α*(Dxx(u(x,y,t)) + Dyy(u(x,y,t)))]
@@ -35,7 +37,7 @@ using DomainSets
 
               v(x,y,0) ~ v0(x,y,0),
               v(0,y,t) ~ v(1,y,t),
-              v(x,0,t) ~ v(x,1,t)]
+              v(x,0,t) ~ v(x,1,t)] 
        
        @named pdesys = PDESystem(eq,bcs,domains,[t,x,y],[u(x,y,t),v(x,y,t)])
 
@@ -55,15 +57,15 @@ using DomainSets
        Nx = floor(Int64, (x_max - x_min) / dx) + 1
        Ny = floor(Int64, (y_max - y_min) / dy) + 1
 
-        # @variables u[1:Nx,1:Ny](t)
-        # @variables v[1:Nx,1:Ny](t)
-        # t = sol[t]
-        #  anim = @animate for k in 1:length(t)
-        #         solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-        #         solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-        #         heatmap(solu′)
-        #  end
-        #  gif(anim, "plots/Brusselator2Dsol.gif", fps = 5)
+       #  @variables u[1:Nx,1:Ny](t)
+       #  @variables v[1:Nx,1:Ny](t)
+       #  t = sol[t]
+       #   anim = @animate for k in 1:length(t)
+       #          solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+       #          solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+       #          heatmap(solu′)
+       #   end
+       #   gif(anim, "plots/Brusselator2Dsol.gif", fps = 5)
 
 
     #    solu′ = reshape([sol[u[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
