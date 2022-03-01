@@ -77,7 +77,11 @@ Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 
 @inline function Idx(II, s, u, indexmap)
     # We need to construct a new index as indices may be of different size
+    length(params(u,s)) == 0 && return CartesianIndex()
+    @show(u, params(u,s))
+    @show indexmap
     is = [II[indexmap[x]] for x in params(u, s)]
+    
     
     II = CartesianIndex(is...)
     return II

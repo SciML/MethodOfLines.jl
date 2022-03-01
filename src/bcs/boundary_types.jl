@@ -35,14 +35,11 @@ struct UpperBoundary <: AbstractTruncatingBoundary
         depvars_lhs = get_depvars(eq.lhs, depvar_ops)
         depvars_rhs = get_depvars(eq.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
-        #depvars =  filter(u -> !any(map(x-> x isa Number, arguments(u))), depvars)
         
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [s]), first(allx̄), eq)
     end
 end
-
-
 struct PeriodicBoundary <: AbstractBoundary
     u
     x
@@ -131,9 +128,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
     ## BC matching rules, returns the variable and parameter the bc concerns
 
     lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(s, derivweights.orders)
-    # @show lower_boundary_rules
-    # @show upper_boundary_rules
-
+    
     boundarymap = Dict([operation(u)=>[] for u in s.ū])
 
     # Generate initial conditions and bc equations

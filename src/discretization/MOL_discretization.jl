@@ -74,11 +74,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             for boundary in boundarymap[operation(eqvar)]
                 generate_bc_rules!(bceqs, derivweights, s, interiormap, boundary)
             end
-            #@show interior
-            
+           
             # Set invalid corner points to zero
             generate_corner_eqs!(bceqs, s, interiormap, pde)
-
             
             # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
             args = params(eqvar, s)
@@ -96,7 +94,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             pdeeqs = vec(map(interior) do II
                 boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
-                #@show II
                 rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
                 substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
             end)
@@ -120,17 +117,10 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # 0 ~ ...
             # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
             eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, vcat(alleqs, unique(bceqs)))
-            #getfield.(alldepvarsdisc, [:val])
             sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults),name=pdesys.name)
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by the `solve` method.
-            #println(vcat(alleqs, unique(bceqs)))
-            #println(Dict(defaults))#
-            # println(vec(reduce(vcat, vec(alldepvarsdisc))))
-            # println(ps)
-            # println(tspan)#
-            # println(typeof.(vcat(alleqs, unique(bceqs))))
             sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
             return sys, tspan
         end

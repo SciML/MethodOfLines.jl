@@ -144,7 +144,7 @@ end
 
 @inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, depvars, derivweights, (j,x), u, central_ufunc, indexmap) where N
     # TODO: Allow derivatives in expr
-    expr = substitute(expr, valmaps(s, u, depvars, Idx(II, s, u, indexmap)))
+    expr = substitute(expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
     IfElse.ifelse(expr > 0, 
                   expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, true), 
                   expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, false))
@@ -163,12 +163,9 @@ end
     wind_rules = []
 
     # wind_exprs = []
-    #@show rules
     for t in terms
-        #@show t
         for r in rules
             if r(t) !== nothing
-                #@show t 
                 push!(wind_rules, t => r(t))
             end
         end
