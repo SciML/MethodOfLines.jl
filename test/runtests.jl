@@ -50,4 +50,7 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
         @time @safetestset "MOLFiniteDifference Interface: 1D Partial DAE" begin include("pde_systems/MOL_1D_PDAE.jl") end
     end
 
+    if GROUP == "All" || GROUP == "Burgers"
+        @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin include("pde_systems/burgers_eq.jl") end
+    end
 end

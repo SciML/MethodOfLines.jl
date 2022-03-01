@@ -85,6 +85,100 @@ end
     unitindices(N)[j]
 end
 
+function _split_terms(term)
+    S = Symbolics
+    SU = SymbolicUtils
+    # TODO: Update this to be exclusive of derivatives and depvars rather than inclusive of +-/*
+    if S.istree(term) && ((operation(term) == +) | (operation(term) == -) | (operation(term) == *) | (operation(term) == /))
+        return mapreduce(_split_terms, vcat, SU.arguments(term))
+    else
+        return [term]
+    end
+end
+
+function split_terms(eq::Equation)
+    lhs = _split_terms(eq.lhs)
+    rhs = _split_terms(eq.rhs)
+    return vcat(lhs,rhs)
+end
+
+# Additional handling to get around limitations in rules
+# Splits out derivatives from containing math expressions for ingestion by the rules
+function _split_terms(term, x̄)
+    S = Symbolics
+    SU = SymbolicUtils
+    st(t) = _split_terms(t, x̄)
+    # TODO: Update this to handle more ops e.g. exp sin tanh etc.
+    # TODO: Handle cases where two nonlinear laplacians are multiplied together
+    if S.istree(term) 
+        # Additional handling for upwinding
+        if (operation(term) == *)
+            args = SU.arguments(term)
+            for (i,arg) in enumerate(args)
+                # Incase of upwinding, we need to keep the original term
+                if S.istree(arg) && operation(arg) isa Differential
+                    # Flatten the arguments of the differential to make nonlinear laplacian work in more cases
+                    try
+                        args[i] = operation(arg)(flatten_division.(SU.arguments(arg))...)
+                    catch e 
+                        println("Argument to derivative in $term is not a dependant variable, is trivially differentiable or is otherwise not differentiable.")
+                        throw(e)
+                    end
+                    return [*(flatten_division.(args)...)]
+                end
+            end
+            return mapreduce(st, vcat, SU.arguments(term))
+        elseif (operation(term) == /)
+            args = SU.arguments(term)
+            # Incase of upwinding or spherical, we need to keep the original term
+            if S.istree(args[1])
+                if args[1] isa Differential
+                    try
+                        args[1] = operation(arg)(flatten_division.(SU.arguments(arg))...)
+                    catch e 
+                        println("Argument to derivative in $term is not a dependant variable, is trivially differentiable or is otherwise not differentiable.")
+                        throw(e)
+                    end
+                    return [/(flatten_division.(args)...)]
+                # Handle with care so that spherical still works
+                elseif operation(args[1]) == *
+                    subargs = SU.arguments(args[1])
+                    # look for a differential in the arguments
+                    for (i,arg) in enumerate(subargs)
+                        if S.istree(arg) && operation(arg) isa Differential
+                            # Flatten the arguments of the differential to make nonlinear laplacian/spherical work in more cases
+                            try
+                                subargs[i] = operation(arg)(flatten_division.(SU.arguments(arg))...)
+                                args[1] = operation(args[1])(flatten_division.(subargs)...)
+                            catch e 
+                                println("Argument to derivative in $term is not a dependant variable, is trivially differentiable or is otherwise not differentiable.")
+                                throw(e)
+                            end
+                            return [/(flatten_division.(args)...)]
+                        end
+                    end
+                end
+            end
+            # Basecase for division
+            return vcat(st(args[1]), st(args[2]))
+        elseif (operation(term) == +) | (operation(term) == -)
+            return mapreduce(st, vcat, SU.arguments(term))
+        elseif (operation(term) isa Differential)
+            return [operation(term)(flatten_division.(SU.arguments(term))...)]
+        else
+            return [term]
+        end
+    else
+        return [term]
+    end
+end
+
+function split_terms(eq::Equation, x̄)
+    lhs = _split_terms(eq.lhs, x̄)
+    rhs = _split_terms(eq.rhs, x̄)
+    return flatten_division.(vcat(lhs,rhs))
+end
+
 function split_additive_terms(eq)
     # Calling the methods from symbolicutils matches the expressions
     rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
@@ -92,6 +186,21 @@ function split_additive_terms(eq)
 
     return vcat(lhs_arg,rhs_arg)
 end
+
+# Filthy hack to get around limitations in rules and avoid simplification to a dividing expression
+function flatten_division(term)
+    #=rules = [@rule(/(~a, ~b) => *(~a, b^(-1.0))),
+             @rule(/(*(~~a), ~b) => *(~a..., b^(-1.0))),
+             @rule(/(~a, *(~~b)) => *(~a, *(~b...)^(-1.0))),
+             @rule(/(*(~~a), *(~~b)) => *(~a..., *(~b...)^(-1.0)))]
+    for r in rules
+        if r(term) !== nothing
+            return r(term)
+        end
+    end
+    =#return term
+end
+
 @inline clip(II::CartesianIndex{M}, j, N) where M = II[j] > N ? II - unitindices(M)[j] : II
 
 subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true

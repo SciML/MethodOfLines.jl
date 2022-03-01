@@ -8,9 +8,9 @@ Feature requests and issues welcome.
 ```
 discretization = MOLFiniteDifference(dxs, 
                                       <your choice of continuous variable, usually time>; 
-                                      upwind_order = <currently hard coded to 1>, 
-                                      approx_order = Order of derivative approximation, starting from 2 
-                                      grid_align = your grid type choice>)
+                                      upwind_order = <Currently unstable at any value other than 1>, 
+                                      approx_order = <Order of derivative approximation, starting from 2> 
+                                      grid_align = <your grid type choice>)
 prob = discretize(pdesys, discretization)
 ```
 Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`
@@ -30,7 +30,7 @@ If you find that your system throws errors, please post an issue with the code a
 - That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`. Note that this generalises to higher dimensions
 - That boundary conditions only contain references to the variable on which they are defined at the edge of the domain, i.e. if `u(t,0)` is defined there are no references to `v(t,0)`. Note that references to dependent variables with all of their arguments are allowed such as `w(t)` or `v(t,x)` if the condition is on `u(t,x,y_min)`.
 - That initial conditions are of the form `u(...) ~ ...`, and doesn't reference the initial time derivative.
-- That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))` is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product/chain rules and use the linearity of the derivative operator, or define a new dependant variable equal to the term to be differentiated. Exceptions to this are the nonlinear or spherical laplacian, which have special handling.
+- That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))` is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product/chain rules and use the linearity of the derivative operator, or define a new dependant variable by adding an equation for it like `eqs = [Differential(x)(w(t,x))~ ... , w(t,x) ~ v(t,x)*u(t,x)]`. An exception to this is if the differential is a nonlinear laplacian, in which case only the innermost argument should be wrapped.
 
 If any of these limitations are a problem for you please post an issue and we will prioritize removing them.
 
@@ -86,8 +86,8 @@ domains = [t ∈ Interval(t_min, t_max),
 @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
 
 # Method of lines discretization
-discretization = MOLFiniteDifference([x=>dx,y=>dy],t;centered_order=order)
-prob = ModelingToolkit.discretize(pdesys,discretization)
+discretization = MOLFiniteDifference([x=>dx, y=>dy], t; approx_order = order)
+prob = ModelingToolkit.discretize(pdesys, discretization)
 
 # Solution of the ODE system
 sol = solve(prob,Tsit5())

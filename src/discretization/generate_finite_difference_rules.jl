@@ -195,7 +195,7 @@ end
 end
 
 @inline function generate_nonlinlap_rules(II, s, depvars, derivweights, terms)
-    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~~c,cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, depvars, x, u), ~~d) for x in params(u, s)]) for u in depvars])
+    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c...,cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
 
     rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), II, derivweights, s, depvars, x, u) for x in params(u, s)]) for u in depvars]))
 
@@ -248,15 +248,13 @@ There are of course more specific schemes that are used to improve stability/spe
     - Spherical derivatives
     - Nonlinear laplacian uses a half offset centered scheme for the inner derivative to improve stability
     - Spherical nonlinear laplacian.
-
-##Planned special cases include:
     - Up/Downwind schemes to be used for odd ordered derivatives multiplied by a coefficient, downwinding when the coefficient is positive, and upwinding when the coefficient is negative.
 
 Please submit an issue if you know of any special cases which impact stability or accuracy that are not implemented, with links to papers and/or code that demonstrates the special case.
 """
 function generate_finite_difference_rules(II, s, depvars, pde, derivweights)
 
-    terms = split_additive_terms(pde)
+    terms = split_terms(pde, s.x̄)
 
     # Standard cartesian centered difference scheme
     central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, terms)
@@ -264,10 +262,11 @@ function generate_finite_difference_rules(II, s, depvars, pde, derivweights)
     # Nonlinear laplacian scheme
     nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, terms)
 
+    # Because winding needs to know about multiplying terms, we can't split the terms into additive and multiplicative terms.
     winding_rules = generate_winding_rules(II, s, depvars, derivweights, terms)
 
     # Spherical diffusion scheme
-    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, terms)
+    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, split_additive_terms(pde))
     
     return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(winding_rules), vec(central_deriv_rules_cartesian))
 end
