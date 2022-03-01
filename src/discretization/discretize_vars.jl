@@ -42,7 +42,7 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
 
     depvarsdisc = map(depvars) do u
         op = SymbolicUtils.operation(u)
-        if op isa SymbolicUtils.FnType
+        if op isa SymbolicUtils.Term{SymbolicUtils.FnType{Tuple, Real}, Nothing}
             sym = Symbol(string(op))
         else
             sym = nameof(op)

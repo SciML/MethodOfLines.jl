@@ -196,7 +196,7 @@ end
        sol = solve(prob,Rodas4())
 end
 
-@test_broken begin # "Array u" begin
+@testset "Array u" begin
 	# Dependencies
 	N = 6 # number of dependent variables
 	
