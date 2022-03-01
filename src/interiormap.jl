@@ -31,6 +31,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
         upper = zeros(Int, n)
         # Determine thec number of points to remove from each end of the domain for each dimension
         for b in boundaries
+            #@show b
             clip_interior!!(lower, upper, s, b)
         end           
         push!(vlower, pde => lower)

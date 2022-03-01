@@ -43,7 +43,7 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
     depvarsdisc = map(depvars) do u
         op = SymbolicUtils.operation(u)
         if op isa SymbolicUtils.FnType
-            sym = nameof(op.var)
+            sym = Symbol(string(op))
         else
             sym = nameof(op)
         end
@@ -75,6 +75,15 @@ Base.length(s::DiscreteSpace, x) = length(s.grid[x])
 Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])
 Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 
+@inline function Idx(II, s, u, indexmap)
+    # We need to construct a new index as indices may be of different size
+    length(params(u,s)) == 0 && return CartesianIndex()
+    is = [II[indexmap[x]] for x in params(u, s)]
+    
+    
+    II = CartesianIndex(is...)
+    return II
+end
 
 """
 A function that returns what to replace independent variables with in boundary equations
@@ -94,16 +103,15 @@ gridvals(s::DiscreteSpace{N}, u) where N = ndims(u,s) == 0 ? [] : map(y-> [x => 
 gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where N = ndims(u,s) == 0 ? [] : [x => s.grid[x][I[x2i(s,u,x)]] for x in params(u, s)]
 
 
-varmaps(s::DiscreteSpace, depvars, II) = [u => s.discvars[u][II] for u in depvars]
+varmaps(s::DiscreteSpace, depvars, II, indexmap) = [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
 
-valmaps(s::DiscreteSpace, u, depvars, II) = vcat(varmaps(s, depvars, II), gridvals(s, u, II))
+valmaps(s::DiscreteSpace, u, depvars, II, indexmap) = length(II) == 0 ? [] : vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
 
-valmaps(s, u, depvars) = valmaps.([s], [u], [depvars], s.Igrid[u])
+valmaps(s, u, depvars, indexmap) = valmaps.([s], [u], [depvars], s.Igrid[u], [indexmap])
 
 map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} = vcat([s.ū[k] => s.discvars[k][II] for k = 1:M], [s.x̄[j] => s.grid[j][II[j]] for j = 1:N])
 
 # TODO: Allow other grids
-# TODO: allow depvar-specific center/edge choice?
  
 @inline function generate_grid(x̄, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:CenterAlignedGrid}
     return axies    
