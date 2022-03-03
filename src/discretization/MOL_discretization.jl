@@ -121,6 +121,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by the `solve` method.
+
             sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
             return sys, tspan
         end
@@ -152,3 +153,30 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
         rethrow(e)
     end
 end
+
+function ModelingToolkit.ODEFunctionExpr(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
+    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
+    try
+        if tspan === nothing
+            @assert true "Codegen for NonlinearSystems is not yet implemented."
+        else
+            simpsys = structural_simplify(sys)
+            return code = ODEFunctionExpr(simpsys)
+        end
+    catch e
+        println("The system of equations is:")
+        println(sys.eqs)
+        println()
+        println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
+        println()
+        rethrow(e)
+    end
+end
+
+function generate_code(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference,filename="code.jl")
+    code = ODEFunctionExpr(pdesys, discretization)
+    open(filename, "a") do io
+        println(io, code)
+    end
+end
+

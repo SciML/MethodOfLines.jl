@@ -10,8 +10,6 @@ module MethodOfLines
     using IfElse
     import DomainSets
     
-
-
     include("discretization/fornberg.jl")
     
     include("grid_types.jl")
@@ -30,5 +28,5 @@ module MethodOfLines
 
     include("discretization/MOL_discretization.jl")
 
-    export MOLFiniteDifference, discretize, symbolic_discretize, grid_align, edge_align, center_align
+    export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align
 end
