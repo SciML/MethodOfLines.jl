@@ -152,7 +152,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
                 # initial condition
                 # * Assume that the initial condition is not in terms of the initial derivative i.e. equation is first order in time
                 initindex = findfirst(isequal(bc.lhs), initmaps) 
-                if initindex !== nothingy ∈ Interval(ymin,ymax)
+                if initindex !== nothing
                     #@show bcdepvar, bc, depvar(bcdepvar, s)
                     args = params(depvar(bcdepvar, s), s)
                     indexmap = Dict([args[i]=>i for i in 1:length(args)])
