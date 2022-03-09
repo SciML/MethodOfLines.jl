@@ -1,4 +1,4 @@
-@inline function generate_bc_rules!(bceqs, derivweights::DifferentialDiscretizer, s, interiormap, boundary::AbstractTruncatingBoundary)
+@inline function generate_bc_eqs!(bceqs, derivweights::DifferentialDiscretizer, s, interiormap, boundary::AbstractTruncatingBoundary)
     bc = boundary.eq
     args = params(depvar(boundary.u, s), s)
     indexmap = Dict([args[i]=>i for i in 1:length(args)])
@@ -10,7 +10,7 @@
 end
 
 
-function boundarymaps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:EdgeAlignedGrid}
+function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:EdgeAlignedGrid}
     u_, x_ = getvars(boundary)
 
     ufunc(v, I, x) = s.discvars[v][I]
@@ -32,14 +32,14 @@ function boundarymaps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, index
     shift(::LowerBoundary) = zero(II)
     shift(::UpperBoundary) = unitindex(N, j)
 
-    depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II-shift(boundary), s, (j,x_), u, ufunc) for d in derivweights.orders[x_]]
+    depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II-shift(boundary), s, boundary, (j,x_), u, ufunc) for d in derivweights.orders[x_]]
 
-    depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II-shift(boundary), s, (j,x_), u, ufunc)]
+    depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II-shift(boundary), s, b, (j,x_), u, ufunc)]
 
     return vcat(depvarderivbcmaps, depvarbcmaps)
 end
 
-function boundarymaps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:CenterAlignedGrid}
+function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:CenterAlignedGrid}
     u_, x_ = getvars(boundary)
     ufunc(v, I, x) = s.discvars[v][I]
 
@@ -57,7 +57,7 @@ function boundarymaps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, index
     is = [is[1:j-1]..., idx(boundary, s), is[j:end]...]
     II = CartesianIndex(is...)
 
-    depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
+    depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, boundary, (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
     # ? Does this need to be done for all variables at the boundary?
     depvarbcmaps = [u_ => s.discvars[u][II]]
 
@@ -68,19 +68,19 @@ end
 function generate_bc_rules(II, derivweights, s::DiscreteSpace{N,M,G}, boundary::AbstractTruncatingBoundary, indexmap) where {N, M, G}
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
-    bmaps = boundarymaps(II, s, boundary, derivweights, indexmap)
+    bmaps = boundary_value_maps(II, s, boundary, derivweights, indexmap)
 
-    fd_rules = generate_finite_difference_rules(II, s, boundary.depvars, boundary.eq, derivweights, indexmap)
+    #fd_rules = generate_finite_difference_rules(II, s, boundary.depvars, boundary.eq, derivweights, indexmap)
     vmaps = varmaps(s, boundary.depvars, II, indexmap)
     varrules = axiesvals(s, depvar(boundary.u, s), boundary.x, II)
 
     # valrules should be caught by depvarbcmaps and varrules if the above assumption holds
     #valr = valrules(s, II)
     #for condition in fd_rules.conditions
-    return vcat(bmaps, fd_rules, vmaps, varrules)
+    return vcat(bmaps, vmaps, varrules)
 end
 
-function generate_bc_rules!(bceqs, derivweights, s::DiscreteSpace{N}, interiormap, boundary::PeriodicBoundary) where N
+function generate_bc_eqs!(bceqs, derivweights, s::DiscreteSpace{N}, interiormap, boundary::PeriodicBoundary) where N
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
     u_, x_ = getvars(boundary)

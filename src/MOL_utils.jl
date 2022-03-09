@@ -82,7 +82,9 @@ end
 
 @inline function unitindex(N, j)
     N == 0  && return CartesianIndex()
-    unitindices(N)[j]
+    null = zeros(Int, N)
+    null[j] = 1
+    CartesianIndex(Tuple(null))
 end
 
 function _split_terms(term)
@@ -188,7 +190,7 @@ function split_additive_terms(eq)
 end
 
 # Filthy hack to get around limitations in rules and avoid simplification to a dividing expression
-function flatten_division(term)
+@inline function flatten_division(term)
     #=rules = [@rule(/(~a, ~b) => *(~a, b^(-1.0))),
              @rule(/(*(~~a), ~b) => *(~a..., b^(-1.0))),
              @rule(/(~a, *(~~b)) => *(~a, *(~b...)^(-1.0))),
@@ -211,4 +213,19 @@ remove(args, t) = filter(x -> t === nothing || !isequal(x, t.val), args)
 
 half_range(x) = -div(x,2):div(x,2)
 
+@inline function wrapperiodic(I, s, ::Val{true}, jx)
+    j, x = jx
 
+    I1 = unitindex(ndims(u,s), j)
+    # -1 because of the relation u[1] ~ u[end]
+    if I[j] <= 1
+        I = I + I1*(length(s, x)  - 1)
+    elseif I[j] > length(s, x)
+        I = I - I1*(length(s, x) - 1)
+    end
+    return I
+end
+
+@inline function wrapperiodic(I, s, ::Val{false}, jx)
+    return I
+end

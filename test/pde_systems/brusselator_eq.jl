@@ -1,10 +1,10 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using DomainSets
 
-#using Plots
+using Plots
 
-# Exact solutions from: https://www.sciencedirect.com/science/article/pii/S0898122110003883
-@testset "Test 01: Brusselator equation 2D" begin
+local sol
+@time begin #@testset "Test 01: Brusselator equation 2D" begin
        @parameters x y t
        @variables u(..) v(..)
        Dt = Differential(t)
@@ -17,14 +17,14 @@ using DomainSets
 
        x_min = y_min = t_min = 0.0
        x_max = y_max = 1.0
-       t_max = 11.5
+       t_max = 1.0
 
        α = 10.
 
        u0(x,y,t) = 22(y*(1-y))^(3/2)
        v0(x,y,t) = 27(x*(1-x))^(3/2)
 
-       eq = [Dt(u(x,y,t)) ~ 1. + v(x,y,t)*u(x,y,t)^2 + 4.4*u(x,y,t) + α*(Dxx(u(x,y,t)) + Dyy(u(x,y,t))) + brusselator_f(x, y, t),
+       eq = [Dt(u(x,y,t)) ~ 1. + v(x,y,t)*u(x,y,t)^2 - 4.4*u(x,y,t) + α*(Dxx(u(x,y,t)) + Dyy(u(x,y,t))) + brusselator_f(x, y, t),
              Dt(v(x,y,t)) ~ 3.4*u(x,y,t) - v(x,y,t)*u(x,y,t)^2 + α*(Dxx(u(x,y,t)) + Dyy(u(x,y,t)))]
 
        domains = [x ∈ Interval(x_min, x_max),
@@ -50,9 +50,9 @@ using DomainSets
        discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=order)
 
        # Convert the PDE problem into an ODE problem
-       prob = discretize(pdesys,discretization)
+       @time prob = discretize(pdesys,discretization)
 
-       sol = solve(prob, TRBDF2())
+       @time sol = solve(prob, TRBDF2(),saveat=0.01)
 
        Nx = floor(Int64, (x_max - x_min) / dx) + 1
        Ny = floor(Int64, (y_max - y_min) / dy) + 1
@@ -61,9 +61,9 @@ using DomainSets
        #  @variables v[1:Nx,1:Ny](t)
        #  t = sol[t]
        #   anim = @animate for k in 1:length(t)
-       #          solu′ = real.(reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
-       #          solv′ = real.(reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
-       #          heatmap(solu′)
+       #          solu = real.(reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
+       #          solv = real.(reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
+       #          heatmap(solu[2:end, 2:end], title="$(t[k])")
        #   end
        #   gif(anim, "plots/Brusselator2Dsol.gif", fps = 5)
 

@@ -18,6 +18,8 @@ module MethodOfLines
     include("discretization/discretize_vars.jl")
     include("MOL_utils.jl")
     include("interiormap.jl")
+
+    include("periodic_map.jl")
     
     include("discretization/differential_discretizer.jl")
     include("bcs/boundary_types.jl")
