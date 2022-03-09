@@ -101,7 +101,7 @@ function _boundary_rules(s, orders, u, x, val)
         args = s.args[operation(u)]
         args = substitute.(args, (x=>val,))
         varrule = operation(u)(args...) => [operation(u)(args...), x]
-        return vcat([(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x] for d in reverse(orders[x])], Differential(s.time)(operation(u)(args...)), varrule)
+        return vcat([(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x] for d in reverse(orders[x])], Differential(s.time)(operation(u)(args...)) => [operation(u)(args...), x], varrule)
 end
 
 function generate_boundary_matching_rules(s, orders)
