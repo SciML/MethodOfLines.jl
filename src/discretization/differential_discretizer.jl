@@ -54,11 +54,11 @@ function central_difference(D, II, s, b, jx, u, ufunc)
     I1 = unitindex(ndims(u, s), j) 
     # offset is important due to boundary proximity
 
-    if II[j] <= D.boundary_point_count & b isa Val{false}
+    if (II[j] <= D.boundary_point_count) & (b isa Val{false})
         weights = D.low_boundary_coefs[II[j]]    
         offset = 1 - II[j]
         Itap = [II + (i+offset)*I1 for i in 0:(D.boundary_stencil_length-1)]
-    elseif II[j] > (length(s, x) - D.boundary_point_count) & b isa Val{false}
+    elseif (II[j] > (length(s, x) - D.boundary_point_count)) & (b isa Val{false})
         weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
         offset = length(s, x) - II[j]
         Itap = [II + (i+offset)*I1 for i in (-D.boundary_stencil_length+1):1:0]
@@ -74,7 +74,7 @@ end
 @inline function _upwind_difference(D, I, s, b, u, jx)
     j, x = jx
     I1 = unitindex(ndims(u,s), j)
-    if I > (length(s, x) - D.boundary_point_count) & b isa Val{false}
+    if (I > (length(s, x) - D.boundary_point_count)) & (b isa Val{false})
         weights = D.high_boundary_coefs[length(s, x)-I+1]
         offset = length(s, x) - I
         Itap = [(i+offset)*I1 for i in (-D.boundary_stencil_length+1):1:0]
@@ -95,7 +95,7 @@ function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, b, deri
         weights, Itap = _upwind_difference(D, length(s, x) - II[j] +1, s, b, u, jx)
         #don't need to reverse because it's already reversed by subtracting Itap
         weights = -reverse(weights)
-        Itap = wwrapperiodic.((II,) .- reverse(Itap), (s,), (b,), (jx,))
+        Itap = wrapperiodic.((II,) .- reverse(Itap), (s,), (b,), (jx,))
     else
         weights, Itap = _upwind_difference(D, II[j], s, b, u, jx)
         Itap = wrapperiodic.((II,) .+ Itap, (s,), (b,), (jx,))
@@ -122,11 +122,11 @@ function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::Cartesia
     I1 = unitindex(ndims(u,s),j) 
     # offset is important due to boundary proximity
 
-    if II[j] < D.boundary_point_count & b isa Val{false}
+    if (II[j] < D.boundary_point_count) & (b isa Val{false})
         weights = D.low_boundary_coefs[II[j]]    
         offset = 1 - II[j]
         Itap = [II + (i+offset)*I1 for i in 0:(D.boundary_stencil_length-1)]
-    elseif II[j] > (len - D.boundary_point_count) & b isa Val{false}
+    elseif (II[j] > (len - D.boundary_point_count)) & (b isa Val{false})
         weights = D.high_boundary_coefs[len-II[j]]        
         offset = len - II[j]
         Itap = [II + (i+offset)*I1 for i in (-D.boundary_stencil_length+1):0]

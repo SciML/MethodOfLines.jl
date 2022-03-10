@@ -60,6 +60,14 @@ getvars(b::AbstractBoundary) = (b.u, b.x)
     end
 end
 
+@inline function isperiodic(b)
+    if b isa PeriodicBoundary
+        return Val(true)
+    else
+        return Val(false)
+    end
+end
+
 @inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
     # This x2i is correct
     dim = x2i(s, depvar(b.u, s), b.x)

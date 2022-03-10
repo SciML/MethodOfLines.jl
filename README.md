@@ -26,10 +26,11 @@ Currently supported grid types: `center_align` and `edge_align`. Edge align will
 If you find that your system throws errors, please post an issue with the code and we will endeavor to support it.
 
 ## Assumptions
+- That the grid is cartesian.
 - That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`, or the same with lhs and rhs reversed. Note that this generalises to higher dimensions
 - That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.
 - That initial conditions are of the form `u(...) ~ ...`, and don't reference the initial time derivative.
-- That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))` is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product/chain rules and use the linearity of the derivative operator, or define a new dependant variable by adding an equation for it like `eqs = [Differential(x)(w(t,x))~ ... , w(t,x) ~ v(t,x)*u(t,x)]`. An exception to this is if the differential is a nonlinear laplacian, in which case only the innermost argument should be wrapped.
+- That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))` is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product/chain rules and use the linearity of the derivative operator, or define a new dependant variable by adding an equation for it like `eqs = [Differential(x)(w(t,x))~ ... , w(t,x) ~ v(t,x)*u(t,x)]`. An exception to this is if the differential is a nonlinear or spherical laplacian, in which case only the innermost argument should be wrapped.
 
 If any of these limitations are a problem for you please post an issue and we will prioritize removing them.
 
