@@ -1,7 +1,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using DomainSets
 
-using Plots
+#using Plots
 
 local sol
 @time begin #@testset "Test 01: Brusselator equation 2D" begin
@@ -57,15 +57,15 @@ local sol
        Nx = floor(Int64, (x_max - x_min) / dx) + 1
        Ny = floor(Int64, (y_max - y_min) / dy) + 1
 
-        @variables u[1:Nx,1:Ny](t)
-        @variables v[1:Nx,1:Ny](t)
-        t = sol[t]
-         anim = @animate for k in 1:length(t)
-                solu = real.(reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
-                solv = real.(reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
-                heatmap(solu[2:end, 2:end], title="$(t[k])")
-         end
-         gif(anim, "plots/Brusselator2Dsol.gif", fps = 5)
+       #  @variables u[1:Nx,1:Ny](t)
+       #  @variables v[1:Nx,1:Ny](t)
+       #  t = sol[t]
+       #   anim = @animate for k in 1:length(t)
+       #          solu = real.(reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
+       #          solv = real.(reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny)))
+       #          heatmap(solu[2:end, 2:end], title="$(t[k])")
+       #   end
+       #   gif(anim, "plots/Brusselator2Dsol.gif", fps = 5)
 
 
     #    solu′ = reshape([sol[u[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
