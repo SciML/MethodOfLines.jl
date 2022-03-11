@@ -156,7 +156,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
 
         depvars = depvar.(collect(union(depvarslhs, get_depvars(bc.rhs, depvar_ops))), (s,))
         if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
-            if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))
+            if t !== nothing && ((operation(bc.lhs) isa Sym) | (operation(bc.lhs) isa Term)) && !any(x -> isequal(x, t.val), arguments(bc.lhs))
                 # initial condition
                 # * Assume that the initial condition is not in terms of the initial derivative i.e. equation is first order in time
                 initindex = findfirst(isequal(bc.lhs), initmaps) 

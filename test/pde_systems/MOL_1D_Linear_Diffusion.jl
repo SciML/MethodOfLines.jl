@@ -732,8 +732,8 @@ end
 
     # Test against exact solution
     for i in 1:length(sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), sol.u[1][i][1:l-2], atol=0.01))
-        @test all(isapprox.(v_exact(y_sol, t_sol[i]), sol.u[1][i][l-1:end], atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), sol.(u[1])[i][1:l-2], atol=0.01))
+        @test all(isapprox.(v_exact(y_sol, t_sol[i]), sol.(u[2])[i][l-1:end], atol=0.01))
     end
 end
 
