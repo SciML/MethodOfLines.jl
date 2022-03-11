@@ -64,7 +64,7 @@ function central_difference(D, II, s, b, jx, u, ufunc)
         Itap = [II + (i+offset)*I1 for i in (-D.boundary_stencil_length+1):1:0]
     else
         weights = D.stencil_coefs
-        Itap = [wrapperiodic(II + i*I1, s, b, jx) for i in half_range(D.stencil_length)]
+        Itap = [wrapperiodic(II + i*I1, s, b, u, jx) for i in half_range(D.stencil_length)]
     end   
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
 
@@ -95,10 +95,10 @@ function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, b, deri
         weights, Itap = _upwind_difference(D, length(s, x) - II[j] +1, s, b, u, jx)
         #don't need to reverse because it's already reversed by subtracting Itap
         weights = -reverse(weights)
-        Itap = wrapperiodic.((II,) .- reverse(Itap), (s,), (b,), (jx,))
+        Itap = wrapperiodic.((II,) .- reverse(Itap), (s,), (b,), (u,), (jx,))
     else
         weights, Itap = _upwind_difference(D, II[j], s, b, u, jx)
-        Itap = wrapperiodic.((II,) .+ Itap, (s,), (b,), (jx,))
+        Itap = wrapperiodic.((II,) .+ Itap, (s,), (b,), (u,), (jx,))
         weights = weights
     end
     return dot(weights, ufunc(u, Itap, x))
@@ -132,7 +132,7 @@ function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::Cartesia
         Itap = [II + (i+offset)*I1 for i in (-D.boundary_stencil_length+1):0]
     else
         weights = D.stencil_coefs
-        Itap = [wrapperiodic(II + i*I1, s, b, jx) for i in (1-div(D.stencil_length,2)):(div(D.stencil_length,2))]
+        Itap = [wrapperiodic(II + i*I1, s, b, u, jx) for i in (1-div(D.stencil_length,2)):(div(D.stencil_length,2))]
     end    
 
     return (weights, Itap)

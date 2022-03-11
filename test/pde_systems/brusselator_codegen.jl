@@ -50,7 +50,7 @@ local sol
        discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=order)
 
        # Convert the PDE problem into an ODE problem
-       generate_code(pdesys,discretization, "brusselator_2D_ode")
+       generate_code(pdesys,discretization, "brusselator_2D_ode.jl")
 
     #    solu′ = reshape([sol[u[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
     #    solv′ = reshape([sol[v[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
