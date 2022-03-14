@@ -103,7 +103,7 @@ using DomainSets
        t = sol[t]
        for k in 1:length(t)
               @test msol.u[k][:,:,1] ≈ reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))[2:end,2:end] rtol = 0.1
-              msolv = msol.u[k][:,:,2] ≈ reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))[2:end,2:end] rtol = 0.1
+              @test msol.u[k][:,:,2] ≈ reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))[2:end,2:end] rtol = 0.1
        end
    
        
