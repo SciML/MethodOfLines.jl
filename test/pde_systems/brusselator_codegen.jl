@@ -25,7 +25,7 @@ local sol
        v0(x,y,t) = 27(x*(1-x))^(3/2)
 
        eq = [Dt(u(x,y,t)) ~ 1. + v(x,y,t)*u(x,y,t)^2 - 4.4*u(x,y,t) + α*(Dxx(u(x,y,t)) + Dyy(u(x,y,t))) + brusselator_f(x, y, t),
-             Dt(v(x,y,t)) ~ 3.4*u(x,y,t) - v(x,y,t)*u(x,y,t)^2 + α*(Dxx(u(x,y,t)) + Dyy(u(x,y,t)))]
+             Dt(v(x,y,t)) ~ 3.4*u(x,y,t) - v(x,y,t)*u(x,y,t)^2 + α*(Dxx(v(x,y,t)) + Dyy(v(x,y,t)))]
 
        domains = [x ∈ Interval(x_min, x_max),
                   y ∈ Interval(y_min, y_max),
@@ -51,30 +51,4 @@ local sol
 
        # Convert the PDE problem into an ODE problem
        generate_code(pdesys,discretization, "brusselator_2D_ode.jl")
-
-    #    solu′ = reshape([sol[u[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-    #    solv′ = reshape([sol[v[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-
-    #    r_space_x = x_min:dx:x_max
-    #    r_space_y = y_min:dy:y_max
-
-    #    asfu = reshape([u_exact(t_max,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
-    #    asfv = reshape([v_exact(t_max,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
-
-    #    asfu[1,1] = asfu[1, end] = asfu[end, 1] = asfu[end, end] = 0.
-    #    asfv[1,1] = asfv[1, end] = asfv[end, 1] = asfv[end, end] = 0.
-
-    #    # anim = @animate for T in t
-    #    #        asfu = reshape([u_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
-    #    #        asfv = reshape([v_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
-              
-    #    #        heatmap(asfu)
-    #    # end
-    #    # gif(anim, "plots/Burgers2Dexact.gif", fps = 5)
-
-   
-    #    mu = max(asfu...)
-    #    mv = max(asfv...)
-    #    @test_broken asfu / mu ≈ solu′ / mu  atol=0.2 
-    #    @test_broken asfv / mv ≈ solv′ / mv  atol=0.2 
 end
