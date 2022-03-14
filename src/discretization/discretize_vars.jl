@@ -42,7 +42,7 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
 
     depvarsdisc = map(depvars) do u
         op = SymbolicUtils.operation(u)
-        if op isa SymbolicUtils.FnType
+        if op isa SymbolicUtils.Term{SymbolicUtils.FnType{Tuple, Real}, Nothing}
             sym = Symbol(string(op))
         else
             sym = nameof(op)
@@ -68,7 +68,7 @@ end
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
 nvars(::DiscreteSpace{N,M}) where {N,M} = M
 
-params(u,s) = remove(arguments(u), s.time)
+params(u,s) = remove(s.args[operation(u)], s.time)
 Base.ndims(u,s::DiscreteSpace) = length(params(u,s))
 
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])

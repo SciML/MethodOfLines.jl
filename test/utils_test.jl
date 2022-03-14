@@ -121,3 +121,13 @@ end
     end
 end
 
+@testset "Periodic Wraparound" begin
+    I = CartesianIndex(2, 5)
+    @test MethodOfLines._wrapperiodic(I, 2, 2, 4) == CartesianIndex(2, 2)
+
+    I = CartesianIndex(1, 4)
+    @test MethodOfLines._wrapperiodic(I, 2, 1, 4) == CartesianIndex(4, 4)
+
+    I = CartesianIndex(-1, 2)
+    @test MethodOfLines._wrapperiodic(I, 2, 1, 4) == CartesianIndex(2, 2)
+end

@@ -10,7 +10,7 @@ function count_differentials(term, x::Symbolics.Symbolic)
     else
         op = SU.operation(term)
         count_children = sum(map(arg -> count_differentials(arg, x), SU.arguments(term)))
-        if op isa Differential && op.x === x
+        if op isa Differential && isequal(op.x, x)
             return 1 + count_children
         end
         return count_children
@@ -82,7 +82,9 @@ end
 
 @inline function unitindex(N, j)
     N == 0  && return CartesianIndex()
-    unitindices(N)[j]
+    null = zeros(Int, N)
+    null[j] = 1
+    CartesianIndex(Tuple(null))
 end
 
 function _split_terms(term)
@@ -188,7 +190,7 @@ function split_additive_terms(eq)
 end
 
 # Filthy hack to get around limitations in rules and avoid simplification to a dividing expression
-function flatten_division(term)
+@inline function flatten_division(term)
     #=rules = [@rule(/(~a, ~b) => *(~a, b^(-1.0))),
              @rule(/(*(~~a), ~b) => *(~a..., b^(-1.0))),
              @rule(/(~a, *(~~b)) => *(~a, *(~b...)^(-1.0))),
@@ -211,4 +213,22 @@ remove(args, t) = filter(x -> t === nothing || !isequal(x, t.val), args)
 
 half_range(x) = -div(x,2):div(x,2)
 
+@inline function _wrapperiodic(I, N, j, l)
+    I1 = unitindex(N, j)
+    # -1 because of the relation u[1] ~ u[end]
+    if I[j] <= 1
+        I = I + I1*(l  - 1)
+    elseif I[j] > l
+        I = I - I1*(l - 1)
+    end
+    return I
+end
 
+@inline function wrapperiodic(I, s, ::Val{true}, u, jx)
+    j, x = jx
+    return _wrapperiodic(I, ndims(u,s), j, length(s,x))
+end
+
+@inline function wrapperiodic(I, s, ::Val{false}, u, jx)
+    return I
+end

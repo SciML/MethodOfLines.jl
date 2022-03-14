@@ -25,7 +25,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
 
     interior = map(pdes) do pde
         u = varmap[pde]
-        boundaries = boundarymap[operation(u)]
+        boundaries = reduce(vcat, collect(values(boundarymap[operation(u)])))
         n = ndims(u, s)
         lower = zeros(Int, n)
         upper = zeros(Int, n)
@@ -140,7 +140,7 @@ function get_order_and_depvars(term, x, s)
         op = SU.operation(term)
         children = map(arg -> get_order_and_depvars(arg, x, s), SU.arguments(term))
         count, vars = split(children)
-        if op isa Differential && op.x === x
+        if op isa Differential && isequal(op.x, x)
             return (1 + count, vars) 
         end
         return (count, vars)
@@ -153,13 +153,17 @@ function getvars(pde, s)
     ct = 0
     ut = []
     if s.time !== nothing
-        ct, ut = get_order_and_depvars(pde, s.time, s)
+        l = get_order_and_depvars(pde.lhs, s.time, s)
+        r = get_order_and_depvars(pde.rhs, s.time, s)
+        ct, ut = split([l, r])
         if ct > 0
             return ut
         end
     end
     countsx = vcat(map(s.x̄) do x
-        get_order_and_depvars(pde, x, s)
+        l = get_order_and_depvars(pde.lhs, x, s)
+        r = get_order_and_depvars(pde.rhs, x, s)
+        split([l, r])
     end, (ct, ut))
     _, vars = split(countsx)
     return vars

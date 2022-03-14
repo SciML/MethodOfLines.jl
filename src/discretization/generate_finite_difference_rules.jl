@@ -63,7 +63,7 @@ where `finitediff(u, i)` is the finite difference at the interpolated point `i` 
 
 And so on.
 """
-function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace{N}, depvars, x, u) where N
+function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace{N}, b, depvars, x, u) where N
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf 
     # See scheme 1, namely the term without the 1/r dependence. See also #354 and #371 in DiffEqOperators, the previous home of this package.
     ndims(u,s) == 0 && return Num(0)
@@ -77,11 +77,11 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace{
     # Get the outer weights and stencil. clip() essentially removes a point from either end of the grid, for this reason this function is only defined on the interior, not in bcs#
     cliplen = length(s, x) - 1
 
-    outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II-unitindex(N,j), s, u, jx, cliplen)
+    outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II-unitindex(N,j), s, b, u, jx, cliplen)
 
     # Get the correct weights and stencils for this II
-    inner_deriv_weights_and_stencil = [get_half_offset_weights_and_stencil(D_inner, I, s, u, jx) for I in outerstencil]
-    interp_weights_and_stencil = [get_half_offset_weights_and_stencil(inner_interpolater, I, s, u, jx) for I in outerstencil]
+    inner_deriv_weights_and_stencil = [get_half_offset_weights_and_stencil(D_inner, I, s, b, u, jx) for I in outerstencil]
+    interp_weights_and_stencil = [get_half_offset_weights_and_stencil(inner_interpolater, I, s, b, u, jx) for I in outerstencil]
 
     # map variables to symbolically inerpolated/extrapolated expressions
     map_vars_to_interpolated(stencil, weights) = [v => dot(weights, s.discvars[v][stencil]) for v in depvars]
@@ -111,7 +111,7 @@ Based on https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretiz
 
 See scheme 1 in appendix A. The r = 0 case is treated in a later appendix
 """
-function spherical_diffusion(innerexpr, II, derivweights, s, depvars, r, u)
+function spherical_diffusion(innerexpr, II, derivweights, s, b, depvars, r, u)
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf 
     D_1 = derivweights.map[Differential(r)]
     D_2 = derivweights.map[Differential(r)^2]
@@ -128,36 +128,36 @@ function spherical_diffusion(innerexpr, II, derivweights, s, depvars, r, u)
     exprhere = Num(substitute(innerexpr, rsubs(II)))
     # Catch the r ≈ 0 case
     if Symbolics.unwrap(substitute(r, _rsubs(r, II))) ≈ 0
-        D_2_u = central_difference(D_2, II, s, (s.x2i[r], r), u, ufunc_u)
+        D_2_u = central_difference(D_2, II, s, b, (s.x2i[r], r), u, ufunc_u)
         return 3exprhere*D_2_u # See appendix B of the paper
     end
-    D_1_u = central_difference(D_1, II, s, (s.x2i[r], r), u, ufunc_u)
+    D_1_u = central_difference(D_1, II, s, b, (s.x2i[r], r), u, ufunc_u)
     # See scheme 1 in appendix A of the paper
     
-    return exprhere*(D_1_u/Num(substitute(r, _rsubs(r, II))) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, depvars, r, u))
+    return exprhere*(D_1_u/Num(substitute(r, _rsubs(r, II))) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, b, depvars, r, u))
 end
 
-@inline function generate_cartesian_rules(II, s, depvars, derivweights, indexmap, terms)
+@inline function generate_cartesian_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
     central_ufunc(u, I, x) = s.discvars[u][I]
-    return reduce(vcat, [reduce(vcat, [[(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap), s, (x2i(s,u,x),x), u, central_ufunc) for d in (let orders = derivweights.orders[x]; orders[iseven.(orders)] end)] for x in params(u, s)]) for u in depvars])
+    return reduce(vcat, [reduce(vcat, [[(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], (x2i(s,u,x),x), u, central_ufunc) for d in (let orders = derivweights.orders[x]; orders[iseven.(orders)] end)] for x in params(u, s)]) for u in depvars])
 end
 
-@inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, depvars, derivweights, (j,x), u, central_ufunc, indexmap) where N
+@inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, b, depvars, derivweights, (j,x), u, central_ufunc, indexmap) where N
     # TODO: Allow derivatives in expr
     expr = substitute(expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
     IfElse.ifelse(expr > 0, 
-                  expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, true), 
-                  expr*upwind_difference(d, II, s, derivweights, (j,x), u, central_ufunc, false))
+                  expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, true), 
+                  expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, false))
 end
                 
-@inline function generate_winding_rules(II, s, depvars, derivweights, indexmap, terms)    
+@inline function generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)    
     wind_ufunc(v, I, x) = s.discvars[v][I]
     # for all independent variables and dependant variables
     rules = vcat(#Catch multiplication
-                reduce(vcat, [reduce(vcat, [[@rule *(~~a, $(Differential(x)^d)(u), ~~b) => upwind_difference(*(~a..., ~b...), d, Idx(II, s, u, indexmap), s, depvars, derivweights, (x2i(s,u,x),x), u, wind_ufunc, indexmap) for d in (let orders = derivweights.orders[x]; orders[isodd.(orders)] end)] for x in params(u, s)]) for u in depvars]),
+                reduce(vcat, [reduce(vcat, [[@rule *(~~a, $(Differential(x)^d)(u), ~~b) => upwind_difference(*(~a..., ~b...), d, Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], depvars, derivweights, (x2i(s,u,x),x), u, wind_ufunc, indexmap) for d in (let orders = derivweights.orders[x]; orders[isodd.(orders)] end)] for x in params(u, s)]) for u in depvars]),
 
                 #Catch division and multiplication, see issue #1
-                reduce(vcat, [reduce(vcat, [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(*(~a..., ~b...)/~c, d, Idx(II, s, u, indexmap), s, depvars, derivweights, (x2i(s,u,x), x), u, wind_ufunc, indexmap) for d in (let orders = derivweights.orders[x]; orders[isodd.(orders)] end)] for x in params(u, s)]) for u in depvars])
+                reduce(vcat, [reduce(vcat, [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(*(~a..., ~b...)/~c, d, Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], depvars, derivweights, (x2i(s,u,x), x), u, wind_ufunc, indexmap) for d in (let orders = derivweights.orders[x]; orders[isodd.(orders)] end)] for x in params(u, s)]) for u in depvars])
                 )
     
     wind_rules = []
@@ -179,7 +179,7 @@ end
                 # for all odd orders
                 if length(oddorders) > 0
                     map(oddorders) do d
-                        (Differential(x)^d)(u) => upwind_difference(d, Idx(II, s, u, indexmap), s, derivweights, (j,x), u, wind_ufunc, true)
+                        (Differential(x)^d)(u) => upwind_difference(d, Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], derivweights, (j,x), u, wind_ufunc, true)
                     end
                 else
                     []
@@ -191,12 +191,12 @@ end
 
 end
 
-@inline function generate_nonlinlap_rules(II, s, depvars, derivweights, indexmap, terms)
-    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c...,cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
+@inline function generate_nonlinlap_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c...,cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, depvars, x, u) for x in params(u, s)]) for u in depvars]))
+    rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, Idx(II, s, u, indexmap), derivweights, s, depvars, x, u) for x in params(u, s)]) for u in depvars]))
+    rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
     
     nonlinlap_rules = []
     for t in terms
@@ -209,14 +209,14 @@ end
     return nonlinlap_rules
 end
 
-@inline function generate_spherical_diffusion_rules(II, s, depvars, derivweights, indexmap, terms)
-    rules = reduce(vcat, [vec([@rule *(~~a, 1/(r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e...), Idx(II, s, u, indexmap), derivweights, s, depvars, r, u), ~b...)
+@inline function generate_spherical_diffusion_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+    rules = reduce(vcat, [vec([@rule *(~~a, 1/(r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][r], depvars, r, u), ~b...)
             for r in params(u,s)]) for u in depvars])
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e...), Idx(II, s, u, indexmap), derivweights, s, depvars, r, u))
+    rules = vcat(rules, reduce(vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][r], depvars, r, u))
     for r in params(u,s)]) for u in depvars]))
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e...), Idx(II, s, u, indexmap), derivweights, s, depvars, r, u)
+    rules = vcat(rules, reduce(vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][r], depvars, r, u)
     for r in params(u, s)]) for u in depvars]))
 
     spherical_diffusion_rules = []
@@ -249,21 +249,21 @@ There are of course more specific schemes that are used to improve stability/spe
 
 Please submit an issue if you know of any special cases which impact stability or accuracy that are not implemented, with links to papers and/or code that demonstrates the special case.
 """
-function generate_finite_difference_rules(II, s, depvars, pde, derivweights, indexmap)
+function generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap)
 
     terms = split_terms(pde, s.x̄)
 
     # Standard cartesian centered difference scheme
-    central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, indexmap, terms)
+    central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
 
     # Nonlinear laplacian scheme
-    nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, indexmap, terms)
+    nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
 
     # Because winding needs to know about multiplying terms, we can't split the terms into additive and multiplicative terms.
-    winding_rules = generate_winding_rules(II, s, depvars, derivweights, indexmap, terms)
+    winding_rules = generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
 
     # Spherical diffusion scheme
-    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, indexmap, split_additive_terms(pde))
+    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, pmap, indexmap, split_additive_terms(pde))
     
     return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(winding_rules), vec(central_deriv_rules_cartesian))
 end

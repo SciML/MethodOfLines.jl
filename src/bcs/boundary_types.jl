@@ -47,8 +47,25 @@ end
 
 getvars(b::AbstractBoundary) = (b.u, b.x)
 
-struct BoundaryHandler{hasperiodic}
-    boundaries::Dict{Num, AbstractBoundary}
+@inline function isperiodic(bmps, u, x)
+    if !isempty(bmps[operation(u)][x])
+        # Being explicit hoping the compiler will optimize this away
+        if first(bmps[operation(u)][x]) isa PeriodicBoundary
+            return Val(true)
+        else
+            return Val(false)
+        end
+    else
+        return Val(false)
+    end
+end
+
+@inline function isperiodic(b)
+    if b isa PeriodicBoundary
+        return Val(true)
+    else
+        return Val(false)
+    end
 end
 
 @inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
@@ -92,7 +109,7 @@ function _boundary_rules(s, orders, u, x, val)
         args = s.args[operation(u)]
         args = substitute.(args, (x=>val,))
         varrule = operation(u)(args...) => [operation(u)(args...), x]
-        return vcat([(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x] for d in reverse(orders[x])], varrule)
+        return vcat([(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x] for d in reverse(orders[x])], Differential(s.time)(operation(u)(args...)) => [operation(u)(args...), x], varrule)
 end
 
 function generate_boundary_matching_rules(s, orders)
@@ -129,7 +146,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
 
     lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(s, derivweights.orders)
     
-    boundarymap = Dict([operation(u)=>[] for u in s.ū])
+    boundarymap = Dict([operation(u)=>Dict([x => [] for x in s.x̄]) for u in s.ū])
 
     # Generate initial conditions and bc equations
     for bc in bcs
@@ -139,7 +156,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
 
         depvars = depvar.(collect(union(depvarslhs, get_depvars(bc.rhs, depvar_ops))), (s,))
         if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
-            if t !== nothing && operation(bc.lhs) isa Sym && !any(x -> isequal(x, t.val), arguments(bc.lhs))
+            if t !== nothing && ((operation(bc.lhs) isa Sym) | (operation(bc.lhs) isa Term)) && !any(x -> isequal(x, t.val), arguments(bc.lhs))
                 # initial condition
                 # * Assume that the initial condition is not in terms of the initial derivative i.e. equation is first order in time
                 initindex = findfirst(isequal(bc.lhs), initmaps) 
@@ -186,7 +203,7 @@ function BoundaryHandler(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights:
                 end
                 @assert boundary !== nothing "Boundary condition $bc is not on a boundary of the domain, or is not a valid boundary condition"
                 
-                push!(boundarymap[operation(boundary.u)], boundary)
+                push!(boundarymap[operation(boundary.u)][boundary.x], boundary)
                 #generate_bc_rules!(bceqs, Iedge, derivweights, s, bc, boundary)
             end
         end

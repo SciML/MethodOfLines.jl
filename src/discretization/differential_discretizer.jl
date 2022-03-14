@@ -47,34 +47,34 @@ end
 Performs a centered difference in `x` centered at index `II` of `u`
 ufunc is a function that returns the correct discretization indexed at Itap, it is designed this way to allow for central differences of arbitrary expressions which may be needed in some schemes 
 """
-function central_difference(D, II, s, jx, u, ufunc)
+function central_difference(D, II, s, b, jx, u, ufunc)
     j, x = jx
     ndims(u,s) == 0 && return Num(0)
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j) 
     # offset is important due to boundary proximity
 
-    if II[j] <= D.boundary_point_count
+    if (II[j] <= D.boundary_point_count) & (b isa Val{false})
         weights = D.low_boundary_coefs[II[j]]    
         offset = 1 - II[j]
         Itap = [II + (i+offset)*I1 for i in 0:(D.boundary_stencil_length-1)]
-    elseif II[j] > (length(s, x) - D.boundary_point_count)
+    elseif (II[j] > (length(s, x) - D.boundary_point_count)) & (b isa Val{false})
         weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
         offset = length(s, x) - II[j]
         Itap = [II + (i+offset)*I1 for i in (-D.boundary_stencil_length+1):1:0]
     else
         weights = D.stencil_coefs
-        Itap = [II + i*I1 for i in half_range(D.stencil_length)]
+        Itap = [wrapperiodic(II + i*I1, s, b, u, jx) for i in half_range(D.stencil_length)]
     end   
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
 
     return dot(weights, ufunc(u, Itap, x))
 end
 
-@inline function _upwind_difference(D, I, s, u, jx)
+@inline function _upwind_difference(D, I, s, b, u, jx)
     j, x = jx
     I1 = unitindex(ndims(u,s), j)
-    if I > (length(s, x) - D.boundary_point_count)
+    if (I > (length(s, x) - D.boundary_point_count)) & (b isa Val{false})
         weights = D.high_boundary_coefs[length(s, x)-I+1]
         offset = length(s, x) - I
         Itap = [(i+offset)*I1 for i in (-D.boundary_stencil_length+1):1:0]
@@ -85,20 +85,20 @@ end
     return weights, Itap
 end
 
-function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, derivweights, jx, u, ufunc, ispositive) 
+function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, b, derivweights, jx, u, ufunc, ispositive) 
     j, x = jx
     ndims(u,s) == 0 && return Num(0)
     D = derivweights.windmap[Differential(x)^d]
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative
     if !ispositive
-        weights, Itap = _upwind_difference(D, length(s, x) - II[j] +1, s, u, jx)
+        weights, Itap = _upwind_difference(D, length(s, x) - II[j] +1, s, b, u, jx)
         #don't need to reverse because it's already reversed by subtracting Itap
         weights = -reverse(weights)
-        Itap = (II,) .- reverse(Itap)
+        Itap = wrapperiodic.((II,) .- reverse(Itap), (s,), (b,), (u,), (jx,))
     else
-        weights, Itap = _upwind_difference(D, II[j], s, u, jx)
-        Itap = (II,) .+ Itap
+        weights, Itap = _upwind_difference(D, II[j], s, b, u, jx)
+        Itap = wrapperiodic.((II,) .+ Itap, (s,), (b,), (u,), (jx,))
         weights = weights
     end
     return dot(weights, ufunc(u, Itap, x))
@@ -113,7 +113,7 @@ TODO: consider refactoring this to harmonize with centered difference
 
 Each index corresponds to the weights and index for the derivative at index i+1/2
 """
-function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::CartesianIndex, s::DiscreteSpace, u, jx, len = 0)
+function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::CartesianIndex, s::DiscreteSpace, b, u, jx, len = 0)
     j, x = jx
     len = len == 0 ? length(s, x) : len
     @assert II[j] != length(s, x)
@@ -122,22 +122,17 @@ function get_half_offset_weights_and_stencil(D::DerivativeOperator, II::Cartesia
     I1 = unitindex(ndims(u,s),j) 
     # offset is important due to boundary proximity
 
-    if II[j] < D.boundary_point_count
+    if (II[j] < D.boundary_point_count) & (b isa Val{false})
         weights = D.low_boundary_coefs[II[j]]    
         offset = 1 - II[j]
         Itap = [II + (i+offset)*I1 for i in 0:(D.boundary_stencil_length-1)]
-    elseif II[j] > (len - D.boundary_point_count)
-        try
-            weights = D.high_boundary_coefs[len-II[j]]
-        catch e
-            print(II, len, D.high_boundary_coefs)
-            throw(e)
-        end
+    elseif (II[j] > (len - D.boundary_point_count)) & (b isa Val{false})
+        weights = D.high_boundary_coefs[len-II[j]]        
         offset = len - II[j]
         Itap = [II + (i+offset)*I1 for i in (-D.boundary_stencil_length+1):0]
     else
         weights = D.stencil_coefs
-        Itap = [II + i*I1 for i in (1-div(D.stencil_length,2)):(div(D.stencil_length,2))]
+        Itap = [wrapperiodic(II + i*I1, s, b, u, jx) for i in (1-div(D.stencil_length,2)):(div(D.stencil_length,2))]
     end    
 
     return (weights, Itap)
@@ -145,9 +140,9 @@ end
 
 
 # i is the index of the offset, assuming that there is one precalculated set of weights for each offset required for a first order finite difference
-function half_offset_centered_difference(D, II, s, jx, u, ufunc)
+function half_offset_centered_difference(D, II, s, b, jx, u, ufunc)
     ndims(u,s) == 0 && return Num(0)
     j, x = jx
-    weights, Itap = get_half_offset_weights_and_stencil(D, II, s, u, jx)
+    weights, Itap = get_half_offset_weights_and_stencil(D, II, s, b, u, jx)
     return dot(weights, ufunc(u, Itap, x))
 end
