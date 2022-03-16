@@ -5,13 +5,20 @@ of symbolicaly-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
 
-Allowable terms in the system and bcs include, but are not limited to
+Allowable terms in the system include, but are not limited to
 - Advection
 - Diffusion
 - Reaction
 - Nonlinear Diffusion
 - Spherical laplacian
 - Any julia function of the symbolic parameters/dependant variables and other parameters in the environment that's defined on the whole domain.
+
+Boundary conditions include, but are not limited to:
+- Dirichlet
+- Neumann (can also include time derivative)
+- Robin (can also include time derivative)
+- Periodic
+- Any equation, subject to the assumptions below
 
 # Discretization
 It discrertizes the above with a `MOLFiniteDifference`, with the following interface:
@@ -49,6 +56,7 @@ At the moment the package is able to discretize almost any system, with some ass
 
 - That the grid is cartesian.
 - That the equation is first order in time.
+- That integrals are not used.
 - That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`, or the same with lhs and rhs reversed. Note that this generalises to higher dimensions.
 - That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.
 - That initial conditions are of the form `u(...) ~ ...`, and don't reference the initial time derivative.
@@ -56,11 +64,41 @@ At the moment the package is able to discretize almost any system, with some ass
 
 If any of these limitations are a problem for you please post an issue and we will prioritize removing them. If you discover a limitation that isn't listed here, pleae post an issue with example code.
 
-
 ## Coming soon:
 - Fewer Assumptions.
 - More robust testing and validation.
 - Benchmarks.
+
+# Example systems
+```
+# Diffusion
+eqs = [Dt(u(t,x)) ~ Dxx(u(t,x)),
+        Dt(v(t,y)) ~ Dyy(v(t,y))]
+bcs = [u(0,x) ~ cos(x),
+        v(0,y) ~ sin(y),
+        u(t,0) ~ exp(-t),
+        Dx(u(t,1)) ~ -exp(-t) * sin(1),
+        Dy(v(t,0)) ~ exp(-t),
+        v(t,2) ~ exp(-t) * sin(2)]
+
+
+# Nonlinear Laplacian
+eq = Dt(u(t,x,y)) ~ Dx( (u(t,x,y)^2 / exp(x+y)^2 + sin(x+y+4t)^2)^0.5 * Dx(u(t,x,y))) +
+                Dy( (u(t,x,y)^2 / exp(x+y)^2 + sin(x+y+4t)^2)^0.5 * Dy(u(t,x,y)))
+
+# Arbitrary boundary conditions
+bcs = [u(t_min,x,y) ~ func0(t_min,x,y),
+        0 ~ func1(t,x_min,y) - Dx(u(t,x_min,y)),
+        u(t,x_max,y) ~ func2(t,x_max,y),
+        Dy(u(t,x,y_min)) ~ func3(t,x,y_min) + u(t,x,y_min),
+        u(t,x,y_max) ~ func4(t,x,y_max)]
+# Advection
+eq  = Dt(u(t,x)) ~ -Dx(u(t,x))
+
+# Static
+eq = Dxx(u(x, y)) + Dyy(u(x, y)) ~ 0
+
+```
 ## Full Example:
 ```
 ## 2D Diffusion
