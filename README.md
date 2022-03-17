@@ -5,6 +5,8 @@ of symbolicaly-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
 
+This project is under active development, therefore the interface is subject to change. The docs will be updated to reflect any changes, please check back for current usage information.
+
 Allowable terms in the system include, but are not limited to
 - Advection
 - Diffusion
@@ -23,7 +25,7 @@ Boundary conditions include, but are not limited to:
 # Discretization
 It discrertizes the above with a `MOLFiniteDifference`, with the following interface:
 
-```
+```julia
 eq = [your system of equations, see examples for possibilities]
 bcs = [your boundary conditions, see examples for possibilities]
 
@@ -70,7 +72,7 @@ If any of these limitations are a problem for you please post an issue and we wi
 - Benchmarks.
 
 # Example systems
-```
+```julia
 # Diffusion
 eqs = [Dt(u(t,x)) ~ Dxx(u(t,x)),
         Dt(v(t,y)) ~ Dyy(v(t,y))]
@@ -100,7 +102,7 @@ eq = Dxx(u(x, y)) + Dyy(u(x, y)) ~ 0
 
 ```
 ## Full Example:
-```
+```julia
 ## 2D Diffusion
 
 # Dependencies
@@ -155,7 +157,47 @@ sol = solve(prob,Tsit5())
 ```
 
 # Reaction Diffusion example, Brusselator Equation
+The Brusselator PDE is defined as follows:
+
+```math
+\begin{align}
+\frac{\partial u}{\partial t} &= 1 + u^2v - 4.4u + \alpha(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}) + f(x, y, t)\\
+\frac{\partial v}{\partial t} &= 3.4u - u^2v + \alpha(\frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2})
+\end{align}
 ```
+
+where
+
+```math
+f(x, y, t) = \begin{cases}
+5 & \quad \text{if } (x-0.3)^2+(y-0.6)^2 ≤ 0.1^2 \text{ and } t ≥ 1.1 \\
+0 & \quad \text{else}
+\end{cases}
+```
+
+and the initial conditions are
+
+```math
+\begin{align}
+u(x, y, 0) &= 22\cdot (y(1-y))^{3/2} \\
+v(x, y, 0) &= 27\cdot (x(1-x))^{3/2}
+\end{align}
+```
+
+with the periodic boundary condition
+
+```math
+\begin{align}
+u(x+1,y,t) &= u(x,y,t) \\
+u(x,y+1,t) &= u(x,y,t)
+\end{align}
+```
+
+on a timespan of ``t \in [0,11.5]``.
+
+With MethodOfLines:
+
+```julia
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
 
 
