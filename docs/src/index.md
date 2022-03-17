@@ -36,3 +36,5 @@ At the moment the package is able to discretize almost any system, with some ass
 - That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))` is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product/chain rules and use the linearity of the derivative operator, or define a new dependant variable by adding an equation for it like `eqs = [Differential(x)(w(t,x))~ ... , w(t,x) ~ v(t,x)*u(t,x)]`. An exception to this is if the differential is a nonlinear or spherical laplacian, in which case only the innermost argument should be wrapped.
 
 If any of these limitations are a problem for you please post an issue and we will prioritize removing them. If you discover a limitation that isn't listed here, pleae post an issue with example code.
+
+### If you have any usage questions or feature requests, please post an issue
