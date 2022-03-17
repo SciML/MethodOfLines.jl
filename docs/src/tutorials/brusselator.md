@@ -42,7 +42,7 @@ on a timespan of ``t \in [0,11.5]``.
 
 ## Solving with MethodOfLines
 
-With `ModelingToolkit.jl`, we first symbolicaly define the system:
+With `ModelingToolkit.jl`, we first symbolicaly define the system, see also the docs for (`PDESystem`)[https://mtk.sciml.ai/stable/systems/PDESystem/]:
 
 ```julia
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets

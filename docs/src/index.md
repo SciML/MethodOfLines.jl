@@ -5,7 +5,7 @@ of symbolicaly-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
 
-See (here)[] for a full tutorial.
+See (here)[/tutorials/brusselator.md] for a full tutorial.
 
 Allowable terms in the system include, but are not limited to
 - Advection
