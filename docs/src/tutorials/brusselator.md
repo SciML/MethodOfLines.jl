@@ -1,5 +1,5 @@
 
-# Tutorial
+# [Tutorial] (@id brusselator)
 ## Using the Brusselator PDE as an example
 
 The Brusselator PDE is defined as follows:
@@ -87,10 +87,11 @@ bcs = [u(x,y,0) ~ u0(x,y,0),
 
 @named pdesys = PDESystem(eq,bcs,domains,[x,y,t],[u(x,y,t),v(x,y,t)])
 ```
+For a list of limitations constraining which systems will work, see [here](@ref limitations)
 
 ## Method of lines discretization
 
-Then, we create the discretization, leaving the time dimension undiscretized by supplying `t` as an argument. Optionally, all dimensions can be discretized in this step, just remove the argument `t` and supply `t=>dt` in the `dxs`. See (here)[] for more information on the `MOLFiniteDifference` constructor arguments and options.
+Then, we create the discretization, leaving the time dimension undiscretized by supplying `t` as an argument. Optionally, all dimensions can be discretized in this step, just remove the argument `t` and supply `t=>dt` in the `dxs`. See [here](@ref molfd) for more information on the `MOLFiniteDifference` constructor arguments and options.
 
 ```julia
 N = 32
@@ -120,7 +121,7 @@ Next, the boundary conditions are discretized, creating an equation for each poi
 
 After that, the system of PDEs is discretized, first matching each PDE to each dependant variable by which variable is highest order in each PDE, with precedance given to time derivatives. Then, the PDEs are discretized creating a finite difference equation for each point in their matched dependant variables discrete form, less the number of boundary equations. These equations are removed from around the boundary, so each PDE only has discrete equations on its variable's interior.
 
-Now we have a set of equations which are either ODEs, linear, or nonlinear equations and an equal number of unknowns. See (here)[] for the system that is generated for the Brusselator at low point count. The structure of the system is simplified with `ModelingToolkit.structural_simplify`, and then either an `ODEProblem` or `NonlinearProblem` is returned. Under the hood, the `ODEProblem` generates a fast semidiscretization, written in julia with `RuntimeGeneratedFunctions`. See (here)[] for an example of the generated code for the Brusselator system at low point count. 
+Now we have a system of equations which are either ODEs, linear, or nonlinear equations and an equal number of unknowns. See (here)[] for the system that is generated for the Brusselator at low point count. The structure of the system is simplified with `ModelingToolkit.structural_simplify`, and then either an `ODEProblem` or `NonlinearProblem` is returned. Under the hood, the `ODEProblem` generates a fast semidiscretization, written in julia with `RuntimeGeneratedFunctions`. See (here)[] for an example of the generated code for the Brusselator system at low point count. 
 
 Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for (`DifferentialEquations.jl`)[https://diffeq.sciml.ai/stable/solvers/ode_solve/] and (`NonlinearSolve.jl`)[http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/].
 

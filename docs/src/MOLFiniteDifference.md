@@ -1,4 +1,4 @@
-# Discretization
+# [Discretization] ('ref molfd)
 ```julia
 struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
     dxs
