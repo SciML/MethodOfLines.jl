@@ -5,6 +5,8 @@ of symbolicaly-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
 
+The package's handling is quite general, it is recomended to try out your system of equations and post an issue if you run in to trouble. If you want to solve it, we want to support it.
+
 See [here](@ref brusselator) for a full tutorial, involving the brusselator equation.
 
 Allowable terms in the system include, but are not limited to
