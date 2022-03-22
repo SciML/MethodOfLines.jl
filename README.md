@@ -1,5 +1,11 @@
 # MethodOfLines.jl
 
+[![Github Action CI](https://github.com/SciML/MethodOfLines.jl/workflows/CI/badge.svg)](https://github.com/SciML/MethodOfLines.jl/actions)
+[![Coverage Status](https://coveralls.io/repos/github/SciML/MethodOfLines.jl/badge.svg?branch=master)](https://coveralls.io/github/SciML/MethodOfLines.jl?branch=master)
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](http://methodoflines.sciml.ai/stable/)
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](http://methodoflines.sciml.ai/dev/)
+[![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
+
 MethodOfLines.jl is a package for automated finite difference discretization
 of symbolicaly-defined PDEs in N dimensions.
 
