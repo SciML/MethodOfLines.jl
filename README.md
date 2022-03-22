@@ -20,4 +20,4 @@ Boundary conditions include, but are not limited to:
 - Neumann (can also include time derivative)
 - Robin (can also include time derivative)
 - Periodic
-- Any equation, subject to the assumptions below
+- Any equation, which can include arbitrary julia functions defined on that boundary, with the only symbolic parameters being those appering in the referenced boundary.

@@ -24,7 +24,7 @@ Boundary conditions include, but are not limited to:
 
 At the moment the centered difference, upwind difference, nonlinear laplacian and spherical laplacian schemes are implemented. If you know of a scheme with better stability or accuracy in any specific case, please post an issue with a link to a paper.
 
-## [Known Limitations] (@ref limitations)
+## [Known Limitations] (@id limitations)
 
 At the moment the package is able to discretize almost any system, with some assumptions listed below
 

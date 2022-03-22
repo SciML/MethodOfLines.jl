@@ -13,6 +13,7 @@ makedocs(
     pages=[
         "MethodOfLines.jl: Automated Finite Difference for Phyiscs-Informed Learning" => "index.md",
         "MOLFiniteDifference" => "MOLFiniteDifference.md",
+        "Boundary Conditions" => "boundary_conditions.md",
         "Tutorials" => ["tutorials/brusselator.md"]
         # "Tutorial: Burgers" => "tutorials/burgers.md",
         # "Tutorial: 1D Linear Diffusion" => "tutorials/1d_linear_diffusion.md",
