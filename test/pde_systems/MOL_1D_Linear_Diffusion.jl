@@ -679,7 +679,7 @@ end
     end
 end
 
-@test_broken begin # @test "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
+@test_broken begin # "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
     # Method of Manufactured Solutions
     u_exact = (x,t) -> exp.(-t) * cos.(x)
     v_exact = (y,t) -> exp.(-t) * sin.(y)
@@ -729,6 +729,8 @@ end
     x_sol = dx[2:end-1]
     y_sol = dy[2:end-1]
     t_sol = sol.t
+
+    fail
 
     # Test against exact solution
     for i in 1:length(sol)
