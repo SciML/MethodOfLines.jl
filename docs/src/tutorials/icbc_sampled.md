@@ -23,7 +23,7 @@ sitp2(5., 10.) # exactly log(5 + 10)
 sitp2(5.6, 7.1) # approximately log(5.6 + 7.1)
 ```
 Then, register the functions with ModelingToolkit:
-```
+```julia
 @register sitp1(y)
 @register sitp2(x, y)
 ```
