@@ -1,5 +1,5 @@
 
-# [Generated ODE system for the Brusselator Equation] (@id brusscode)
+# [Generated Code for the Brusselator Equation] (@id brusscode)
 
 Here's the generated julia code for the [Brusselator](@ref brusselator), with `dx = dy = 1/4`
 
