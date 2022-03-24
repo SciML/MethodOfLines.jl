@@ -15,8 +15,8 @@ makedocs(
         "Tutorials" => ["tutorials/brusselator.md", "icbc_sampled.md"],
         "MOLFiniteDifference" => "MOLFiniteDifference.md",
         "Boundary Conditions" => "boundary_conditions.md",
-        "How it works" => "howitworks.md"
-        "Notes for developers: Implement a scheme" => "devnotes.md"
+        "How it works" => "howitworks.md",
+        "Notes for developers: Implement a scheme" => "devnotes.md",
         "Generated Examples" => ["generated/bruss_sys.md", "generated/bruss_code.jl"]
         # "Tutorial: Burgers" => "tutorials/burgers.md",
         # "Tutorial: 1D Linear Diffusion" => "tutorials/1d_linear_diffusion.md",
