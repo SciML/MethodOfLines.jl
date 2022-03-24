@@ -34,3 +34,5 @@ bcs = [u(0, x, y) ~ sitp2(x, y),
 Note that the measured data need not be measured on the same grid as will be generated for the discretization in `MethodOfLines.jl`, as long as it is defined upon the whole simulation domain it will be automatically re-sampled.
 
 If you are using an [`edge_align` grid](@ref molfd), your interpolation will need to be defined `±dx/2 ` above and below the edges of the simulation domain where `dx` is the step size in the direction of that edge. [Extrapolation](http://juliamath.github.io/Interpolations.jl/latest/extrapolation/) may prove useful here.
+
+See also [`DataInterpolations.jl`](https://github.com/PumasAI/DataInterpolations.jl), for better dealing with possibly noisy data (currently limited to 1D).
