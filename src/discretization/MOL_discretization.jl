@@ -7,7 +7,7 @@ function interface_errors(depvars, indvars, discretization)
 end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where G
-    pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
+    pdeeqs = pdesys.eqs 
     bcs = pdesys.bcs
     domain = pdesys.domain
     
