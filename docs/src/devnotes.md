@@ -11,7 +11,7 @@ julia>] activate MethodOfLines
 ## Overview
 MethodOfLines.jl makes heavy use of [`Symbolics.jl`](https://symbolics.juliasymbolics.org/dev/) and [`SymbolicUtils.jl`](https://symbolicutils.juliasymbolics.org), especially the replacement rules from the latter.
 
-Take a look at [`src/discretization/MOL_discretization.jl`](https://github.com/SciML/MethodOfLines.jl/blob/master/src/discretization/MOL_discretization.jl) to get a high level overview of how the discretization works. A more consise description can be found [here](@ref hiw) Feel free to post an issue if you would like help understanding anything, or want to know developer opinions on the best way to go about implementing something.
+Take a look at [`src/discretization/MOL_discretization.jl`](https://github.com/SciML/MethodOfLines.jl/blob/master/src/discretization/MOL_discretization.jl) to get a high level overview of how the discretization works. A more consise description can be found [here](@ref hiw). Feel free to post an issue if you would like help understanding anything, or want to know developer opinions on the best way to go about implementing something.
 
 ## Adding new finite difference schemes
 
