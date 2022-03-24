@@ -42,7 +42,7 @@ on a timespan of ``t \in [0,11.5]``.
 
 ## Solving with MethodOfLines
 
-With `ModelingToolkit.jl`, we first symbolicaly define the system, see also the docs for (`PDESystem`)[https://mtk.sciml.ai/stable/systems/PDESystem/]:
+With `ModelingToolkit.jl`, we first symbolicaly define the system, see also the docs for [`PDESystem`](https://mtk.sciml.ai/stable/systems/PDESystem/):
 
 ```julia
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
@@ -87,7 +87,7 @@ bcs = [u(x,y,0) ~ u0(x,y,0),
 
 @named pdesys = PDESystem(eq,bcs,domains,[x,y,t],[u(x,y,t),v(x,y,t)])
 ```
-For a list of limitations constraining which systems will work, see [here](@ref limitations)
+For a list of limitations constraining which systems will work, seeu[2, 1](t) ~ u[2, 5](t), u[3, 1](t) ~ u[3, 5](t), u[4, 1](t) ~ u[4, 5](t), u[5, 1](t) ~ u[5, 5](t), u[1, 2](t) ~ u[5, 2](t), u[1, 3](t) ~ u[ [here](@ref limitations)
 
 ## Method of lines discretization
 
@@ -111,25 +111,71 @@ println("Discretization:")
 @time prob = discretize(pdesys,discretization)
 ```
 
-## How it works
-
-MethodOfLines.jl makes heavy use of `Symbolics.jl` and `SymbolicUtils.jl`, namely it's rule matching features to recognize terms which require particular discretizations.
-
-Given your discretization and `PDESystem`, we take each independent variable defined on the space to be discretized and create a corresponding range. We then take each dependant variable and create an array of symbolic variables to represent it in its discretized form. 
-
-Next, the boundary conditions are discretized, creating an equation for each point on the boundary in terms of the discretized variables, replacing any space derivatives in the direction of the boundary with their upwind finite difference expressions.
-
-After that, the system of PDEs is discretized, first matching each PDE to each dependant variable by which variable is highest order in each PDE, with precedance given to time derivatives. Then, the PDEs are discretized creating a finite difference equation for each point in their matched dependant variables discrete form, less the number of boundary equations. These equations are removed from around the boundary, so each PDE only has discrete equations on its variable's interior.
-
-Now we have a system of equations which are either ODEs, linear, or nonlinear equations and an equal number of unknowns. See (here)[] for the system that is generated for the Brusselator at low point count. The structure of the system is simplified with `ModelingToolkit.structural_simplify`, and then either an `ODEProblem` or `NonlinearProblem` is returned. Under the hood, the `ODEProblem` generates a fast semidiscretization, written in julia with `RuntimeGeneratedFunctions`. See (here)[] for an example of the generated code for the Brusselator system at low point count. 
-
-Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for (`DifferentialEquations.jl`)[https://diffeq.sciml.ai/stable/solvers/ode_solve/] and (`NonlinearSolve.jl`)[http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/].
+## Solving the problem
+Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://diffeq.sciml.ai/stable/solvers/ode_solve/) and [`NonlinearSolve.jl`](http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/).
 
 ```julia
 println("Solve:")
 @time sol = solve(prob, TRBDF2(), saveat=0.1)
 ```
 
+## Extracting results
 To retrieve your solution, for example for `u`, use `sol[u]`. To get the time axis, use `sol.t`.
 
-To get the generated code for your system, use `code = ODEFunctionExpr(prob)`, or `MethodOfLines.generate_code(pdesys, discretization, "my_generated_code_filename.jl")`, which will create a file called `my_generated_code_filename.jl` in `pwd()`. This can be useful to find errors in the discretization, but note that it is not recommended to use this code directly, calling `solve(prob, AppropriateSolver())` will handle this for you.
+Due to current limitations in the `sol` interface, above 1 discretized dimension the result must be manually reshaped to correctly display the result, here is an example of how to do this:
+
+With `grid_align = center_align`:
+```julia
+discrete_x = x_min:dx:x_max
+discrete_y = y_min:dy:y_max
+
+Nx = floor(Int64, (x_max - x_min) / dx) + 1
+Ny = floor(Int64, (y_max - y_min) / dy) + 1
+
+@variables u[1:Nx,1:Ny](t)
+@variables v[1:Nx,1:Ny](t)
+
+solu, solv = map(1:length(sol.t)) do k
+       solu = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+       solv = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+       (solu, solv)
+end
+```
+
+With `grid_align = edge_align`:
+```julia
+discrete_x = x_min - dx/2 : dx : x_max + dx/2
+discrete_y = y_min - dy/2 : dy : y_max + dy/2
+
+Nx = floor(Int64, (x_max - x_min) / dx) + 2
+Ny = floor(Int64, (y_max - y_min) / dy) + 2
+
+@variables u[1:Nx,1:Ny](t)
+@variables v[1:Nx,1:Ny](t)
+
+solu, solv = map(1:length(sol.t)) do k
+       solu = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+       solv = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+       (solu, solv)
+end
+```
+
+The result after plotting an animation:
+
+For `u`:
+```julia
+anim = @animate for k in 1:length(t)
+    heatmap(solu[k][2:end, 2:end], title="$(t[k])")
+end
+gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
+```       
+![Brusselator2Dsol_u](https://user-images.githubusercontent.com/9698054/159934498-e5c21b13-c63b-4cd2-9149-49e521765141.gif)
+
+For `v`:
+```julia
+anim = @animate for k in 1:length(t)
+    heatmap(solv[k][2:end, 2:end], title="$(t[k])")
+end
+gif(anim, "plots/Brusselator2Dsol_v.gif", fps = 8)
+```       
+![Brusselator2Dsol_v](https://i.imgur.com/3kQNMI3.gifv)

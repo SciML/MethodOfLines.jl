@@ -60,7 +60,7 @@ function get_depvars(eq,depvar_ops)
 end
 
 @inline function get_all_depvars(pdesys, depvar_ops)
-    pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
+    pdeeqs = pdesys.eqs # Vector
     return collect(mapreduce(x->get_depvars(x.lhs,depvar_ops), union, pdeeqs) ∪ mapreduce(x->get_depvars(x.rhs,depvar_ops), union, pdeeqs))
 end
 
