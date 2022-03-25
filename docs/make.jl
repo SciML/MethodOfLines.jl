@@ -17,7 +17,7 @@ makedocs(
         "Boundary Conditions" => "boundary_conditions.md",
         "How it works" => "howitworks.md",
         "Notes for developers: Implement a scheme" => "devnotes.md",
-        "Generated Examples" => ["generated/bruss_sys.md", "generated/bruss_ode_eqs.md"]
+        "Generated Examples" => ["generated/bruss_code.md", "generated/bruss_ode_eqs.md"]
         # "Tutorial: Burgers" => "tutorials/burgers.md",
         # "Tutorial: 1D Linear Diffusion" => "tutorials/1d_linear_diffusion.md",
         # "Tutorial: 1D Non-Linear Diffusion" => "tutorials/1d_nonlinear_diffusion.md",
