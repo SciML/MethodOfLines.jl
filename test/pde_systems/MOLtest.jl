@@ -114,6 +114,132 @@ end
        prob = discretize(pdesys,discretization)
 end
 
+@testset "2D Neumann Hydrogen flame" begin
+
+    # the two spatial dimensions and time
+    @parameters x y t
+    # the mass fractions MF (respectively H₂, O₂, and H₂O), temperature,
+    # and the source terms of the mass fractions and temperature
+    @variables YF(..) YO(..) YP(..) T(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    # laplace operator
+    ∇²(u) = Dxx(u) + Dyy(u)
+
+    ## Define domains
+
+    xmin = ymin = 0.0 # cm
+    xmax = 1.8 # cm
+    ymax = 0.9 # cm
+    tmin = 0.0
+    tmax = 0.06 # s
+
+    domains = [
+        x ∈ Interval(xmin, xmax),
+        y ∈ Interval(ymin, ymax),
+        t ∈ Interval(tmin, tmax)
+    ]
+
+    ## Define parameters
+
+    # diffusivity coefficient (for temperature and mass fractions)
+    κ =  2.0 #* cm^2/s
+    # constant (divergence-free) velocity field
+    U = [50.0, 0.0] #.* cm/s
+    # density of the mixture
+    ρ = 1.39e-3 #* g/cm^3
+    # molecular weights (respectively H₂, O₂, and H₂O)
+    W = [2.016, 31.9, 18.0] #.* g/mol
+    # stoichiometric coefficients
+    ν = [2, 1, 2]
+    # heat of the reaction
+    Q = 9800 #* K
+    # universal gas constant
+    R = 8.314472 * 100 #* 1e-2 J/mol/K -> because J = Nm = 100 N cm
+    # y coordinates of the inlet area on the left side of the domain
+    inlety = (0.3, 0.6) # mm
+
+    # TODO try out different values (systematically)
+    # pre-exponential factor in source term
+    A = 5.5e11 # dimensionless
+    # activation energy in source term
+    E = 5.5e13 * 100 # 1e-2 J/mol -> J = Nm = 100 N cm
+
+    ## Define the model
+
+    # diffusion and convection terms for the mass fractions and temperature
+    eqs = [
+        Dt( YF(x,y,t) ) ~ κ * ∇²( YF(x,y,t) ) - U[1] * Dx( YF(x,y,t) ) - U[2] * Dy( YF(x,y,t) )
+        Dt( YO(x,y,t) ) ~ κ * ∇²( YO(x,y,t) ) - U[1] * Dx( YO(x,y,t) ) - U[2] * Dy( YO(x,y,t) )
+        Dt( YP(x,y,t) ) ~ κ * ∇²( YP(x,y,t) ) - U[1] * Dx( YP(x,y,t) ) - U[2] * Dy( YP(x,y,t) )
+        Dt( T(x,y,t) )  ~ κ * ∇²( T(x,y,t) )  - U[1] * Dx( T(x,y,t) )  - U[2] * Dy( T(x,y,t) )
+    ]
+
+    function atInlet(x,y,t)
+        return (inlety[1] < y) * (y < inlety[2])
+    end
+
+    bcs = [
+        #
+        # initial conditions
+        #
+
+        T(x, y, 0) ~ 300.0, # K; around 26 C
+        # domain is empty at the start
+        YF(x,y,0) ~ 0.0,
+        YO(x,y,0) ~ 0.0,
+        YP(x,y,0) ~ 0.0,
+
+        #
+        # boundary conditions
+        #
+
+        # left side
+        T(xmin,y,t) ~ atInlet(xmin,y,t) * 950 + (1-atInlet(xmin,y,t)) *  300, # K
+        YF(xmin,y,t) ~ atInlet(xmin,y,t) * 0.0282, # mass fraction
+        YO(xmin,y,t) ~ atInlet(xmin,y,t) * 0.2259,
+        YP(xmin,y,t) ~ 0.0,
+
+        # bottom
+        Dt( T(x,ymin,t) ) ~ 0.0, # K/s
+        Dt( YF(x,ymin,t) ) ~ 0.0, # mass fraction/s
+        Dt( YO(x,ymin,t) ) ~ 0.0,
+        Dt( YP(x,ymin,t) ) ~ 0.0,
+        # right side
+        Dt( T(xmax,y,t) ) ~ 0.0, # K/s
+        Dt( YF(xmax,y,t) ) ~ 0.0, # mass fraction/s
+        Dt( YO(xmax,y,t) ) ~ 0.0,
+        Dt( YP(xmax,y,t) ) ~ 0.0,
+
+        # top
+        Dt( T(x,ymax,t) ) ~ 0.0, # K/s
+        Dt( YF(x,ymax,t) ) ~ 0.0, # mass fraction/s
+        Dt( YO(x,ymax,t) ) ~ 0.0,
+        Dt( YP(x,ymax,t) ) ~ 0.0,
+
+    ]
+
+    @named pdesys = PDESystem(eqs, bcs, domains, [x,y,t],[YF(x,y,t), YO(x,y,t), YP(x,y,t), T(x,y,t)])
+    ## Discretize the system
+
+    N = 4
+    dx = 1/N
+    dy = 1/N
+    order = 2
+
+    discretization = MOLFiniteDifference(
+        [x=>dx, y=>dy], t, approx_order=order
+    )
+
+    # this creates an ODEProblem or a NonlinearProblem, depending on the system
+    problem = discretize(pdesys, discretization)
+
+end
+
 @testset "Wave Equation" begin
        # Parameters, variables, and derivatives
        @parameters t x
@@ -153,7 +279,7 @@ end
        discretization = MOLFiniteDifference([x=>dx, t=>dt], approx_order=order)
 
        # Convert the PDE problem into an ODE problem
-       prob = discretize(pdesys,discretization)  
+       prob = discretize(pdesys,discretization)
 
        # Solve the ODE problem
        sol = NonlinearSolve.solve(prob, NewtonRaphson())
@@ -191,7 +317,7 @@ end
        discretization = MOLFiniteDifference([x=>dx],t,approx_order=order)
 
        # Convert the PDE problem into an ODE problem
-       prob = discretize(pdesys,discretization)  
+       prob = discretize(pdesys,discretization)
 
        sol = solve(prob,Rodas4())
 end
@@ -199,13 +325,13 @@ end
 @testset "Array u" begin
 	# Dependencies
 	N = 6 # number of dependent variables
-	
+
 	# Variables, parameters, and derivatives
 	@parameters x
 	@variables u[1:N](..)
 	Dx = Differential(x)
 	Dxx = Differential(x)^2
-	
+
 	# Domain edges
 	x_min= 0.
 	x_max = 1.
@@ -215,7 +341,7 @@ end
 	order = 2
 
        #u = collect(u)
-	
+
 	# Equations
 	eqs  = Vector{ModelingToolkit.Equation}(undef, N)
 	for i = 1:N
@@ -226,28 +352,28 @@ end
 	bcs = Vector{ModelingToolkit.Equation}(undef, 2*N)
 	for i = 1:N
 		bcs[i] = Dx(u[i](x_min)) ~ 0.
-	end	
-	
+	end
+
 	for i = 1:N
 		bcs[i+N] = u[i](x_max) ~ rand()
 	end
-	
+
 	# Space and time domains
 	domains = [x ∈ Interval(x_min, x_max)]
-	
+
 	# PDE system
 	@named pdesys = PDESystem(eqs, bcs, domains, [x], collect([u[i](x) for i = 1:N]))
-	
+
 	# Method of lines discretization
 	discretization = MOLFiniteDifference([x=>dx], nothing, approx_order=order)
 	prob = ModelingToolkit.discretize(pdesys,discretization)
-	
+
 	# # Solution of the ODE system
 	sol = NonlinearSolve.solve(prob,NewtonRaphson())
 end
 
 @testset "2D variable connected to 1D variable at boundary #33" begin
-       @parameters t x r 
+       @parameters t x r
        @variables u(..) v(..)
        Dt = Differential(t)
        Dx = Differential(x)
@@ -267,7 +393,7 @@ end
        domains = [t ∈ Interval(0.0,1.0),
                   x ∈ Interval(0.0,1.0),
                   r ∈ Interval(0.0,1.0)]
-       
+
        @named pdesys = PDESystem(eqs,bcs,domains,[t,x,r],[u(t,x),v(t,x,r)])
 
        # Method of lines discretization
@@ -282,7 +408,7 @@ end
        sol = solve(prob, Tsit5())
 end
 
- 
+
 
 
 @testset "Testing discretization of varied systems" begin
@@ -293,7 +419,7 @@ end
 	∂t  = Differential(t)
 	∂x  = Differential(x)
 	∂²x = Differential(x) ^ 2
-	
+
 	D₀ = 1.5
 	α = 0.15
 	χ = 1.2
@@ -301,16 +427,16 @@ end
 	cₑ = 2.0
 	ℓ = 1.0
 	Δx = 0.1
-	
+
 	bcs = [
               # initial condition
 		c(x, 0) ~ 0.0,
 		# Robin BC
-		∂x(c(0.0, t)) / (1 + exp(α * (c(0.0, t) - χ))) * R * D₀ + cₑ - c(0.0, t) ~ 0.0,		  
+		∂x(c(0.0, t)) / (1 + exp(α * (c(0.0, t) - χ))) * R * D₀ + cₑ - c(0.0, t) ~ 0.0,
 		# no flux BC
 		∂x(c(ℓ, t)) ~ 0.0]
-              
-              
+
+
        # define space-time plane
        domains = [x ∈ Interval(0.0, ℓ), t ∈ Interval(0.0, 5.0)]
 
@@ -327,13 +453,13 @@ end
               @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)]);
               discretization = MOLFiniteDifference([x=>Δx], t)
        end
-       
+
        @testset "Test 03: ∂t(c(x, t)) ~ ∂x(1.0 / (1.0/D₀ + exp(α * (c(x, t) - χ))/D₀) * ∂x(c(x, t)))" begin
               diff_eq = ∂t(c(x, t)) ~ ∂x(1.0 / (1.0/D₀ + exp(α * (c(x, t) - χ))/D₀) * ∂x(c(x, t)))
               @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)]);
               discretization = MOLFiniteDifference([x=>Δx], t)
        end
-       
+
        @testset "Test 04: ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))" begin
               diff_eq = ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))
               @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)]);
@@ -383,4 +509,3 @@ end
        end
 
 end
-
