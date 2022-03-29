@@ -18,20 +18,32 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
     t = discretization.time
     nspace = length(x̄)
     # Discretize space
-    axies = map(x̄) do x
+    dxs = Dict(map(x̄) do x
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
         dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
-        dx isa Number ? x => (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : x => dx
+        xmin = DomainSets.infimum(xdomain.domain)
+        xmax = DomainSets.supremum(xdomain.domain)
+        dx = dx isa Number ? dx : dx[2] - dx[1]
+        N = (xmax - xmin) / dx
+        if !isinteger(N)
+            N = ceil(N)
+            dx = (xmax - xmin) / N
+            @warn "d$x does not give integer point count for that dimension, reducing to $dx"
+        end
+        x => dx
+    end)
+    axies = map(x̄) do x
+        xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
+        xmin = DomainSets.infimum(xdomain.domain)
+        xmax = DomainSets.supremum(xdomain.domain)
+        x => xmin:dxs[x]:xmax
     end
-    dxs = map(x̄) do x
-        x => discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
-    end
-    
+
     # Define the grid on which the dependent variables will be evaluated (see #378)
     # center_align is recommended for Dirichlet BCs
     # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
 
-    grid = generate_grid(x̄, axies, domain, discretization)
+    grid = generate_grid(x̄, dxs, axies, domain, discretization)
 
     axies = Dict(axies)
     grid = Dict(grid)
@@ -42,7 +54,7 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
 
     depvarsdisc = map(depvars) do u
         op = SymbolicUtils.operation(u)
-        if op isa SymbolicUtils.Term{SymbolicUtils.FnType{Tuple, Real}, Nothing}
+        if op isa SymbolicUtils.Term{SymbolicUtils.FnType{Tuple,Real},Nothing}
             sym = Symbol(string(op))
         else
             sym = nameof(op)
@@ -51,10 +63,10 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
             u => collect(first(@variables $sym[uaxes...]))
         elseif isequal(SymbolicUtils.arguments(u), [t])
-            u => fill(first(@variables($sym(t))),()) #Create a 0-dimensional array
+            u => fill(first(@variables($sym(t))), ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            u => collect(first(@variables $sym[uaxes...](t))) 
+            u => collect(first(@variables $sym[uaxes...](t)))
         end
     end
 
@@ -62,7 +74,7 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
 
     x̄2dim = [x̄[i] => i for i in 1:nspace]
     dim2x̄ = [i => x̄[i] for i in 1:nspace]
-    return DiscreteSpace{nspace,length(depvars), G}(depvars, Dict(args), Dict(depvarsdisc), discretization.time, x̄, axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), Dict(x̄2dim))
+    return DiscreteSpace{nspace,length(depvars),G}(depvars, Dict(args), Dict(depvarsdisc), discretization.time, x̄, axies, grid, dxs, Dict(Iaxies), Dict(Igrid), Dict(x̄2dim))
 end
 
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
@@ -79,8 +91,8 @@ Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
     # We need to construct a new index as indices may be of different size
     length(params(u,s)) == 0 && return CartesianIndex()
     is = [II[indexmap[x]] for x in params(u, s)]
-    
-    
+
+
     II = CartesianIndex(is...)
     return II
 end
@@ -88,7 +100,7 @@ end
 """
 A function that returns what to replace independent variables with in boundary equations
 """
-@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I) where {N,M,G} 
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I) where {N,M,G}
     u = depvar(u_,s)
     map(params(u, s)) do x
         if isequal(x, x_)
@@ -112,15 +124,15 @@ valmaps(s, u, depvars, indexmap) = valmaps.([s], [u], [depvars], s.Igrid[u], [in
 map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} = vcat([s.ū[k] => s.discvars[k][II] for k = 1:M], [s.x̄[j] => s.grid[j][II[j]] for j = 1:N])
 
 # TODO: Allow other grids
- 
-@inline function generate_grid(x̄, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:CenterAlignedGrid}
-    return axies    
+
+@inline function generate_grid(x̄, dxs, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:CenterAlignedGrid}
+    return axies
 end
 
-@inline function generate_grid(x̄, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:EdgeAlignedGrid}
+@inline function generate_grid(x̄, dxs, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:EdgeAlignedGrid}
     return map(x̄) do x
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
-        dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
+        dx = dxs[x]
         dx isa Number ? (x => ((DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2))) : x => dx
     end
 end
@@ -129,4 +141,3 @@ end
 depvar(u, s::DiscreteSpace) = operation(u)(s.args[operation(u)]...)
 
 x2i(s::DiscreteSpace, u, x) = findfirst(isequal(x), remove(s.args[operation(u)], s.time))
-

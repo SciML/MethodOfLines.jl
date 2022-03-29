@@ -425,7 +425,7 @@ end
     for i in 1:length(sol)
 
        exact = u_exact(x, t[i])
-       u_approx = sol.u[i][2:end-1] # ! why is this different to the other testcases
+       u_approx = sol.u[i]
        @test all(isapprox.(u_approx, exact, atol=0.06))
     end
 end
