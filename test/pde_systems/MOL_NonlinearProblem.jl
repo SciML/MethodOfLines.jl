@@ -64,7 +64,7 @@ end
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
-    @test sol.u ≈ 1.0:0.1:2.0
+    @test sol.[u] ≈ 1.0:0.1:2.0
 end
 
 # 2D heat
@@ -97,7 +97,7 @@ end
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
     xs,ys = [infimum(d.domain):dx:supremum(d.domain) for d in domains]
-    u_sol = reshape(sol.u, (length(xs),length(ys)))
+    u_sol = reshape(sol[u], (length(xs),length(ys)))
 
     # test boundary
     @test all(abs.(u_sol[:,1]) .< eps(Float32))
