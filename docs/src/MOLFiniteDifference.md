@@ -40,8 +40,8 @@ Where `dxs` is a vector of pairs of parameters to the grid step in this dimensio
 
 Note that the second argument to `MOLFiniteDifference` is optional, all parameters can be discretized if all required boundary conditions are specified.
 
-Currently supported grid types: `center_align` and `edge_align`. Edge align will give better accuracy with Neumann Boundary conditions.
+Currently supported grid types: `center_align` and `edge_align`. Edge align will give better accuracy with Neumann boundary conditions.
 
 `center_align`: naive grid, starting from lower boundary, ending on upper boundary with step of `dx`
 
-`edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`. This improves accuracy for neumann BCs.
+`edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`. This improves accuracy for Neumann BCs.

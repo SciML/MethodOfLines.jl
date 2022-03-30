@@ -1,6 +1,7 @@
 # Initial and Boundary Conditions with sampled/measured Data
 
-Initial and boundary conditions are sometimes applied with measured data that is itself pre-discretized. In order to use such data it is recommended to leverage [`Interpolations.jl`](https://github.com/JuliaMath/Interpolations.jl), or [`DataInterpolations.jl`](https://github.com/PumasAI/DataInterpolations.jl), for better dealing with possibly noisy data (currently limited to 1D). to create a callable effectively continuous function, for example (from the `Interpolations.jl` [docs](http://juliamath.github.io/Interpolations.jl/latest/control/)):
+Initial and boundary conditions are sometimes applied with measured data that is itself pre-discretized. In order to use such data it is recommended to leverage [`Interpolations.jl`](https://github.com/JuliaMath/Interpolations.jl), or [`DataInterpolations.jl`](https://github.com/PumasAI/DataInterpolations.jl), for better dealing with possibly noisy data (currently limited to 1D). To create a callable effectively continuous function, for example (from the `Interpolations.jl` [docs](http://juliamath.github.io/Interpolations.jl/latest/control/)):
+
 1D:
 ```julia
 A_x = 1.:2.:40.
