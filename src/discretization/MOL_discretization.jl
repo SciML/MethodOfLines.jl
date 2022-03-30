@@ -148,7 +148,7 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
         if tspan === nothing
             return prob = NonlinearProblem(sys, ones(length(sys.states)); kwargs...)
         else
-            return prob = ODEProblem(simpsys,Pair[],tspan; kwargs...)
+            return prob = ODEProblem(sys,Pair[],tspan; kwargs...)
         end
     catch e
         println("The system of equations is:")
