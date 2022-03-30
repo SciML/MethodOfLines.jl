@@ -41,7 +41,7 @@ end
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
-    @test sol.u ≈ ones(4)
+    @test sol[u] ≈ ones(4)
 end
 
 # Laplace's Equation, linear solution
@@ -64,7 +64,7 @@ end
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
-    @test sol.[u] ≈ 1.0:0.1:2.0
+    @test sol[u] ≈ 1.0:0.1:2.0
 end
 
 # 2D heat
