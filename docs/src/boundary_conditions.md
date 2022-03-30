@@ -1,6 +1,6 @@
 # [Boundary Conditions] (@ref bcs)
 
-What follows is a set of allowable boundary conditions, please note that this is not exhaustive - Try your condition and see if it works, the handling is quite general. If it doesn't please post an issue and we'll try to support it. At the moment boundary conditions have to be supplied at the edge of the domain, but there are plans to support conditions embedded in the domain.
+What follows is a set of allowable boundary conditions, please note that this is not exhaustive - try your condition and see if it works, the handling is quite general. If it doesn't please post an issue and we'll try to support it. At the moment boundary conditions have to be supplied at the edge of the domain, but there are plans to support conditions embedded in the domain.
 
 ## Definitions
 ```julia
