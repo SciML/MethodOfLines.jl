@@ -87,7 +87,7 @@ bcs = [u(x,y,0) ~ u0(x,y,0),
 
 @named pdesys = PDESystem(eq,bcs,domains,[x,y,t],[u(x,y,t),v(x,y,t)])
 ```
-For a list of limitations constraining which systems will work, seeu[2, 1](t) ~ u[2, 5](t), u[3, 1](t) ~ u[3, 5](t), u[4, 1](t) ~ u[4, 5](t), u[5, 1](t) ~ u[5, 5](t), u[1, 2](t) ~ u[5, 2](t), u[1, 3](t) ~ u[ [here](@ref limitations)
+For a list of limitations constraining which systems will work, see [here](@ref limitations)
 
 ## Method of lines discretization
 
@@ -178,4 +178,4 @@ anim = @animate for k in 1:length(t)
 end
 gif(anim, "plots/Brusselator2Dsol_v.gif", fps = 8)
 ```       
-![Brusselator2Dsol_v](https://i.imgur.com/3kQNMI3.gifv)
+![Brusselator2Dsol_v](https://i.imgur.com/3kQNMI3.gif)

@@ -7,7 +7,7 @@ It uses symbolic expressions for systems of partial differential equations as de
 
 The package's handling is quite general, it is recommended to try out your system of equations and post an issue if you run in to trouble. If you want to solve it, we want to support it.
 
-See [here](@ref brusselator) for a full tutorial, involving the brusselator equation.
+See [here](@ref brusselator) for a full tutorial, involving the Brusselator equation.
 
 Allowable terms in the system include, but are not limited to
 - Advection
@@ -15,7 +15,7 @@ Allowable terms in the system include, but are not limited to
 - Reaction
 - Nonlinear Diffusion
 - Spherical laplacian
-- Any julia function of the symbolic parameters/dependant variables and other parameters in the environment that's defined on the whole domain.
+- Any Julia function of the symbolic parameters/dependant variables and other parameters in the environment that's defined on the whole domain.
 
 Boundary conditions include, but are not limited to:
 - Dirichlet

@@ -7,7 +7,7 @@
 [![ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://img.shields.io/badge/ColPrac-Contributor's%20Guide-blueviolet)](https://github.com/SciML/ColPrac)
 
 MethodOfLines.jl is a package for automated finite difference discretization
-of symbolicaly-defined PDEs in N dimensions.
+of symbolically-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
 
@@ -18,12 +18,12 @@ Allowable terms in the system include, but are not limited to
 - Diffusion
 - Reaction
 - Nonlinear Diffusion
-- Spherical laplacian
-- Any julia function of the symbolic parameters/dependant variables and other parameters in the environment that's defined on the whole domain.
+- Spherical Laplacian
+- Any Julia function of the symbolic parameters/dependant variables and other parameters in the environment that's defined on the whole domain.
 
 Boundary conditions include, but are not limited to:
 - Dirichlet
 - Neumann (can also include time derivative)
 - Robin (can also include time derivative)
 - Periodic
-- Any equation, which can include arbitrary julia functions defined on that boundary, with the only symbolic parameters being those appering in the referenced boundary.
+- Any equation, which can include arbitrary Julia functions defined on that boundary, with the only symbolic parameters being those appearing in the referenced boundary.
