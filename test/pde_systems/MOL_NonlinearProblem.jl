@@ -41,7 +41,7 @@ end
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
-    @test sol[u] ≈ ones(4)
+    @test sol.u ≈ ones(4)
 end
 
 # Laplace's Equation, linear solution
@@ -64,7 +64,7 @@ end
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
-    @test sol[u] ≈ 1.0:0.1:2.0
+    @test sol.u ≈ 1.0+dx:0.1:2.0-dx
 end
 
 # 2D heat
@@ -97,13 +97,13 @@ end
     prob = discretize(pdesys,discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
     xs,ys = [infimum(d.domain):dx:supremum(d.domain) for d in domains]
-    u_sol = reshape(sol[u], (length(xs),length(ys)))
+    u_sol = reshape(sol.u, (length(xs)-2,length(ys)-2))
 
     # test boundary
     @test all(abs.(u_sol[:,1]) .< eps(Float32))
     @test all(abs.(u_sol[1,:]) .< eps(Float32))
-    @test u_sol[2:end-1,end] ≈ (0.0:dy:1.0)[2:end-1]
-    @test u_sol[end,2:end-1] ≈ (0.0:dx:1.0)[2:end-1]
+    @test u_sol[1:end,end] ≈ (0.0:dy:1.0)[2:end-1]
+    @test u_sol[end,1:end] ≈ (0.0:dx:1.0)[2:end-1]
 
     # test interior with finite differences
     interior = CartesianIndices((axes(xs)[1], axes(ys)[1]))[2:end-1,2:end-1]
