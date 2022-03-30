@@ -178,4 +178,4 @@ anim = @animate for k in 1:length(t)
 end
 gif(anim, "plots/Brusselator2Dsol_v.gif", fps = 8)
 ```       
-![Brusselator2Dsol_v](https://i.imgur.com/3kQNMI3.gifv)
+![Brusselator2Dsol_v](https://i.imgur.com/3kQNMI3.gif)
