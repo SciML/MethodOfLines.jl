@@ -18,7 +18,7 @@ Allowable terms in the system include, but are not limited to
 - Diffusion
 - Reaction
 - Nonlinear Diffusion
-- Spherical laplacian
+- Spherical Laplacian
 - Any julia function of the symbolic parameters/dependant variables and other parameters in the environment that's defined on the whole domain.
 
 Boundary conditions include, but are not limited to:
