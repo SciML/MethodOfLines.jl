@@ -7,6 +7,8 @@ It uses symbolic expressions for systems of partial differential equations as de
 
 The package's handling is quite general, it is recommended to try out your system of equations and post an issue if you run in to trouble. If you want to solve it, we want to support it.
 
+At present compile times are quite high for higher dimensional and high point count systems, but changes are planned which will reduce these considerably.
+
 See [here](@ref brusselator) for a full tutorial, involving the Brusselator equation.
 
 Allowable terms in the system include, but are not limited to
