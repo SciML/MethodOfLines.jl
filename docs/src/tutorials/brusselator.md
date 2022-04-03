@@ -101,7 +101,7 @@ dy = 1/N
 
 order = 2
 
-discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=order grid_type=center_align)
+discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=order, grid_align=center_align)
 ```
 Next, we discretize the system, converting the `PDESystem` in to an `ODEProblem` or `NonlinearProblem`.
 
