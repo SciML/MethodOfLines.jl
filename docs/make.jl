@@ -7,7 +7,8 @@ makedocs(
     doctest=false,
     modules=[MethodOfLines],
 
-    format=Documenter.HTML(assets=["assets/favicon.ico"],
+    format=Documenter.HTML(analytics = "UA-90474609-3",
+                           assets=["assets/favicon.ico"],
                            canonical="https://methodoflines.sciml.ai/stable/"),
 
     pages=[
