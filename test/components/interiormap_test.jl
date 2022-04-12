@@ -37,8 +37,11 @@ using Combinatorics: permutations
     s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
-
-    @test m == [1 2 0; 1 0 3; 4 1 1]
+    if VERSION >= v"1.7"
+        @test m == [2 0 1; 0 3 1; 1 1 4] # Test the matrix is the identity matrix
+    else
+        @test m == [1 2 0; 1 0 3; 4 1 1]
+    end
 
 end
 
@@ -77,8 +80,11 @@ end
      s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
-
-    @test m == [2 2 0; 3 0 3; 4 4 4]
+    if VERSION >= v"1.7"
+        @test m == [2 0 2; 0 3 3; 4 4 4] # Test the matrix is the identity matrix
+    else
+        @test m == [2 2 0; 3 0 3; 4 4 4]
+    end
 end
 #
 @testset "Test 00b: recognize relevant variable for equations, time undefined, mixed derivatives, multiple choices" begin
@@ -116,8 +122,11 @@ end
     s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
-
-    @test m == [1 2 0; 3 0 3; 4 5 5]
+    if VERSION >= v"1.7"
+        @test m == [2 0 1; 0 3 3; 5 5 4] # Test the matrix is the identity matrix
+    else
+        @test m == [1 2 0; 3 0 3; 4 5 5]
+    end
 
 end
 
