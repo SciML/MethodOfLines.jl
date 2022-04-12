@@ -2,8 +2,8 @@ using MethodOfLines, ModelingToolkit, DomainSets
 using Combinatorics: permutations
 
 
-@testset "Test 00: recognize relevant variable for equations, time defined" begin 
-    @parameters x, t 
+@testset "Test 00: recognize relevant variable for equations, time defined" begin
+    @parameters x, t
     @variables u(..), v(..), w(..)
 
     Dx(d) = Differential(x)^d
@@ -13,7 +13,7 @@ using Combinatorics: permutations
     t_min= 0.
     t_max = 2.0
     x_min = 0.
-    x_max = 20.0 
+    x_max = 20.0
 
     dx = 1.0
 
@@ -26,10 +26,10 @@ using Combinatorics: permutations
     bcs = [u(0,x) ~ 0, u(t,0) ~ 0, u(t,Float64(π)) ~ 0]
 
     @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
-    
-    # Test centered order 
+
+    # Test centered order
     disc = MOLFiniteDifference([x=>dx], t)
-    
+
     depvar_ops = map(x->operation(x.val),pdesys.depvars)
     depvars = MethodOfLines.get_all_depvars(pdesys, depvar_ops)
     indvars = MethodOfLines.remove(collect(reduce(union,filter(xs->!isequal(xs, [t]), map(arguments, depvars)))),t)
@@ -37,15 +37,13 @@ using Combinatorics: permutations
     s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
-    if VERSION >= v"1.7"
-        @test m == hcat([1,0,0],[0,1,0],[0,0,1]) # Test the matrix is the identity matrix
-    else
-        @test m == [0 1 0; 0 0 1; 1 0 0] 
-    end
+
+    @test m == [1 2 0; 1 0 3; 4 1 1]
+
 end
 
-@testset "Test 00a: recognize relevant variable for equations, time undefined, multiple choices" begin 
-    @parameters x, t 
+@testset "Test 00a: recognize relevant variable for equations, time undefined, multiple choices" begin
+    @parameters x, t
     @variables u(..), v(..), w(..)
 
     Dx(d) = Differential(x)^d
@@ -55,7 +53,7 @@ end
     t_min= 0.
     t_max = 2.0
     x_min = 0.
-    x_max = 20.0 
+    x_max = 20.0
 
     dx = 1.0
 
@@ -69,7 +67,7 @@ end
 
     @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
 
-    # Test centered order 
+    # Test centered order
     disc = MOLFiniteDifference([x=>dx, t=>dx])
 
     depvar_ops = map(x->operation(x.val),pdesys.depvars)
@@ -80,16 +78,11 @@ end
 
     m = MethodOfLines.buildmatrix(pde, s)
 
-    if VERSION >= v"1.7"
-        @test m == hcat([1,0,1],[0,1,1],[1,1,1]) # Test the matrix is the identity matrix
-    else
-        @test m == [1 1 0; 1 0 1; 1 1 1]
-    end
-
+    @test m == [2 2 0; 3 0 3; 4 4 4]
 end
 #
-@testset "Test 00b: recognize relevant variable for equations, time undefined, mixed derivatives, multiple choices" begin 
-    @parameters x, t 
+@testset "Test 00b: recognize relevant variable for equations, time undefined, mixed derivatives, multiple choices" begin
+    @parameters x, t
     @variables u(..), v(..), w(..)
 
     Dx(d) = Differential(x)^d
@@ -99,7 +92,7 @@ end
     t_min= 0.
     t_max = 2.0
     x_min = 0.
-    x_max = 20.0 
+    x_max = 20.0
 
     dx = 1.0
 
@@ -113,7 +106,7 @@ end
 
     @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
 
-    # Test centered order 
+    # Test centered order
     disc = MOLFiniteDifference([x=>dx, t=>1.0])
 
     depvar_ops = map(x->operation(x.val),pdesys.depvars)
@@ -124,11 +117,7 @@ end
 
     m = MethodOfLines.buildmatrix(pde, s)
 
-    if VERSION >= v"1.7"
-        @test m == hcat([1,0,1],[0,1,1],[0,1,1]) # Test the matrix is correct
-    else
-        @test m == [0 1 0; 1 0 1; 1 1 1]
-    end
+    @test m == [1 2 0; 3 0 3; 4 5 5]
 
 end
 
@@ -147,7 +136,7 @@ end
 end
 
 @testset "Test 01b: Build variable mapping - one right choice complex" begin
-    m = hcat([0, 1, 1], 
+    m = hcat([0, 1, 1],
              [1, 0, 1],
              [0, 1, 0])
     pdes = ["a", "b", "c"]
@@ -161,17 +150,17 @@ end
 end
 
 @testset "Test 01c: Build variable mapping - two right choices" begin
-    m = hcat([0, 1, 1], 
+    m = hcat([0, 1, 1],
              [1, 0, 1],
              [1, 1, 0])
     pdes = ["a", "b", "c"]
     vars = ["x", "y", "z"]
-
-    @test Dict(MethodOfLines.build_variable_mapping(m, vars, pdes)) == Dict([
+    out = Dict(MethodOfLines.build_variable_mapping(m, vars, pdes))
+    @test out == Dict([
         "a" => "y",
         "b" => "z",
         "c" => "x"
-    ]) || Dict(MethodOfLines.build_variable_mapping(m, pdes, vars)) == Dict([
+    ]) || out == Dict([
         "a" => "z",
         "b" => "x",
         "c" => "y"
@@ -179,7 +168,7 @@ end
 end
 
 @testset "Test 01d: Build variable mapping - any choice correct" begin
-    m = hcat([1, 1, 1], 
+    m = hcat([1, 1, 1],
              [1, 1, 1],
              [1, 1, 1])
     pdes = ["a", "b", "c"]
@@ -193,7 +182,7 @@ end
 end
 
 @testset "Test 01e: Build variable mapping - no correct mapping" begin
-    m = hcat([1, 1, 0], 
+    m = hcat([1, 1, 0],
              [1, 1, 0],
              [1, 1, 0])
 

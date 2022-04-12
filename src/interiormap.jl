@@ -108,7 +108,7 @@ function build_variable_mapping(m, vars, pdes)
         m[i, :] .= 0
         m[:, j] .= 0
     end
-    @assert length(varpdemap) == N "Could not map all variables to pdes"
+    @assert length(varpdemap) == N "Could not map all PDEs to variables to solve for, the system is unbalanced."
     return varpdemap
 end
 
@@ -141,8 +141,8 @@ function get_ranking!(varmap, term, x, s)
         count, vars = split(children)
         if op isa Differential && isequal(op.x, x)
             for var in vars
-                if varmap[var] < count + 2
-                    varmap[var] = count + 2
+                if varmap[var] < count + 1
+                    varmap[var] = count + 1
                 end
             end
             return (1 + count, vars)
