@@ -14,7 +14,7 @@ end
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
+function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}) where {N,M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
@@ -33,12 +33,12 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N, M}) where {N,M}
         for b in boundaries
             #@show b
             clip_interior!!(lower, upper, s, b)
-        end           
+        end
         push!(vlower, pde => lower)
         push!(vupper, pde => upper)
         args = remove(arguments(u), s.time)
         # Don't update this x2i, it is correct.
-        pde => s.Igrid[u][[(1 + lower[x2i(s, u, x)] : length(s.grid[x]) - upper[x2i(s, u, x)]) for x in args]...]
+        pde => s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
     end
     pdemap = [k.second => k.first for k in varmap]
     return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper))
@@ -50,15 +50,16 @@ function buildmatrix(pdes, s::DiscreteSpace{N,M}) where {N,M}
     elegiblevars = [getvars(pde, s) for pde in pdes]
     u2i = Dict([u => k for (k, u) in enumerate(s.ū)])
     #@show elegiblevars, s.ū
-    for (i, vars) in enumerate(elegiblevars)
-        for var in vars
-            m[i, u2i[var]] = 1
+    for (i, varmap) in enumerate(elegiblevars)
+        for var in keys(varmap)
+            m[i, u2i[var]] = varmap[var]
         end
     end
     return m
 end
 
 function build_variable_mapping(m, vars, pdes)
+    notzero(x) = x > 0 ? 1 : 0
     varpdemap = []
     N = length(pdes)
     rows = sum(m, dims=2)
@@ -69,12 +70,13 @@ function build_variable_mapping(m, vars, pdes)
     @assert j === nothing "Variable $(vars[j[2]]) does not appear in any equation, therefore cannot be solved for"
     for k in 1:N
         # Check if any of the pdes only have one valid variable
-        cols = sum(m, dims=1)
+        m_ones = notzero.(m)
+        cols = sum(m_ones, dims=1)
         j = findfirst(isequal(1), cols)
-        if j !== nothing 
+        if j !== nothing
             j = j[2]
             for i in 1:N
-                if m[i, j] == 1
+                if m[i, j] > 0
                     push!(varpdemap, pdes[i] => vars[j])
                     m[i, :] .= 0
                     m[:, j] .= 0
@@ -84,12 +86,12 @@ function build_variable_mapping(m, vars, pdes)
             continue
         end
         # Check if any of the variables only have one valid pde
-        rows = sum(m, dims=2)
+        rows = sum(m_ones, dims=2)
         i = findfirst(isequal(1), rows)
         if i !== nothing
             i = i[1]
             for j in 1:N
-                if m[i, j] == 1
+                if m[i, j] > 0
                     push!(varpdemap, pdes[i] => vars[j])
                     m[i, :] .= 0
                     m[:, j] .= 0
@@ -99,25 +101,18 @@ function build_variable_mapping(m, vars, pdes)
             continue
         end
         # Check if any of the variables have more than one valid pde, and pick one
-        i = findfirst(x -> x > 1, rows)
-        if i !== nothing 
-            i = i[1]
-            for j in 1:N
-                if m[i, j] == 1
-                    push!(varpdemap, pdes[i] => vars[j])
-                    m[i, :] .= 0
-                    m[:, j] .= 0
-                    break
-                end
-            end
-            continue
-        end
+        I = findmax(m)[2]
+        i = I[1]
+        j = I[2]
+        push!(varpdemap, pdes[i] => vars[j])
+        m[i, :] .= 0
+        m[:, j] .= 0
     end
     @assert length(varpdemap) == N "Could not map all variables to pdes"
     return varpdemap
 end
 
-@inline function split(children) 
+@inline function split(children)
     count = [child[1] for child in children]
     # if there are more than one depvars at that order, include all of them
     is = findall(a -> a == maximum(count), count)
@@ -125,9 +120,10 @@ end
     return (sum(count), vars)
 end
 """
-Counts the Differential operators for given variable x, and the derived variables at that order
+Creates a ranking of the variables in the term, based on their derivative order.
+The heuristic that should work is, if there's a time derivative then use that variable, otherwise use the highest derivative for that variable. If there are two with the highest derivative, pick first from the list that hasn't been chosen for another equation
 """
-function get_order_and_depvars(term, x, s)
+function get_ranking!(varmap, term, x, s)
     if !istree(term)
         return (0, [])
     end
@@ -135,37 +131,44 @@ function get_order_and_depvars(term, x, s)
     SU = SymbolicUtils
     #@show term
     if findfirst(isequal(term), s.ū) !== nothing
-        return (0, [term])
+        if varmap[term] < 1
+            varmap[term] = 1
+        end
+        return (1, [term])
     else
         op = SU.operation(term)
-        children = map(arg -> get_order_and_depvars(arg, x, s), SU.arguments(term))
+        children = map(arg -> get_ranking!(varmap, arg, x, s), SU.arguments(term))
         count, vars = split(children)
         if op isa Differential && isequal(op.x, x)
-            return (1 + count, vars) 
+            for var in vars
+                if varmap[var] < count + 2
+                    varmap[var] = count + 2
+                end
+            end
+            return (1 + count, vars)
         end
         return (count, vars)
     end
 end
 
-get_order_and_depvars(eq::Equation, x, s) = split([get_order_and_depvars(eq.lhs, x, s), get_order_and_depvars(eq.rhs, x, s)])
-
 function getvars(pde, s)
     ct = 0
     ut = []
+    # Create ranking for each variable
+    varmap = Dict([u => 0 for u in s.ū])
     if s.time !== nothing
-        l = get_order_and_depvars(pde.lhs, s.time, s)
-        r = get_order_and_depvars(pde.rhs, s.time, s)
-        ct, ut = split([l, r])
-        if ct > 0
-            return ut
+        l = get_ranking!(varmap, pde.lhs, s.time, s)
+        r = get_ranking!(varmap, pde.rhs, s.time, s)
+        for u in s.ū
+            if varmap[u] > 0
+                varmap[u] += div(typemax(Int) + 1, 2) #Massively weight derivatives in time
+            end
         end
     end
-    countsx = vcat(map(s.x̄) do x
-        l = get_order_and_depvars(pde.lhs, x, s)
-        r = get_order_and_depvars(pde.rhs, x, s)
+    for x in s.x̄
+        l = get_ranking!(varmap, pde.lhs, x, s)
+        r = get_ranking!(varmap, pde.rhs, x, s)
         split([l, r])
-    end, (ct, ut))
-    _, vars = split(countsx)
-    return vars
+    end
+    return varmap
 end
-
