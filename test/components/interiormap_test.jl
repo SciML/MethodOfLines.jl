@@ -130,6 +130,49 @@ end
 
 end
 
+@testset "Test 00c: recognize relevant variable for equations, time undefined, ranking important" begin
+    @parameters x, t
+    @variables u(..), v(..), w(..)
+
+    Dx = Differential(x)
+
+    Dt = Differential(t)
+
+    t_min= 0.
+    t_max = 2.0
+    x_min = 0.
+    x_max = 20.0
+
+    dx = 1.0
+
+    domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
+
+    pde  = [Dt(u(t,x)) ~ Dx(v(t,x)),
+            u(t,x) ~ w(t,x)*w(t,x),
+            v(t,x) ~ w(t,x)*Dx(w(t,x))]
+
+    bcs = [u(0,x) ~ 0, u(t,0) ~ 0, u(t,Float64(π)) ~ 0]
+
+    @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
+
+    # Test centered order
+    disc = MOLFiniteDifference([x=>dx, t=>1.0])
+
+    depvar_ops = map(x->operation(x.val),pdesys.depvars)
+    depvars = MethodOfLines.get_all_depvars(pdesys, depvar_ops)
+    indvars = collect(reduce(union,filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
+
+    s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
+
+    m = MethodOfLines.buildmatrix(pde, s)
+    if VERSION >= v"1.7"
+        @test m == [2 0 1; 0 3 3; 5 5 4]
+    else
+        @test m == [0 2 2; 1 1 0; 2 0 1]
+    end
+
+end
+
 @testset "Test 01a: Build variable mapping - one right choice simple" begin
     m = hcat([0, 1, 0],
              [0, 0, 1],
