@@ -166,7 +166,7 @@ end
 
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
-        @test m == [2 0 1; 0 3 3; 5 5 4]
+        @test m == [2 2 0; 1 0 1; 0 1 2]
     else
         @test m == [0 2 2; 1 1 0; 2 0 1]
     end
