@@ -278,22 +278,27 @@ end
         t ∈ Interval(t_min, t_max)]
 
     bcs = [u(x, y, 0) ~ u0(x, y, 0),
-        u(0, y, t) ~ u(1, y, t),
-        u(x, 0, t) ~ u(x, 1, t), v(x, y, 0) ~ v0(x, y, 0),
-        v(0, y, t) ~ v(1, y, t),
-        v(x, 0, t) ~ v(x, 1, t)]
+        u(0, y, t) ~ 0.0,
+        u(1, y, t) ~ 0.0,
+        u(x, 0, t) ~ 0.0,
+        u(x, 1, t) ~ 0.0,
+        v(x, y, 0) ~ v0(x, y, 0),
+        v(0, y, t) ~ 0.0,
+        v(1, y, t) ~ 0.0,
+        v(x, 0, t) ~ 0.0,
+        v(x, 1, t) ~ 0.0]
 
     @named pdesys = PDESystem(eq, bcs, domains, [x, y, t], [u(x, y, t), v(x, y, t)])
 
     # Method of lines discretization
     N = 5
 
-    dx = rand(0.05:0:1:0.2, 5)
+    dx = rand(0.05:0.1:0.2, 5)
     if dx[end] < 1.0
         push!(dx, 1.0)
     end
 
-    dy = rand(0.05:0:1:0.2, 5)
+    dy = rand(0.05:0.1:0.2, 5)
     if dy[end] < 1.0
         push!(dy, 1.0)
     end

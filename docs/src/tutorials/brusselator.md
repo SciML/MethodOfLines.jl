@@ -96,8 +96,8 @@ Then, we create the discretization, leaving the time dimension undiscretized by 
 ```julia
 N = 32
 
-dx = 1/N
-dy = 1/N
+dx = (x_max-x_min)/N
+dy = (y_max-y_min)/N
 
 order = 2
 
@@ -112,7 +112,7 @@ println("Discretization:")
 ```
 
 ## Solving the problem
-Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://diffeq.sciml.ai/stable/solvers/ode_solve/) and [`NonlinearSolve.jl`](http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/).
+Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://diffeq.sciml.ai/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/) and [SteadyStateDiffEq.jl](https://diffeq.sciml.ai/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl).
 
 ```julia
 println("Solve:")

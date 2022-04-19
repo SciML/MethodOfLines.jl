@@ -52,14 +52,13 @@ function DifferentialDiscretizer(pdesys, s, discretization)
 
             discx = s.grid[x]
             nonlinlap_inner = vcat(nonlinlap_inner, [Differential(x)^d => CompleteHalfCenteredDifference(d, approx_order, s.grid[x]) for d in _orders])
-            nonlinlap_outer = push!(nonlinlap_outer, Differential(x) => CompleteHalfCenteredDifference(1, approx_order, [(discx[i+1] + discx[i]) / 2 for i in eachindex(discx)]))
+            nonlinlap_outer = push!(nonlinlap_outer, Differential(x) => CompleteHalfCenteredDifference(1, approx_order, [(discx[i+1] + discx[i]) / 2 for i in 1:length(discx)-1]))
             differentialmap = vcat(differentialmap, rs)
             # A 0th order derivative off the grid is an interpolation
             push!(interp, x => CompleteHalfCenteredDifference(0, approx_order, s.grid[x]))
         else
             @assert false "s.grid contains nonvectors"
         end
-
     end
 
     return DifferentialDiscretizer{eltype(orders),typeof(Dict(differentialmap))}(approx_order, Dict(differentialmap), (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)), Dict(interp), Dict(orders))
@@ -118,51 +117,52 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, b, jx, u,
     return dot(weights, ufunc(u, Itap, x))
 end
 
-@inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, I, s, b, ispositive, u, jx) where {T,N,Wind,DX<:Number}
+@inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, b, ispositive, u, jx) where {T,N,Wind,DX<:Number}
     j, x = jx
     I1 = unitindex(ndims(u, s), j)
     if ispositive
-        if (I > (length(s, x) - D.boundary_point_count)) & (b isa Val{false})
-            weights = D.high_boundary_coefs[length(s, x)-I+1]
-            offset = length(s, x) - I
-            Itap = [(i + offset) * I1 for i in (-D.boundary_stencil_length+1):1:0]
+        if (II[j] > (length(s, x) - D.boundary_point_count)) & (b isa Val{false})
+            weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
+            offset = length(s, x) - II[j]
+            Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):0]
         else
-            weights = D.stencil_coefs[I]
-            Itap = [i * I1 for i in 0:D.stencil_length-1]
+            weights = D.stencil_coefs
+            Itap = [II + i * I1 for i in 0:D.stencil_length-1]
         end
     else
-        if (I <= D.boundary_point_count) & (b isa Val{false})
-            weights = D.low_boundary_coefs[I]
-            offset = 1 - I
-            Itap = [(i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
+        if (II[j] <= D.offside) & (b isa Val{false})
+            weights = D.low_boundary_coefs[II[j]]
+            offset = 1 - II[j]
+            Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
         else
-            weights = D.stencil_coefs[I-D.boundary_point_count]
-            Itap = [i * I1 for i in -D.stencil_length+1:0]
+            weights = D.stencil_coefs
+            Itap = [II + i * I1 for i in -D.stencil_length+1:0]
         end
     end
+    return weights, Itap
 end
 
-@inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, I, s, b, ispositive, u, jx) where {T,N,Wind,DX<:AbstractVector}
+@inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, b, ispositive, u, jx) where {T,N,Wind,DX<:AbstractVector}
     j, x = jx
     @assert b isa Val{false} "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     I1 = unitindex(ndims(u, s), j)
     if ispositive
-        if (I > (length(s, x) - D.boundary_point_count))
-            weights = D.high_boundary_coefs[length(s, x)-I+1]
-            offset = length(s, x) - I
-            Itap = [(i + offset) * I1 for i in (-D.boundary_stencil_length+1):1:0]
+        if (II[j] > (length(s, x) - D.boundary_point_count))
+            weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
+            offset = length(s, x) - II[j]
+            Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):0]
         else
-            weights = D.stencil_coefs[I]
-            Itap = [i * I1 for i in 0:D.stencil_length-1]
+            weights = D.stencil_coefs[II[j]]
+            Itap = [II + i * I1 for i in 0:D.stencil_length-1]
         end
     else
-        if (I <= D.boundary_point_count)
-            weights = D.low_boundary_coefs[I]
-            offset = 1 - I
-            Itap = [(i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
+        if (II[j] <= D.offside)
+            weights = D.low_boundary_coefs[II[j]]
+            offset = 1 - II[j]
+            Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
         else
-            weights = D.stencil_coefs[I-D.boundary_point_count]
-            Itap = [i * I1 for i in -D.stencil_length+1:0]
+            weights = D.stencil_coefs[II[j] - D.offside]
+            Itap = [II + i * I1 for i in -D.stencil_length+1:0]
         end
     end
     return weights, Itap
@@ -174,9 +174,7 @@ function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, b, deri
     D = ispositive ? derivweights.windmap[1][Differential(x)^d] : derivweights.windmap[2][Differential(x)^d]
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative
-    weights, Itap = _upwind_difference(D, II[j], s, b, ispositive, u, jx)
-    Itap = wrapperiodic.((II,) .+ Itap, (s,), (b,), (u,), (jx,))
-    weights = weights
+    weights, Itap = _upwind_difference(D, II, s, b, ispositive, u, jx)
     return dot(weights, ufunc(u, Itap, x))
 end
 
