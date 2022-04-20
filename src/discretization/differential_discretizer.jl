@@ -127,7 +127,7 @@ end
             Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):0]
         else
             weights = D.stencil_coefs
-            Itap = [II + i * I1 for i in 0:D.stencil_length-1]
+            Itap = [wrapperiodic(II + i * I1, s, b, u, jx) for i in 0:D.stencil_length-1]
         end
     else
         if (II[j] <= D.offside) & (b isa Val{false})
@@ -136,7 +136,7 @@ end
             Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
         else
             weights = D.stencil_coefs
-            Itap = [II + i * I1 for i in -D.stencil_length+1:0]
+            Itap = [wrapperiodic(II + i * I1, s, b, u, jx) for i in -D.stencil_length+1:0]
         end
     end
     return weights, Itap
@@ -147,6 +147,8 @@ end
     @assert b isa Val{false} "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     I1 = unitindex(ndims(u, s), j)
     if ispositive
+        @assert D.offside == 0
+
         if (II[j] > (length(s, x) - D.boundary_point_count))
             weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
             offset = length(s, x) - II[j]

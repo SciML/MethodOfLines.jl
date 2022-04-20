@@ -293,12 +293,12 @@ end
     # Method of lines discretization
     N = 5
 
-    dx = rand(0.05:0.1:0.2, 5)
+    dx = [0.0, cumsum(rand(0.05:0.01:0.2, 5))...]
     if dx[end] < 1.0
         push!(dx, 1.0)
     end
 
-    dy = rand(0.05:0.1:0.2, 5)
+    dy = [0.0, cumsum(rand(0.05:0.01:0.2, 5))...]
     if dy[end] < 1.0
         push!(dy, 1.0)
     end
