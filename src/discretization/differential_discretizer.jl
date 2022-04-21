@@ -198,7 +198,7 @@ function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX},
     I1 = unitindex(ndims(u, s), j)
     # offset is important due to boundary proximity
 
-    if (II[j] < D.boundary_point_count) & (b isa Val{false})
+    if (II[j] <= D.boundary_point_count) & (b isa Val{false})
         weights = D.low_boundary_coefs[II[j]]
         offset = 1 - II[j]
         Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
@@ -224,17 +224,17 @@ function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX},
     I1 = unitindex(ndims(u, s), j)
     # offset is important due to boundary proximity
 
-    if (II[j] < D.boundary_point_count) & (b isa Val{false})
+    if (II[j] <= D.boundary_point_count)
         weights = D.low_boundary_coefs[II[j]]
         offset = 1 - II[j]
         Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
-    elseif (II[j] > (len - D.boundary_point_count)) & (b isa Val{false})
+    elseif (II[j] > (len - D.boundary_point_count))
         weights = D.high_boundary_coefs[len-II[j]]
         offset = len - II[j]
         Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):0]
     else
         weights = D.stencil_coefs[II[j]-D.boundary_point_count]
-        Itap = [wrapperiodic(II + i * I1, s, b, u, jx) for i in (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
+        Itap = [II + i * I1 for i in (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
     end
 
     return (weights, Itap)
