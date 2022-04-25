@@ -31,8 +31,9 @@ const shouldplot = false
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
 
     # Method of lines discretization
-    dx = range(0.0,Float64(π)-1/3,length=30)
-    dx_ = dx[2]-dx[1]-1/3
+    dx = range(0.0,Float64(π),length=30)
+    dx_ = dx[2]-dx[1]
+
     order = 2
     discretization = MOLFiniteDifference([x=>dx_],t)
     discretization_edge = MOLFiniteDifference([x=>dx_],t;grid_align=edge_align)
@@ -49,7 +50,7 @@ const shouldplot = false
         sol = solve(prob,Tsit5(),saveat=0.1)
 
         if disc.grid_align == center_align
-            x = dx[2:end-1]
+            x = (0.0:dx_:Float64(π))[2:end-1]
         else
             x = ((0.0-dx_/2): dx_ : (Float64(π)+dx_/2))[2:end-1]
         end
@@ -86,7 +87,7 @@ end
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)],[D=>10.0])
 
     # Method of lines discretization
-    dx = 0.1
+    dx = 1/(5pi)
     order = 2
     discretization = MOLFiniteDifference([x=>dx],t)
 
