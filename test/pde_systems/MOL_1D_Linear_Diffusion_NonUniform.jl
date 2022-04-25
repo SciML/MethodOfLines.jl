@@ -368,13 +368,13 @@ end
     t = sol.t
 
 
-    anim = @animate for (i, T) in enumerate(t)
-        exact = u_exact(x, T)
-        plot(x, exact, seriestype=:scatter, label="Analytic solution")
-        plot!(x, sol.u[i], label="Numeric solution")
-        plot!(x, log10.(abs.(exact - sol.u[i])), label="log10 Error at t = $(t[i])")
-    end
-    gif(anim, "plots/MOL_Linear_Diffusion_1D_Test06_$(disc.grid_align).gif", fps=5)
+    # anim = @animate for (i, T) in enumerate(t)
+    #     exact = u_exact(x, T)
+    #     plot(x, exact, seriestype=:scatter, label="Analytic solution")
+    #     plot!(x, sol.u[i], label="Numeric solution")
+    #     plot!(x, log10.(abs.(exact - sol.u[i])), label="log10 Error at t = $(t[i])")
+    # end
+    # gif(anim, "plots/MOL_Linear_Diffusion_1D_Test06_$(disc.grid_align).gif", fps=5)
 
 
     # Test against exact solution

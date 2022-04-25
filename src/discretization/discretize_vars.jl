@@ -24,7 +24,7 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
         discx = dx isa Number ? (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : dx
         xhigh = DomainSets.supremum(xdomain.domain)
         if discx[end] != xhigh
-            @warn "Discretization of space variable $x is not a multiple of the domain size, rounding up to $(xhigh))"
+            @warn "d$x for $x does not divide domain exactly, adding grid point at $(xhigh))."
             discx = collect(discx)
             push!(discx, xhigh)
         end
@@ -141,8 +141,8 @@ end
             x => (DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2)
         else
             discx = [(dict[x][i]+dict[x][i+1])/2 for i in 1:length(dict[x])-1]
-            pushfirst!(discx, discx[1]-(discx[2]-discx[1])/2)
-            push!(discx, discx[end]+(discx[end]-discx[end-1])/2)
+            pushfirst!(discx, discx[1] - 2*(discx[1] - infimum(xdomain.domain)))
+            push!(discx, discx[end] + 2*(supremum(xdomain.domain) - discx[end]))
             x => discx
         end
     end

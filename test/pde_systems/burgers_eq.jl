@@ -16,7 +16,8 @@ using DomainSets
     eq = Dt(u(t, x)) + u(t, x) * Dx(u(t, x)) ~ 0
 
     bcs = [u(0, x) ~ x,
-        u(t, x_min) ~ 0]
+        u(t, x_min) ~ analytic_u(t, x_min),
+        u(t, x_max) ~ analytic_u(t, x_max)]
 
     domains = [t ∈ Interval(t_min, t_max),
         x ∈ Interval(x_min, x_max)]
@@ -31,13 +32,14 @@ using DomainSets
 
     sol = solve(prob, Tsit5())
 
-    x_disc = 0:dx:1
+    grid = get_discrete(pdesys, disc)
+    x_disc = grid[x]
+    solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
 
-    for t in sol.t
+    for (i, t) in enumerate(sol.t)
         u_analytic = analytic_u.([t], x_disc)
-        u_disc = sol[u]
-
-        @test all(isapprox.(u_analytic, u_disc), atol=1e-3)
+        u_disc = solu[i]
+        @test all(isapprox.(u_analytic, u_disc, atol=1e-3))
     end
 end
 
@@ -56,7 +58,8 @@ end
     eq = Dt(u(t, x)) + u(t, x) * Dx(u(t, x)) ~ 0
 
     bcs = [u(0, x) ~ x,
-        u(t, x_min) ~ 0]
+        u(t, x_min) ~ analytic_u(t, x_min),
+        u(t, x_max) ~ analytic_u(t, x_max)]
 
     domains = [t ∈ Interval(t_min, t_max),
         x ∈ Interval(x_min, x_max)]
@@ -73,13 +76,14 @@ end
 
     sol = solve(prob, Tsit5())
 
-    x_disc = dx
+    grid = get_discrete(pdesys, disc)
+    x_disc = grid[x]
+    solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
 
-    for t in sol.t
+    for (i, t) in enumerate(sol.t)
         u_analytic = analytic_u.([t], x_disc)
-        u_disc = sol[u]
-
-        @test all(isapprox.(u_analytic, u_disc), atol=1e-3)
+        u_disc = solu[i]
+        @test all(isapprox.(u_analytic, u_disc, atol=1e-3))
     end
 end
 

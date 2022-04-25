@@ -419,13 +419,14 @@ end
     # Solve ODE problem
     sol = solve(prob,Rodas4(),reltol=1e-6,saveat=0.1)
 
-    x = (-1:dx:1)[2:end-1]
+    grid = get_grid(pdesys, discretization)
+    discx = grid[x][2:end-1]
     t = sol.t
 
     # Test against exact solution
     for i in 1:length(sol)
 
-       exact = u_exact(x, t[i])
+       exact = u_exact(discx, t[i])
        u_approx = sol.u[i]
        @test all(isapprox.(u_approx, exact, atol=0.06))
     end

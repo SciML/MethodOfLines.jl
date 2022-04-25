@@ -53,7 +53,7 @@ using ModelingToolkit: Differential
     # Test against exact solution
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = floor(Int64, (x_max - x_min) / dx) + 1
+    Nx = length(dx)
     @variables u[1:Nx](t)
     sol′ = [sol[u[i]][end] for i in 1:Nx]
     @test asf ≈ sol′ atol = 0.1
@@ -173,7 +173,7 @@ end
     # Test against exact solution
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = floor(Int64, (x_max - x_min) / dx) + 1
+    Nx = length(dx)
     @variables u[1:Nx](t)
     sol′ = [sol[u[i]][end] for i in 1:Nx]
     @test asf ≈ sol′ atol = 0.01
@@ -237,7 +237,7 @@ end
     # Test against exact solution
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = floor(Int64, (x_max - x_min) / dx) + 1
+    Nx = length(dx)
     @variables u[1:Nx](t)
     sol′ = [sol[u[i]][end] for i in 1:Nx]
     @test asf ≈ sol′ atol = 0.01
@@ -319,7 +319,7 @@ end
     t_min = 0.0
     t_max = 2.0
     x_min = 0.0
-    x_max = 2.0
+    x_max = 0.8
 
     # Analytic solution
     analytic_sol_func(t, x) = tan(x)
@@ -341,7 +341,7 @@ end
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization
-    dx = 0:0.01:2
+    dx = 0:0.01:0.8
     dx = collect(dx)
     dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
 
@@ -355,7 +355,7 @@ end
     # Test against exact solution
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = floor(Int64, (x_max - x_min) / dx) + 1
+    Nx = length(dx)
     @variables u[1:Nx](t)
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
@@ -380,7 +380,7 @@ end
     t_min = 0.0
     t_max = 2.0
     x_min = 0.0
-    x_max = 2.0
+    x_max = 0.8
 
     # Analytic solution
     analytic_sol_func(t, x) = tan(x)
@@ -401,7 +401,7 @@ end
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization
-    dx = 0:0.01:2
+    dx = 0:0.01:0.8
     dx = collect(dx)
     dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
 
@@ -415,7 +415,7 @@ end
     # Test against exact solution
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = floor(Int64, (x_max - x_min) / dx) + 1
+    Nx = length(dx)
     @variables u[1:Nx](t)
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
@@ -476,7 +476,7 @@ end
     # Test against exact solution
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = floor(Int64, (x_max - x_min) / dx) + 1
+    Nx = length(dx)
     @variables u[1:Nx](t)
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
@@ -536,7 +536,7 @@ end
     # Test against exact solution
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = floor(Int64, (x_max - x_min) / dx) + 1
+    Nx = length(dx)
     @variables u[1:Nx](t)
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
