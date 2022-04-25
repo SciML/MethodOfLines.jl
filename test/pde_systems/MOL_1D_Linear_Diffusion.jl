@@ -31,8 +31,8 @@ const shouldplot = false
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
 
     # Method of lines discretization
-    dx = range(0.0,Float64(π),length=30)
-    dx_ = dx[2]-dx[1]
+    dx = range(0.0,Float64(π)-1/3,length=30)
+    dx_ = dx[2]-dx[1]-1/3
     order = 2
     discretization = MOLFiniteDifference([x=>dx_],t)
     discretization_edge = MOLFiniteDifference([x=>dx_],t;grid_align=edge_align)
@@ -193,11 +193,11 @@ end
 
         # Plots
         # if shouldplot
-        #     anim = @animate for (i,T) in enumerate(t_sol) 
+        #     anim = @animate for (i,T) in enumerate(t_sol)
         #         exact = u_exact(x_sol, T)
         #         plot(x_sol, exact, seriestype = :scatter,label="Analytic solution")
         #         plot!(x_sol, sol.u[i], label="Numeric solution")
-        #         plot!(x_sol, log.(abs.(exact-sol.u[i])), label="Log Error at t = $(t_sol[i])")
+        #         plot!(x_sol, log10.(abs.(exact-sol.u[i])), label="log10 Error at t = $(t_sol[i])")
         #     end
         #     gif(anim, "plots/MOL_Linear_Diffusion_1D_Test03_$disc.gif", fps = 5)
         # end
@@ -256,14 +256,14 @@ end
             x = ((0.0-dx_/2): dx_ : (Float64(π)+dx_/2))[2:end-1]
         end
         t = sol.t
-        
+
         # # Plots
-        # if shouldplot 
-        #     anim = @animate for (i,T) in enumerate(t) 
+        # if shouldplot
+        #     anim = @animate for (i,T) in enumerate(t)
         #         exact = u_exact(x, T)
         #         plot(x, exact, seriestype = :scatter,label="Analytic solution")
         #         plot!(x, sol.u[i], label="Numeric solution")
-        #         plot!(x, log.(abs.(exact-sol.u[i])), label="Log Error at t = $(t[i])")
+        #         plot!(x, log10.(abs.(exact-sol.u[i])), label="log10 Error at t = $(t[i])")
         #     end
         #     gif(anim, "plots/MOL_Linear_Diffusion_1D_Test03a_$disc.gif", fps = 5)
         # end
@@ -423,7 +423,7 @@ end
 
     # Test against exact solution
     for i in 1:length(sol)
-      
+
        exact = u_exact(x, t[i])
        u_approx = sol.u[i]
        @test all(isapprox.(u_approx, exact, atol=0.06))
@@ -469,11 +469,11 @@ end
     r = (0:dr:1)[2:end-1]
     t = sol.t
     # if shouldplot
-    #     anim = @animate for (i,T) in enumerate(t) 
+    #     anim = @animate for (i,T) in enumerate(t)
     #         exact = u_exact(r, T)
     #         plot(r, exact, seriestype = :scatter,label="Analytic solution")
     #         plot!(r, sol.u[i], label="Numeric solution")
-    #         plot!(r, log.(abs.(exact-sol.u[i])), label="Log Error at t = $(t[i])")
+    #         plot!(r, log10.(abs.(exact-sol.u[i])), label="log10 Error at t = $(t[i])")
     #     end
     #     gif(anim, "plots/MOL_Linear_Diffusion_1D_Test07.gif", fps = 5)
     # end
@@ -526,11 +526,11 @@ end
     t = sol.t
 
     # if shouldplot
-    #     anim = @animate for (i,T) in enumerate(t) 
+    #     anim = @animate for (i,T) in enumerate(t)
     #         exact = u_exact(r, T)
     #         plot(r, exact, seriestype = :scatter,label="Analytic solution")
     #         plot!(r, sol.u[i], label="Numeric solution")
-    #         plot!(r, log.(abs.(exact-sol.u[i])), label="Log Error at t = $(t[i])")
+    #         plot!(r, log10.(abs.(exact-sol.u[i])), label="log10 Error at t = $(t[i])")
     #     end
     #     gif(anim, "plots/MOL_Linear_Diffusion_1D_Test08.gif", fps = 5)
     # end
@@ -686,7 +686,7 @@ end
 
     # Parameters, variables, and derivatives
     @parameters t x y
-    @variables u[1:2](..) 
+    @variables u[1:2](..)
     Dt = Differential(t)
     Dx = Differential(x)
     Dxx = Dx^2

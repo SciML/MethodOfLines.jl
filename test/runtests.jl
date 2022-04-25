@@ -36,6 +36,12 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
         @time @safetestset "MOLFiniteDifference Interface: 1D Non-Linear Diffusion" begin include("pde_systems/MOL_1D_NonLinear_Diffusion.jl") end
     end
 
+    if GROUP == "All" || GROUP == "Nonlinear_Diffusion_NU"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Non-Linear Diffusion, Non-Uniform" begin
+            include("pde_systems/MOL_1D_NonLinear_Diffusion_NonUniform.jl")
+        end
+    end
+
     if GROUP == "All" || GROUP == "2D_Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 2D Diffusion" begin include("pde_systems/MOL_2D_Diffusion.jl") end
     end

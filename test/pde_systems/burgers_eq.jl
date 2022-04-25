@@ -23,7 +23,7 @@ using DomainSets
 
     dx = 0.05
 
-    pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     disc = MOLFiniteDifference([x => dx], t, upwind_order=1)
 
@@ -61,7 +61,7 @@ end
     domains = [t ∈ Interval(t_min, t_max),
         x ∈ Interval(x_min, x_max)]
 
-    pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     dx = 0:0.05:1
     dx = collect(dx)

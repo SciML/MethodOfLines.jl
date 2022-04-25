@@ -21,7 +21,14 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
     axies = map(x̄) do x
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
         dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
-        dx isa Number ? x => (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : x => dx
+        discx = dx isa Number ? (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : dx
+        xhigh = DomainSets.supremum(xdomain.domain)
+        if discx[end] != xhigh
+            @warn "Discretization of space variable $x is not a multiple of the domain size, rounding up to $(xhigh))"
+            discx = collect(discx)
+            push!(discx, xhigh)
+        end
+        x => discx
     end
 
     # Define the grid on which the dependent variables will be evaluated (see #378)
@@ -126,10 +133,18 @@ map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} 
 end
 
 @inline function generate_grid(x̄, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:EdgeAlignedGrid}
+    dict = Dict(axies)
     return map(x̄) do x
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
         dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
-        dx isa Number ? (x => ((DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2))) : x => dx
+        if dict[x] isa StepRangeLen
+            x => (DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2)
+        else
+            discx = [(dict[x][i]+dict[x][i+1])/2 for i in 1:length(dict[x])-1]
+            pushfirst!(discx, discx[1]-(discx[2]-discx[1])/2)
+            push!(discx, discx[end]+(discx[end]-discx[end-1])/2)
+            x => discx
+        end
     end
 end
 
