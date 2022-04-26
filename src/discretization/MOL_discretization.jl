@@ -152,13 +152,7 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
             return prob = ODEProblem(simpsys,Pair[],tspan)
         end
     catch e
-        println("The system of equations is:")
-        println(sys.eqs)
-        println()
-        println("Discretization failed at structural_simplify, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
-        println()
-        println(sys.states)
-        rethrow(e)
+        error_analysis(sys, e)
     end
 end
 
