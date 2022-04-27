@@ -17,7 +17,7 @@ Allowable terms in the system include, but are not limited to
 - Reaction
 - Nonlinear Diffusion
 - Spherical laplacian
-- Any Julia function of the symbolic parameters/dependant variables and other parameters in the environment that's defined on the whole domain. Note that more complicated functions may require registration with `@register`, see the [ModelingToolkit.jl docs](https://docs.juliahub.com/ModelingToolkit/Qmdqu/4.1.0/IR/).
+- Any Julia function of the symbolic parameters/dependant variables and other parameters in the environment that's defined on the whole domain. Note that more complicated functions may require registration with `@register`, see the [ModelingToolkit.jl docs](https://mtk.sciml.ai/stable/basics/Validation/#User-Defined-Registered-Functions-and-Types).
 
 Boundary conditions include, but are not limited to:
 - Dirichlet
