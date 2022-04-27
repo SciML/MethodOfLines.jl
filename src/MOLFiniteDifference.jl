@@ -15,7 +15,7 @@ function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, upwind_order =
     @assert approx_order >= 1 "approx_order must be at least 1"
     @assert upwind_order >= 1 "upwind_order must be at least 1"
 
-    @assert (t isa Num | t isa Nothing) "time must be a Num, or Nothing. See docs for MOLFiniteDifference."
+    @assert (time isa Num | time isa Nothing) "time must be a Num, or Nothing. See docs for MOLFiniteDifference."
 
     return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order, upwind_order, grid_align)
 end
