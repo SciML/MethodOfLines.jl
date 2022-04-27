@@ -44,7 +44,7 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
         elseif discx isa AbstractVector # is an abstract vector but not StepRangeLen
             x => [discx[i+1] - discx[i] for i in 1:length(x)]
         else
-            throw(ArgumentError("Supplied dx is not a Number or AbstractVector, got $(typeof(discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2])) for $x"))
+            throw(ArgumentError("Supplied d$x is not a Number or AbstractVector, got $(typeof(discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2])) for $x"))
         end
     end
 
