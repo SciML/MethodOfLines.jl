@@ -15,7 +15,7 @@ makedocs(
         "MethodOfLines.jl: Automated Finite Difference for Phyiscs-Informed Learning" => "index.md",
         "Tutorials" => ["tutorials/brusselator.md", "tutorials/icbc_sampled.md"],
         "MOLFiniteDifference" => "MOLFiniteDifference.md",
-        "Grid and solution retrieval" => "get_grid.md"
+        "Grid and solution retrieval" => "get_grid.md",
         "Boundary Conditions" => "boundary_conditions.md",
         "Non-Uniform Rectilinear Grids" => "nonuniform.md",
         "Curvilinear Grids" => "curvilinear_grids.md",
