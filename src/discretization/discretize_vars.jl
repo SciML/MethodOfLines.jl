@@ -24,7 +24,7 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
         discx = dx isa Number ? (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : dx
         xhigh = DomainSets.supremum(xdomain.domain)
         if discx[end] != xhigh
-            @warn "d$x for $x does not divide domain exactly, adding grid point at $(xhigh))."
+            @warn "d$x for $x does not divide domain exactly, adding grid point at $x = $(xhigh))."
             discx = collect(discx)
             push!(discx, xhigh)
         end
