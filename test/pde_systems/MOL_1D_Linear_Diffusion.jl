@@ -419,7 +419,7 @@ end
     # Solve ODE problem
     sol = solve(prob,Rodas4(),reltol=1e-6,saveat=0.1)
 
-    grid = get_grid(pdesys, discretization)
+    grid = get_discrete(pdesys, discretization)
     discx = grid[x][2:end-1]
     t = sol.t
 

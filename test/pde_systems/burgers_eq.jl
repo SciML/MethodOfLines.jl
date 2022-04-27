@@ -36,9 +36,9 @@ using DomainSets
     x_disc = grid[x]
     solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
 
-    for (i, t) in enumerate(sol.t)
+    for (i, t) in enumerate(sol.t[5:end])
         u_analytic = analytic_u.([t], x_disc)
-        u_disc = solu[i]
+        u_disc = solu[i+4]
         @test_broken all(isapprox.(u_analytic, u_disc, atol=1e-3))
     end
 end
@@ -80,9 +80,9 @@ end
     x_disc = grid[x]
     solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
 
-    for (i, t) in enumerate(sol.t)
+    for (i, t) in enumerate(sol.t[5:end])
         u_analytic = analytic_u.([t], x_disc)
-        u_disc = solu[i]
+        u_disc = solu[i+4]
         @test_broken all(isapprox.(u_analytic, u_disc, atol=1e-3))
     end
 end
