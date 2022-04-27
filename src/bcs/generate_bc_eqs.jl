@@ -19,7 +19,7 @@ function generate_bc_eqs!(bceqs, s::DiscreteSpace{N}, boundaryvalfuncs, interior
         end
     end
 
-    
+
     push!(bceqs, vec(map(edge(s, boundary, interiormap)) do II
         disc[II] ~ disc[II + Ioffset]
     end))
@@ -45,14 +45,14 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
 
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
-    
+
     u = depvar(u_, s)
     args = params(u, s)
     j = findfirst(isequal(x_), args)
-    
-    # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower    
+
+    # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     is = [II[indexmap[x]] for x in filter(!isequal(x_), args)]
-    
+
     is = [is[1:j-1]..., idx(boundary, s), is[j:end]...]
     II = CartesianIndex(is...)
 
@@ -60,7 +60,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     shift(::LowerBoundary) = zero(II)
     shift(::UpperBoundary) = unitindex(N, j)
 
-    depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[Differential(x_)^d], II-shift(boundary), s, isperiodic(boundary), (j,x_), u, ufunc) for d in derivweights.orders[x_]]
+    depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[1][Differential(x_)^d], II-shift(boundary), s, isperiodic(boundary), (j,x_), u, ufunc) for d in derivweights.orders[x_]]
 
     depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II-shift(boundary), s, isperiodic(boundary), (j,x_), u, ufunc)]
 
@@ -73,15 +73,15 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
 
     depvarderivbcmaps = []
     depvarbcmaps = []
-    
+
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
     u = depvar(u_, s)
     args = params(u, s)
     j = findfirst(isequal(x_), args)
 
-    # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower    
+    # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     is = [II[indexmap[x]] for x in filter(!isequal(x_), args)]
-    
+
     is = [is[1:j-1]..., idx(boundary, s), is[j:end]...]
     II = CartesianIndex(is...)
 
@@ -100,9 +100,9 @@ function generate_bc_eqs(s::DiscreteSpace{N,M,G}, boundaryvalfuncs, boundary::Ab
         vmaps = varmaps(s, boundary.depvars, II, indexmap)
         varrules = axiesvals(s, depvar(boundary.u, s), boundary.x, II)
         rules = vcat(boundaryvalrules, vmaps, varrules)
-        
+
         substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
-    end)    
+    end)
 end
 
 #TODO: Benchmark and optimize this
@@ -161,4 +161,3 @@ end
         generate_corner_eqs!(bceqs, s, interiormap, N, u)
     end
 end
-

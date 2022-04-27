@@ -8,7 +8,7 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
 # Start Test Script
 
 @time begin
-    
+
     if GROUP == "All" || GROUP == "Components"
        #@time @safetestset "Test for regression against original code" begin include("regression_test.jl") end
        @time @safetestset "MOLFiniteDifference Utils" begin include("utils_test.jl") end
@@ -25,9 +25,21 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
     if GROUP == "All" || GROUP == "Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin include("pde_systems/MOL_1D_Linear_Diffusion.jl") end
     end
-    
+
+    if GROUP == "All" || GROUP == "Diffusion_NU"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
+            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
+        end
+    end
+
     if GROUP == "All" || GROUP == "Nonlinear_Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 1D Non-Linear Diffusion" begin include("pde_systems/MOL_1D_NonLinear_Diffusion.jl") end
+    end
+
+    if GROUP == "All" || GROUP == "Nonlinear_Diffusion_NU"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Non-Linear Diffusion, Non-Uniform" begin
+            include("pde_systems/MOL_1D_NonLinear_Diffusion_NonUniform.jl")
+        end
     end
 
     if GROUP == "All" || GROUP == "2D_Diffusion"
@@ -37,7 +49,7 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
     if GROUP == "All" || GROUP == "Convection"
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin include("pde_systems/MOL_1D_Linear_Convection.jl") end
     end
-    
+
     if GROUP == "All" || GROUP == "Higher_Order"
         @time @safetestset "MOLFiniteDifference Interface: 1D HigherOrder" begin include("pde_systems/MOL_1D_HigherOrder.jl") end
     end

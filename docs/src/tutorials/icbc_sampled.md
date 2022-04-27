@@ -5,23 +5,23 @@ Initial and boundary conditions are sometimes applied with measured data that is
 1D:
 ```julia
 A_x = 1.:2.:40.
-A = [log(x) for x in A_x]
+A = [log10(x) for x in A_x]
 itp = interpolate(A, BSpline(Cubic(Line(OnGrid()))))
 sitp1 = scale(itp, A_x)
-sitp1(3.) # exactly log(3.)
-sitp1(3.5) # approximately log(3.5)
+sitp1(3.) # exactly log10(3.)
+sitp1(3.5) # approximately log10(3.5)
 ```
 
 Multidimensional:
 ```julia
 A_x1 = 1:.1:10
 A_x2 = 1:.5:20
-f(x1, x2) = log(x1+x2)
+f(x1, x2) = log10(x1+x2)
 A = [f(x1,x2) for x1 in A_x1, x2 in A_x2]
 itp = interpolate(A, BSpline(Cubic(Line(OnGrid()))))
 sitp2 = scale(itp, A_x1, A_x2)
-sitp2(5., 10.) # exactly log(5 + 10)
-sitp2(5.6, 7.1) # approximately log(5.6 + 7.1)
+sitp2(5., 10.) # exactly log10(5 + 10)
+sitp2(5.6, 7.1) # approximately log10(5.6 + 7.1)
 ```
 Then, register the functions with ModelingToolkit:
 ```julia

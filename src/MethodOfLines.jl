@@ -32,5 +32,6 @@ module MethodOfLines
     include("error_analysis.jl")
     include("discretization/MOL_discretization.jl")
 
-    export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align
+    export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete
+
 end

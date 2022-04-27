@@ -20,7 +20,7 @@
 #     priorities = vcat(map(r -> r.priority, rules), map(r -> r.priority, conditional_rules))
 
 #     for (i,r) in enumerate(vcat(rules, conditional_rules))
-        
+
 #     end
 
 # ModelingToolkit.substitute(expr, rule::AbstractRule{T}) where T = substitute(expr, rule.r)
@@ -32,8 +32,8 @@ Interpolate gridpoints by taking the average of the values of the discrete point
 """
 @inline function interpolate_discrete_param(i, s, itap, x, bpc)
 
-    return s.grid[x][i+itap]+s.dxs[x]*.5        
-    
+    return s.grid[x][i+itap]+s.dxs[x]*.5
+
 end
 
 """
@@ -43,7 +43,7 @@ Differential(x)(expr(x)*Differential(x)(u(x)))
 
 Given an internal multiplying expression `expr`, return the correct finite difference equation for the nonlinear laplacian at the location in the grid given by `II`.
 
-The inner derivative is discretized with the half offset centered scheme, giving the derivative at interpolated grid points offset by dx/2 from the regular grid. 
+The inner derivative is discretized with the half offset centered scheme, giving the derivative at interpolated grid points offset by dx/2 from the regular grid.
 
 The outer derivative is discretized with the centered scheme, giving the nonlinear laplacian at the grid point `II`.
 For first order returns something like this:
@@ -51,9 +51,9 @@ For first order returns something like this:
 
 For 4th order, returns something like this:
 ```
-first_finite_diffs = [a(x-3/2)*finitediff(u, i-3/2), 
-                      a(x-1/2)*finitediff(u, i-1/2), 
-                      a(x+1/2)*finitediff(u, i+1/2), 
+first_finite_diffs = [a(x-3/2)*finitediff(u, i-3/2),
+                      a(x-1/2)*finitediff(u, i-1/2),
+                      a(x+1/2)*finitediff(u, i+1/2),
                       a(x+3/2)*finitediff(u, i+3/2)]
 
 dot(central_finite_diff_weights, first_finite_diffs)
@@ -64,20 +64,21 @@ where `finitediff(u, i)` is the finite difference at the interpolated point `i` 
 And so on.
 """
 function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace{N}, b, depvars, x, u) where N
-    # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf 
+    # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     # See scheme 1, namely the term without the 1/r dependence. See also #354 and #371 in DiffEqOperators, the previous home of this package.
     ndims(u,s) == 0 && return Num(0)
     jx = j, x = (x2i(s, u, x), x)
     @assert II[j] != 1 "The nonlinear laplacian is only defined on the interior of the grid, it is unsupported in boundary conditions."
     @assert II[j] != length(s, x) "The nonlinear laplacian is only defined on the interior of the grid, it is unsupported in boundary conditions."
 
-    D_inner = derivweights.halfoffsetmap[Differential(x)]
+    D_inner = derivweights.halfoffsetmap[1][Differential(x)]
+    D_outer = derivweights.halfoffsetmap[2][Differential(x)]
     inner_interpolater = derivweights.interpmap[x]
 
     # Get the outer weights and stencil. clip() essentially removes a point from either end of the grid, for this reason this function is only defined on the interior, not in bcs#
     cliplen = length(s, x) - 1
 
-    outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II-unitindex(N,j), s, b, u, jx, cliplen)
+    outerweights, outerstencil = get_half_offset_weights_and_stencil(D_outer, II-unitindex(N,j), s, b, u, jx, cliplen)
 
     # Get the correct weights and stencils for this II
     inner_deriv_weights_and_stencil = [get_half_offset_weights_and_stencil(D_inner, I, s, b, u, jx) for I in outerstencil]
@@ -92,14 +93,14 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace{
 
     # Take the inner finite difference
     inner_difference = [dot(inner_weights, s.discvars[u][inner_stencil]) for (inner_weights, inner_stencil) in inner_deriv_weights_and_stencil]
-    
+
     # Symbolically interpolate the multiplying expression
 
-    
+
     interpolated_expr = map(interp_weights_and_stencil) do (weights, stencil)
         Num(substitute(substitute(expr, map_vars_to_interpolated(stencil, weights)), map_params_to_interpolated(stencil, weights)))
     end
- 
+
     # multiply the inner finite difference by the interpolated expression, and finally take the outer finite difference
     return dot(outerweights, inner_difference .* interpolated_expr)
 end
@@ -107,12 +108,12 @@ end
 """
 `spherical_diffusion`
 
-Based on https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf 
+Based on https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
 
 See scheme 1 in appendix A. The r = 0 case is treated in a later appendix
 """
 function spherical_diffusion(innerexpr, II, derivweights, s, b, depvars, r, u)
-    # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf 
+    # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     D_1 = derivweights.map[Differential(r)]
     D_2 = derivweights.map[Differential(r)^2]
 
@@ -133,7 +134,7 @@ function spherical_diffusion(innerexpr, II, derivweights, s, b, depvars, r, u)
     end
     D_1_u = central_difference(D_1, II, s, b, (s.x2i[r], r), u, ufunc_u)
     # See scheme 1 in appendix A of the paper
-    
+
     return exprhere*(D_1_u/Num(substitute(r, _rsubs(r, II))) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, b, depvars, r, u))
 end
 
@@ -145,12 +146,12 @@ end
 @inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, b, depvars, derivweights, (j,x), u, central_ufunc, indexmap) where N
     # TODO: Allow derivatives in expr
     expr = substitute(expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
-    IfElse.ifelse(expr > 0, 
-                  expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, true), 
+    IfElse.ifelse(expr > 0,
+                  expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, true),
                   expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, false))
 end
-                
-@inline function generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)    
+
+@inline function generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
     wind_ufunc(v, I, x) = s.discvars[v][I]
     # for all independent variables and dependant variables
     rules = vcat(#Catch multiplication
@@ -159,7 +160,7 @@ end
                 #Catch division and multiplication, see issue #1
                 reduce(vcat, [reduce(vcat, [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(*(~a..., ~b...)/~c, d, Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], depvars, derivweights, (x2i(s,u,x), x), u, wind_ufunc, indexmap) for d in (let orders = derivweights.orders[x]; orders[isodd.(orders)] end)] for x in params(u, s)]) for u in depvars])
                 )
-    
+
     wind_rules = []
 
     # wind_exprs = []
@@ -187,7 +188,7 @@ end
             end
         end
     end))
-    
+
 
 end
 
@@ -197,7 +198,7 @@ end
     rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
 
     rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
-    
+
     nonlinlap_rules = []
     for t in terms
         for r in rules
@@ -227,7 +228,7 @@ end
             end
         end
     end
-    return spherical_diffusion_rules    
+    return spherical_diffusion_rules
 end
 
 """
@@ -264,7 +265,6 @@ function generate_finite_difference_rules(II, s, depvars, pde, derivweights, pma
 
     # Spherical diffusion scheme
     spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, pmap, indexmap, split_additive_terms(pde))
-    
+
     return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(winding_rules), vec(central_deriv_rules_cartesian))
 end
-

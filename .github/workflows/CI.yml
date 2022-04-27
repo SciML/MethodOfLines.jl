@@ -15,7 +15,9 @@ jobs:
           - Components
           - Interface
           - Diffusion
+          - Diffusion_NU
           - Nonlinear_Diffusion
+          - Nonlinear_Diffusion_NU
           - 2D_Diffusion
           - Convection
           - Higher_Order

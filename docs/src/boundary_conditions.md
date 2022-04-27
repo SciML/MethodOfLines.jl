@@ -39,13 +39,32 @@ f(t,x,y) = x*y - t
 
 function g(x,y) 
     z = sin(x*y)+cos(y)
-    # Note that symbolic conditionals require the use of IfElse.ifelse
-    return IfElse.ifelse(z > 0, x, 0.0)
+    # Note that symbolic conditionals require the use of IfElse.ifelse, or registration
+    return IfElse.ifelse(z > 0, x, 1.0)
 end
 
 u(t,x,y_min) ~ f(t,x,y_min) + alpha/g(x,y_min)
 ```
+### Registered User Defined Function
+```julia
+alpha = 9
 
+f(t,x,y) = x*y - t
+
+function g(x,y) 
+    z = sin(x*y)+cos(y)
+    # This function must be registered as it contains a symbolic conditional
+    if z > 0
+        return x
+    else
+        return 1.0
+    end
+end
+
+@register g(x, y)
+
+u(t,x,y_min) ~ f(t,x,y_min) + alpha/g(x,y_min)
+```
 ## Neumann/Robin
 ```julia
 v(t, x_min, y) ~ 2. * Dx(v(t, x_min, y))

@@ -156,6 +156,40 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
     end
 end
 
+function get_discrete(pdesys, discretization)
+    domain = pdesys.domain
+
+    t = discretization.time
+
+    depvar_ops = map(x->operation(x.val),pdesys.depvars)
+    # Get all dependent variables in the correct type
+    alldepvars = get_all_depvars(pdesys, depvar_ops)
+    alldepvars = filter(u -> !any(map(x-> x isa Number, arguments(u))), alldepvars)
+    # Get all independent variables in the correct type, removing time from the list
+    allindvars = remove(collect(filter(x->!(x isa Number), reduce(union, filter(xs->(!isequal(xs, [t])), map(arguments, alldepvars))))), t)
+    #@show allindvars, typeof.(allindvars)
+
+    interface_errors(alldepvars, allindvars, discretization)
+    # @show alldepvars
+    # @show allindvars
+
+    # Get tspan
+    tspan = nothing
+    # Check that inputs make sense
+    if t !== nothing
+        tdomain = pdesys.domain[findfirst(d->isequal(t.val, d.variables), pdesys.domain)]
+        @assert tdomain.domain isa DomainSets.Interval
+        tspan = (DomainSets.infimum(tdomain.domain), DomainSets.supremum(tdomain.domain))
+    end
+    alleqs = []
+    bceqs = []
+
+    # Create discretized space and variables
+    s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
+
+    return Dict(vcat([Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]) )
+end
+
 function ModelingToolkit.ODEFunctionExpr(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
