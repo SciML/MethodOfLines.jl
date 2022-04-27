@@ -84,7 +84,7 @@ end
 
     α = 6
     β = 1
-    eq = Dt(u(x,t)) ~ -α*u(x,t)*Dx(u(x,t)) - β*Dx3(u(x,t)) 
+    eq = Dt(u(x,t)) ~ -α*u(x,t)*Dx(u(x,t)) - β*Dx3(u(x,t))
 
     u_analytic(x,t;z = (x - t)/2) =  1/2*sech(z)^2
     du(x,t;z = (x-t)/2) = 1/2*tanh(z)*sech(z)^2
@@ -118,12 +118,12 @@ end
 
     u_predict = sol.u
     u_real = [[u_analytic(x, t) for x in xs] for t in ts]
-    
 
-       # anim = @animate for (i,T) in enumerate(ts) 
+
+       # anim = @animate for (i,T) in enumerate(ts)
        #        plot(xs, u_real[i], seriestype = :scatter,label="Analytic solution")
        #        plot!(xs, sol.u[i], label="Numeric solution")
-       #        plot!(xs, log.(abs.(u_real[i]-sol.u[i])), label="Log Error at t = $(ts[i])")
+       #        plot!(xs, log10.(abs.(u_real[i]-sol.u[i])), label="log10 Error at t = $(ts[i])")
        # end
        # gif(anim, "plots/MOL_Higher_order_1D_KdV_single_soliton.gif", fps = 5)
 

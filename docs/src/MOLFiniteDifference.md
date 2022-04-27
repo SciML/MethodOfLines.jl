@@ -36,7 +36,8 @@ discretization = MOLFiniteDifference(dxs,
                                       grid_align = <your grid type choice>)
 prob = discretize(pdesys, discretization)
 ```
-Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`
+Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`.
+For a non uniform rectilinear grid, replace any or all of the step sizes with the grid you'd like to use with that variable, must be an `AbstractVector` but not a `StepRangeLen`.
 
 Note that the second argument to `MOLFiniteDifference` is optional, all parameters can be discretized if all required boundary conditions are specified.
 

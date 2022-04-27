@@ -62,7 +62,7 @@ using ModelingToolkit: Differential
     # Test against exact solution
     sol′ = reshape([sol[u[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
     @test asf ≈ sol′ atol=0.4
-    
+
     #Plot
     #using Plots
     #heatmap(sol′)
@@ -86,7 +86,7 @@ end
 
     # Analytic solution
     analytic_sol_func(t,x,y) = exp(x+y)*cos(x+y+4t)
-    
+
     # Equation
     eq = Dt(u(t,x,y)) ~ Dx( (u(t,x,y)^2 / exp(x+y)^2 + sin(x+y+4t)^2)^0.5 * Dx(u(t,x,y))) +
                         Dy( (u(t,x,y)^2 / exp(x+y)^2 + sin(x+y+4t)^2)^0.5 * Dy(u(t,x,y)))
@@ -115,12 +115,12 @@ end
     sol = solve(prob,Rosenbrock23())
 
     # Test against exact solution
-    Nx = floor(Int64, (x_max - x_min) / dx) + 1
-    Ny = floor(Int64, (y_max - y_min) / dy) + 1
-    @variables u[1:Nx,1:Ny](t)
-    sol′ = reshape([sol[u[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-    r_space_x = x_min:dx:x_max
-    r_space_y = y_min:dy:y_max
+    grid = get_discrete(pdesys, discretization)
+    sol′ = map(d -> sol[d][end], grid[u(t, x, y)])
+    r_space_x = grid[x]
+    r_space_y = grid[y]
+    Nx = length(r_space_x)
+    Ny = length(r_space_y)
     asf = reshape([analytic_sol_func(t_max,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
     asf[1,1] = asf[1, end] = asf[end, 1] = asf[end, end] = 0.
 
@@ -131,5 +131,5 @@ end
     #using Plots
     #heatmap(sol′)
     #savefig("MOL_NonLinear_Diffusion_2D_Test01.png")
-    
+
 end

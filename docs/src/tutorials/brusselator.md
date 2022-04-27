@@ -96,8 +96,8 @@ Then, we create the discretization, leaving the time dimension undiscretized by 
 ```julia
 N = 32
 
-dx = 1/N
-dy = 1/N
+dx = (x_max-x_min)/N
+dy = (y_max-y_min)/N
 
 order = 2
 
@@ -112,7 +112,7 @@ println("Discretization:")
 ```
 
 ## Solving the problem
-Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://diffeq.sciml.ai/stable/solvers/ode_solve/) and [`NonlinearSolve.jl`](http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/).
+Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://diffeq.sciml.ai/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/) and [SteadyStateDiffEq.jl](https://diffeq.sciml.ai/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl).
 
 ```julia
 println("Solve:")
@@ -122,42 +122,15 @@ println("Solve:")
 ## Extracting results
 To retrieve your solution, for example for `u`, use `sol[u]`. To get the time axis, use `sol.t`.
 
-Due to current limitations in the `sol` interface, above 1 discretized dimension the result must be manually reshaped to correctly display the result, here is an example of how to do this:
+Due to current limitations in the `sol` interface, above 1 discretized dimension the result must be manually reshaped to correctly display the result, best done with the help of the `get_discrete` helper function. Here is an example of how to do this:
 
-With `grid_align = center_align`:
 ```julia
-discrete_x = x_min:dx:x_max
-discrete_y = y_min:dy:y_max
+grid = get_discrete(pdesys, discretization)
+discrete_x = grid[x]
+discrete_y = grid[y]
 
-Nx = floor(Int64, (x_max - x_min) / dx) + 1
-Ny = floor(Int64, (y_max - y_min) / dy) + 1
-
-@variables u[1:Nx,1:Ny](t)
-@variables v[1:Nx,1:Ny](t)
-
-solu, solv = map(1:length(sol.t)) do k
-       solu = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-       solv = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-       (solu, solv)
-end
-```
-
-With `grid_align = edge_align`:
-```julia
-discrete_x = x_min - dx/2 : dx : x_max + dx/2
-discrete_y = y_min - dy/2 : dy : y_max + dy/2
-
-Nx = floor(Int64, (x_max - x_min) / dx) + 2
-Ny = floor(Int64, (y_max - y_min) / dy) + 2
-
-@variables u[1:Nx,1:Ny](t)
-@variables v[1:Nx,1:Ny](t)
-
-solu, solv = map(1:length(sol.t)) do k
-       solu = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-       solv = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-       (solu, solv)
-end
+solu = [map(d -> sol[d][i], grid[u(t, x, y)]) for i in 1:length(sol[t])]
+solv = [map(d -> sol[d][i], grid[v(t, x, y)]) for i in 1:length(sol[t])]
 ```
 
 The result after plotting an animation:
