@@ -13,7 +13,7 @@ makedocs(
 
     pages=[
         "MethodOfLines.jl: Automated Finite Difference for Phyiscs-Informed Learning" => "index.md",
-        "Tutorials" => ["tutorials/brusselator.md", "tutorials/icbc_sampled.md"],
+        "Tutorials" => ["tutorials/brusselator.md", "tutorials/icbc_sampled.md", "tutorials/heat.md", "tutorials/params.md"],
         "MOLFiniteDifference" => "MOLFiniteDifference.md",
         "Grid and Solution Retrieval" => "get_grid.md",
         "Boundary Conditions" => "boundary_conditions.md",
