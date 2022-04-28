@@ -23,7 +23,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 [compat]
 Combinatorics = "1"
 DiffEqBase = "6"
-DiffEqOperators = "4.41.0"
+DiffEqOperators = "4.43.0"
 DomainSets = "0.5"
 IfElse = "0.1"
 ModelingToolkit = "8"
