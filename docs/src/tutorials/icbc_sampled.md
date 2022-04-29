@@ -25,14 +25,16 @@ sitp2(5.6, 7.1) # approximately log10(5.6 + 7.1)
 ```
 Then, register the functions with ModelingToolkit:
 ```julia
-@register sitp1(y)
-@register sitp2(x, y)
+sitp1_f(x) = sitp1(x)
+sitp2_f(x, y) = sitp2(x, y)
+@register_symbolic sitp1_f(y)
+@register_symbolic sitp2_f(x, y)
 ```
 
 Then as a BC or IC:
 ```julia
-bcs = [u(0, x, y) ~ sitp2(x, y),
-       u(t, 0, y) ~ sitp1(y),
+bcs = [u(0, x, y) ~ sitp2_f(x, y),
+       u(t, 0, y) ~ sitp1_f(y),
        ...
        ]
 ```
