@@ -26,7 +26,7 @@ domains = [t ∈ Interval(0.0,1.0),
            x ∈ Interval(0.0,1.0)]
 
 # PDE system
-pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
+@named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
 
 # Method of lines discretization
 dx = 0.1
@@ -79,7 +79,7 @@ domains = [t ∈ Interval(0.0,1.0),
         x ∈ Interval(0.0,1.0)]
 
 # PDE system
-pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
+@named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
 
 # Method of lines discretization
 # Need a small dx here for accuracy
@@ -134,7 +134,7 @@ domains = [t ∈ Interval(0.0,1.0),
         x ∈ Interval(-1.0,1.0)]
 
 # PDE system
-pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
+@named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
 
 # Method of lines discretization
 # Need a small dx here for accuracy
