@@ -18,11 +18,11 @@ function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, upwind_order =
 
     @assert (time isa Num) | (time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
 
-    overlap_map = Dict(mapreduce(vcat, keys(overlap_map)) do x
+    _overlap_map = Dict(mapreduce(vcat, keys(overlap_map)) do x
         [y => x for y in overlap_map[x]]
     end)
 
-    @assert collect(keys(overlap_map)) == unique(collect(keys(overlap_map))) "Variables cannot be subsets of more than one domain, check overlap_map."
+    @assert collect(keys(_overlap_map)) == unique(collect(keys(_overlap_map))) "Variables cannot be subsets of more than one domain, check overlap_map."
 
     return MOLFiniteDifference{typeof(grid_align)}(dxs, time, overlap_map, approx_order, upwind_order, grid_align)
 end

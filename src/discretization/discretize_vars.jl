@@ -18,7 +18,12 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
     t = discretization.time
     nspace = length(x̄)
     # Discretize space
-    axies = map(x̄) do x
+
+    # Needed to allow variables in seperate but overlapping domains
+    subdomains = filter(y -> any(isequal((y,), unique(reduce(vcat, [discretization.overlap_map[x] for x in keys(discretization.overlap_map)])))), x̄)
+    superdomains = filter(y -> !any(isequal.(subdomains,(y,))), x̄)
+    subaxies = []
+    axies = map(superdomains) do x
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
         dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
         discx = dx isa Number ? (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : dx
@@ -28,8 +33,40 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
             discx = collect(discx)
             push!(discx, xhigh)
         end
+        # Handle overlaps
+        try
+            xsub = discretization.overlap_map[x]
+            if length(xsub) > 0
+                highs = Dict(map(xsub) do x
+                    x => DomainSets.supremum(domain[findfirst(d -> isequal(x, d.variables), domain)].domain)
+                end)
+                lows = Dict(map(xsub) do x
+                    x => DomainSets.infimum(domain[findfirst(d -> isequal(x, d.variables), domain)].domain)
+                end)
+                for high in values(highs)
+                    if !(high ∈ discx)
+                        discx = vcat(discx[discx .< high], high, discx[discx .> high])
+                        @warn "Due to overlap, adding grid point at $x = $(high))."
+                    end
+                end
+                for low in values(lows)
+                    if !(low ∈ discx)
+                        discx = vcat(discx[discx .< low], low, discx[discx .> low])
+                        @warn "Due to overlap, adding grid point at $x = $(low))."
+                    end
+                end
+            end
+            vcat!(subaxies, map(y -> y => discx[lows[y] .<= discx .<= highs[y]], xsub))
+        catch e
+            # Catch missing keys for no overlap
+        end
+
         x => discx
     end
+
+    axies = Dict(vcat(subaxies, axies))
+    #* intercept overlapping variables and define them as views into parent grid
+    #* check that endpoints of the domains are represented
 
     # Define the grid on which the dependent variables will be evaluated (see #378)
     # center_align is recommended for Dirichlet BCs
@@ -48,7 +85,6 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
         end
     end
 
-    axies = Dict(axies)
     grid = Dict(grid)
 
     # Build symbolic variables
@@ -133,7 +169,6 @@ map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} 
 end
 
 @inline function generate_grid(x̄, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:EdgeAlignedGrid}
-    dict = Dict(axies)
     return map(x̄) do x
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
         dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
