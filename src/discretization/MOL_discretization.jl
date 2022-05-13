@@ -12,6 +12,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     domain = pdesys.domain
 
     t = discretization.time
+    @parameters dt
+
+    returnlimiter = discretization.return_limiter
 
     depvar_ops = map(x->operation(x.val),pdesys.depvars)
     # Get all dependent variables in the correct type
@@ -34,6 +37,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         tspan = (DomainSets.infimum(tdomain.domain), DomainSets.supremum(tdomain.domain))
     end
     alleqs = []
+    flux_limiters = []
     bceqs = []
     # * We wamt to do this in 2 passes
     # * First parse the system and BCs, replacing with DiscreteVariables and DiscreteDerivatives
@@ -95,9 +99,10 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             generate_corner_eqs!(bceqs, s, interiormap, pde)
 
             # Generate the equations for the interior points
-            pdeeqs = discretize_equation(pde, interiormap.I[pde], eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap)
+            pdeeqs, fleqs = discretize_equation(pde, interiormap.I[pde], eqvar, depvars, s, dt, derivweights, indexmap, boundaryvalfuncs, pmap)
 
-            push!(alleqs,pdeeqs)
+            push!(alleqs,vec(pdeeqs))
+            push!(flux_limiters, fleqs)
         end
     end
 
@@ -117,12 +122,17 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
             eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, vcat(alleqs, unique(bceqs)))
             sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults),name=pdesys.name)
-            return sys, nothing
+            return sys, nothing, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
             sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
-            return sys, tspan
+            sys = structural_simplify(sys)
+            limiter_func = length(flux_limiters) == 0 ? (u, integrator, p, t) -> nothing : build_limiter_func(flux_limiters, dt, sys.states, sys.parameters)
+            if returnlimiter
+                return sys, tspan, limiter_func
+            else
+                return sys, tspan
         end
     catch e
         println("The system of equations is:")
@@ -134,22 +144,31 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     end
 end
 
-function discretize_equation(pde, interior, eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap::PeriodicMap{hasperiodic}) where {hasperiodic}
-    return vec(map(interior) do II
+function discretize_equation(pde, interior, eqvar, depvars, s, dt, derivweights, indexmap, boundaryvalfuncs, pmap::PeriodicMap{hasperiodic}) where {hasperiodic}
+    return map(interior) do II
         boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
+        rules, flux_limiters = generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap)
         rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
-        substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
-    end)
+        (substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules), build_limiter_eq(II, flux_limiters, s, dt, derivweights, pmap, indexmap))
+    end
 end
 
 function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
-    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
+    returns = SciMLBase.symbolic_discretize(pdesys, discretization)
+    if length(returns) == 2
+        sys, tspan = returns
+    else
+        sys, tspan, limiter_func = returns
+        fl = true
     try
         if tspan === nothing
             return prob = NonlinearProblem(sys, ones(length(sys.states)))
         else
-            simpsys = structural_simplify(sys)
-            return prob = ODEProblem(simpsys,Pair[],tspan)
+            if fl
+                return ODEProblem(sys, Pair[], tspan), limiter_func
+            else
+                return ODEProblem(sys, Pair[], tspan)
+            end
         end
     catch e
         error_analysis(sys, e)
@@ -191,7 +210,7 @@ function get_discrete(pdesys, discretization)
 end
 
 function ModelingToolkit.ODEFunctionExpr(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
-    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
+    sys, tspan, _ = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
         if tspan === nothing
             @assert true "Codegen for NonlinearSystems is not yet implemented."
