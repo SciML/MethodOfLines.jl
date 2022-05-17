@@ -148,7 +148,7 @@ end
     expr = substitute(expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
     return (IfElse.ifelse(expr > 0,
                   expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, true),
-                  expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, false)), FluxLimiterGenerator(expr, u, x))
+                  expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, false)))
 end
 
 @inline function generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
@@ -163,17 +163,15 @@ end
 
     wind_rules = []
 
-    wind_exprs = []
     for t in terms
         for r in rules
             if r(t) !== nothing
-                push!(wind_rules, t => r(t)[1])
-                push!(wind_exprs, t => r(t)[2])
+                push!(wind_rules, t => r(t))
             end
         end
     end
 
-    return (vcat(wind_rules, vec(mapreduce(vcat, depvars) do u
+    return vcat(wind_rules, vec(mapreduce(vcat, depvars) do u
         mapreduce(vcat, params(u, s)) do x
             j = x2i(s,u,x)
             let orders = derivweights.orders[x]
@@ -188,7 +186,7 @@ end
                 end
             end
         end
-    end)), wind_exprs)
+    end))
 
 
 end
@@ -262,10 +260,10 @@ function generate_finite_difference_rules(II, s, depvars, pde, derivweights, pma
     nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
 
     # Because winding needs to know about multiplying terms, we can't split the terms into additive and multiplicative terms.
-    winding_rules, winding_exprs = generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+    winding_rules = generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
 
     # Spherical diffusion scheme
     spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, pmap, indexmap, split_additive_terms(pde))
 
-    return (vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(winding_rules), vec(central_deriv_rules_cartesian)), winding_exprs)
+    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(winding_rules), vec(central_deriv_rules_cartesian))
 end
