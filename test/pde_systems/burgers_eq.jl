@@ -1,7 +1,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using DomainSets
 
-@test_broken begin #@testset "Inviscid Burgers equation, 1D, u(0, x) ~ x" begin
+@testset "Inviscid Burgers equation, 1D, u(0, x) ~ x" begin
     @parameters x t
     @variables u(..)
     Dx = Differential(x)
@@ -9,11 +9,11 @@ using DomainSets
     x_min = 0.0
     x_max = 1.0
     t_min = 0.0
-    t_max = 1.0
+    t_max = 6.0
 
     analytic_u(t, x) = x / (t + 1)
 
-    eq = Dt(u(t, x)) + u(t, x) * Dx(u(t, x)) ~ 0
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
 
     bcs = [u(0, x) ~ x,
         u(t, x_min) ~ analytic_u(t, x_min),
@@ -36,14 +36,14 @@ using DomainSets
     x_disc = grid[x]
     solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
 
-    for (i, t) in enumerate(sol.t[5:end])
+    for (i, t) in enumerate(sol.t[1:end])
         u_analytic = analytic_u.([t], x_disc)
-        u_disc = solu[i+4]
-        @test_broken all(isapprox.(u_analytic, u_disc, atol=1e-3))
+        u_disc = solu[i]
+        @test all(isapprox.(u_analytic, u_disc, atol=1e-3))
     end
 end
 
-@test_broken begin #@testset "Inviscid Burgers equation, 1D, u(0, x) ~ x, Non-Uniform" begin
+@testset "Inviscid Burgers equation, 1D, u(0, x) ~ x, Non-Uniform" begin
     @parameters x t
     @variables u(..)
     Dx = Differential(x)
@@ -53,9 +53,9 @@ end
     t_min = 0.0
     t_max = 1.0
 
-    analytic_u(t, x) = x / (t + 1)
+    analytic_u(t_, x_) = x_ / (t_ + 1.0)
 
-    eq = Dt(u(t, x)) + u(t, x) * Dx(u(t, x)) ~ 0
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
 
     bcs = [u(0, x) ~ x,
         u(t, x_min) ~ analytic_u(t, x_min),
@@ -78,12 +78,14 @@ end
 
     grid = get_discrete(pdesys, disc)
     x_disc = grid[x]
+    x_disc = getfield.(x_disc, [:val])
+
     solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
 
-    for (i, t) in enumerate(sol.t[5:end])
-        u_analytic = analytic_u.([t], x_disc)
-        u_disc = solu[i+4]
-        @test_broken all(isapprox.(u_analytic, u_disc, atol=1e-3))
+    for (i, t_disc) in enumerate(sol.t[1:end])
+        u_analytic = analytic_u.([t_disc], x_disc)
+        u_disc = solu[i]
+        @test  all(isapprox.(u_analytic, u_disc, atol=1*10^(-2.5)))
     end
 end
 
