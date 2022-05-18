@@ -146,9 +146,10 @@ end
 @inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, b, depvars, derivweights, (j,x), u, central_ufunc, indexmap) where N
     # TODO: Allow derivatives in expr
     expr = substitute(expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
-    IfElse.ifelse(expr > 0,
+    # Apply the scheme with the correct winding direction depending on if the expression is positive or negative
+    return (IfElse.ifelse(expr > 0,
                   expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, true),
-                  expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, false))
+                  expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, false)))
 end
 
 @inline function generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
@@ -163,7 +164,6 @@ end
 
     wind_rules = []
 
-    # wind_exprs = []
     for t in terms
         for r in rules
             if r(t) !== nothing

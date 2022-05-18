@@ -26,11 +26,11 @@ using DomainSets
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => dx], t, upwind_order=1)
+    disc = MOLFiniteDifference([x => dx], t, upwind_order=1, return_limiter=true)
 
-    prob = discretize(pdesys, disc)
+    prob, stage_limiter! = discretize(pdesys, disc)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, SSPRK22(stage_limiter!, (u, i, p, t) -> nothing))
 
     grid = get_discrete(pdesys, disc)
     x_disc = grid[x]
@@ -70,11 +70,11 @@ end
     dx = collect(dx)
     dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
 
-    disc = MOLFiniteDifference([x => dx], t, upwind_order=1)
+    disc = MOLFiniteDifference([x => dx], t, upwind_order=1, return_limiter=true)
 
-    prob = discretize(pdesys, disc)
+    prob, stage_limiter! = discretize(pdesys, disc)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, SSPRK22(stage_limiter!, (u, i, p, t) -> nothing))
 
     grid = get_discrete(pdesys, disc)
     x_disc = grid[x]
