@@ -146,6 +146,7 @@ end
 @inline function upwind_difference(expr, d::Int, II::CartesianIndex{N}, s::DiscreteSpace{N}, b, depvars, derivweights, (j,x), u, central_ufunc, indexmap) where N
     # TODO: Allow derivatives in expr
     expr = substitute(expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
+    # Apply the scheme with the correct winding direction depending on if the expression is positive or negative
     return (IfElse.ifelse(expr > 0,
                   expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, true),
                   expr*upwind_difference(d, II, s, b, derivweights, (j,x), u, central_ufunc, false)))
