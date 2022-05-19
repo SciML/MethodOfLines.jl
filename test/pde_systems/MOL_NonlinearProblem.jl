@@ -115,7 +115,7 @@ end
     # test interior with finite differences
     interior = CartesianIndices((axes(xs)[1], axes(ys)[1]))[2:end-1, 2:end-1]
     fd = map(interior) do I
-        abs(u_sol[(I-CartesianIndex(1, 0))] + u_sol[(I+CartesianIndex(1, 0))] - 2 * u_sol[I]) < eps(Float32)
-    end
+        abs(u_sol[(I-CartesianIndex(1, 0))] + u_sol[(I+CartesianIndex(1, 0))] - 2 * u_sol[I]) < 0.01
+    end#
     @test all(fd)
 end
