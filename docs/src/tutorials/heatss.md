@@ -1,4 +1,4 @@
-# Steady State Heat Equation
+# Steady State Heat Equation - No Time Dependance - NonlinearProblem
 
 Sometimes it is desirable to solve an equation that has no time evolution, such as the steady state heat equation:
 ```@example heatss
