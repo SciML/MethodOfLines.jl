@@ -7,7 +7,7 @@ function interface_errors(depvars, indvars, discretization)
 end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where G
-    pdeeqs = pdesys.eqs
+    pdeeqs = [eq.lhs - eq.rhs ~ 0 for eq in pdesys.eqs]
     bcs = pdesys.bcs
     domain = pdesys.domain
 
@@ -79,11 +79,11 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             eqvar = interiormap.var[pde]
 
-            # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
             args = params(eqvar, s)
             indexmap = Dict([args[i]=>i for i in 1:length(args)])
 
-            # Generate replacement rule gen closures for the boundary values
+            # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
+            # Generate replacement rule gen closures for the boundary values like u(t, 1)
             boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
 
             # Generate the boundary conditions for the correct variable
@@ -145,10 +145,10 @@ end
 function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
+        simpsys = structural_simplify(sys)
         if tspan === nothing
-            return prob = NonlinearProblem(sys, ones(length(sys.states)))
+            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)))
         else
-            simpsys = structural_simplify(sys)
             return prob = ODEProblem(simpsys,Pair[],tspan)
         end
     catch e
