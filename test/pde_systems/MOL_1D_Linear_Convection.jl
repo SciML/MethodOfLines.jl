@@ -175,8 +175,8 @@ end
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test_broken sol.u[end] ≈ u atol = 0.1
-    @test_broken sol_upwind.u[end] ≈ u atol = 0.1
+    @test sol.u[end] ≈ u atol = 0.1
+    @test sol_upwind.u[end] ≈ u atol = 0.1
 end
 
 @testset "Test 00c: Dt(u(t,x)) + Dx(u(t,x)) ~ 0" begin
@@ -187,7 +187,7 @@ end
     Dx = Differential(x)
 
     # 1D PDE and boundary conditions
-    eq = Dt(u(t, x)) - Dx(u(t, x)) ~ 0
+    eq = Dt(u(t, x)) + Dx(u(t, x)) ~ 0
 
     asf(x) = (0.5 / (0.2 * sqrt(2.0 * 3.1415))) * exp(-(x - 1.0)^2 / (2.0 * 0.2^2))
     bcs = [u(0, x) ~ asf(x),
@@ -233,8 +233,8 @@ end
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test_broken sol.u[end] ≈ u atol = 0.1
-    @test_broken sol_upwind.u[end] ≈ u atol = 0.1
+    @test sol.u[end] ≈ u atol = 0.1
+    @test sol_upwind.u[end] ≈ u atol = 0.1
 end
 
 @testset "Test 01: Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.001" begin

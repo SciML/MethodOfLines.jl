@@ -120,7 +120,7 @@ end
 @inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, b, ispositive, u, jx) where {T,N,Wind,DX<:Number}
     j, x = jx
     I1 = unitindex(ndims(u, s), j)
-    if ispositive
+    if !ispositive
         if (II[j] > (length(s, x) - D.boundary_point_count)) & (b isa Val{false})
             weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
             offset = length(s, x) - II[j]
@@ -146,7 +146,7 @@ end
     j, x = jx
     @assert b isa Val{false} "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     I1 = unitindex(ndims(u, s), j)
-    if ispositive
+    if !ispositive
         @assert D.offside == 0
 
         if (II[j] > (length(s, x) - D.boundary_point_count))
@@ -173,7 +173,7 @@ end
 function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, b, derivweights, jx, u, ufunc, ispositive)
     j, x = jx
     ndims(u, s) == 0 && return Num(0)
-    D = ispositive ? derivweights.windmap[1][Differential(x)^d] : derivweights.windmap[2][Differential(x)^d]
+    D = !ispositive ? derivweights.windmap[1][Differential(x)^d] : derivweights.windmap[2][Differential(x)^d]
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative
     weights, Itap = _upwind_difference(D, II, s, b, ispositive, u, jx)
