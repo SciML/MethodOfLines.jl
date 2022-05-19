@@ -5,13 +5,17 @@ makedocs(
     authors="Chris Rackauckas, Alex Jones et al.",
     clean=true,
     doctest=false,
-    modules=[MethodOfLines],
-
-    format=Documenter.HTML(analytics = "UA-90474609-3",
-                           assets=["assets/favicon.ico"],
-                           canonical="https://methodoflines.sciml.ai/stable/"),
-
-    pages=[
+    strict=[
+        :doctest,
+        :linkcheck,
+        :parse_error,
+        :example_block,
+        # Other available options are
+        # :autodocs_block, :cross_references, :docs_block, :eval_block, :example_block, :footnote, :meta_block, :missing_docs, :setup_block
+    ],
+    modules=[MethodOfLines], format=Documenter.HTML(analytics="UA-90474609-3",
+        assets=["assets/favicon.ico"],
+        canonical="https://methodoflines.sciml.ai/stable/"), pages=[
         "MethodOfLines.jl: Automated Finite Difference for Phyiscs-Informed Learning" => "index.md",
         "Tutorials" => ["tutorials/brusselator.md", "tutorials/icbc_sampled.md", "tutorials/heat.md", "tutorials/params.md"],
         "MOLFiniteDifference" => "MOLFiniteDifference.md",
@@ -31,7 +35,7 @@ makedocs(
         # "Tutorial: Stationary Nonlinear Problems" => "tutorials/stationary_nonlinear_problems.md",
         # "Tutorial: 1D Partial DAE" => "tutorials/1d_partial_DAE.md",
 
-     ]
+    ]
 )
 
 deploydocs(

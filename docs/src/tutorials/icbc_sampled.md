@@ -4,6 +4,8 @@ Initial and boundary conditions are sometimes applied with measured data that is
 
 1D:
 ```julia
+using Interpolations
+
 A_x = 1.:2.:40.
 A = [log10(x) for x in A_x]
 itp = interpolate(A, BSpline(Cubic(Line(OnGrid()))))
@@ -14,6 +16,8 @@ sitp1(3.5) # approximately log10(3.5)
 
 Multidimensional:
 ```julia
+using Interpolations 
+
 A_x1 = 1:.1:10
 A_x2 = 1:.5:20
 f(x1, x2) = log10(x1+x2)
