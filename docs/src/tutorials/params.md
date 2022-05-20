@@ -3,6 +3,8 @@
 We can also build up more complicated systems with multiple dependent variables and parameters as follows
 
 ```@example params1
+using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
+
 @parameters t x
 @parameters Dn, Dp
 @variables u(..) v(..)
@@ -42,6 +44,8 @@ gif(anim, "plot.gif",fps=30)
 The system does not need to be re-discretized every time we want to plot with different parameters, the system can be remade with new parameters with `remake`. See the `ModelingToolkit.jl` [docs](https://mtk.sciml.ai/stable/tutorials/ode_modeling/#Algebraic-relations-and-structural-simplification) for more ways to manipulate a `prob` post discretization.
 
 ```@example params2
+using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
+
 @parameters t x
 @parameters Dn, Dp
 @variables u(..) v(..)

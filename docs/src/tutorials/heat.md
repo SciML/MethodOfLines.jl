@@ -112,7 +112,7 @@ savefig("plot.png")
 ### Robin boundary conditions
 
 ```@example heatr
-using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
+using ModelingToolkit, MethodOfLines, DomainSets, OrdinaryDiffEq
 # Method of Manufactured Solutions
 u_exact = (x,t) -> exp.(-t) * sin.(x)
 
