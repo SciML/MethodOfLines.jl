@@ -1,7 +1,10 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
 
 [compat]
 Documenter = "0.27"
