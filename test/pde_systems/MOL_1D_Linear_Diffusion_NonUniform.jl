@@ -149,10 +149,13 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
+    grid = get_discrete(pdesys, discretization)
+    solu = map(d -> sol[d][end], grid[u(t, x)])
+
     # Test
-    n = size(sol, 1)
+    n = size(solu)
     t_f = size(sol, 3)
-    @test_broken sol.u[:, 1, t_f] ≈ zeros(n) atol = 0.01
+    @test_broken solu ≈ zeros(n) atol = 0.01
 end
 
 @testset "Test 03: Dt(u(t,x)) ~ Dxx(u(t,x)), homogeneous Neumann BCs, order 8" begin
@@ -314,13 +317,18 @@ end
 
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
-    x = dx
-    t = sol.t
+
+    grid = get_discrete(pdesys, disc)
+
+    solu = [map(d -> sol[d][ti], grid[u(t, x)]) for ti in sol[t]]
+
+    x_sol = grid[x]
+    t_sol = sol.t
 
     # Test against exact solution
-    for i in 1:length(sol)
-        exact = u_exact(x, t[i])
-        u_approx = sol.u[i]
+    for i in 1:length(t_sol)
+        exact = u_exact(x_sol, t[i])
+        u_approx = solu[i]
         @test_broken all(isapprox.(u_approx, exact, atol=0.1))
     end
 
@@ -698,16 +706,18 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    x_sol = dx[2:end-1]
-    y_sol = dy[2:end-1]
+    grid = get_discrete(pdesys, discretization)
+    solu1 = [map(d -> sol[d][ti], grid[u[1](t, x)]) for ti in sol[t]]
+    solu2 = [map(d -> sol[d][ti], grid[u[2](t, x)]) for ti in sol[t]]
+
+    x_sol = grid[x]
+    y_sol = grid[y]
     t_sol = sol.t
 
-    fail
-
     # Test against exact solution
-    for i in 1:length(sol)
-        @test_broken all(isapprox.(u_exact(x_sol, t_sol[i]), sol.u[i][1:l-2, 1], atol=0.01))
-        @test_broken all(isapprox.(v_exact(y_sol, t_sol[i]), sol.u[i][l-1:end, 2], atol=0.01))
+    for i in 1:length(t_sol)
+        @test_broken all(isapprox.(u_exact(x_sol, t_sol[i]), solu1[i], atol=0.01))
+        @test_broken all(isapprox.(v_exact(y_sol, t_sol[i]), solu2[i], atol=0.01))
     end
 end
 
