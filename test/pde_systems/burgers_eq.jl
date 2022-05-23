@@ -131,7 +131,7 @@ end
     dx = 0.1
     dy = 0.1
 
-
+    # Try 4th approx order
     order = 4
 
     discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order=order)
