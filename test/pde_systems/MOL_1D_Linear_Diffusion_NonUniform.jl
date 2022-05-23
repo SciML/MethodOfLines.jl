@@ -108,8 +108,7 @@ end
     @test sol[end] ≈ zeros(n) atol = 0.001
 end
 
-# @test_set "Test 02: Dt(u(t,x)) ~ Dx(D(t,x))*Dx(u(t,x))+D(t,x)*Dxx(u(t,x))" begin
-@test_broken begin
+@testset "Test 02: Dt(u(t,x)) ~ Dx(D(t,x))*Dx(u(t,x))+D(t,x)*Dxx(u(t,x))" begin
     # Parameters, variables, and derivatives
     @parameters t x
     @variables u(..) D(..)
@@ -155,7 +154,7 @@ end
     # Test
     n = size(solu)
     t_f = size(sol, 3)
-    @test_broken solu ≈ zeros(n) atol = 0.01
+    @test solu ≈ zeros(n) atol = 0.01
 end
 
 @testset "Test 03: Dt(u(t,x)) ~ Dxx(u(t,x)), homogeneous Neumann BCs, order 8" begin
@@ -320,7 +319,7 @@ end
 
     grid = get_discrete(pdesys, disc)
 
-    solu = [map(d -> sol[d][ti], grid[u(t, x)]) for ti in sol[t]]
+    solu = [map(d -> sol[d][ti], grid[u(t, x)]) for ti in eachindex(sol[t])]
 
     x_sol = grid[x]
     t_sol = sol.t
@@ -656,7 +655,7 @@ end
     end
 end
 
-@test_broken begin # "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
+@test_broken begin #@testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
     # Method of Manufactured Solutions
     u_exact = (x, t) -> exp.(-t) * cos.(x)
     v_exact = (y, t) -> exp.(-t) * sin.(y)
@@ -707,8 +706,8 @@ end
     sol = solve(prob, Tsit5(), saveat=0.1)
 
     grid = get_discrete(pdesys, discretization)
-    solu1 = [map(d -> sol[d][ti], grid[u[1](t, x)]) for ti in sol[t]]
-    solu2 = [map(d -> sol[d][ti], grid[u[2](t, x)]) for ti in sol[t]]
+    solu1 = [map(d -> sol[d][ti], grid[u[1](t, x)]) for ti in eachindex(sol[t])]
+    solu2 = [map(d -> sol[d][ti], grid[u[2](t, x)]) for ti in eachindex(sol[t])]
 
     x_sol = grid[x]
     y_sol = grid[y]
