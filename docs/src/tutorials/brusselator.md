@@ -128,6 +128,7 @@ Due to current limitations in the `sol` interface, above 1 discretized dimension
 grid = get_discrete(pdesys, discretization)
 discrete_x = grid[x]
 discrete_y = grid[y]
+discrete_t = sol[t]
 
 solu = [map(d -> sol[d][i], grid[u(x, y, t)]) for i in 1:length(sol[t])]
 solv = [map(d -> sol[d][i], grid[v(x, y, t)]) for i in 1:length(sol[t])]
@@ -138,8 +139,8 @@ The result after plotting an animation:
 For `u`:
 ```@example bruss
 using Plots
-anim = @animate for k in 1:length(t)
-    heatmap(solu[k][2:end, 2:end], title="$(t[k])")
+anim = @animate for k in 1:length(discrete_t)
+    heatmap(solu[k][2:end, 2:end], title="$(discrete_t[k])")
 end
 gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
 ```       
@@ -147,8 +148,8 @@ gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
 
 For `v`:
 ```@example bruss
-anim = @animate for k in 1:length(t)
-    heatmap(solv[k][2:end, 2:end], title="$(t[k])")
+anim = @animate for k in 1:length(discrete_t)
+    heatmap(solv[k][2:end, 2:end], title="$(discrete_t[k])")
 end
 gif(anim, "plots/Brusselator2Dsol_v.gif", fps = 8)
 ```       
