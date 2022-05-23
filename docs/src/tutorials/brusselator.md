@@ -137,6 +137,7 @@ The result after plotting an animation:
 
 For `u`:
 ```@example bruss
+using Plots
 anim = @animate for k in 1:length(t)
     heatmap(solu[k][2:end, 2:end], title="$(t[k])")
 end
