@@ -129,8 +129,8 @@ grid = get_discrete(pdesys, discretization)
 discrete_x = grid[x]
 discrete_y = grid[y]
 
-solu = [map(d -> sol[d][i], grid[u(t, x, y)]) for i in 1:length(sol[t])]
-solv = [map(d -> sol[d][i], grid[v(t, x, y)]) for i in 1:length(sol[t])]
+solu = [map(d -> sol[d][i], grid[u(x, y, t)]) for i in 1:length(sol[t])]
+solv = [map(d -> sol[d][i], grid[v(x, y, t)]) for i in 1:length(sol[t])]
 ```
 
 The result after plotting an animation:
