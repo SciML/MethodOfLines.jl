@@ -17,8 +17,7 @@ makedocs(
         assets=["assets/favicon.ico"],
         canonical="https://methodoflines.sciml.ai/stable/"), pages=[
         "MethodOfLines.jl: Automated Finite Difference for Phyiscs-Informed Learning" => "index.md",
-        "Tutorials" => ["tutorials/brusselator.md", "tutorials/icbc_sampled.md",
-                        "tutorials/heat.md", "tutorials/params.md", "tutorials/heatss.md"],
+        "Tutorials" => ["tutorials/brusselator.md", "tutorials/heat.md", "tutorials/params.md", "tutorials/heatss.md", "tutorials/icbc_sampled.md"],
         "MOLFiniteDifference" => "MOLFiniteDifference.md",
         "Grid and Solution Retrieval" => "get_grid.md",
         "Boundary Conditions" => "boundary_conditions.md",
