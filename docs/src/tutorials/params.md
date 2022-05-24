@@ -76,7 +76,7 @@ prob = discretize(pdesys,discretization) # This gives an ODEProblem since it's t
 
 sols = []
 for (Dnval, Dpval) in zip(rand(10), rand(10))
-    newprob = remake(prob, ps = [Dn => Dnval, Dp => Dpval])
+    newprob = remake(prob, ps = [Dnval, Dpval])
     push(sols, solve(newprob, Tsit5()))
 end
 
