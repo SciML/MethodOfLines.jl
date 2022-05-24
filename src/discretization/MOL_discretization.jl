@@ -149,7 +149,7 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
         if tspan === nothing
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)))
         else
-            return prob = ODEProblem(simpsys,Pair[],tspan)
+            return prob = ODEProblem(simpsys,Pair[],tspan; checkbounds = true)
         end
     catch e
         error_analysis(sys, e)
