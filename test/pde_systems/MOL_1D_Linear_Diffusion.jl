@@ -360,7 +360,7 @@ end
     dx = 0.01
     order = 4
     discretization = MOLFiniteDifference([x => dx], t; approx_order=order)
-    discretization_edge = MOLFiniteDifference([x => dx], t; approx_order=order)
+    discretization_edge = MOLFiniteDifference([x => dx], t; approx_order=order, grid_align = edge_align)
 
     for disc ∈ [discretization, discretization_edge]
         # Convert the PDE problem into an ODE problem
