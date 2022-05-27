@@ -137,17 +137,17 @@ solv = [map(d -> sol[d][i], grid[v(x, y, t)]) for i in 1:length(sol[t])]
 The result after plotting an animation:
 
 For `u`:
-```@example bruss
+```julia
 using Plots
 anim = @animate for k in 1:length(discrete_t)
-    heatmap(solu[k][2:end, 2:end], title="$(discrete_t[k])")
+    heatmap(solu[k][2:end, 2:end], title="$(discrete_t[k])") # 2:end since end = 1, periodic condition
 end
 gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
 ```       
 ![Brusselator2Dsol_u](https://user-images.githubusercontent.com/9698054/159934498-e5c21b13-c63b-4cd2-9149-49e521765141.gif)
 
 For `v`:
-```@example bruss
+```julia
 anim = @animate for k in 1:length(discrete_t)
     heatmap(solv[k][2:end, 2:end], title="$(discrete_t[k])")
 end
