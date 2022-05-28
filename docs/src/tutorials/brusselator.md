@@ -44,7 +44,7 @@ on a timespan of ``t \in [0,11.5]``.
 
 With `ModelingToolkit.jl`, we first symbolicaly define the system, see also the docs for [`PDESystem`](https://mtk.sciml.ai/stable/systems/PDESystem/):
 
-```@example bruss
+```julia
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
 
 
@@ -93,7 +93,7 @@ For a list of limitations constraining which systems will work, see [here](@ref 
 
 Then, we create the discretization, leaving the time dimension undiscretized by supplying `t` as an argument. Optionally, all dimensions can be discretized in this step, just remove the argument `t` and supply `t=>dt` in the `dxs`. See [here](@ref molfd) for more information on the `MOLFiniteDifference` constructor arguments and options.
 
-```@example bruss
+```julia
 N = 32
 
 dx = (x_max-x_min)/N
@@ -114,7 +114,7 @@ println("Discretization:")
 ## Solving the problem
 Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://diffeq.sciml.ai/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/) and [SteadyStateDiffEq.jl](https://diffeq.sciml.ai/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl). `Tsit5()` is a good first choice of solver for many problems.
 
-```@example bruss
+```julia
 println("Solve:")
 @time sol = solve(prob, TRBDF2(), saveat=0.1)
 ```
@@ -124,7 +124,7 @@ To retrieve your solution, for example for `u`, use `sol[u]`. To get the time ax
 
 Due to current limitations in the `sol` interface, above 1 discretized dimension the result must be manually reshaped to correctly display the result, best done with the help of the `get_discrete` helper function. Here is an example of how to do this:
 
-```@example bruss
+```julia
 grid = get_discrete(pdesys, discretization)
 discrete_x = grid[x]
 discrete_y = grid[y]
