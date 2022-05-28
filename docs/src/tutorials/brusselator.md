@@ -45,7 +45,7 @@ on a timespan of ``t \in [0,11.5]``.
 With `ModelingToolkit.jl`, we first symbolicaly define the system, see also the docs for [`PDESystem`](https://mtk.sciml.ai/stable/systems/PDESystem/):
 
 ```julia
-using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
+using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets, Plots
 
 
 @parameters x y t
@@ -129,16 +129,16 @@ grid = get_discrete(pdesys, discretization)
 discrete_x = grid[x]
 discrete_y = grid[y]
 
-solu = [map(d -> sol[d][i], grid[u(t, x, y)]) for i in 1:length(sol[t])]
-solv = [map(d -> sol[d][i], grid[v(t, x, y)]) for i in 1:length(sol[t])]
+solu = [map(d -> sol[d][i], grid[u(x, y, t)]) for i in 1:length(sol[t])]
+solv = [map(d -> sol[d][i], grid[v(x, y, t)]) for i in 1:length(sol[t])]
 ```
 
 The result after plotting an animation:
 
 For `u`:
 ```julia
-anim = @animate for k in 1:length(t)
-    heatmap(solu[k][2:end, 2:end], title="$(t[k])")
+anim = @animate for k in 1:length(sol[t])
+    heatmap(solu[k][2:end, 2:end], title="$(sol[t][k])")
 end
 gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
 ```       
@@ -146,8 +146,8 @@ gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
 
 For `v`:
 ```julia
-anim = @animate for k in 1:length(t)
-    heatmap(solv[k][2:end, 2:end], title="$(t[k])")
+anim = @animate for k in 1:length(sol[t])
+    heatmap(solv[k][2:end, 2:end], title="$(sol[t][k])")
 end
 gif(anim, "plots/Brusselator2Dsol_v.gif", fps = 8)
 ```       
