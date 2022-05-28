@@ -1,4 +1,4 @@
-# Solving the Heat Equation (@id heat)
+# [Solving the Heat Equation](@id heat)
 
 In this tutorial we will use the symbolic interface to solve the heat equation.
 
