@@ -372,7 +372,7 @@ end
         if disc.grid_align == center_align
             x = x[2:end-1]
         else
-            x = (-1.0+dx/2):dx:1.0-dx/2)
+            x = (-1.0+dx/2):dx:(1.0-dx/2)
 
         end
         t = sol.t
