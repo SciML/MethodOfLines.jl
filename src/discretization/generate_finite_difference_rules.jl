@@ -193,11 +193,13 @@ end
 end
 
 @inline function generate_nonlinlap_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
-    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c...,cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
+    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c..., cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
 
     rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u)/~a)) => cartesian_nonlinear_laplacian(1/~a, Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
+    rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u) / ~a)) => cartesian_nonlinear_laplacian(1 / ~a, Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(b..., c..., cartesian_nonlinear_laplacian(1 / ~a, Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u)) for x in params(u, s)]) for u in depvars]))
 
     nonlinlap_rules = []
     for t in terms

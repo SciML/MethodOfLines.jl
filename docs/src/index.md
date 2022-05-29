@@ -34,6 +34,7 @@ At the moment the package is able to discretize almost any system, with some ass
 
 - That the grid is cartesian.
 - That the equation is first order in time.
+- Boundary conditions in time are supplied as initial conditions, not at the end of the simulation interal. If your system requires a final condition, please use a change of variables to rectify this. This is unlikely to change due to upstream constraints.
 - Intergral equations are not supported.
 - That dependant variables always have the same argument signature, except in BCs.
 - That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`, or the same with lhs and rhs reversed. Note that this generalises to higher dimensions.

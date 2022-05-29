@@ -112,7 +112,7 @@ println("Discretization:")
 ```
 
 ## Solving the problem
-Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://diffeq.sciml.ai/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/) and [SteadyStateDiffEq.jl](https://diffeq.sciml.ai/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl).
+Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://diffeq.sciml.ai/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/) and [SteadyStateDiffEq.jl](https://diffeq.sciml.ai/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl). `Tsit5()` is a good first choice of solver for many problems.
 
 ```julia
 println("Solve:")
@@ -128,17 +128,19 @@ Due to current limitations in the `sol` interface, above 1 discretized dimension
 grid = get_discrete(pdesys, discretization)
 discrete_x = grid[x]
 discrete_y = grid[y]
+discrete_t = sol[t]
 
-solu = [map(d -> sol[d][i], grid[u(t, x, y)]) for i in 1:length(sol[t])]
-solv = [map(d -> sol[d][i], grid[v(t, x, y)]) for i in 1:length(sol[t])]
+solu = [map(d -> sol[d][i], grid[u(x, y, t)]) for i in 1:length(sol[t])]
+solv = [map(d -> sol[d][i], grid[v(x, y, t)]) for i in 1:length(sol[t])]
 ```
 
 The result after plotting an animation:
 
 For `u`:
 ```julia
-anim = @animate for k in 1:length(t)
-    heatmap(solu[k][2:end, 2:end], title="$(t[k])")
+using Plots
+anim = @animate for k in 1:length(discrete_t)
+    heatmap(solu[k][2:end, 2:end], title="$(discrete_t[k])") # 2:end since end = 1, periodic condition
 end
 gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
 ```       
@@ -146,8 +148,8 @@ gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
 
 For `v`:
 ```julia
-anim = @animate for k in 1:length(t)
-    heatmap(solv[k][2:end, 2:end], title="$(t[k])")
+anim = @animate for k in 1:length(discrete_t)
+    heatmap(solv[k][2:end, 2:end], title="$(discrete_t[k])")
 end
 gif(anim, "plots/Brusselator2Dsol_v.gif", fps = 8)
 ```       
