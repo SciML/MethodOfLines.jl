@@ -105,7 +105,7 @@ discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=order, grid
 ```
 Next, we discretize the system, converting the `PDESystem` in to an `ODEProblem` or `NonlinearProblem`.
 
-```@example bruss
+```julia
 # Convert the PDE problem into an ODE problem
 println("Discretization:")
 @time prob = discretize(pdesys,discretization)
