@@ -1,5 +1,7 @@
 using Documenter, MethodOfLines
 
+include("pages.jl")
+
 makedocs(
     sitename="MethodOfLines.jl",
     authors="Chris Rackauckas, Alex Jones et al.",
