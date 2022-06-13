@@ -25,7 +25,50 @@ First terms are split, isolating particular cases. Then, rules are generated and
 
 Identify a rule which will match your case, then write a function that will handle how to apply that scheme for each index in the interior, for each combination of independant and dependant variables. 
 
+This should be a function of the current index `II::CartesianIndex`, an independent variable `x` which represents the direction of the derivative, and a dependent variable `u`, which is the variable of which the derivative will be taken. The discrete representation of `u` is found in `s.discvars[u]`, which is an array with the same number of spatial dimensions as `u`, each index a symbol representing the discretized `u` at that index. Using this, and cartesian index offsets from `II`, create a finite difference/volume symbolic expression for the approximation of the derivative form you are trying to discretize. This should be returned.
+
+For example, the following is a simple rule and function that would discretize derivatives of each dependent variable `u`in each dependent variable `x` with the second order central difference approximation:
+```julia
+#TODO: Add handling for cases where II is close to the boundaries
+#TODO: Handle periodic boundary conditions
+#TODO: Handle nonuniformly discretized `x`
+function second_order_central_difference(II::CartesianIndex, s::DiscreteSpace, u, x)
+    # Get which place `x` appears in `u`'s arguments
+    j = x2i(s, u, x)
+
+    # Get a CartesianIndex of unit length that points in the direction of `x` e.g. CartesianIndex((1, 0, 0))
+    I1 = unitindex(ndims(u, s), j) 
+
+    discu = s.discvars[u]
+    expr = (discu[II + I1] - discu[II - I1])/s.dx[x]
+
+    return expr
+end
+
+# Note that indexmap is used along with the function `Idx` to create an equivalent index for the discrete form of `u`,
+# which may have a different number of dimensions to `II`
+function generate_central_difference_rules(II::CartesianIndex, s::DiscreteSpace, terms::Vector{<:Term}, indexmap::Dict)
+    rules = [[@rule Differential(x)(u) => second_order_central_difference(Idx(II, s, u, indexmap), s, u, x) for x in, params(u, x)] for u in depvars]
+
+    rules = reduce(vcat, rules)
+
+    # Parse the rules in to pairs that can be used with `substitute`, this can be copy pasted.
+    rule_pairs = []
+    for t in terms
+        for r in rules
+            if r(t) !== nothing
+                push!(rule_pairs, t => r(t))
+            end
+        end
+    end
+    return rule_pairs
+end
+```
+
 Initially, don't worry if your scheme is only implemented for specific approximation orders, it is sufficient just to warn when the requested approximation order does not match that supplied by the scheme. We can work in future pull requests to generalize the scheme to higher approximation orders, where possible.
+
+Finally, include your rules in the vector of rules to be used to replace terms in the PDE at this index, found [here](https://github.com/SciML/MethodOfLines.jl/blob/949d0fee5e97c4adc59057460b3708161f776e9b/src/discretization/generate_finite_difference_rules.jl#L271):
+
 
 ## Inspecting generated code
 To get the generated code for your system, use `code = ODEFunctionExpr(prob)`, or `MethodOfLines.generate_code(pdesys, discretization, "my_generated_code_filename.jl")`, which will create a file called `my_generated_code_filename.jl` in `pwd()`. This can be useful to find errors in the discretization, but note that it is not recommended to use this code directly, calling `solve(prob, AppropriateSolver())` will handle this for you.
