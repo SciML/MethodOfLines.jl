@@ -147,9 +147,9 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
     try
         simpsys = structural_simplify(sys)
         if tspan === nothing
-            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)))
+            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
         else
-            return prob = ODEProblem(simpsys,Pair[],tspan)
+            return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
         end
     catch e
         error_analysis(sys, e)
