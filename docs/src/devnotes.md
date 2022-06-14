@@ -19,7 +19,7 @@ If you know of a finite difference scheme which is better than what is currently
 
 A replacement rule is generated for each term which has a more specific higher stability/accuracy finite difference scheme than the general central difference, which represents a base case.
 
-Take a look at [`src/discretization/generate_finite_difference_rules.jl`](https://github.com/SciML/MethodOfLines.jl/blob/243252a595ed2af549d98270bd3b8ca5e3f93d69/src/discretization/generate_finite_difference_rules.jl#L252) to see how the replacement rules are generated. Note that the order that the rules are applied is important; there may be schemes that are applied first that are special cases of more general rules, for example the sphrical laplacian is a special case of the nonlinear lalacian.
+Take a look at [`src/discretization/generate_finite_difference_rules.jl`](https://github.com/SciML/MethodOfLines.jl/blob/243252a595ed2af549d98270bd3b8ca5e3f93d69/src/discretization/generate_finite_difference_rules.jl#L252) to see how the replacement rules are generated. Read about the [`@rule` macro](https://symbolicutils.juliasymbolics.org/rewrite/) from `SymbolicUtils.jl`, if you haven't already. Note that the order that the rules are applied is important; there may be schemes that are applied first that are special cases of more general rules, for example the sphrical laplacian is a special case of the nonlinear lalacian.
 
 First terms are split, isolating particular cases. Then, rules are generated and applied. Take a look at the docs for symbolic utils to get an idea of how these work. 
 
