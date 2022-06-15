@@ -46,3 +46,5 @@ Currently supported grid types: `center_align` and `edge_align`. Edge align will
 `center_align`: naive grid, starting from lower boundary, ending on upper boundary with step of `dx`
 
 `edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`. This improves accuracy for Neumann BCs.
+
+Any unrecognized keyword arguments will be passed to the `ODEProblem` constructor, see [its documentation](https://mtk.sciml.ai/stable/systems/ODESystem/#Standard-Problem-Constructors) for available options.
