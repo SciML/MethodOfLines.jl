@@ -1,6 +1,7 @@
 # Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model
 
 Considering the following SIS reaction diffusion model:
+
 ```math
 \left\{\begin{array}{l}
 S_{t} = d_{S} S_{x x}-\beta(x) \frac{S I}{S+I}+\gamma(x) I=0, \quad 0<x<1 \\
@@ -8,9 +9,11 @@ I_{t} = d_{I} I_{x x}+\beta(x) \frac{S I}{S+I}-\gamma(x) I=0, \quad 0<x<1 \\
 S_{x}=I_{x}=0, \quad x=0,1,
 \end{array}\right.
 ```
+
 where ``\int_{0}^{1} S(x,t)+I(x,t)dx = 1``. ``S(x,t)`` and ``I(x,t)``  denote the density of susceptible and  infected  populations at location ``x`` and time ``t``,  ``d_{S}`` and ``d_{I}`` represent the  diffusion coefficients for susceptible and infected  individuals, and  ``\beta(x)``, ``\gamma(x)`` are transmission  and recovery rates at ``x``, respectively.
 
 We want to solve the steady state problem (same notations for convenience):
+
 ```math
 \left\{\begin{array}{l}
 d_{S} S_{x x}-\beta(x) \frac{S I}{S+I}+\gamma(x) I=0, \quad 0<x<1 \\
@@ -18,12 +21,13 @@ d_{I} I_{x x}+\beta(x) \frac{S I}{S+I}-\gamma(x) I=0, \quad 0<x<1 \\
 S_{x}=I_{x}=0, \quad x=0,1,
 \end{array}\right.
 ```
+
 where ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 
 Note here elliptic problem has condition ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 
 ```@example sispde
-using DifferentialEquations, ModelingToolkit, MethodOfLines, DomainSets, Plots, NLsolve, Sundials
+using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets, Plots
 
 # Parameters, variables, and derivatives
 @parameters t x
@@ -89,14 +93,16 @@ for i in 1:length(discrete_t)
     S_solution[i, :] = solS[i]
     I_solution[i, :] = solI[i]
 end
-surface(discrete_x, discrete_t, S_solution)
+p = surface(discrete_x, discrete_t, S_solution)
+display(p)
 ```
 
 ### Solving steady state problem
 
 See more solvers in [Steady State Solvers · DifferentialEquations.jl](https://diffeq.sciml.ai/stable/solvers/steady_state_solve/)
 
-```@example sispde
+```julia
+using DifferentialEquations
 steadystateprob = SteadyStateProblem(prob)
 steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
 ```
@@ -106,7 +112,7 @@ steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
 Set the endemic size
 $$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$$
 
-```@example sispde
+```julia
 function episize!(dS, dI)
     newprob = remake(prob, p=[dS, dI, 3, 0.1])
     steadystateprob = SteadyStateProblem(newprob)
