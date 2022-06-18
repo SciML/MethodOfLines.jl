@@ -27,7 +27,7 @@ where ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 Note here elliptic problem has condition ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 
 ```@example sispde
-using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets, Plots
+using DifferentialEquations, ModelingToolkit, MethodOfLines, DomainSets, Plots
 
 # Parameters, variables, and derivatives
 @parameters t x
@@ -101,8 +101,7 @@ display(p)
 
 See more solvers in [Steady State Solvers · DifferentialEquations.jl](https://diffeq.sciml.ai/stable/solvers/steady_state_solve/)
 
-```julia
-using DifferentialEquations
+```@example sispde
 steadystateprob = SteadyStateProblem(prob)
 steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
 ```
@@ -112,7 +111,7 @@ steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
 Set the endemic size
 $$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$$
 
-```julia
+```@example sispde
 function episize!(dS, dI)
     newprob = remake(prob, p=[dS, dI, 3, 0.1])
     steadystateprob = SteadyStateProblem(newprob)
