@@ -99,6 +99,8 @@ display(p)
 
 ### Solving steady state problem
 
+Change the elliptic problem to steady state problem of reaction diffusion equation.
+
 See more solvers in [Steady State Solvers · DifferentialEquations.jl](https://diffeq.sciml.ai/stable/solvers/steady_state_solve/)
 
 ```@example sispde
