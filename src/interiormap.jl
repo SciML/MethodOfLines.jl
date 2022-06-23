@@ -1,9 +1,9 @@
 struct InteriorMap
-    var
-    pde
-    I
-    lower
-    upper
+    var::Any
+    pde::Any
+    I::Any
+    lower::Any
+    upper::Any
 end
 
 #to get an equal mapping, you want to associate every equation to a unique dependent variable that it's solving for
@@ -38,7 +38,9 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}) where {N,M}
         push!(vupper, pde => upper)
         args = remove(arguments(u), s.time)
         # Don't update this x2i, it is correct.
-        pde => s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
+        pde => s.Igrid[u][[
+            (1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args
+        ]...]
     end
     pdemap = [k.second => k.first for k in varmap]
     return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper))
@@ -62,20 +64,20 @@ function build_variable_mapping(m, vars, pdes)
     notzero(x) = x > 0 ? 1 : 0
     varpdemap = []
     N = length(pdes)
-    rows = sum(m, dims=2)
-    cols = sum(m, dims=1)
+    rows = sum(m, dims = 2)
+    cols = sum(m, dims = 1)
     i = findfirst(isequal(0), rows)
     j = findfirst(isequal(0), cols)
     @assert i === nothing "Equation $(pdes[i[1]]) is not an equation for any of the dependent variables."
     @assert j === nothing "Variable $(vars[j[2]]) does not appear in any equation, therefore cannot be solved for"
-    for k in 1:N
+    for k = 1:N
         # Check if any of the pdes only have one valid variable
         m_ones = notzero.(m)
-        cols = sum(m_ones, dims=1)
+        cols = sum(m_ones, dims = 1)
         j = findfirst(isequal(1), cols)
         if j !== nothing
             j = j[2]
-            for i in 1:N
+            for i = 1:N
                 if m[i, j] > 0
                     push!(varpdemap, pdes[i] => vars[j])
                     m[i, :] .= 0
@@ -86,11 +88,11 @@ function build_variable_mapping(m, vars, pdes)
             continue
         end
         # Check if any of the variables only have one valid pde
-        rows = sum(m_ones, dims=2)
+        rows = sum(m_ones, dims = 2)
         i = findfirst(isequal(1), rows)
         if i !== nothing
             i = i[1]
-            for j in 1:N
+            for j = 1:N
                 if m[i, j] > 0
                     push!(varpdemap, pdes[i] => vars[j])
                     m[i, :] .= 0
