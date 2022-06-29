@@ -1,5 +1,5 @@
 pages = [
-    "MethodOfLines.jl: Automated Finite Difference for Phyiscs-Informed Learning" => "index.md",
+    "MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning" => "index.md",
     "Tutorials" => ["tutorials/brusselator.md", "tutorials/heat.md", "tutorials/params.md", "tutorials/heatss.md", "tutorials/sispde.md", "tutorials/icbc_sampled.md"],
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
     "Grid and Solution Retrieval" => "get_grid.md",
