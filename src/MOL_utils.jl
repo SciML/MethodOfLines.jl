@@ -80,6 +80,10 @@ function unitindices(N::Int) #create unit CartesianIndex for each dimension
     end
 end
 
+"""
+    unitindex(N, j)
+Get a `CartesianIndex` of `j`-th canonical vector of length `N`.
+"""
 @inline function unitindex(N, j)
     N == 0  && return CartesianIndex()
     null = zeros(Int, N)
@@ -112,7 +116,7 @@ function _split_terms(term, x̄)
     st(t) = _split_terms(t, x̄)
     # TODO: Update this to handle more ops e.g. exp sin tanh etc.
     # TODO: Handle cases where two nonlinear laplacians are multiplied together
-    if S.istree(term) 
+    if S.istree(term)
         # Additional handling for upwinding
         if (operation(term) == *)
             args = SU.arguments(term)
@@ -122,7 +126,7 @@ function _split_terms(term, x̄)
                     # Flatten the arguments of the differential to make nonlinear laplacian work in more cases
                     try
                         args[i] = operation(arg)(flatten_division.(SU.arguments(arg))...)
-                    catch e 
+                    catch e
                         println("Argument to derivative in $term is not a dependant variable, is trivially differentiable or is otherwise not differentiable.")
                         throw(e)
                     end
@@ -137,7 +141,7 @@ function _split_terms(term, x̄)
                 if args[1] isa Differential
                     try
                         args[1] = operation(arg)(flatten_division.(SU.arguments(arg))...)
-                    catch e 
+                    catch e
                         println("Argument to derivative in $term is not a dependant variable, is trivially differentiable or is otherwise not differentiable.")
                         throw(e)
                     end
@@ -152,7 +156,7 @@ function _split_terms(term, x̄)
                             try
                                 subargs[i] = operation(arg)(flatten_division.(SU.arguments(arg))...)
                                 args[1] = operation(args[1])(flatten_division.(subargs)...)
-                            catch e 
+                            catch e
                                 println("Argument to derivative in $term is not a dependant variable, is trivially differentiable or is otherwise not differentiable.")
                                 throw(e)
                             end

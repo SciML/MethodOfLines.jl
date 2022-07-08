@@ -16,8 +16,8 @@ variable and create an array of symbolic variables to represent it in its discre
 
 - `ū`: The vector of dependant variables.
 - `args`: The dictionary of the operations of dependant variables and the corresponding arguments.
-- `discvars`: The dictionary of dependant variables and symbolic variables to in the discretized form.
-    See the example below.
+- `discvars`: The dictionary of dependant variables and the discrete symbolic representation of them.
+    Note that this includes the boundaries. See the example below.
 - `time`: The time variable. `nothing` for steady state problems.
 - `x̄`: The vector of symbolic spatial variables.
 - `axies`: The dictionary of symbolic spatial variables and their numerical discretizations.
@@ -26,7 +26,7 @@ variable and create an array of symbolic variables to represent it in its discre
 - `dxs`: The discretization symbolic spatial variables and their step sizes.
 - `Iaxies`: The dictionary of the dependant variables and their `CartesianIndices` of the discretization.
 - `Igrid`: Same as `axies` if `CenterAlignedGrid` is used. For `EdgeAlignedGrid`, one more index will be needed for extrapolation.
-- `x2i`: The dictionary of symbolic spatial variables their orders.
+- `x2i`: The dictionary of symbolic spatial variables their ordering.
 
 ## Examples
 
