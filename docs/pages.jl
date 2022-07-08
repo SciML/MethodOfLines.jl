@@ -9,7 +9,7 @@ pages = [
     "How it Works" => "howitworks.md",
     "Notes for Developers: Implement a Scheme" => "devnotes.md",
     "Generated Examples" => ["generated/bruss_code.md", "generated/bruss_ode_eqs.md"],
-    "API Reference" => ["api/discretization.md"]
+    "API Reference" => ["api/discretization.md", "api/utils.md"]
 
     # "Tutorial: Burgers" => "tutorials/burgers.md",
     # "Tutorial: 1D Linear Diffusion" => "tutorials/1d_linear_diffusion.md",

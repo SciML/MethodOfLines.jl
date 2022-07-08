@@ -15,7 +15,8 @@ variable and create an array of symbolic variables to represent it in its discre
 ## Fields
 
 - `ū`: The vector of dependant variables.
-- `args`: The dictionary of the operations of dependant variables and the corresponding arguments.
+- `args`: The dictionary of the operations of dependant variables and the corresponding arguments,
+    which include the time variable if given.
 - `discvars`: The dictionary of dependant variables and the discrete symbolic representation of them.
     Note that this includes the boundaries. See the example below.
 - `time`: The time variable. `nothing` for steady state problems.
@@ -155,18 +156,28 @@ end
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
 nvars(::DiscreteSpace{N,M}) where {N,M} = M
 
-params(u,s) = remove(s.args[operation(u)], s.time)
+"""
+    params(u, s::DiscreteSpace)
+
+Fillter out the time variable and get the spatial variables of `u` in `s`.
+"""
+params(u,s::DiscreteSpace) = remove(s.args[operation(u)], s.time)
 Base.ndims(u,s::DiscreteSpace) = length(params(u,s))
 
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])
 Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])
 Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 
-@inline function Idx(II, s, u, indexmap)
+"""
+    Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
+
+Here `indexmap` maps the arguments of `u` in `s` to the their ordering. Return a subindex
+of `II` that corresponds to only the spatial arguments of `u`.
+"""
+@inline function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     # We need to construct a new index as indices may be of different size
     length(params(u,s)) == 0 && return CartesianIndex()
     is = [II[indexmap[x]] for x in params(u, s)]
-
 
     II = CartesianIndex(is...)
     return II

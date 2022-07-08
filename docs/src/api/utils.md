@@ -6,4 +6,6 @@ CurrentModule = MethodOfLines
 
 ```@docs
 unitindex
+param
+Idx
 ```
