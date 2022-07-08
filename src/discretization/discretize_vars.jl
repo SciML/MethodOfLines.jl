@@ -1,3 +1,15 @@
+"""
+    DiscreteSpace(domain, depvars, indepvars, discretization::MOLFiniteDifference)
+
+A discrete space.
+
+## Arguments
+
+  - `domain`: The domain of the space.
+  - `depvars`: The dependent variables.
+  - `indepvars`: The independent variables.
+  - `discretization`: The discretization algorithm.
+"""
 struct DiscreteSpace{N,M,G}
     ū
     args
