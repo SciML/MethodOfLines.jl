@@ -6,4 +6,5 @@ CurrentModule = MethodOfLines
 
 ```@docs
 MOLFiniteDifference
+DiscreteSpace
 ```
