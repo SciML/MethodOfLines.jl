@@ -1,3 +1,76 @@
+"""
+    DiscreteSpace(domain, depvars, indepvars, discretization::MOLFiniteDifference)
+
+A type that stores informations about the discretized space. It takes each independent variable
+defined on the space to be discretized and create a corresponding range. It then take each dependant
+variable and create an array of symbolic variables to represent it in its discretized form.
+
+## Arguments
+
+- `domain`: The domain of the space.
+- `depvars`: The independent variables to be discretizated.
+- `indepvars`: The independent variables.
+- `discretization`: The discretization algorithm.
+
+## Fields
+
+- `ū`: The vector of dependant variables.
+- `args`: The dictionary of the operations of dependant variables and the corresponding arguments,
+    which include the time variable if given.
+- `discvars`: The dictionary of dependant variables and the discrete symbolic representation of them.
+    Note that this includes the boundaries. See the example below.
+- `time`: The time variable. `nothing` for steady state problems.
+- `x̄`: The vector of symbolic spatial variables.
+- `axies`: The dictionary of symbolic spatial variables and their numerical discretizations.
+- `grid`: Same as `axies` if `CenterAlignedGrid` is used. For `EdgeAlignedGrid`, interpolation will need
+    to be defined `±dx/2`` above and below the edges of the simulation domain where dx is the step size in the direction of that edge.
+- `dxs`: The discretization symbolic spatial variables and their step sizes.
+- `Iaxies`: The dictionary of the dependant variables and their `CartesianIndices` of the discretization.
+- `Igrid`: Same as `axies` if `CenterAlignedGrid` is used. For `EdgeAlignedGrid`, one more index will be needed for extrapolation.
+- `x2i`: The dictionary of symbolic spatial variables their ordering.
+
+## Examples
+
+```julia
+julia> using MethodOfLines, DomainSets, ModelingToolkit
+julia> using MethodOfLines:DiscreteSpace
+
+julia> @parameters t x
+julia> @variables u(..)
+julia> Dt = Differential(t)
+julia> Dxx = Differential(x)^2
+
+julia> eq  = [Dt(u(t, x)) ~ Dxx(u(t, x))]
+julia> bcs = [u(0, x) ~ cos(x),
+              u(t, 0) ~ exp(-t),
+              u(t, 1) ~ exp(-t) * cos(1)]
+
+julia> domain = [t ∈ Interval(0.0, 1.0),
+                 x ∈ Interval(0.0, 1.0)]
+
+julia> dx = 0.1
+julia> discretization = MOLFiniteDifference([x => dx], t)
+julia> ds = DiscreteSpace(domain, [u(t,x).val], [x.val], discretization)
+
+julia> ds.discvars[u(t,x)]
+11-element Vector{Num}:
+  u[1](t)
+  u[2](t)
+  u[3](t)
+  u[4](t)
+  u[5](t)
+  u[6](t)
+  u[7](t)
+  u[8](t)
+  u[9](t)
+ u[10](t)
+ u[11](t)
+
+julia> ds.axies
+Dict{Sym{Real, Base.ImmutableDict{DataType, Any}}, StepRangeLen{Float64, Base.TwicePrecision{Float64}, Base.TwicePrecision{Float64}, Int64}} with 1 entry:
+  x => 0.0:0.1:1.0
+```
+"""
 struct DiscreteSpace{N,M,G}
     ū
     args
@@ -83,18 +156,28 @@ end
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
 nvars(::DiscreteSpace{N,M}) where {N,M} = M
 
-params(u,s) = remove(s.args[operation(u)], s.time)
+"""
+    params(u, s::DiscreteSpace)
+
+Fillter out the time variable and get the spatial variables of `u` in `s`.
+"""
+params(u,s::DiscreteSpace) = remove(s.args[operation(u)], s.time)
 Base.ndims(u,s::DiscreteSpace) = length(params(u,s))
 
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])
 Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])
 Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 
-@inline function Idx(II, s, u, indexmap)
+"""
+    Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
+
+Here `indexmap` maps the arguments of `u` in `s` to the their ordering. Return a subindex
+of `II` that corresponds to only the spatial arguments of `u`.
+"""
+@inline function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     # We need to construct a new index as indices may be of different size
     length(params(u,s)) == 0 && return CartesianIndex()
     is = [II[indexmap[x]] for x in params(u, s)]
-
 
     II = CartesianIndex(is...)
     return II
