@@ -9,7 +9,7 @@ A discretization algorithm.
 
 - `dxs`: A vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`.
     For a non uniform rectilinear grid, replace any or all of the step sizes with the grid you'd like to
-    use with that variable, must be an ``AbstractVector`` but not a ``StepRangeLen``.
+    use with that variable, must be an `AbstractVector` but not a `StepRangeLen`.
 - `time`: Your choice of continuous variable, usually time. If `time = nothing`, then discretization
     yeilds a `NonlinearProblem`.
 
