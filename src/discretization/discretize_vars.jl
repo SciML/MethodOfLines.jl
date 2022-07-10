@@ -2,7 +2,7 @@
     DiscreteSpace(domain, depvars, indepvars, discretization::MOLFiniteDifference)
 
 A type that stores informations about the discretized space. It takes each independent variable
-defined on the space to be discretized and create a corresponding range. It then take each dependant
+defined on the space to be discretized and create a corresponding range. It then takes each dependant
 variable and create an array of symbolic variables to represent it in its discretized form.
 
 ## Arguments
