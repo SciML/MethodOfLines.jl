@@ -23,7 +23,7 @@ variable and create an array of symbolic variables to represent it in its discre
 - `x̄`: The vector of symbolic spatial variables.
 - `axies`: The dictionary of symbolic spatial variables and their numerical discretizations.
 - `grid`: Same as `axies` if `CenterAlignedGrid` is used. For `EdgeAlignedGrid`, interpolation will need
-    to be defined `±dx/2`` above and below the edges of the simulation domain where dx is the step size in the direction of that edge.
+    to be defined `±dx/2` above and below the edges of the simulation domain where dx is the step size in the direction of that edge.
 - `dxs`: The discretization symbolic spatial variables and their step sizes.
 - `Iaxies`: The dictionary of the dependant variables and their `CartesianIndices` of the discretization.
 - `Igrid`: Same as `axies` if `CenterAlignedGrid` is used. For `EdgeAlignedGrid`, one more index will be needed for extrapolation.
