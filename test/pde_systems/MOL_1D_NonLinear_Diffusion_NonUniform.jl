@@ -41,7 +41,7 @@ using ModelingToolkit: Differential
     # Method oflines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -157,7 +157,7 @@ end
     # Method of lines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
 
     discretization = MOLFiniteDifference([x => dx], t, approx_order=2)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -221,7 +221,7 @@ end
     # Method of lines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
 
     discretization = MOLFiniteDifference([x => dx], t, approx_order=4)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -343,7 +343,7 @@ end
     # Method of lines discretization
     dx = 0:0.01:0.8
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -403,7 +403,7 @@ end
     # Method of lines discretization
     dx = 0:0.01:0.8
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -464,7 +464,7 @@ end
     # Method of lines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -524,7 +524,7 @@ end
     # Method of lines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
