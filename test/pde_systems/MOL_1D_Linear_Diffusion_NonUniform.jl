@@ -184,9 +184,9 @@ end
     # Method of lines discretization
     dx = range(0.0, Float64(π), length=300)
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand([0.0001, -0.0001], length(dx[2:end-1]))
 
-    order = 8
+    order = 6
     disc = MOLFiniteDifference([x => dx], t, approx_order=order)
 
     # Convert the PDE problem into an ODE problem
