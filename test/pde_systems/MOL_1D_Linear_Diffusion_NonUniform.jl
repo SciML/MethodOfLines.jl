@@ -3,7 +3,7 @@
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using ModelingToolkit: Differential
-using Random
+using StableRNGs
 const shouldplot = true
 
 # Tests

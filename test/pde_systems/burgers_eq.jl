@@ -1,5 +1,6 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using DomainSets
+using StableRNGs
 
 @testset "Inviscid Burgers equation, 1D, u(0, x) ~ x" begin
     @parameters x t
@@ -68,7 +69,7 @@ end
 
     dx = 0:0.05:1
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand([0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
 
     disc = MOLFiniteDifference([x => dx], t, upwind_order=1)
 
