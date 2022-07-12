@@ -232,7 +232,7 @@ end
     end
 
     for i = 1:N
-        bcs[i+N] = u[i](x_max) ~ rand(MersenneTwister(0), )
+        bcs[i+N] = u[i](x_max) ~ rand(StableRNG(0), )
     end
 
     # Space and time domains
@@ -294,12 +294,12 @@ end
     # Method of lines discretization
     N = 5
 
-    dx = [0.0, cumsum(rand(MersenneTwister(0), 0.05:0.01:0.2, 5))...]
+    dx = [0.0, cumsum(rand(StableRNG(0), 0.05:0.01:0.2, 5))...]
     if dx[end] < 1.0
         push!(dx, 1.0)
     end
 
-    dy = [0.0, cumsum(rand(MersenneTwister(0), 0.05:0.01:0.2, 5))...]
+    dy = [0.0, cumsum(rand(StableRNG(0), 0.05:0.01:0.2, 5))...]
     if dy[end] < 1.0
         push!(dy, 1.0)
     end

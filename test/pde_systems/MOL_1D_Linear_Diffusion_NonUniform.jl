@@ -33,7 +33,7 @@ const shouldplot = true
     # Method of lines discretization
     dx = range(0.0, Float64(π), length=30)
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
     order = 2
     discretization = MOLFiniteDifference([x => dx], t)
     # Explicitly specify order of centered difference
@@ -93,7 +93,7 @@ end
     # Method of lines discretization
     dx = 0.0:0.1:1.0
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
     order = 2
     discretization = MOLFiniteDifference([x => dx], t)
 
@@ -138,7 +138,7 @@ end
     # Method of lines discretization
     dx = 0.0:0.1:1.0
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
 
     order = 2
     discretization = MOLFiniteDifference([x => dx], t)
@@ -185,7 +185,7 @@ end
     # Method of lines discretization
     dx = range(0.0, Float64(π), length=300)
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.0001, -0.0001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.0001, -0.0001], length(dx[2:end-1]))
 
     order = 6
     disc = MOLFiniteDifference([x => dx], t, approx_order=order)
@@ -251,7 +251,7 @@ end
     # Method of lines discretization
     dx = range(0.0, Float64(π), length=30)
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
     order = 2
     disc = MOLFiniteDifference([x => dx], t)
 
@@ -307,7 +307,7 @@ end
 
     dx = -1.0:0.01:1.0
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
     order = 4
     disc = MOLFiniteDifference([x => dx], t; approx_order=order)
 
@@ -362,7 +362,7 @@ end
     # Method of lines discretization
     dx = -1:0.01:1
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
     order = 6
     disc = MOLFiniteDifference([x => dx], t, approx_order=order)
 
@@ -424,7 +424,7 @@ end
     # Method of lines discretization
     dr = 0:0.1:1
     dr = collect(dr)
-    dr[2:end-1] .= dr[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dr[2:end-1]))
+    dr[2:end-1] .= dr[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dr[2:end-1]))
     order = 4
     discretization = MOLFiniteDifference([r => dr], t, approx_order=4)
     prob = discretize(pdesys, discretization)
@@ -482,7 +482,7 @@ end
     # Method of lines discretization
     dr = 0:0.1:1
     dr = collect(dr)
-    dr[2:end-1] .= dr[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dr[2:end-1]))
+    dr[2:end-1] .= dr[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dr[2:end-1]))
 
     order = 2
     discretization = MOLFiniteDifference([r => dr], t)
@@ -545,7 +545,7 @@ end
     l = 100
     dx = range(0.0, 1.0, length=l)
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
     order = 6
     discretization = MOLFiniteDifference([x => dx], t)
 
@@ -585,7 +585,7 @@ end
 
     dx = 0:0.1:1
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
 
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn => 0.5, Dp => 2])
     discretization = MOLFiniteDifference([x => dx], t)
@@ -631,11 +631,11 @@ end
     l = 100
     dx = range(0.0, 1.0, length=l)
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
 
     dy = range(0.0, 2.0, length=l)
     dy = collect(dy)
-    dy[2:end-1] .= dy[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dy[2:end-1]))
+    dy[2:end-1] .= dy[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dy[2:end-1]))
     order = 4
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
 
@@ -692,11 +692,11 @@ end
     l = 100
     dx = range(0.0, 1.0, length=l)
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
 
     dy = range(0.0, 2.0, length=l)
     dy = collect(dy)
-    dy[2:end-1] .= dy[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dy[2:end-1]))
+    dy[2:end-1] .= dy[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dy[2:end-1]))
     order = 2
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
 
@@ -751,7 +751,7 @@ end
     l = 100
     dx = range(0.0, 1.0, length=l)
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
 
     order = 2
     discretization = MOLFiniteDifference([x => dx], t)

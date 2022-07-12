@@ -69,7 +69,7 @@ end
 
     dx = 0:0.05:1
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(MersenneTwister(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
 
     disc = MOLFiniteDifference([x => dx], t, upwind_order=1)
 
