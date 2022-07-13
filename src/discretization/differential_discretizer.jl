@@ -247,3 +247,44 @@ function half_offset_centered_difference(D, II, s, b, jx, u, ufunc)
     weights, Itap = get_half_offset_weights_and_stencil(D, II, s, b, u, jx)
     return dot(weights, ufunc(u, Itap, x))
 end
+
+@inline function weno(II, s, b, jx, u)
+    j, x = jx
+    ε = 1e-6
+
+    I1 = unitindex(ndims(u, s), j)
+
+    udisc = s.discvars[u]
+
+    u_m2 = udisc[wrapperiodic(II - 2I1, s, b, u, jx)]
+    u_m1 = udisc[wrapperiodic(II - I1, s, b, u, jx)]
+    u_0  = udisc[II]
+    u_p1 = udisc[wrapperiodic(II + I1, s, b, u, jx)]
+    u_p2 = udisc[wrapperiodic(II + 2I1, s, b, u, jx)]
+
+    γ1 = 1 / 10
+    γ2 = 3 / 5
+    γ3 = 3 / 10
+
+    β1 = 13 * (u_m2 - 2 * u_m1 + u_0)^2 / 12 + (u_m2 - 4 * u_m1 + 3 * u_0)^2 / 4
+    β2 = 13 * (u_m1 - 2 * u_0 + u_p1)^2 / 12 + (u_m1 - u_p1)^2 / 4
+    β3 = 13 * (u_0 - 2 * u_p1 + u_p2)^2 / 12 + (3 * u_0 - 4 * u_p1 + u_p2)^2 / 4
+
+    ω1 = γ1 / (ε + β1)^2
+    ω2 = γ2 / (ε + β2)^2
+    ω3 = γ3 / (ε + β3)^2
+
+    w_denom = ω1 + ω2 + ω3
+    w1 = ω1 / w_denom
+    w2 = ω2 / w_denom
+    w3 = ω3 / w_denom
+
+    hp1 = u_m2 / 3 - 7u_m1 / 6 + 11u_0 / 6
+    hp2 = -u_m1 / 6 + 5u_0 / 6 + u_p1 / 6
+    hp3 = u_0 / 3 + 5u_p1 / 6 - u_p2 / 6
+
+    hm1 = u_0 / 3 + 5u_m1 / 6 - u_m2 / 6
+    hm2 = -u_p1 / 6 + 5u_0 / 6 + u_m1 / 6
+    hm3 = u_p2 / 3 - 7u_p1 / 6 + 11u_0 / 6
+    hp = w1 * hp1 + w2 * hp2 + w3 * hp3
+end
