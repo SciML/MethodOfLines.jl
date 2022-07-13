@@ -163,7 +163,7 @@ end
             offset = 1 - II[j]
             Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
         else
-            weights = D.stencil_coefs[II[j] - D.offside]
+            weights = D.stencil_coefs[II[j]-D.offside]
             Itap = [II + i * I1 for i in -D.stencil_length+1:0]
         end
     end
@@ -248,7 +248,14 @@ function half_offset_centered_difference(D, II, s, b, jx, u, ufunc)
     return dot(weights, ufunc(u, Itap, x))
 end
 
-@inline function weno(II, s, b, jx, u)
+"""
+Implements the WENO scheme of Jiang and Shu.
+
+Specified in https://repository.library.brown.edu/studio/item/bdr:297524/PDF/ (Page 8-9)
+
+Implementation inspired by https://github.com/ranocha/HyperbolicDiffEq.jl/blob/84c2d882e0c8956457c7d662bf7f18e3c27cfa3d/src/finite_volumes/weno_jiang_shu.jl
+"""
+@inline function weno(II::CartesianIndex, s::DiscreteSpace, b, jx, u, dx::Number)
     j, x = jx
     ε = 1e-6
 
@@ -258,7 +265,7 @@ end
 
     u_m2 = udisc[wrapperiodic(II - 2I1, s, b, u, jx)]
     u_m1 = udisc[wrapperiodic(II - I1, s, b, u, jx)]
-    u_0  = udisc[II]
+    u_0 = udisc[II]
     u_p1 = udisc[wrapperiodic(II + I1, s, b, u, jx)]
     u_p2 = udisc[wrapperiodic(II + 2I1, s, b, u, jx)]
 
@@ -275,16 +282,25 @@ end
     ω3 = γ3 / (ε + β3)^2
 
     w_denom = ω1 + ω2 + ω3
-    w1 = ω1 / w_denom
-    w2 = ω2 / w_denom
-    w3 = ω3 / w_denom
+    wp1 = ω1 / w_denom
+    wp2 = ω2 / w_denom
+    wp3 = ω3 / w_denom
 
-    hp1 = u_m2 / 3 - 7u_m1 / 6 + 11u_0 / 6
-    hp2 = -u_m1 / 6 + 5u_0 / 6 + u_p1 / 6
-    hp3 = u_0 / 3 + 5u_p1 / 6 - u_p2 / 6
+    wm1 = wp3
+    wm2 = wp2
+    wm3 = wp1
 
-    hm1 = u_0 / 3 + 5u_m1 / 6 - u_m2 / 6
-    hm2 = -u_p1 / 6 + 5u_0 / 6 + u_m1 / 6
-    hm3 = u_p2 / 3 - 7u_p1 / 6 + 11u_0 / 6
-    hp = w1 * hp1 + w2 * hp2 + w3 * hp3
+    # * Note: H. Ranchoa has these reversed, check here first for sign error
+    hp1 = (2u_m2 - 7u_m1 + 11u_0) / 6
+    hp2 = -(u_m1 + 5u_0 + 2u_p1) / 6
+    hp3 = (2u_0 + 5u_p1 / 6 - u_p2) / 6
+
+    hm1 = (2u_0 + 5u_m1 / 6 - u_m2) / 6
+    hm2 = -(u_p1 + 5u_0 + 2u_m1) / 6
+    hm3 = (2u_p2 - 7u_p1 + 11u_0) / 6
+
+    hp = wp1 * hp1 + wp2 * hp2 + wp3 * hp3
+    hn = wm1 * hm1 + wm2 * hm2 + wm3 * hm3
+
+    return (hp - hm) / dx
 end
