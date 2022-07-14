@@ -28,7 +28,7 @@ include("discretization/schemes/half_offset_weights.jl")
 include("discretization/differential_discretizer.jl")
 
 # System Parsing
-include("system_parsing/bcs/boundary_types.jl")
+include("system_parsing/bcs/parse_boundaries.jl")
 
 include("system_parsing/bcs/periodic_map.jl")
 
