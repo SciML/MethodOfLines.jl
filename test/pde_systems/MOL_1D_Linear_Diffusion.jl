@@ -43,7 +43,10 @@ const shouldplot = false
     discretization_approx_order4 = MOLFiniteDifference([x => dx_], t; approx_order=4)
 
     for disc in [discretization, discretization_edge, discretization_centered, discretization_approx_order4]
-        # Convert the PDE problem into an ODE problemusing ModelingToolkit, MethodOfLines, DomainSets, OrdinaryDiffEq        # Solve ODE problem
+        # Convert the PDE problem into an ODE problem
+        prob = discretize(pdesys, disc)
+
+        # Solve ODE problem      # Solve ODE problem
         sol = solve(prob, Tsit5(), saveat=0.1)
 
         if disc.grid_align == center_align
