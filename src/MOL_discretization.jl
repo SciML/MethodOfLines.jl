@@ -6,19 +6,19 @@ function interface_errors(depvars, indvars, discretization)
     end
 end
 
-function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where G
+function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
     pdeeqs = [eq.lhs - eq.rhs ~ 0 for eq in pdesys.eqs]
     bcs = pdesys.bcs
     domain = pdesys.domain
 
     t = discretization.time
 
-    depvar_ops = map(x->operation(x.val),pdesys.depvars)
+    depvar_ops = map(x -> operation(x.val), pdesys.depvars)
     # Get all dependent variables in the correct type
     alldepvars = get_all_depvars(pdesys, depvar_ops)
-    alldepvars = filter(u -> !any(map(x-> x isa Number, arguments(u))), alldepvars)
+    alldepvars = filter(u -> !any(map(x -> x isa Number, arguments(u))), alldepvars)
     # Get all independent variables in the correct type, removing time from the list
-    allindvars = remove(collect(filter(x->!(x isa Number), reduce(union, filter(xs->(!isequal(xs, [t])), map(arguments, alldepvars))))), t)
+    allindvars = remove(collect(filter(x -> !(x isa Number), reduce(union, filter(xs -> (!isequal(xs, [t])), map(arguments, alldepvars))))), t)
     #@show allindvars, typeof.(allindvars)
 
     interface_errors(alldepvars, allindvars, discretization)
@@ -29,7 +29,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     tspan = nothing
     # Check that inputs make sense
     if t !== nothing
-        tdomain = pdesys.domain[findfirst(d->isequal(t.val, d.variables), pdesys.domain)]
+        tdomain = pdesys.domain[findfirst(d -> isequal(t.val, d.variables), pdesys.domain)]
         @assert tdomain.domain isa DomainSets.Interval
         tspan = (DomainSets.infimum(tdomain.domain), DomainSets.supremum(tdomain.domain))
     end
@@ -40,36 +40,37 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # * periodic parameters get type info on whether they are periodic or not, and if they join up to any other parameters
     # * Then we can do the actual discretization by recursively indexing in to the DiscreteVariables
 
-    # Create discretized space and variables
+    orders = map(x -> x => d_orders(x, pdeeqs), allindvars)
+
+    # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
-    # Generate finite difference weights
-    derivweights = DifferentialDiscretizer(pdesys, s, discretization)
     # Create a map of each variable to their boundary conditions and get the initial condition
-    boundarymap, u0 = BoundaryHandler(pdesys.bcs, s, depvar_ops, tspan, derivweights)
-    # Generate a map of each variable to whether it is periodic in a given direction
-    pmap = PeriodicMap(boundarymap, s)
+    boundarymap, u0 = parse_bcs(pdesys.bcs, s, depvar_ops, tspan, orders)
     # Get the interior and variable to solve for each equation
     interiormap = InteriorMap(pdeeqs, boundarymap, s)
+    # Generate a map of each variable to whether it is periodic in a given direction
+    pmap = PeriodicMap(boundarymap, s)
+    # Generate finite difference weights
+    derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
-    # Loop over equations: different space, grid, independent variables etc for each equation
-    # a slightly more efficient approach would be to group equations that have the same
-    # independent variables
+    ####
+    # Loop over equations, Discretizing them and their dependent variables' boundary conditions
+    ####
     for pde in pdeeqs
         # Read the dependent variables on both sides of the equation
         depvars_lhs = get_depvars(pde.lhs, depvar_ops)
         depvars_rhs = get_depvars(pde.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
-        depvars =  filter(u -> !any(map(x-> x isa Number, arguments(u))), depvars)
+        depvars = filter(u -> !any(map(x -> x isa Number, arguments(u))), depvars)
 
         # Read the independent variables
         # ignore if the only argument is [t]
-        indvars = Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars)))
+        indvars = Set(filter(xs -> !isequal(xs, [t]), map(arguments, depvars)))
         # get all parameters in the equation
-        allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
+        allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
         # Handle the case where there are no independent variables apart from time
         if isempty(allx̄)
             rules = varmaps(s, depvars, CartesianIndex(), Dict([]))
-
             push!(alleqs, substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules))
         else
             # make sure there is only one set of independent variables per equation
@@ -80,7 +81,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             eqvar = interiormap.var[pde]
 
             args = params(eqvar, s)
-            indexmap = Dict([args[i]=>i for i in 1:length(args)])
+            indexmap = Dict([args[i] => i for i in 1:length(args)])
 
             # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
             # Generate replacement rule gen closures for the boundary values like u(t, 1)
@@ -97,7 +98,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # Generate the equations for the interior points
             pdeeqs = discretize_equation(pde, interiormap.I[pde], eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap)
 
-            push!(alleqs,pdeeqs)
+            push!(alleqs, pdeeqs)
         end
     end
 
@@ -107,7 +108,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))
 
     # Finalize
-    defaults = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0,pdesys.ps)
+    defaults = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps)
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
     # Combine PDE equations and BC equations
     try
@@ -116,7 +117,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # 0 ~ ...
             # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
             eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, vcat(alleqs, unique(bceqs)))
-            sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults),name=pdesys.name)
+            sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.

@@ -40,18 +40,18 @@ end
 """
 find all the dependent variables given by depvar_ops in an expression
 """
-function get_depvars(eq,depvar_ops)
+function get_depvars(eq, depvar_ops)
     S = Symbolics
     SU = SymbolicUtils
     depvars = Set()
     if eq isa Num
-       eq = eq.val
+        eq = eq.val
     end
     if S.istree(eq)
-        if eq isa Term && any(u->isequal(operation(eq),u),depvar_ops)
-              push!(depvars, eq)
+        if eq isa Term && any(u -> isequal(operation(eq), u), depvar_ops)
+            push!(depvars, eq)
         else
-            for o in map(x->get_depvars(x,depvar_ops), SU.arguments(eq))
+            for o in map(x -> get_depvars(x, depvar_ops), SU.arguments(eq))
                 union!(depvars, o)
             end
         end
@@ -61,7 +61,7 @@ end
 
 @inline function get_all_depvars(pdesys, depvar_ops)
     pdeeqs = pdesys.eqs # Vector
-    return collect(mapreduce(x->get_depvars(x.lhs,depvar_ops), union, pdeeqs) ∪ mapreduce(x->get_depvars(x.rhs,depvar_ops), union, pdeeqs))
+    return collect(mapreduce(x -> get_depvars(x.lhs, depvar_ops), union, pdeeqs) ∪ mapreduce(x -> get_depvars(x.rhs, depvar_ops), union, pdeeqs))
 end
 
 """
@@ -85,7 +85,7 @@ end
 Get a `CartesianIndex` of `j`-th canonical vector of length `N`.
 """
 @inline function unitindex(N, j)
-    N == 0  && return CartesianIndex()
+    N == 0 && return CartesianIndex()
     null = zeros(Int, N)
     null[j] = 1
     CartesianIndex(Tuple(null))
@@ -105,7 +105,7 @@ end
 function split_terms(eq::Equation)
     lhs = _split_terms(eq.lhs)
     rhs = _split_terms(eq.rhs)
-    return vcat(lhs,rhs)
+    return vcat(lhs, rhs)
 end
 
 # Additional handling to get around limitations in rules
@@ -120,7 +120,7 @@ function _split_terms(term, x̄)
         # Additional handling for upwinding
         if (operation(term) == *)
             args = SU.arguments(term)
-            for (i,arg) in enumerate(args)
+            for (i, arg) in enumerate(args)
                 # Incase of upwinding, we need to keep the original term
                 if S.istree(arg) && operation(arg) isa Differential
                     # Flatten the arguments of the differential to make nonlinear laplacian work in more cases
@@ -146,11 +146,11 @@ function _split_terms(term, x̄)
                         throw(e)
                     end
                     return [/(flatten_division.(args)...)]
-                # Handle with care so that spherical still works
+                    # Handle with care so that spherical still works
                 elseif operation(args[1]) == *
                     subargs = SU.arguments(args[1])
                     # look for a differential in the arguments
-                    for (i,arg) in enumerate(subargs)
+                    for (i, arg) in enumerate(subargs)
                         if S.istree(arg) && operation(arg) isa Differential
                             # Flatten the arguments of the differential to make nonlinear laplacian/spherical work in more cases
                             try
@@ -182,7 +182,7 @@ end
 function split_terms(eq::Equation, x̄)
     lhs = _split_terms(eq.lhs, x̄)
     rhs = _split_terms(eq.rhs, x̄)
-    return flatten_division.(vcat(lhs,rhs))
+    return flatten_division.(vcat(lhs, rhs))
 end
 
 function split_additive_terms(eq)
@@ -190,7 +190,7 @@ function split_additive_terms(eq)
     rhs_arg = istree(eq.rhs) && (SymbolicUtils.operation(eq.rhs) == +) ? SymbolicUtils.arguments(eq.rhs) : [eq.rhs]
     lhs_arg = istree(eq.lhs) && (SymbolicUtils.operation(eq.lhs) == +) ? SymbolicUtils.arguments(eq.lhs) : [eq.lhs]
 
-    return vcat(lhs_arg,rhs_arg)
+    return vcat(lhs_arg, rhs_arg)
 end
 
 # Filthy hack to get around limitations in rules and avoid simplification to a dividing expression
@@ -204,10 +204,10 @@ end
             return r(term)
         end
     end
-    =#return term
+    return term    =#
 end
 
-@inline clip(II::CartesianIndex{M}, j, N) where M = II[j] > N ? II - unitindices(M)[j] : II
+@inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindices(M)[j] : II
 
 subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
 
@@ -215,24 +215,46 @@ subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
 
 remove(args, t) = filter(x -> t === nothing || !isequal(x, t.val), args)
 
-half_range(x) = -div(x,2):div(x,2)
+half_range(x) = -div(x, 2):div(x, 2)
 
 @inline function _wrapperiodic(I, N, j, l)
     I1 = unitindex(N, j)
     # -1 because of the relation u[1] ~ u[end]
     if I[j] <= 1
-        I = I + I1*(l  - 1)
+        I = I + I1 * (l - 1)
     elseif I[j] > l
-        I = I - I1*(l - 1)
+        I = I - I1 * (l - 1)
     end
     return I
 end
 
 @inline function wrapperiodic(I, s, ::Val{true}, u, jx)
     j, x = jx
-    return _wrapperiodic(I, ndims(u,s), j, length(s,x))
+    return _wrapperiodic(I, ndims(u, s), j, length(s, x))
 end
 
 @inline function wrapperiodic(I, s, ::Val{false}, u, jx)
     return I
+end
+
+d_orders(x, pdeeqs) = reverse(sort(collect(union((differential_order(pde.rhs, x) for pde in pdeeqs)..., (differential_order(pde.lhs, x) for pde in pdeeqs)..., (differential_order(bc.rhs, x) for bc in bcs)..., (differential_order(bc.lhs, x) for bc in bcs)...))))
+
+
+####
+# Utils for DerivativeOperator generation in schemes
+####
+
+index(i::Int, N::Int) = i + div(N, 2) + 1
+
+function generate_coordinates(i::Int, stencil_x, dummy_x,
+    dx::AbstractVector{T}) where {T<:Real}
+    len = length(stencil_x)
+    stencil_x .= stencil_x .* zero(T)
+    for idx in 1:div(len, 2)
+        shifted_idx1 = index(idx, len)
+        shifted_idx2 = index(-idx, len)
+        stencil_x[shifted_idx1] = stencil_x[shifted_idx1-1] + dx[i+idx-1]
+        stencil_x[shifted_idx2] = stencil_x[shifted_idx2+1] - dx[i-idx]
+    end
+    return stencil_x
 end

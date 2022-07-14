@@ -43,8 +43,64 @@ const shouldplot = false
     discretization_approx_order4 = MOLFiniteDifference([x => dx_], t; approx_order=4)
 
     for disc in [discretization, discretization_edge, discretization_centered, discretization_approx_order4]
-        # Convert the PDE problem into an ODE problem
-        prob = discretize(pdesys, disc)
+        # Convert the PDE problem into an ODE problemusing ModelingToolkit, MethodOfLines, DomainSets, OrdinaryDiffEq
+using Plots
+
+# Define the system of equations
+@parameters t x
+@variables u(..) η(..)
+#hu(..)
+
+Dt = Differential(t)
+Dx = Differential(x)
+
+tmin = 0.0;
+tmax = 6000.;
+
+xmin = 0.0;
+xmax = 200.;
+
+dx = 2.0;
+
+slope = 0.001;
+n= 0.03;
+order= 2;
+
+
+elevation(x) =  (xmax - x) * slope;
+h(t,x) = η(t,x) - elevation(x);
+
+
+source(t) = ifelse(t < 3600, 1/60/1000, 0.0)
+@register_symbolic source(t)
+g = 9.81;
+
+eqs = [
+       Dt(η(t,x))  ~ source(t) - u(t,x) * Dx(η(t,x)) + u(t,x) * (-slope) - h(t,x) * Dx(u(t,x)) ,
+       Dt(u(t,x))  ~ - g * Dx(η(t,x))  - u(t,x) * Dx(u(t,x))  - g * u(t,x)^2 * n^2 * max(h(t,x),1e-5)^(-4/3)
+]
+
+
+domain = [x ∈ Interval(xmin,xmax),
+          t ∈ Interval(tmin,tmax)]
+
+
+bcs = [
+    η(tmin,x)     ~ elevation(x),
+    u(tmin,x)     ~ 0.0,
+    η(t,xmin)     ~ elevation(xmin),
+    u(t, xmin)    ~ 0.0,
+
+
+]
+
+
+@named pdesys = PDESystem(eqs, bcs, domain, [t, x], [u(t,x),  η(t,x)])
+discretization = MOLFiniteDifference([x => dx], t) #
+prob = ModelingToolkit.discretize(pdesys, discretization)
+
+@time sol = solve(prob, TRBDF2())
+
 
         # Solve ODE problem
         sol = solve(prob, Tsit5(), saveat=0.1)
