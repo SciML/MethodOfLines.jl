@@ -22,7 +22,7 @@ include("system_parsing/interior_map.jl")
 # Weight calculation
 include("discretization/schemes/fornberg_calculate_weights.jl")
 include("discretization/derivative_operator.jl")
-include("discretization/schemes/central_difference/central_diff_weights.jl")
+include("discretization/schemes/centered_difference/centered_diff_weights.jl")
 include("discretization/schemes/upwind_difference/upwind_diff_weights.jl")
 include("discretization/schemes/half_offset_weights.jl")
 
@@ -34,8 +34,9 @@ include("system_parsing/bcs/parse_boundaries.jl")
 include("system_parsing/bcs/periodic_map.jl")
 
 # Schemes
-include("discretization/schemes/central_difference/central_difference.jl")
+include("discretization/schemes/centered_difference/centered_difference.jl")
 include("discretization/schemes/upwind_difference/upwind_difference.jl")
+include("discretization/schemes/half_offset_centred_difference.jl")
 include("discretization/schemes/nonlinear_laplacian/nonlinear_laplacian.jl")
 include("discretization/schemes/spherical_laplacian/spherical_laplacian.jl")
 

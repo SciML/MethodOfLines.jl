@@ -58,5 +58,5 @@ function DifferentialDiscretizer(pdesys, s, discretization, orders)
         end
     end
 
-    return DifferentialDiscretizer{eltype(orders),typeof(Dict(differentialmap))}(approx_order, Dict(differentialmap), (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)), Dict(interp), Dict(orders))
+    return DifferentialDiscretizer{eltype(orders),typeof(Dict(differentialmap)), typeof(advection_scheme)}(approx_order, advection_scheme, Dict(differentialmap), (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)), Dict(interp), Dict(orders))
 end
