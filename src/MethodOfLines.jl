@@ -12,25 +12,25 @@ module MethodOfLines
 
     include("discretization/fornberg.jl")
 
-    include("grid_types.jl")
-    include("MOLFiniteDifference.jl")
+    include("interface/grid_types.jl")
+    include("interface/scheme_types.jl")
+    include("interface/MOLFiniteDifference.jl")
 
     include("discretization/discretize_vars.jl")
     include("MOL_utils.jl")
-    include("interiormap.jl")
-
+    include("system_parsing/interior_map.jl")
 
     include("discretization/differential_discretizer.jl")
-    include("bcs/boundary_types.jl")
+    include("system_parsing/bcs/boundary_types.jl")
 
-    include("periodic_map.jl")
+    include("system_parsing/bcs/periodic_map.jl")
 
     include("discretization/generate_finite_difference_rules.jl")
 
-    include("bcs/generate_bc_eqs.jl")
+    include("discretization/generate_bc_eqs.jl")
 
     include("error_analysis.jl")
-    include("discretization/MOL_discretization.jl")
+    include("MOL_discretization.jl")
 
     export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete
 
