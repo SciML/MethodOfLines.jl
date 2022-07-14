@@ -1,6 +1,6 @@
 """
     MOLFiniteDifference(dxs, time=nothing;
-                        approx_order = 2, upwind_order = 1,
+                        approx_order = 2, advection_scheme = UpwindScheme(),
                         grid_align = CenterAlignedGrid(), kwargs...)
 
 A discretization algorithm.
@@ -16,7 +16,7 @@ A discretization algorithm.
 ## Keyword Arguments
 
 - `approx_order`: The order of the derivative approximation.
-- `upwind_order`: The order of the upwind scheme. Currently unstable at any value other than 1.
+- `advection_scheme`: The scheme to be used to discretize advection terms, i.e. first order spatial derivatives and associated coefficients. Defaults to `UpwindScheme()`. This is the only relevant scheme at present.
 - `grid_align`: The grid alignment types. See [`CenterAlignedGrid()`](@ref) and [`EdgeAlignedGrid()`](@ref).
 - `kwargs`: Any other keyword arguments you want to pass to the `ODEProblem`.
 

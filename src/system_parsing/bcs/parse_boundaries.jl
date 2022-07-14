@@ -128,7 +128,7 @@ end
 """
 Creates a map of boundaries for each variable to be used later when discretizing the boundary condition equations, and
 """
-function parse_bcs(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights::DifferentialDiscretizer)
+function parse_bcs(bcs, s::DiscreteSpace, depvar_ops, tspan, orders)
 
     t=s.time
 
@@ -144,7 +144,7 @@ function parse_bcs(bcs, s::DiscreteSpace, depvar_ops, tspan, derivweights::Diffe
     bceqs = []
     ## BC matching rules, returns the variable and parameter the bc concerns
 
-    lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(s, derivweights.orders)
+    lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(s, orders)
 
     boundarymap = Dict([operation(u)=>Dict([x => [] for x in s.x̄]) for u in s.ū])
 

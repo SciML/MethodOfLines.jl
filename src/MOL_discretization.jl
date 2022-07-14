@@ -40,7 +40,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # * periodic parameters get type info on whether they are periodic or not, and if they join up to any other parameters
     # * Then we can do the actual discretization by recursively indexing in to the DiscreteVariables
 
-    orders = map(x -> x => d_orders(x, pdeeqs), allindvars)
+    orders = Dict(map(x -> x => d_orders(x, pdeeqs, pdesys.bcs), allindvars))
 
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(domain, alldepvars, allindvars, discretization)

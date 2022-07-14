@@ -4,7 +4,6 @@ struct InteriorMap
     I
     lower
     upper
-    orders
 end
 
 #to get an equal mapping, you want to associate every equation to a unique dependent variable that it's solving for
@@ -42,7 +41,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}) where {N,M}
         pde => s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
     end
     pdemap = [k.second => k.first for k in varmap]
-    return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(orders))
+    return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper))
 end
 
 

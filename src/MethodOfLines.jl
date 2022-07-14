@@ -7,6 +7,7 @@ using ModelingToolkit: operation, istree, arguments, variable
 using SymbolicUtils, Symbolics
 using SymbolicUtils: operation, arguments
 using IfElse
+using StaticArrays
 import DomainSets
 
 # Interface
