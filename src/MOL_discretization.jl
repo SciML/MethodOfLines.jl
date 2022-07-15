@@ -47,7 +47,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Create a map of each variable to their boundary conditions and get the initial condition
     boundarymap, u0 = parse_bcs(pdesys.bcs, s, depvar_ops, tspan, orders)
     # Get the interior and variable to solve for each equation
-    interiormap = InteriorMap(pdeeqs, boundarymap, s)
+    interiormap = InteriorMap(pdeeqs, boundarymap, s,)
     # Generate a map of each variable to whether it is periodic in a given direction
     pmap = PeriodicMap(boundarymap, s)
     # Generate finite difference weights
@@ -80,6 +80,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             eqvar = interiormap.var[pde]
 
+            # * Assumes that all variables have same dimensionality
             args = params(eqvar, s)
             indexmap = Dict([args[i] => i for i in 1:length(args)])
 

@@ -35,20 +35,25 @@ function spherical_diffusion(innerexpr, II, derivweights, s, b, depvars, r, u)
 end
 
 @inline function generate_spherical_diffusion_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
-    rules = reduce(vcat, [vec([@rule *(~~a, 1/(r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][r], depvars, r, u), ~b...)
-            for r in params(u,s)]) for u in depvars])
+    rules = reduce(vcat, [vec([@rule *(~~a, 1 / (r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][r], depvars, r, u), ~b...)
+                               for r in params(u, s)]) for u in depvars])
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][r], depvars, r, u))
-    for r in params(u,s)]) for u in depvars]))
+    rules = vcat(rules, reduce(vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][r], depvars, r, u))
+                                           for r in params(u, s)]) for u in depvars]))
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][r], depvars, r, u)
-    for r in params(u, s)]) for u in depvars]))
+    rules = vcat(rules, reduce(vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][r], depvars, r, u)
+                                           for r in params(u, s)]) for u in depvars]))
 
     spherical_diffusion_rules = []
     for t in terms
         for r in rules
+            try
             if r(t) !== nothing
                 push!(spherical_diffusion_rules, t => r(t))
+            end
+            catch e
+                @show t, r
+                rethrow(e)
             end
         end
     end

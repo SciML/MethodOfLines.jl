@@ -13,6 +13,7 @@ function DifferentialDiscretizer(pdesys, s, discretization, orders)
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs isa Vector ? pdesys.bcs : [pdesys.bcs]
     approx_order = discretization.approx_order
+    upwind_order = 1
     advection_scheme = discretization.advection_scheme
 
     differentialmap = Array{Pair{Num,DerivativeOperator},1}()
@@ -30,8 +31,8 @@ function DifferentialDiscretizer(pdesys, s, discretization, orders)
             rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.dxs[x]) for d in _orders]
 
             if advection_scheme isa UpwindScheme
-                windpos = vcat(windpos, [(Differential(x)^d) => CompleteUpwindDifference(d, 1, s.dxs[x], 0) for d in orders_[isodd.(orders_)]])
-                windneg = vcat(windneg, [(Differential(x)^d) => CompleteUpwindDifference(d, 1, s.dxs[x], d + upwind_order - 1) for d in orders_[isodd.(orders_)]])
+                windpos = vcat(windpos, [(Differential(x)^d) => CompleteUpwindDifference(d, upwind_order, s.dxs[x], 0) for d in orders_[isodd.(orders_)]])
+                windneg = vcat(windneg, [(Differential(x)^d) => CompleteUpwindDifference(d, upwind_order, s.dxs[x], d + upwind_order - 1) for d in orders_[isodd.(orders_)]])
             end
 
             nonlinlap_inner = vcat(nonlinlap_inner, [Differential(x)^d => CompleteHalfCenteredDifference(d, approx_order, s.dxs[x]) for d in _orders])
@@ -43,8 +44,8 @@ function DifferentialDiscretizer(pdesys, s, discretization, orders)
         elseif s.grid[x] isa AbstractVector # The nonuniform grid case
             rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.grid[x]) for d in _orders]
             if advection_scheme isa UpwindScheme
-                windpos = vcat(windpos, [(Differential(x)^d) => CompleteUpwindDifference(d, 1, s.grid[x], 0) for d in orders_[isodd.(orders_)]])
-                windneg = vcat(windneg, [(Differential(x)^d) => CompleteUpwindDifference(d, 1, s.grid[x], d + upwind_order - 1) for d in orders_[isodd.(orders_)]])
+                windpos = vcat(windpos, [(Differential(x)^d) => CompleteUpwindDifference(d, upwind_order, s.grid[x], 0) for d in orders_[isodd.(orders_)]])
+                windneg = vcat(windneg, [(Differential(x)^d) => CompleteUpwindDifference(d, upwind_order, s.grid[x], d + upwind_order - 1) for d in orders_[isodd.(orders_)]])
             end
 
             discx = s.grid[x]

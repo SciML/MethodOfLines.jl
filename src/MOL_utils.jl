@@ -182,7 +182,7 @@ end
 function split_terms(eq::Equation, x̄)
     lhs = _split_terms(eq.lhs, x̄)
     rhs = _split_terms(eq.rhs, x̄)
-    return flatten_division.(vcat(lhs, rhs))
+    return filter(term -> !isequal(term, Num(0)), flatten_division.(vcat(lhs, rhs)))
 end
 
 function split_additive_terms(eq)
@@ -203,8 +203,8 @@ end
         if r(term) !== nothing
             return r(term)
         end
-    end
-    return term    =#
+    end=#
+    return term
 end
 
 @inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindices(M)[j] : II
