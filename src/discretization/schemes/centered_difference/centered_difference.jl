@@ -1,0 +1,64 @@
+"""
+Performs a centered difference in `x` centered at index `II` of `u`
+ufunc is a function that returns the correct discretization indexed at Itap, it is designed this way to allow for central differences of arbitrary expressions which may be needed in some schemes
+"""
+function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, b, jx, u, ufunc) where {T,N,Wind,DX<:Number}
+    j, x = jx
+    ndims(u, s) == 0 && return Num(0)
+    # unit index in direction of the derivative
+    I1 = unitindex(ndims(u, s), j)
+    # offset is important due to boundary proximity
+
+    if (II[j] <= D.boundary_point_count) & (b isa Val{false})
+        weights = D.low_boundary_coefs[II[j]]
+        offset = 1 - II[j]
+        Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
+    elseif (II[j] > (length(s, x) - D.boundary_point_count)) & (b isa Val{false})
+        weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
+        offset = length(s, x) - II[j]
+        Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):1:0]
+    else
+        weights = D.stencil_coefs
+        Itap = [wrapperiodic(II + i * I1, s, b, u, jx) for i in half_range(D.stencil_length)]
+    end
+    # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
+
+    return dot(weights, ufunc(u, Itap, x))
+end
+
+function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, b, jx, u, ufunc) where {T,N,Wind,DX<:AbstractVector}
+    j, x = jx
+    @assert b isa Val{false} "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
+    ndims(u, s) == 0 && return Num(0)
+    # unit index in direction of the derivative
+    I1 = unitindex(ndims(u, s), j)
+    # offset is important due to boundary proximity
+
+    if (II[j] <= D.boundary_point_count) & (b isa Val{false})
+        weights = D.low_boundary_coefs[II[j]]
+        offset = 1 - II[j]
+        Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
+    elseif (II[j] > (length(s, x) - D.boundary_point_count)) & (b isa Val{false})
+        weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
+        offset = length(s, x) - II[j]
+        Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):1:0]
+    else
+        weights = D.stencil_coefs[II[j]-D.boundary_point_count]
+        Itap = [wrapperiodic(II + i * I1, s, b, u, jx) for i in half_range(D.stencil_length)]
+    end
+    # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
+
+    return dot(weights, ufunc(u, Itap, x))
+end
+
+"""
+This is a catch all ruleset, as such it does not use @rule. Any even ordered derivative may be adequately approximated by these.
+"""
+@inline function generate_cartesian_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
+    central_ufunc(u, I, x) = s.discvars[u][I]
+    return reduce(vcat, [reduce(vcat, [[(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, central_ufunc) for d in (
+        let orders = derivweights.orders[x]
+            orders[iseven.(orders)]
+        end
+    )] for x in params(u, s)]) for u in depvars])
+end

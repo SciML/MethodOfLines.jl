@@ -11,7 +11,7 @@ julia>] activate MethodOfLines
 ## Overview
 MethodOfLines.jl makes heavy use of [`Symbolics.jl`](https://symbolics.juliasymbolics.org/dev/) and [`SymbolicUtils.jl`](https://symbolicutils.juliasymbolics.org), especially the replacement rules from the latter.
 
-Take a look at [`src/discretization/MOL_discretization.jl`](https://github.com/SciML/MethodOfLines.jl/blob/master/src/discretization/MOL_discretization.jl) to get a high level overview of how the discretization works. A more consise description can be found [here](@ref hiw). Feel free to post an issue if you would like help understanding anything, or want to know developer opinions on the best way to go about implementing something.
+Take a look at [`src/discretization/MOL_discretization.jl`](https://github.com/SciML/MethodOfLines.jl/blob/master/src/MOL_discretization.jl) to get a high level overview of how the discretization works. A more consise description can be found [here](@ref hiw). Feel free to post an issue if you would like help understanding anything, or want to know developer opinions on the best way to go about implementing something.
 
 ## Adding new finite difference schemes
 
@@ -19,9 +19,9 @@ If you know of a finite difference scheme which is better than what is currently
 
 A replacement rule is generated for each term which has a more specific higher stability/accuracy finite difference scheme than the general central difference, which represents a base case.
 
-Take a look at [`src/discretization/generate_finite_difference_rules.jl`](https://github.com/SciML/MethodOfLines.jl/blob/243252a595ed2af549d98270bd3b8ca5e3f93d69/src/discretization/generate_finite_difference_rules.jl#L252) to see how the replacement rules are generated. Read about the [`@rule` macro](https://symbolicutils.juliasymbolics.org/rewrite/) from `SymbolicUtils.jl`, if you haven't already. Note that the order that the rules are applied is important; there may be schemes that are applied first that are special cases of more general rules, for example the sphrical laplacian is a special case of the nonlinear laplacian.
+Take a look at [`src/discretization/generate_finite_difference_rules.jl`](https://github.com/SciML/MethodOfLines.jl/blob/243252a595ed2af549d98270bd3b8ca5e3f93d69/src/discretization/generate_finite_difference_rules.jl) to see where the replacement rules are generated. Implemented schemes can be found in `/src/discretization/schemes`. Have a look at some of the already implemented examples there; read about the [`@rule` macro](https://symbolicutils.juliasymbolics.org/rewrite/) from `SymbolicUtils.jl`, if you haven't already. Note that the order that the rules are applied is important; there may be schemes that are applied first that are special cases of more general rules, for example the sphrical laplacian is a special case of the nonlinear laplacian.
 
-First terms are split, isolating particular cases. Then, rules are generated and applied. Take a look at the docs for symbolic utils to get an idea of how these work. 
+First terms are split, isolating particular cases. Then, rules are generated and applied.  
 
 Identify a rule which will match your case, then write a function that will handle how to apply that scheme for each index in the interior, for each combination of independant and dependant variables. 
 
