@@ -40,18 +40,19 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # * periodic parameters get type info on whether they are periodic or not, and if they join up to any other parameters
     # * Then we can do the actual discretization by recursively indexing in to the DiscreteVariables
 
-    orders = Dict(map(x -> x => d_orders(x, pdeeqs, pdesys.bcs), allindvars))
+    pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), allindvars))
+    bcorders = Dict(map(x -> x => d_orders(x, bcs), allindvars))
 
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
     # Create a map of each variable to their boundary conditions and get the initial condition
-    boundarymap, u0 = parse_bcs(pdesys.bcs, s, depvar_ops, tspan, orders)
+    boundarymap, u0 = parse_bcs(pdesys.bcs, s, depvar_ops, tspan, bcorders)
     # Get the interior and variable to solve for each equation
-    interiormap = InteriorMap(pdeeqs, boundarymap, s,)
+    interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization)
     # Generate a map of each variable to whether it is periodic in a given direction
     pmap = PeriodicMap(boundarymap, s)
     # Generate finite difference weights
-    derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
+    derivweights = DifferentialDiscretizer(pdesys, s, discretization, reverse(sort(collect(union(pdeorders..., bcorders)))))
 
     ####
     # Loop over equations, Discretizing them and their dependent variables' boundary conditions
