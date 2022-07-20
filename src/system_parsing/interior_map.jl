@@ -4,6 +4,7 @@ struct InteriorMap
     I
     lower
     upper
+    stencil_extents
 end
 
 #to get an equal mapping, you want to associate every equation to a unique dependent variable that it's solving for
@@ -38,34 +39,43 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) w
         push!(vupper, pde => upper)
         args = remove(arguments(u), s.time)
         #TODO: Allow assymmetry
-        stencil_extents = calculate_stencil_extents(pde, u, discretization)
+
         # Don't update this x2i, it is correct.
         pde => s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
     end
+
+    extents = map(pdes) do pde
+        u = varmap[pde]
+        pdeorders = Dict(map(x -> x => d_orders(x, [pde]), allindvars))
+
+        # Add ghost points to pad stencil extents
+        stencil_extents = calculate_stencil_extents(pde, u, discretization, pdeorders)
+
+        pde => stencil_extents
+    end
+
     pdemap = [k.second => k.first for k in varmap]
-    return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper))
+    return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(extents))
 end
 
 function calculate_stencil_extents(pde, u, discretization, orders)
     aorder = discretization.approx_order
-    adscheme = discretization.advection_scheme
+    advection_scheme = discretization.advection_scheme
 
     args = remove(arguments(u), s.time)
     extents = zeros(Int, length(args))
     for (j,x) in enumerate(args)
         for dorder in orders[x]
             if isodd(order)
-                extents[j] = max(extents[j], extent(adscheme, dorder))
+                extents[j] = max(extents[j], extent(advection_scheme, dorder))
             else
+                #TODO: add scheme types for even order derivatives
                 extents[j] = max(extents[j], div(dorder + aorder - 1 + (dorder + aorder) % 2, 2))
             end
         end
     end
     return extents
 end
-
-
-
 
 function buildmatrix(pdes, s::DiscreteSpace{N,M}) where {N,M}
     m = zeros(Int, M, M)
