@@ -14,7 +14,7 @@ end
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}) where {N,M}
+function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) where {N,M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
@@ -37,12 +37,34 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}) where {N,M}
         push!(vlower, pde => lower)
         push!(vupper, pde => upper)
         args = remove(arguments(u), s.time)
+        #TODO: Allow assymmetry
+        stencil_extents = calculate_stencil_extents(pde, u, discretization)
         # Don't update this x2i, it is correct.
         pde => s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
     end
     pdemap = [k.second => k.first for k in varmap]
     return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper))
 end
+
+function calculate_stencil_extents(pde, u, discretization, orders)
+    aorder = discretization.approx_order
+    adscheme = discretization.advection_scheme
+
+    args = remove(arguments(u), s.time)
+    extents = zeros(Int, length(args))
+    for (j,x) in enumerate(args)
+        for dorder in orders[x]
+            if isodd(order)
+                extents[j] = max(extents[j], extent(adscheme, dorder))
+            else
+                extents[j] = max(extents[j], div(dorder + aorder - 1 + (dorder + aorder) % 2, 2))
+            end
+        end
+    end
+    return extents
+end
+
+
 
 
 function buildmatrix(pdes, s::DiscreteSpace{N,M}) where {N,M}

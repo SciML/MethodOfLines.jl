@@ -105,6 +105,36 @@ function generate_bc_eqs(s::DiscreteSpace{N,M,G}, boundaryvalfuncs, boundary::Ab
     end)
 end
 
+"""
+`generate_extrap_eqs`
+
+Pads the boundaries with extrapolation equations, extrapolated with 6th order lagrangian polynomials.
+Reuses `central_difference` as this already dispatches the correct stencil, given a `DerivativeOperator` which contains the correct weights.
+"""
+function generate_extrap_eqs(pde, u, s, interiormap, periodicmap)
+    args = remove(arguments(u), s.time)
+    extents = interiormap.stencil_extents[pde]
+    vlower = interiormap.lower[pde]
+    vupper = interiormap.upper[pde]
+    eqs = []
+    for (j, x) in enumerate(args)
+        ninterp = extents[j] - vlower[j]
+        I1 = unitindex(length(args), j)
+        while ninterp > 0
+            vcat(eqs, map(edge(interiormap, s, u, j, true) .+ ninterp*I1) do II
+                u[II] ~ central_difference(derivweights.extrapmap[x], II, s, periodicmap[x], (j,x), u, ufunc)
+            end)
+        end
+        niterp = extents[j] - vupper[j]
+        while ninterp > 0
+            vcat(eqs, map(edge(interiormap, s, u, j, false) .- ninterp*I1) do II
+                u[II] ~ central_difference(derivweights.extrapmap[x], II, s, periodicmap[x], (j,x), u, ufunc)
+            end)
+        end
+    end
+    return eqs
+end
+
 #TODO: Benchmark and optimize this
 
 @inline function generate_corner_eqs!(bceqs, s, interiormap, N, u)
