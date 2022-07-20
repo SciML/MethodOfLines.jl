@@ -239,7 +239,7 @@ end
 
 d_orders(x, pdeeqs) = reverse(sort(collect(union((differential_order(pde.rhs, x) for pde in pdeeqs)..., (differential_order(pde.lhs, x) for pde in pdeeqs)...))))
 
-
+insert(args...) = insert!(args[1], args[2:end]...)
 
 ####
 # Utils for DerivativeOperator generation in schemes
