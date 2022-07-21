@@ -51,7 +51,14 @@ Implementation inspired by https://github.com/ranocha/HyperbolicDiffEq.jl/blob/8
     hm3 = (2u_p2 - 7u_p1 + 11u_0) / 6
 
     hp = wp1 * hp1 + wp2 * hp2 + wp3 * hp3
-    hn = wm1 * hm1 + wm2 * hm2 + wm3 * hm3
+    hm = wm1 * hm1 + wm2 * hm2 + wm3 * hm3
 
     return (hp - hm) / dx
+end
+
+"""
+This is a catch all ruleset, as such it does not use @rule. Any first order derivative may be adequately approximated by a WENO scheme.
+"""
+@inline function generate_WENO_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
+    return reduce(vcat, [[(Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars])
 end
