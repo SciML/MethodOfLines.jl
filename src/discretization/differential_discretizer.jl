@@ -42,7 +42,7 @@ function DifferentialDiscretizer(pdesys, s, discretization, orders)
             differentialmap = vcat(differentialmap, rs)
             # A 0th order derivative off the grid is an interpolation
             push!(interp, x => CompleteHalfCenteredDifference(0, max(4, approx_order), s.dxs[x]))
-            push!(boundary, x => BoundaryInterpolatorExtrapolator(max(5, approx_order), s.dxs[x]))
+            push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), s.dxs[x]))
 
         elseif s.grid[x] isa AbstractVector # The nonuniform grid case
             rs = [(Differential(x)^d) => CompleteCenteredDifference(d, approx_order, s.grid[x]) for d in _orders]
@@ -57,7 +57,7 @@ function DifferentialDiscretizer(pdesys, s, discretization, orders)
             differentialmap = vcat(differentialmap, rs)
             # A 0th order derivative off the grid is an interpolation
             push!(interp, x => CompleteHalfCenteredDifference(0, max(4, approx_order), s.grid[x]))
-            push!(boundary, x => BoundaryInterpolatorExtrapolator(max(5, approx_order), s.dxs[x]))
+            push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), s.dxs[x]))
         else
             @assert false "s.grid contains nonvectors"
         end
