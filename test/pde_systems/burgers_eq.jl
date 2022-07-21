@@ -2,7 +2,7 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using DomainSets
 using StableRNGs
 
-@testset "Inviscid Burgers equation, 1D, u(0, x) ~ x" begin
+@testset "Inviscid Burgers equation, 1D, upwind, u(0, x) ~ x" begin
     @parameters x t
     @variables u(..)
     Dx = Differential(x)
@@ -27,7 +27,49 @@ using StableRNGs
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => dx], t, upwind_order=1)
+    disc = MOLFiniteDifference([x => dx], t, advection_scheme = UpwindScheme())
+
+    prob = discretize(pdesys, disc)
+
+    sol = solve(prob, Tsit5())
+
+    grid = get_discrete(pdesys, disc)
+    x_disc = grid[x]
+    solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
+
+    for (i, t) in enumerate(sol.t[1:end])
+        u_analytic = analytic_u.([t], x_disc)
+        u_disc = solu[i]
+        @test all(isapprox.(u_analytic, u_disc, atol=1e-3))
+    end
+end
+
+@testset "Inviscid Burgers equation, 1D, WENO, u(0, x) ~ x" begin
+    @parameters x t
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+    x_min = 0.0
+    x_max = 1.0
+    t_min = 0.0
+    t_max = 6.0
+
+    analytic_u(t, x) = x / (t + 1)
+
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
+
+    bcs = [u(0, x) ~ x,
+        u(t, x_min) ~ analytic_u(t, x_min),
+        u(t, x_max) ~ analytic_u(t, x_max)]
+
+    domains = [t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max)]
+
+    dx = 0.05
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
 
     prob = discretize(pdesys, disc)
 
@@ -135,7 +177,7 @@ end
     # Try 4th approx order
     order = 4
 
-    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order=order)
+    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order=order, advection_scheme = WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -146,11 +188,11 @@ end
     Ny = floor(Int64, (y_max - y_min) / dy) + 1
 
     # anim = @animate for k in 1:length(t)
-        #        solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-        #        solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-        #        heatmap(solu′)
-        # end
-        # gif(anim, "plots/Burgers2Dsol.gif", fps = 5)
+    #        solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+    #        solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+    #        heatmap(solu′)
+    # end
+    # gif(anim, "plots/Burgers2Dsol.gif", fps = 5)
     grid = get_discrete(pdesys, discretization)
 
 
