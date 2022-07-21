@@ -116,20 +116,39 @@ function generate_extrap_eqs(pde, u, s, interiormap, periodicmap)
     extents = interiormap.stencil_extents[pde]
     vlower = interiormap.lower[pde]
     vupper = interiormap.upper[pde]
-    eqs = []
+    pmap = periodicmap[operation(u)]
+    ufunc(u, I, x) = s.discvars[u][I]
+
+    eqmap = fill([], size(s.discvars[u]))
     for (j, x) in enumerate(args)
+        pmap[x] isa Val{true} && continue
         ninterp = extents[j] - vlower[j]
         I1 = unitindex(length(args), j)
         while ninterp > 0
-            vcat(eqs, map(edge(interiormap, s, u, j, true) .+ ninterp*I1) do II
-                u[II] ~ central_difference(derivweights.extrapmap[x], II, s, periodicmap[x], (j,x), u, ufunc)
-            end)
+            for II in edge(interiormap, s, u, j, true) .+ ninterp * I1
+                push!(eqmap[II], central_difference(derivweights.extrapmap[x], II, s, pmap[x], (j, x), u, ufunc))
+            end
+            ninterp = ninterp - 1
         end
         niterp = extents[j] - vupper[j]
         while ninterp > 0
-            vcat(eqs, map(edge(interiormap, s, u, j, false) .- ninterp*I1) do II
-                u[II] ~ central_difference(derivweights.extrapmap[x], II, s, periodicmap[x], (j,x), u, ufunc)
-            end)
+            for II in edge(interiormap, s, u, j, false) .- ninterp * I1
+                push!(eqmap[II], central_difference(derivweights.extrapmap[x], II, s, pmap[x], (j, x), u, ufunc))
+            end
+            ninterp = ninterp - 1
+        end
+    end
+    eqs = Equation[]
+    # Overlap handling
+    for II in CartesianIndices(eqmap)
+        rhss = eqmap[II]
+        if length(rhss) == 0
+            continue
+        elseif length(rhss) == 1
+            push!(eqs, s.discvars[u][II] ~ rhss[1])
+        else
+            n = length(rhss)
+            push!(eqs, s.discvars[u][II] ~ sum(rhss)/n)
         end
     end
     return eqs

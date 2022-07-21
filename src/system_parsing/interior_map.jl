@@ -15,7 +15,7 @@ end
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) where {N,M}
+function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, pmap) where {N,M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
@@ -23,6 +23,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) w
     # Determine the interiors for each pde
     vlower = []
     vupper = []
+    extents = []
 
     interior = map(pdes) do pde
         u = varmap[pde]
@@ -39,32 +40,32 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) w
         push!(vupper, pde => upper)
         args = remove(arguments(u), s.time)
         #TODO: Allow assymmetry
+        pdeorders = Dict(map(x -> x => d_orders(x, [pde]), allindvars))
+
+        # Add ghost points to pad stencil extents
+        stencil_extents = calculate_stencil_extents(pde, u, discretization, pdeorders, pmap)
+
+        lower = [max(e, l) for (e, l) in zip(stencil_extents, lower)]
+        upper = [max(e, u) for (e, u) in zip(stencil_extents, upper)]
 
         # Don't update this x2i, it is correct.
         pde => s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
     end
 
-    extents = map(pdes) do pde
-        u = varmap[pde]
-        pdeorders = Dict(map(x -> x => d_orders(x, [pde]), allindvars))
-
-        # Add ghost points to pad stencil extents
-        stencil_extents = calculate_stencil_extents(pde, u, discretization, pdeorders)
-
-        pde => stencil_extents
-    end
 
     pdemap = [k.second => k.first for k in varmap]
     return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(extents))
 end
 
-function calculate_stencil_extents(pde, u, discretization, orders)
+function calculate_stencil_extents(pde, u, discretization, orders, pmap)
     aorder = discretization.approx_order
     advection_scheme = discretization.advection_scheme
 
     args = remove(arguments(u), s.time)
     extents = zeros(Int, length(args))
     for (j,x) in enumerate(args)
+        # Skip if periodic in x
+        pmap[operation(u)][x] isa Val{true} && continue
         for dorder in orders[x]
             if isodd(order)
                 extents[j] = max(extents[j], extent(advection_scheme, dorder))
