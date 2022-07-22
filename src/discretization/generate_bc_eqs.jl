@@ -147,11 +147,8 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, periodi
             continue
         elseif length(rhss) == 1
             push!(eqs, s.discvars[u][II] ~ rhss[1])
-            println("ping")
         else
             n = length(rhss)
-            println("pong")
-            @show II, rhss
             push!(eqs, s.discvars[u][II] ~ sum(rhss)/n)
         end
     end

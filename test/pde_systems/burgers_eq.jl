@@ -28,7 +28,7 @@ using Plots
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => dx], t, advection_scheme = UpwindScheme())
+    disc = MOLFiniteDifference([x => dx], t, advection_scheme=UpwindScheme())
 
     prob = discretize(pdesys, disc)
 
@@ -38,10 +38,10 @@ using Plots
     x_disc = grid[x]
     solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
 
-    anim = @animate for (i, T) in enumerate(sol[t])
-        plot(x_disc, solu[i], title = "t = $T", xlabel = "x", ylabel = "u")
-    end
-    gif(anim, "burgers_upwind.gif", fps = 10)
+    # anim = @animate for (i, T) in enumerate(sol[t])
+    #     plot(x_disc, solu[i], title="t = $T", xlabel="x", ylabel="u")
+    # end
+    # gif(anim, "burgers_upwind.gif", fps=10)
 
     for (i, t) in enumerate(sol.t[1:end])
         u_analytic = analytic_u.([t], x_disc)
@@ -85,10 +85,10 @@ end
     x_disc = grid[x]
     solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
 
-    anim = @animate for (i, T) in enumerate(sol[t])
-        plot(x_disc, solu[i], title = "t = $T", xlabel = "x", ylabel = "u")
-    end
-    gif(anim, "burgers_weno.gif", fps = 4)
+    # anim = @animate for (i, T) in enumerate(sol[t])
+    #     plot(x_disc, solu[i], title="t = $T", xlabel="x", ylabel="u")
+    # end
+    # gif(anim, "burgers_weno.gif", fps=4)
 
     for (i, t) in enumerate(sol.t[1:end])
         u_analytic = analytic_u.([t], x_disc)
@@ -162,8 +162,8 @@ end
     u_exact(x, y, t) = 3 / 4 - 1 / (4 * (1 + exp(R * (-t - 4x + 4y) / 32)))
     v_exact(x, y, t) = 3 / 4 + 1 / (4 * (1 + exp(R * (-t - 4x + 4y) / 32)))
 
-    eq = [Dt(u(x, y, t)) + u(x, y, t) * Dx(u(x, y, t)) + v(x, y, t) * Dy(u(x, y, t)) ~ 1 / R * (Dxx(u(x, y, t)) + Dyy(u(x, y, t))),
-        Dt(v(x, y, t)) + u(x, y, t) * Dx(v(x, y, t)) + v(x, y, t) * Dy(v(x, y, t)) ~ 1 / R * (Dxx(v(x, y, t)) + Dyy(v(x, y, t)))]
+    eq = [Dt(u(x, y, t)) + u(x, y, t) * Dx(u(x, y, t)) + v(x, y, t) * Dy(u(x, y, t)) ~ (1 / R) * (Dxx(u(x, y, t)) + Dyy(u(x, y, t))),
+        Dt(v(x, y, t)) + u(x, y, t) * Dx(v(x, y, t)) + v(x, y, t) * Dy(v(x, y, t)) ~ (1 / R) * (Dxx(v(x, y, t)) + Dyy(v(x, y, t)))]
 
     domains = [x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),
@@ -188,7 +188,7 @@ end
     # Try 4th approx order
     order = 4
 
-    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order=order, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order=order, advection_scheme=WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -198,26 +198,25 @@ end
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
     Ny = floor(Int64, (y_max - y_min) / dy) + 1
 
-    @variables u[1:Nx,1:Ny](t) v[1:Nx,1:Ny](t)
-
-    anim = @animate for k in 1:length(t)
-           solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-           solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-           heatmap(solu′)
-    end
-    gif(anim, "plots/Burgers2Dsolu.gif", fps = 5)
+    # anim = @animate for k in 1:length(t)
+    #        solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+    #        solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+    #        heatmap(solu′)
+    # end
+    # gif(anim, "plots/Burgers2Dsol.gif", fps = 5)
     grid = get_discrete(pdesys, discretization)
 
-    t = sol[t]
+
+    solu′ = map(d -> sol[d][end], grid[u(x, y, t)][3:end-2, 3:end-2])
+    solv′ = map(d -> sol[d][end], grid[v(x, y, t)][3:end-2, 3:end-2])
+    heatmap(solu′)
+    t_disc = sol[t]
     r_space_x = grid[x]
     r_space_y = grid[y]
 
-    asfu = reshape([u_exact(t_max, r_space_x[i], r_space_y[j]) for j in 1:Ny for i in 1:Nx], (Nx, Ny))
-    asfv = reshape([v_exact(t_max, r_space_x[i], r_space_y[j]) for j in 1:Ny for i in 1:Nx], (Nx, Ny))
-
-    asfu[1, 1] = asfu[1, end] = asfu[end, 1] = asfu[end, end] = 0.0
-    asfv[1, 1] = asfv[1, end] = asfv[end, 1] = asfv[end, end] = 0.0
-
+    asfu = reshape([u_exact(t_disc[end], r_space_x[i], r_space_y[j]) for j in 1:Ny for i in 1:Nx], (Nx, Ny))[3:end-2, 3:end-2]
+    asfv = reshape([v_exact(t_disc[end], r_space_x[i], r_space_y[j]) for j in 1:Ny for i in 1:Nx], (Nx, Ny))[3:end-2, 3:end-2]
+        heatmap(asfu)
     # anim = @animate for T in t
     #        asfu = reshape([u_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
     #        asfv = reshape([v_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
@@ -229,6 +228,6 @@ end
 
     #    mu = max(asfu...)
     #    mv = max(asfv...)
-    @test_broken asfu ≈ solu′ atol = 0.2
-    @test_broken asfv ≈ solv′ atol = 0.2
+    @test asfu ≈ solu′ atol = 0.2
+    @test asfv ≈ solv′ atol = 0.2
 end

@@ -31,7 +31,7 @@ domain = [your domain, a vector of Intervals i.e. x ∈ Interval(x_min, x_max)]
 
 discretization = MOLFiniteDifference(dxs, 
                                       <your choice of continuous variable, usually time>; 
-                                      upwind_order = <Currently unstable at any value other than 1>, 
+                                      advection_scheme = <UpwindScheme() or WENOScheme()>, 
                                       approx_order = <Order of derivative approximation, starting from 2> 
                                       grid_align = <your grid type choice>)
 prob = discretize(pdesys, discretization)
@@ -40,6 +40,8 @@ Where `dxs` is a vector of pairs of parameters to the grid step in this dimensio
 For a non uniform rectilinear grid, replace any or all of the step sizes with the grid you'd like to use with that variable, must be an `AbstractVector` but not a `StepRangeLen`.
 
 Note that the second argument to `MOLFiniteDifference` is optional, all parameters can be discretized if all required boundary conditions are specified.
+
+Currently implemented advection schemes are ``UpwindScheme()` and `WENOScheme()`, defaults to upwind.
 
 Currently supported grid types: `center_align` and `edge_align`. Edge align will give better accuracy with Neumann boundary conditions.
 
