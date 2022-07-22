@@ -13,7 +13,7 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int, dx::T) where
                                                                      insert(calculate_weights(0,
                                                                                         oneunit(T) *
                                                                                         x0,
-                                                                                        remove(left_boundary_x, x0)), i, zero(T))
+                                                                                        remove(left_boundary_x, x0)), i, zero(T)))
                                                               for (i,x0) in enumerate(L_boundary_deriv_spots)]
     low_boundary_coefs = convert(SVector{boundary_point_count}, _low_boundary_coefs)
 
@@ -29,7 +29,7 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int, dx::T) where
     DerivativeOperator{T, Nothing, false, T, typeof(stencil_coefs),
                        typeof(low_boundary_coefs), typeof(high_boundary_coefs),
                        typeof(coefficients),
-                       Nothing}(derivative_order, approximation_order, dx, 1,
+                       Nothing}(0, approximation_order, dx, 1,
                                 stencil_length,
                                 stencil_coefs,
                                 boundary_stencil_length,
@@ -58,7 +58,7 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int,
                                                                              T},
                                                                      insert(calculate_weights(0,
                                                                                        low_boundary_x[i + 1],
-                                                                                       remove(low_boundary_x, low_boundary_x[i+1])), i+1, zero(T))
+                                                                                       remove(low_boundary_x, low_boundary_x[i+1])), i+1, zero(T)))
                                                              for i in 0:(boundary_point_count - 1)]
 
     high_boundary_coefs = SVector{boundary_stencil_length, T}[convert(SVector{
@@ -66,7 +66,7 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int,
                                                                               T},
                                                                       insert(calculate_weights(0,
                                                                                         high_boundary_x[end - i],
-                                                                                        remove(high_boundary_x), high_boundary_x[end - i]), length(high_boundary_x) - i, zero(T))
+                                                                                        remove(high_boundary_x, high_boundary_x[end - i])), length(high_boundary_x) - i, zero(T)))
                                                               for i in 0:(boundary_point_count - 1)]
 
     offside = 0
@@ -75,7 +75,7 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int,
     DerivativeOperator{eltype(x), Nothing, false, typeof(dx), typeof(stencil_coefs),
                        typeof(low_boundary_coefs), typeof(high_boundary_coefs),
                        typeof(coefficients),
-                       Nothing}(derivative_order, approximation_order, dx,
+                       Nothing}(0, approximation_order, dx,
                                 len, stencil_length,
                                 stencil_coefs,
                                 boundary_stencil_length,

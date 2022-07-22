@@ -1,5 +1,5 @@
 # Use DiffEqOperators to generate weights and calculate derivative orders
-struct DifferentialDiscretizer{T,D1,S<:AbstractScheme{1}}
+struct DifferentialDiscretizer{T, D1, S}
     approx_order::Int
     advection_scheme::S
     map::D1
@@ -57,7 +57,7 @@ function DifferentialDiscretizer(pdesys, s, discretization, orders)
             differentialmap = vcat(differentialmap, rs)
             # A 0th order derivative off the grid is an interpolation
             push!(interp, x => CompleteHalfCenteredDifference(0, max(4, approx_order), s.grid[x]))
-            push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), s.dxs[x]))
+            push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), s.grid[x]))
         else
             @assert false "s.grid contains nonvectors"
         end

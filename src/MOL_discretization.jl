@@ -43,6 +43,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), allindvars))
     bcorders = Dict(map(x -> x => d_orders(x, bcs), allindvars))
 
+    orders = Dict(map(x -> x => collect(union(pdeorders[x], bcorders[x])), allindvars))
+
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
     # Create a map of each variable to their boundary conditions and get the initial condition
@@ -52,7 +54,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Get the interior and variable to solve for each equation
     interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
     # Generate finite difference weights
-    derivweights = DifferentialDiscretizer(pdesys, s, discretization, reverse(sort(collect(union(pdeorders..., bcorders)))))
+    derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
     ####
     # Loop over equations, Discretizing them and their dependent variables' boundary conditions
@@ -93,9 +95,12 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             for boundary in reduce(vcat, collect(values(boundarymap[operation(eqvar)])))
                 generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
             end
+            # Generate extrapolation eqs
+            generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
 
             # Set invalid corner points to zero
             generate_corner_eqs!(bceqs, s, interiormap, pde)
+
 
             # Generate the equations for the interior points
             pdeeqs = discretize_equation(pde, interiormap.I[pde], eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap)

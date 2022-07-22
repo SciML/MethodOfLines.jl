@@ -51,14 +51,20 @@ function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, 
     # Standard cartesian centered difference scheme
     central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
 
+    # Advection rules
+    if derivweights.advection_scheme isa UpwindScheme
+        advection_rules = generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+    elseif derivweights.advection_scheme isa WENOScheme
+        advection_rules = generate_WENO_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+    else
+        @assert false "Unsupported advection scheme $(derivweights.advection_scheme) encountered."
+    end
+
     # Nonlinear laplacian scheme
     nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
-
-    # Because winding needs to know about multiplying terms, we can't split the terms into additive and multiplicative terms.
-    winding_rules = generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
 
     # Spherical diffusion scheme
     spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, pmap, indexmap, split_additive_terms(pde))
 
-    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(winding_rules), vec(central_deriv_rules_cartesian))
+    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(advection_rules), vec(central_deriv_rules_cartesian))
 end

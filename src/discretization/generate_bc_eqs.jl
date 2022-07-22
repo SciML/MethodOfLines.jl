@@ -111,13 +111,15 @@ end
 Pads the boundaries with extrapolation equations, extrapolated with 6th order lagrangian polynomials.
 Reuses `central_difference` as this already dispatches the correct stencil, given a `DerivativeOperator` which contains the correct weights.
 """
-function generate_extrap_eqs(pde, u, s, interiormap, periodicmap)
+function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, periodicmap)
     args = remove(arguments(u), s.time)
     extents = interiormap.stencil_extents[pde]
     vlower = interiormap.lower[pde]
     vupper = interiormap.upper[pde]
-    pmap = periodicmap[operation(u)]
+    pmap = periodicmap.map[operation(u)]
     ufunc(u, I, x) = s.discvars[u][I]
+
+    @show extents, vlower, vupper
 
     eqmap = fill([], size(s.discvars[u]))
     for (j, x) in enumerate(args)
@@ -125,33 +127,36 @@ function generate_extrap_eqs(pde, u, s, interiormap, periodicmap)
         ninterp = extents[j] - vlower[j]
         I1 = unitindex(length(args), j)
         while ninterp > 0
-            for II in edge(interiormap, s, u, j, true) .+ ninterp * I1
-                push!(eqmap[II], central_difference(derivweights.extrapmap[x], II, s, pmap[x], (j, x), u, ufunc))
+            for II in (edge(interiormap, s, u, j, true) .+ (ninterp * I1,))
+                @show II
+                push!(eqmap[II], central_difference(derivweights.boundary[x], II, s, pmap[x], (j, x), u, ufunc))
             end
             ninterp = ninterp - 1
         end
-        niterp = extents[j] - vupper[j]
+        ninterp = extents[j] - vupper[j]
         while ninterp > 0
-            for II in edge(interiormap, s, u, j, false) .- ninterp * I1
-                push!(eqmap[II], central_difference(derivweights.extrapmap[x], II, s, pmap[x], (j, x), u, ufunc))
+            for II in (edge(interiormap, s, u, j, false) .- (ninterp * I1,))
+                @show II
+                push!(eqmap[II], central_difference(derivweights.boundary[x], II, s, pmap[x], (j, x), u, ufunc))
             end
             ninterp = ninterp - 1
         end
     end
-    eqs = Equation[]
     # Overlap handling
-    for II in CartesianIndices(eqmap)
+    for II in setdiff(collect(CartesianIndices(eqmap)), interiormap.I[pde])
         rhss = eqmap[II]
         if length(rhss) == 0
             continue
         elseif length(rhss) == 1
             push!(eqs, s.discvars[u][II] ~ rhss[1])
+            println("ping")
         else
             n = length(rhss)
+            println("pong")
+            @show II, rhss
             push!(eqs, s.discvars[u][II] ~ sum(rhss)/n)
         end
     end
-    return eqs
 end
 
 #TODO: Benchmark and optimize this

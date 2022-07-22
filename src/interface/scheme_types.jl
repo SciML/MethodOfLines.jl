@@ -3,7 +3,7 @@ abstract type AbstractScheme{AOrder} end
 struct UpwindScheme <: AbstractScheme{1}
 end
 
-extent(::UpwindScheme, dorder) = dorder+1
+extent(::UpwindScheme, dorder) = dorder
 
 struct WENOScheme <: AbstractScheme{5}
 end

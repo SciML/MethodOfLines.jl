@@ -40,11 +40,11 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, p
         push!(vupper, pde => upper)
         args = remove(arguments(u), s.time)
         #TODO: Allow assymmetry
-        pdeorders = Dict(map(x -> x => d_orders(x, [pde]), allindvars))
+        pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
 
         # Add ghost points to pad stencil extents
-        stencil_extents = calculate_stencil_extents(pde, u, discretization, pdeorders, pmap)
-
+        stencil_extents = calculate_stencil_extents(s, u, discretization, pdeorders, pmap)
+        push!(extents, pde => stencil_extents)
         lower = [max(e, l) for (e, l) in zip(stencil_extents, lower)]
         upper = [max(e, u) for (e, u) in zip(stencil_extents, upper)]
 
@@ -57,7 +57,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, p
     return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(extents))
 end
 
-function calculate_stencil_extents(pde, u, discretization, orders, pmap)
+function calculate_stencil_extents(s, u, discretization, orders, pmap)
     aorder = discretization.approx_order
     advection_scheme = discretization.advection_scheme
 
@@ -65,9 +65,9 @@ function calculate_stencil_extents(pde, u, discretization, orders, pmap)
     extents = zeros(Int, length(args))
     for (j,x) in enumerate(args)
         # Skip if periodic in x
-        pmap[operation(u)][x] isa Val{true} && continue
+        pmap.map[operation(u)][x] isa Val{true} && continue
         for dorder in orders[x]
-            if isodd(order)
+            if isodd(dorder)
                 extents[j] = max(extents[j], extent(advection_scheme, dorder))
             else
                 #TODO: add scheme types for even order derivatives
