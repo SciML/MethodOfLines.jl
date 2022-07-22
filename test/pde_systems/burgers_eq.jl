@@ -1,6 +1,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using DomainSets
 using StableRNGs
+using Plots
 
 @testset "Inviscid Burgers equation, 1D, upwind, u(0, x) ~ x" begin
     @parameters x t
@@ -36,6 +37,11 @@ using StableRNGs
     grid = get_discrete(pdesys, disc)
     x_disc = grid[x]
     solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
+
+    anim = @animate for (i, T) in enumerate(sol[t])
+        plot(x_disc, solu[i], title = "t = $T", xlabel = "x", ylabel = "u")
+    end
+    gif(anim, "burgers_upwind.gif", fps = 10)
 
     for (i, t) in enumerate(sol.t[1:end])
         u_analytic = analytic_u.([t], x_disc)
@@ -78,6 +84,11 @@ end
     grid = get_discrete(pdesys, disc)
     x_disc = grid[x]
     solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
+
+    anim = @animate for (i, T) in enumerate(sol[t])
+        plot(x_disc, solu[i], title = "t = $T", xlabel = "x", ylabel = "u")
+    end
+    gif(anim, "burgers_weno.gif", fps = 4)
 
     for (i, t) in enumerate(sol.t[1:end])
         u_analytic = analytic_u.([t], x_disc)
@@ -187,17 +198,15 @@ end
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
     Ny = floor(Int64, (y_max - y_min) / dy) + 1
 
-    # anim = @animate for k in 1:length(t)
-    #        solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-    #        solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-    #        heatmap(solu′)
-    # end
-    # gif(anim, "plots/Burgers2Dsol.gif", fps = 5)
+    @variables u[1:Nx,1:Ny](t) v[1:Nx,1:Ny](t)
+
+    anim = @animate for k in 1:length(t)
+           solu′ = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+           solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+           heatmap(solu′)
+    end
+    gif(anim, "plots/Burgers2Dsolu.gif", fps = 5)
     grid = get_discrete(pdesys, discretization)
-
-
-    solu′ = map(d -> sol[d][end], grid[u(x, y, t)])
-    solv′ = map(d -> sol[d][end], grid[v(x, y, t)])
 
     t = sol[t]
     r_space_x = grid[x]

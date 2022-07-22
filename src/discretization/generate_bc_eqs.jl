@@ -119,25 +119,23 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, periodi
     pmap = periodicmap.map[operation(u)]
     ufunc(u, I, x) = s.discvars[u][I]
 
-    @show extents, vlower, vupper
-
-    eqmap = fill([], size(s.discvars[u]))
+    eqmap = [[] for _ in CartesianIndices(s.discvars[u])]
     for (j, x) in enumerate(args)
         pmap[x] isa Val{true} && continue
         ninterp = extents[j] - vlower[j]
         I1 = unitindex(length(args), j)
-        while ninterp > vlower[j]
-            for II in (edge(interiormap, s, u, j, true) .+ (ninterp * I1,))
-                @show II
-                push!(eqmap[II], central_difference(derivweights.boundary[x], II, s, pmap[x], (j, x), u, ufunc))
+        while ninterp >= vlower[j]
+            for Il in (edge(interiormap, s, u, j, true) .+ (ninterp * I1,))
+                expr = central_difference(derivweights.boundary[x], Il, s, pmap[x], (j, x), u, ufunc)
+                push!(eqmap[Il], expr)
             end
             ninterp = ninterp - 1
         end
         ninterp = extents[j] - vupper[j]
-        while ninterp > vupper[j]
-            for II in (edge(interiormap, s, u, j, false) .- (ninterp * I1,))
-                @show II
-                push!(eqmap[II], central_difference(derivweights.boundary[x], II, s, pmap[x], (j, x), u, ufunc))
+        while ninterp >= vupper[j]
+            for Iu in (edge(interiormap, s, u, j, false) .- (ninterp * I1,))
+                expr = central_difference(derivweights.boundary[x], Iu, s, pmap[x], (j, x), u, ufunc)
+                push!(eqmap[Iu], expr)
             end
             ninterp = ninterp - 1
         end
