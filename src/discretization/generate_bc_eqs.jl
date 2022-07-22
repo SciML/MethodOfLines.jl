@@ -126,7 +126,7 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, periodi
         pmap[x] isa Val{true} && continue
         ninterp = extents[j] - vlower[j]
         I1 = unitindex(length(args), j)
-        while ninterp > 0
+        while ninterp > vlower[j]
             for II in (edge(interiormap, s, u, j, true) .+ (ninterp * I1,))
                 @show II
                 push!(eqmap[II], central_difference(derivweights.boundary[x], II, s, pmap[x], (j, x), u, ufunc))
@@ -134,7 +134,7 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, periodi
             ninterp = ninterp - 1
         end
         ninterp = extents[j] - vupper[j]
-        while ninterp > 0
+        while ninterp > vupper[j]
             for II in (edge(interiormap, s, u, j, false) .- (ninterp * I1,))
                 @show II
                 push!(eqmap[II], central_difference(derivweights.boundary[x], II, s, pmap[x], (j, x), u, ufunc))
