@@ -1,6 +1,7 @@
 # [MethodOfLines.jl] (@id index)
 
-MethodOfLines.jl is a package for automated finite difference discretization
+[MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl)
+is a Julia package for automated finite difference discretization
 of symbolicaly-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
