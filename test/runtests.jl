@@ -8,7 +8,6 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
 # Start Test Script
 
 @time begin
-
     if GROUP == "All" || GROUP == "Components"
        #@time @safetestset "Test for regression against original code" begin include("regression_test.jl") end
        @time @safetestset "MOLFiniteDifference Utils" begin include("utils_test.jl") end
@@ -63,7 +62,9 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
     end
 
     if GROUP == "All" || GROUP == "Burgers"
-        @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin include("pde_systems/burgers_eq.jl") end
+        @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin
+            include("pde_systems/burgers_eq.jl")
+        end
     end
 
     if GROUP == "All" || GROUP == "Brusselator"

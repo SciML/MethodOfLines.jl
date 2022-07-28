@@ -214,6 +214,8 @@ subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
 #substitute(eq::Equation, rules) = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
 
 remove(args, t) = filter(x -> t === nothing || !isequal(x, t.val), args)
+remove(v::AbstractVector, a::Number) = filter(x -> !isequal(x, a), v)
+
 
 half_range(x) = -div(x, 2):div(x, 2)
 
@@ -237,8 +239,9 @@ end
     return I
 end
 
-d_orders(x, pdeeqs, bcs) = reverse(sort(collect(union((differential_order(pde.rhs, x) for pde in pdeeqs)..., (differential_order(pde.lhs, x) for pde in pdeeqs)..., (differential_order(bc.rhs, x) for bc in bcs)..., (differential_order(bc.lhs, x) for bc in bcs)...))))
+d_orders(x, pdeeqs) = reverse(sort(collect(union((differential_order(pde.rhs, x) for pde in pdeeqs)..., (differential_order(pde.lhs, x) for pde in pdeeqs)...))))
 
+insert(args...) = insert!(args[1], args[2:end]...)
 
 ####
 # Utils for DerivativeOperator generation in schemes
