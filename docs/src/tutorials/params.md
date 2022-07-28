@@ -95,3 +95,18 @@ for (j, sol) in enumerate(sols)
 end
 
 ```
+
+## Scan parameter sets in parallel
+
+This toy example solves quickly by simply looping through parameter sets, but slower problems can benefit from parallel processing using an [EnsembleProblem](https://diffeq.sciml.ai/stable/features/ensemble/s).
+
+```
+Dnval = rand(1000)
+Dpval = rand(1000)
+
+function prob_func(prob,i,repeat)
+    remake(prob, p=[Dnval[i],Dpval[i]])
+end
+ensemble_prob = EnsembleProblem(prob, prob_func=prob_func)
+sols = solve(ensemble_prob, Tsit5(), trajectories=1000)
+```
