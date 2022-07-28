@@ -64,6 +64,10 @@ Implementation *heavily* inspired by https://github.com/ranocha/HyperbolicDiffEq
     return (hp - hm) / dx
 end
 
+function weno(II::CartesianIndex, s::DiscreteSpace, b, jx, u, dx::AbstractVector)
+    @assert false "WENO scheme not implemented for nonuniform grids."
+end
+
 """
 This is a catch all ruleset, as such it does not use @rule. Any first order derivative may be adequately approximated by a WENO scheme.
 """
