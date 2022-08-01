@@ -41,7 +41,7 @@ For a non uniform rectilinear grid, replace any or all of the step sizes with th
 
 Note that the second argument to `MOLFiniteDifference` is optional, all parameters can be discretized if all required boundary conditions are specified.
 
-Currently implemented advection schemes are ``UpwindScheme()` and `WENOScheme()`, defaults to upwind.
+Currently implemented advection schemes are `UpwindScheme()` and `WENOScheme()`, defaults to upwind. Problems that require WENO schemes may also benefit from a [Strong-Stability-Preserving (SSP) solver](https://diffeq.sciml.ai/stable/solvers/ode_solve/#Explicit-Strong-Stability-Preserving-Runge-Kutta-Methods-for-Hyperbolic-PDEs-(Conservation-Laws))
 
 Currently supported grid types: `center_align` and `edge_align`. Edge align will give better accuracy with Neumann boundary conditions.
 

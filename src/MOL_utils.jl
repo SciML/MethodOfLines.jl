@@ -110,15 +110,15 @@ end
 
 # Additional handling to get around limitations in rules
 # Splits out derivatives from containing math expressions for ingestion by the rules
-function _split_terms(term, x̄)
+function _split_terms(term, x̄, advection_scheme)
     S = Symbolics
     SU = SymbolicUtils
-    st(t) = _split_terms(t, x̄)
+    st(t) = _split_terms(t, x̄, advection_scheme)
     # TODO: Update this to handle more ops e.g. exp sin tanh etc.
     # TODO: Handle cases where two nonlinear laplacians are multiplied together
     if S.istree(term)
         # Additional handling for upwinding
-        if (operation(term) == *)
+        if (operation(term) == *) && (advection_scheme isa UpwindScheme)
             args = SU.arguments(term)
             for (i, arg) in enumerate(args)
                 # Incase of upwinding, we need to keep the original term
@@ -179,9 +179,9 @@ function _split_terms(term, x̄)
     end
 end
 
-function split_terms(eq::Equation, x̄)
-    lhs = _split_terms(eq.lhs, x̄)
-    rhs = _split_terms(eq.rhs, x̄)
+function split_terms(eq::Equation, x̄, advection_scheme)
+    lhs = _split_terms(eq.lhs, x̄, advection_scheme)
+    rhs = _split_terms(eq.rhs, x̄, advection_scheme)
     return filter(term -> !isequal(term, Num(0)), flatten_division.(vcat(lhs, rhs)))
 end
 
@@ -248,7 +248,7 @@ insert(args...) = insert!(args[1], args[2:end]...)
 
 ####
 # Utils for DerivativeOperator generation in schemes
-####
+####https://github.com/ranocha/HyperbolicDiffEq.jl/blob/84c2d882e0c8956457c7d662bf7f18e3c27cfa3d/src/finite_volumes/weno_jiang_shu.jl
 
 index(i::Int, N::Int) = i + div(N, 2) + 1
 

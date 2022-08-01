@@ -53,7 +53,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pmap = PeriodicMap(boundarymap, s)
     # Get the interior and variable to solve for each equation
     interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
-    @show interiormap
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
@@ -128,7 +127,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
-            println(vcat(alleqs, unique(bceqs)))
 
             sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
             return sys, tspan

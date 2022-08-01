@@ -142,7 +142,7 @@ end
         @test all(isapprox.(u_analytic, u_disc, atol=1 * 10^(-2.5)))
     end
 end
-#=
+
 # Exact solutions from: https://www.sciencedirect.com/science/article/pii/S0898122110003883
 @testset "Test 01: Burger's Equation 2D" begin
     @parameters x y t
@@ -194,7 +194,7 @@ end
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, SSPRK33(), dt = 0.01)
 
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
     Ny = floor(Int64, (y_max - y_min) / dy) + 1
@@ -234,4 +234,3 @@ end
     @test asfu ≈ solu′ atol = 0.2
     @test asfv ≈ solv′ atol = 0.2
 end
-=#

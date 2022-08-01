@@ -33,35 +33,35 @@ Implementation *heavily* inspired by https://github.com/ranocha/HyperbolicDiffEq
     u_p1 = udisc[Ip1]
     u_p2 = udisc[Ip2]
 
-    γ1 = 1 / 10
-    γ2 = 3 / 5
-    γ3 = 3 / 10
+    γm1 = 1 / 10
+    γm2 = 3 / 5
+    γm3 = 3 / 10
 
     β1 = 13 * (u_0 - 2 * u_p1 + u_p2)^2 / 12 + (3 * u_0 - 4 * u_p1 + u_p2)^2 / 4
     β2 = 13 * (u_m1 - 2 * u_0 + u_p1)^2 / 12 + (u_m1 - u_p1)^2 / 4
     β3 = 13 * (u_m2 - 2 * u_m1 + u_0)^2 / 12 + (u_m2 - 4 * u_m1 + 3 * u_0)^2 / 4
 
-    ω1 = γ1 / (ε + β1)^2
-    ω2 = γ2 / (ε + β2)^2
-    ω3 = γ3 / (ε + β3)^2
+    ωm1 = γm1 / (ε + β1)^2
+    ωm2 = γm2 / (ε + β2)^2
+    ωm3 = γm3 / (ε + β3)^2
 
-    w_denom = ω1 + ω2 + ω3
-    wm1 = ω1 / w_denom
-    wm2 = ω2 / w_denom
-    wm3 = ω3 / w_denom
+    wm_denom = ωm1 + ωm2 + ωm3
+    wm1 = ωm1 / wm_denom
+    wm2 = ωm2 / wm_denom
+    wm3 = ωm3 / wm_denom
 
-    γ1 = 3 / 10
-    γ2 = 3 / 5
-    γ3 = 1 / 10
+    γp1 = 3 / 10
+    γp2 = 3 / 5
+    γp3 = 1 / 10
 
-    ω1 = γ1 / (ε + β1)^2
-    ω2 = γ2 / (ε + β2)^2
-    ω3 = γ3 / (ε + β3)^2
+    ωp1 = γp1 / (ε + β1)^2
+    ωp2 = γp2 / (ε + β2)^2
+    ωp3 = γp3 / (ε + β3)^2
 
-    w_denom = ω1 + ω2 + ω3
-    wp1 = ω1 / w_denom
-    wp2 = ω2 / w_denom
-    wp3 = ω3 / w_denom
+    wp_denom = ωp1 + ωp2 + ωp3
+    wp1 = ωp1 / wp_denom
+    wp2 = ωp2 / wp_denom
+    wp3 = ωp3 / wp_denom
 
     hm1 = (11 * u_0 - 7 * u_p1 + 2 * u_p2) / 6
     hm2 = (5 * u_0 - u_p1 + 2 * u_m1) / 6
@@ -85,5 +85,20 @@ end
 This is a catch all ruleset, as such it does not use @rule.
 """
 @inline function generate_WENO_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
-    return reduce(vcat, [[(Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars])
+    rules = reduce(vcat, [[@rule ($Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars])
+
+    weno_rules = []
+    for t in terms
+        for r in rules
+            try
+                if r(t) !== nothing
+                    push!(weno_rules, t => r(t))
+                end
+            catch e
+                @show t, r
+                rethrow(e)
+            end
+        end
+    end
+    return weno_rules
 end

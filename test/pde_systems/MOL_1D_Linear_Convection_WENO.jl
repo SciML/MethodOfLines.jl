@@ -39,8 +39,8 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
-    sol_upwind = solve(prob_upwind, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
+    sol_upwind = solve(prob_upwind, SSPRK33(), dt=0.025, saveat=0.1)
 
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
@@ -97,8 +97,8 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
-    sol_upwind = solve(prob_upwind, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
+    sol_upwind = solve(prob_upwind, SSPRK33(), dt=0.025, saveat=0.1)
 
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
@@ -155,8 +155,8 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
-    sol_upwind = solve(prob_upwind, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
+    sol_upwind = solve(prob_upwind, SSPRK33(), dt=0.025, saveat=0.1)
 
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
@@ -213,8 +213,8 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
-    sol_upwind = solve(prob_upwind, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
+    sol_upwind = solve(prob_upwind, SSPRK33(), dt=0.025, saveat=0.1)
 
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
@@ -268,7 +268,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
 
 
     # Test
@@ -325,7 +325,7 @@ end
 
     # Solve ODE problemdoes this mean that - doesn't seem to affect things
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
 
     # Plot and save results
     # using Plots
@@ -403,7 +403,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
 
     #Plot and save results
     # using Plots
@@ -470,7 +470,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
 
     # Plot and save results
     # using Plots
@@ -545,7 +545,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
 
     # Plot and save results
     # using Plots
