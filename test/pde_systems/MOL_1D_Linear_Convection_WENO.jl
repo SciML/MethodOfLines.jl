@@ -29,18 +29,14 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
-    # explicitly specify upwind order
-    discretization_upwind = MOLFiniteDifference([x => dx], t; advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
-    prob_upwind = discretize(pdesys, discretization_upwind)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
-    sol_upwind = solve(prob_upwind, SSPRK33(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
@@ -60,7 +56,6 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
 
 
     @test sol.u[end] ≈ u atol = 0.1
-    @test sol_upwind.u[end] ≈ u atol = 0.1
 end
 
 @testset "Test 00a: Dt(u(t,x)) ~ Dx(u(t,x))" begin
@@ -87,18 +82,14 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
-    # explicitly specify upwind order
-    discretization_upwind = MOLFiniteDifference([x => dx], t; advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
-    prob_upwind = discretize(pdesys, discretization_upwind)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
-    sol_upwind = solve(prob_upwind, SSPRK33(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
@@ -118,7 +109,6 @@ end
 
 
     @test sol.u[end] ≈ u atol = 0.1
-    @test sol_upwind.u[end] ≈ u atol = 0.1
 end
 
 @testset "Test 00b: Dt(u(t,x)) - Dx(u(t,x)) ~ 0" begin
@@ -145,18 +135,14 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
-    # explicitly specify upwind order
-    discretization_upwind = MOLFiniteDifference([x => dx], t; advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
-    prob_upwind = discretize(pdesys, discretization_upwind)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
-    sol_upwind = solve(prob_upwind, SSPRK33(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
@@ -176,7 +162,6 @@ end
 
 
     @test sol.u[end] ≈ u atol = 0.1
-    @test sol_upwind.u[end] ≈ u atol = 0.1
 end
 
 @testset "Test 00c: Dt(u(t,x)) + Dx(u(t,x)) ~ 0" begin
@@ -203,18 +188,15 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
     # explicitly specify upwind order
-    discretization_upwind = MOLFiniteDifference([x => dx], t; advection_scheme=WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
-    prob_upwind = discretize(pdesys, discretization_upwind)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
-    sol_upwind = solve(prob_upwind, SSPRK33(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
     x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
@@ -234,7 +216,6 @@ end
 
 
     @test sol.u[end] ≈ u atol = 0.1
-    @test sol_upwind.u[end] ≈ u atol = 0.1
 end
 
 @testset "Test 01: Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.001" begin
@@ -268,7 +249,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
 
     # Test
@@ -325,7 +306,7 @@ end
 
     # Solve ODE problemdoes this mean that - doesn't seem to affect things
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
     # Plot and save results
     # using Plots
@@ -364,7 +345,7 @@ end
 
     @test sol.u[end] ≈ u atol = 0.1
 end
-@test_broken begin#@testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
+@testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
     # Parameters, variables, and derivatives
     @parameters t x
     @variables v(..) u(..)
@@ -378,9 +359,8 @@ end
     bcs = [u(0, x) ~ asf(x),
         u(t, 0) ~ u(t, 2),
         v(0, x) ~ 1.0,
-        v(t, 0) ~ 1.0,
-        v(t, 2) ~ 1.0
-    ]
+        v(t, 0) ~ v(t, 2)]
+
 
     # Space and time domains
 
@@ -403,7 +383,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
     #Plot and save results
     # using Plots
@@ -416,7 +396,7 @@ end
     # savefig("MOL_1D_Linear_Convection_Test03.png")
 
     # Test
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)-dx
+    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
     u = asf.(x_interval)
     # Plot and save results
 
@@ -470,7 +450,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
     # Plot and save results
     # using Plots
@@ -545,7 +525,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.025, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
     # Plot and save results
     # using Plots

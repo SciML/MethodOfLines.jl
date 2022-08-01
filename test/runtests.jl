@@ -50,9 +50,9 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
     #     @time @safetestset "MOLFiniteDifference Interface: 2D Diffusion" begin include("pde_systems/MOL_2D_Diffusion.jl") end
     # end
 
-    if GROUP == "All" || GROUP == "Convection"
-        @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin include("pde_systems/MOL_1D_Linear_Convection.jl") end
-    end
+    # if GROUP == "All" || GROUP == "Convection"
+    #     @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin include("pde_systems/MOL_1D_Linear_Convection.jl") end
+    # end
 
     if GROUP == "All" || GROUP == "Convection_WENO"
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection, WENO Scheme." begin

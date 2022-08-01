@@ -85,20 +85,5 @@ end
 This is a catch all ruleset, as such it does not use @rule.
 """
 @inline function generate_WENO_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
-    rules = reduce(vcat, [[@rule ($Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars])
-
-    weno_rules = []
-    for t in terms
-        for r in rules
-            try
-                if r(t) !== nothing
-                    push!(weno_rules, t => r(t))
-                end
-            catch e
-                @show t, r
-                rethrow(e)
-            end
-        end
-    end
-    return weno_rules
+    return reduce(vcat, [[(Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars])
 end
