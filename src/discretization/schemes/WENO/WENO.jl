@@ -6,9 +6,9 @@ Specified in https://repository.library.brown.edu/studio/item/bdr:297524/PDF/ (P
 
 Implementation *heavily* inspired by https://github.com/ranocha/HyperbolicDiffEq.jl/blob/84c2d882e0c8956457c7d662bf7f18e3c27cfa3d/src/finite_volumes/weno_jiang_shu.jl by H. Ranocha.
 """
-@inline function weno(II::CartesianIndex, s::DiscreteSpace, b, jx, u, dx::Number)
+@inline function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, b, jx, u, dx::Number)
     j, x = jx
-    ε = 1e-6
+    ε = wenoscheme.epsilon
 
     I1 = unitindex(ndims(u, s), j)
 
@@ -85,5 +85,5 @@ end
 This is a catch all ruleset, as such it does not use @rule.
 """
 @inline function generate_WENO_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
-    return reduce(vcat, [[(Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars])
+    return reduce(vcat, [[(Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, derivweights.advection_scheme, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars])
 end

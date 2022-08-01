@@ -14,8 +14,8 @@ function DifferentialDiscretizer(pdesys, s, discretization, orders)
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs isa Vector ? pdesys.bcs : [pdesys.bcs]
     approx_order = discretization.approx_order
-    upwind_order = 1
     advection_scheme = discretization.advection_scheme
+    upwind_order = advection_scheme isa UpwindScheme ? advection_scheme.order : 0
 
     differentialmap = Array{Pair{Num,DerivativeOperator},1}()
     nonlinlap_inner = []
