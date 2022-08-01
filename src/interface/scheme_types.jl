@@ -14,7 +14,7 @@ extent(::UpwindScheme, dorder) = dorder
 ## Keyword Arguments
 - `epsilon`: A quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. More sensetive problems will benefit from a smaller value.
 """
-struct WENOScheme <: AbstractScheme{5}
+struct WENOScheme <: AbstractScheme
     epsilon
     function WENOScheme(epsilon = 1e-6)
         new(epsilon)
@@ -26,5 +26,4 @@ function extent(::WENOScheme, dorder)
     return 2
 end
 
-approximation_order(::AbstractScheme{Aorder}) where Aorder = Aorder
 # Note: This type and its subtypes will become important later with the stencil interfaces as we will need to dispatch on derivative order and approximation order
