@@ -14,11 +14,24 @@ Implementation *heavily* inspired by https://github.com/ranocha/HyperbolicDiffEq
 
     udisc = s.discvars[u]
 
-    u_m2 = udisc[wrapperiodic(II - 2I1, s, b, u, jx)]
-    u_m1 = udisc[wrapperiodic(II - I1, s, b, u, jx)]
+    Im2 = wrapperiodic(II - 2I1, s, b, u, jx)
+    Im1 = wrapperiodic(II - I1, s, b, u, jx)
+    Ip1 = wrapperiodic(II + I1, s, b, u, jx)
+    Ip2 = wrapperiodic(II + 2I1, s, b, u, jx)
+    is = map(I -> I[j], [Im2, Im1, Ip1, Ip2])
+    for i in is
+        if i < 1
+            return nothing
+        elseif i > length(s, x)
+            return nothing
+        end
+    end
+
+    u_m2 = udisc[Im2]
+    u_m1 = udisc[Im1]
     u_0 = udisc[II]
-    u_p1 = udisc[wrapperiodic(II + I1, s, b, u, jx)]
-    u_p2 = udisc[wrapperiodic(II + 2I1, s, b, u, jx)]
+    u_p1 = udisc[Ip1]
+    u_p2 = udisc[Ip2]
 
     γ1 = 1 / 10
     γ2 = 3 / 5
@@ -69,7 +82,7 @@ function weno(II::CartesianIndex, s::DiscreteSpace, b, jx, u, dx::AbstractVector
 end
 
 """
-This is a catch all ruleset, as such it does not use @rule. Any first order derivative may be adequately approximated by a WENO scheme.
+This is a catch all ruleset, as such it does not use @rule.
 """
 @inline function generate_WENO_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
     return reduce(vcat, [[(Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars])

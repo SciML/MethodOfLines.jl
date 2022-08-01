@@ -28,6 +28,7 @@ variable and create an array of symbolic variables to represent it in its discre
 - `Iaxies`: The dictionary of the dependant variables and their `CartesianIndices` of the discretization.
 - `Igrid`: Same as `axies` if `CenterAlignedGrid` is used. For `EdgeAlignedGrid`, one more index will be needed for extrapolation.
 - `x2i`: The dictionary of symbolic spatial variables their ordering.
+- `errvar`: A symbolic variable marking that a scheme has been incorrectly used.
 
 ## Examples
 
@@ -83,6 +84,7 @@ struct DiscreteSpace{N,M,G}
     Iaxies
     Igrid
     x2i
+    errvar # The error variable for the discrete space
 end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
@@ -146,11 +148,13 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
         end
     end
 
+    @parameters errvar
+
     args = [operation(u) => arguments(u) for u in depvars]
 
     x̄2dim = [x̄[i] => i for i in 1:nspace]
     dim2x̄ = [i => x̄[i] for i in 1:nspace]
-    return DiscreteSpace{nspace,length(depvars),G}(depvars, Dict(args), Dict(depvarsdisc), discretization.time, x̄, axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), Dict(x̄2dim))
+    return DiscreteSpace{nspace,length(depvars),G}(depvars, Dict(args), Dict(depvarsdisc), discretization.time, x̄, axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), Dict(x̄2dim), errvar)
 end
 
 nparams(::DiscreteSpace{N,M}) where {N,M} = N

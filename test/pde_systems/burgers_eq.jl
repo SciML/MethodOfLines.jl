@@ -221,7 +221,9 @@ end
     # anim = @animate for T in t
     #        asfu = reshape([u_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
     #        asfv = reshape([v_exact(T,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
-
+    if GROUP == "All" || GROUP == "Interface"
+        @time @safetestset "MOLFiniteDifference Interface" begin include("pde_systems/MOLtest.jl") end
+    end
     #        heatmap(asfu)
     # end
     # gif(anim, "plots/Burgers2Dexact.gif", fps = 5)

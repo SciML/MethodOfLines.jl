@@ -210,7 +210,7 @@ end
 @inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindices(M)[j] : II
 
 subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
-
+subsmatch(eq::Equation, rule) = subsmatch(eq.lhs, rule) | subsmatch(eq.rhs, rule)
 #substitute(eq::Equation, rules) = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
 
 remove(args, t) = filter(x -> t === nothing || !isequal(x, t.val), args)
@@ -230,6 +230,9 @@ half_range(x) = -div(x, 2):div(x, 2)
     return I
 end
 
+"""
+Allow stencils indexing over periodic boundaries. Index through this function.
+"""
 @inline function wrapperiodic(I, s, ::Val{true}, u, jx)
     j, x = jx
     return _wrapperiodic(I, ndims(u, s), j, length(s, x))

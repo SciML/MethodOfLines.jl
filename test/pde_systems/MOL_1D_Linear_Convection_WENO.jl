@@ -451,8 +451,7 @@ end
     bcs = [u(0, x) ~ asf(x),
         u(t, 0) ~ u(t, 2),
         v(0, x) ~ 0.999,
-        v(t, 0) ~ 0.999,
-        v(t, 2) ~ 0.9999 + 0.0001 * t * 2.0]
+        v(t, 0) ~ v(t, 2)]
 
     # Space and time domains
     domains = [t ∈ Interval(0.0, 2.0),
@@ -527,8 +526,7 @@ end
     bcs = [u(0, x) ~ asf(x),
         u(t, 0) ~ u(t, 2),
         v(0, x) ~ 0.999,
-        v(t, 0) ~ 0.999,
-        v(t, 2) ~ 0.9999 + 0.0001 * t * 2.0]
+        v(t, 0) ~ v(t, 2)]
 
     # Space and time domains
     domains = [t ∈ Interval(0.0, 2.0),

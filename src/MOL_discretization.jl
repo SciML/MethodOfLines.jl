@@ -53,6 +53,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pmap = PeriodicMap(boundarymap, s)
     # Get the interior and variable to solve for each equation
     interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
+    @show interiormap
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
@@ -127,6 +128,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
+            println(vcat(alleqs, unique(bceqs)))
 
             sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
             return sys, tspan
@@ -145,7 +147,15 @@ function discretize_equation(pde, interior, eqvar, depvars, s, derivweights, ind
     return vec(map(interior) do II
         boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
         rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
-        substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
+        try
+            substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
+        catch e
+            println("A scheme has been incorrectly applied to the following equation: $pde.\n")
+            println("The following rules were constructed at index $II:")
+            display(rules)
+            rethrow(e)
+        end
+
     end)
 end
 
