@@ -43,12 +43,13 @@ const shouldplot = true
     for disc in [discretization, discretization_approx_order4]
         # Convert the PDE problem into an ODE problem
         prob = discretize(pdesys, disc)
+        grid = get_discrete(pdesys, disc)
 
         # Solve ODE problem
         sol = solve(prob, Tsit5(), saveat=0.1)
 
 
-        x_sol = dx[2:end-1]
+        x_sol = dx
 
         t = sol.t
 
@@ -63,7 +64,7 @@ const shouldplot = true
         # Test against exact solution
         for i in 1:length(sol)
             exact = u_exact(x_sol, t[i])
-            u_approx = sol.u[i]
+            u_approx = map(d -> sol[d][i], grid[u(t, x)])
             @test all(isapprox.(u_approx, exact, atol=0.02))
         end
     end

@@ -18,6 +18,12 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
     end
 
 
+    if GROUP == "All" || GROUP == "Diffusion_NU"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
+            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
+        end
+    end
+
     if GROUP == "All" || GROUP == "Burgers"
         @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin
         include("pde_systems/burgers_eq.jl") end
@@ -28,12 +34,6 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
 
     if GROUP == "All" || GROUP == "Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin include("pde_systems/MOL_1D_Linear_Diffusion.jl") end
-    end
-
-    if GROUP == "All" || GROUP == "Diffusion_NU"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
-            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
-        end
     end
 
     if GROUP == "All" || GROUP == "Nonlinear_Diffusion"

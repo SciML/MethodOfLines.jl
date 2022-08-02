@@ -55,7 +55,6 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int,
     low_boundary_x = [zero(T); cumsum(dx[1:(boundary_stencil_length-1)])]
     high_boundary_x = cumsum(dx[(end-boundary_stencil_length+1):end])
     # Because it's a N x (N+2) operator, the last stencil on the sides are the [b,0,x,x,x,x] stencils, not the [0,x,x,x,x,x] stencils, since we're never solving for the derivative at the boundary point.
-    @show endpoint
     stencil_coefs = stencil_coefs = [convert(SVector{stencil_length,T},
         insert(calculate_weights(0, x[i],
                 remove(x[(i-endpoint):(i+endpoint)], x[i])), midpoint, zero(T)))

@@ -20,7 +20,7 @@ using ModelingToolkit: Differential
     y_min = 0.
     y_max = 2.
     dx = 0.1; dy = 0.2
-    order = 2
+    order = 4
 
     # Analytic solution
     analytic_sol_func(t,x,y) = exp(x+y)*cos(x+y+4t)
