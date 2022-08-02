@@ -196,7 +196,7 @@ end
     prob = discretize(pdesys, disc)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Rodas4(), saveat=0.1)
 
     x_sol = dx[2:end-1]
 
