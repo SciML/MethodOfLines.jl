@@ -7,7 +7,7 @@ struct UpwindScheme <: AbstractScheme
     end
 end
 
-extent(::UpwindScheme, dorder) = dorder
+extent(scheme::UpwindScheme, dorder) = dorder+scheme.order-1
 
 """
 `WENOScheme` of Jiang and Shu
