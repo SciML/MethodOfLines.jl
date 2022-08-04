@@ -7,7 +7,7 @@
 using ModelingToolkit,MethodOfLines,LinearAlgebra,Test,OrdinaryDiffEq, DomainSets
 using ModelingToolkit: Differential
 # Tests
-@testset "Test 00: Dt(u(t,x)) ~ Dx(u(t,x)^(-1) * Dx(u(t,x)))" begin 
+@testset "Test 00: Dt(u(t,x)) ~ Dx(u(t,x)^(-1) * Dx(u(t,x)))" begin
     # Variables, parameters, and derivatives
     @parameters t x
     @variables u(..)
@@ -22,7 +22,7 @@ using ModelingToolkit: Differential
 
     # Analytic solution
     analytic_sol_func(t,x) = 2.0 * (c + t) / (a + x)^2
-    
+
     # Equation
     eq = Dt(u(t,x)) ~ Dx(u(t,x)^(-1) * Dx(u(t,x)))
 
@@ -51,7 +51,7 @@ using ModelingToolkit: Differential
     r_space = x_min:dx:x_max
     asf = [analytic_sol_func(t_max,x) for x in r_space]
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
     @test asf ≈ sol′ atol=0.1
 
@@ -63,7 +63,7 @@ using ModelingToolkit: Differential
 
 end
 
-# @testset "Test 01: Dt(u(t,x)) ~ Dx(u(t,x) * Dx(u(t,x)))" begin 
+# @testset "Test 01: Dt(u(t,x)) ~ Dx(u(t,x) * Dx(u(t,x)))" begin
 #     # Variables, parameters, and derivatives
 #     @parameters t x
 #     @variables u(..)
@@ -78,7 +78,7 @@ end
 
 #     # Analytic solution
 #     analytic_sol_func(t,x) = 2.0 * (c + t) / (a + x)^2
-    
+
 #     # Equation
 #     eq = Dt(u(t,x)) ~ Dx(u(t,x) * Dx(u(t,x)))
 
@@ -107,7 +107,7 @@ end
 #     r_space = x_min:dx:x_max
 #     asf = [analytic_sol_func(t_max,x) for x in r_space]
 #     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-#     @variables u[1:Nx](t)
+#     @variables u(t)[1:Nx]
 #     sol′ = [sol[u[i]][end] for i in 1:Nx]
 #     @test asf ≈ sol′ atol=0.1
 
@@ -135,7 +135,7 @@ end
 
     # Analytic solution
     analytic_sol_func(t,x) = 0.5 * (x + h) / sqrt(c - t)
-    
+
     # Equation
     eq = Dt(u(t,x)) ~ Dx(u(t,x)^2 * Dx(u(t,x)))
 
@@ -168,7 +168,7 @@ end
     r_space = x_min:dx:x_max
     asf = [analytic_sol_func(t_max,x) for x in r_space]
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
     @test asf ≈ sol′ atol=0.01
 
@@ -196,7 +196,7 @@ end
 
     # Analytic solution
     analytic_sol_func(t,x) = 0.5 * (x + h) / sqrt(c - t)
-    
+
     # Equation
     eq = Dt(u(t,x)) ~ Dx(u(t,x)^2 * Dx(u(t,x)))
 
@@ -229,7 +229,7 @@ end
     r_space = x_min:dx:x_max
     asf = [analytic_sol_func(t_max,x) for x in r_space]
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
     @test asf ≈ sol′ atol=0.01
 
@@ -257,7 +257,7 @@ end
 
 #     # Analytic solution
 #     analytic_sol_func(t,x) = 0.5 * (x + h) / sqrt(c - t)
-    
+
 #     # Equation
 #     eq = Dt(u(t,x)) ~ Dx(u(t,x)^3 * Dx(u(t,x)))
 
@@ -286,7 +286,7 @@ end
 #     r_space = x_min:dx:x_max
 #     asf = [analytic_sol_func(t_max,x) for x in r_space]
 #     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-#     @variables u[1:Nx](t)
+#     @variables u(t)[1:Nx]
 #     sol′ = [sol[u[i]][end] for i in 1:Nx]
 #     @test asf ≈ sol′ atol=0.01
 
@@ -344,7 +344,7 @@ end
     r_space = x_min:dx:x_max
     asf = [analytic_sol_func(t_max,x) for x in r_space]
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
     m = max(asf...,sol′...)
@@ -401,7 +401,7 @@ end
     r_space = x_min:dx:x_max
     asf = [analytic_sol_func(t_max,x) for x in r_space]
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
     m = max(asf...,sol′...)
@@ -459,7 +459,7 @@ end
     r_space = x_min:dx:x_max
     asf = [analytic_sol_func(t_max,x) for x in r_space]
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
     m = max(asf...,sol′...)
@@ -516,7 +516,7 @@ end
     r_space = x_min:dx:x_max
     asf = [analytic_sol_func(t_max,x) for x in r_space]
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
     m = max(asf...,sol′...)
@@ -529,4 +529,3 @@ end
     #savefig("MOL_NonLinear_Diffusion_1D_Test03.png")
 
 end
-

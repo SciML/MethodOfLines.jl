@@ -56,7 +56,7 @@ using StableRNGs
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
     Nx = length(dx)
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
     @test asf ≈ sol′ atol = 0.1
 
@@ -112,7 +112,7 @@ end
 #     r_space = x_min:dx:x_max
 #     asf = [analytic_sol_func(t_max,x) for x in r_space]
 #     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-#     @variables u[1:Nx](t)
+#     @variables u(t)[1:Nx]
 #     sol′ = [sol[u[i]][end] for i in 1:Nx]
 #     @test asf ≈ sol′ atol=0.1
 
@@ -176,7 +176,7 @@ end
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
     Nx = length(dx)
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
     @test asf ≈ sol′ atol = 0.01
 
@@ -240,7 +240,7 @@ end
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
     Nx = length(dx)
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
     @test asf ≈ sol′ atol = 0.01
 
@@ -297,7 +297,7 @@ end
 #     r_space = x_min:dx:x_max
 #     asf = [analytic_sol_func(t_max,x) for x in r_space]
 #     Nx = floor(Int64, (x_max - x_min) / dx) + 1
-#     @variables u[1:Nx](t)
+#     @variables u(t)[1:Nx]
 #     sol′ = [sol[u[i]][end] for i in 1:Nx]
 #     @test asf ≈ sol′ atol=0.01
 
@@ -358,7 +358,7 @@ end
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
     Nx = length(dx)
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
     m = max(asf..., sol′...)
@@ -418,7 +418,7 @@ end
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
     Nx = length(dx)
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
     m = max(asf..., sol′...)
@@ -479,7 +479,7 @@ end
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
     Nx = length(dx)
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
     m = max(asf..., sol′...)
@@ -539,7 +539,7 @@ end
     r_space = dx
     asf = [analytic_sol_func(t_max, x) for x in r_space]
     Nx = length(dx)
-    @variables u[1:Nx](t)
+    @variables u(t)[1:Nx]
     sol′ = [sol[u[i]][end] for i in 1:Nx]
 
     m = max(asf..., sol′...)
