@@ -51,7 +51,7 @@ const shouldplot = true
 
         x_sol = dx
 
-        t = sol.t
+        t_disc = sol.t
 
         # anim = @animate for (i, T) in enumerate(t)
         #     exact = u_exact(x_sol, T)
@@ -63,7 +63,7 @@ const shouldplot = true
 
         # Test against exact solution
         for i in 1:length(sol)
-            exact = u_exact(x_sol, t[i])
+            exact = u_exact(x_sol, t_disc[i])
             u_approx = map(d -> sol[d][i], grid[u(t, x)])
             @test all(isapprox.(u_approx, exact, atol=0.02))
         end

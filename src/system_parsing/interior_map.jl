@@ -71,7 +71,7 @@ function calculate_stencil_extents(s, u, discretization, orders, pmap)
                 extents[j] = max(extents[j], extent(advection_scheme, dorder))
             else
                 #TODO: add scheme types for even order derivatives
-                extents[j] = max(extents[j], div(dorder + aorder - 1 + (dorder + aorder) % 2, 2))
+                extents[j] = max(extents[j], 0)
             end
         end
     end

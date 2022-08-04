@@ -99,7 +99,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
 
             # Set invalid corner points to zero
-            generate_corner_eqs!(bceqs, s, interiormap, pde)
+            generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
 
             # Generate the equations for the interior points
             pdeeqs = discretize_equation(pde, interiormap.I[pde], eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap)
@@ -128,6 +128,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
+           # Main.xx[] = vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, Dict(defaults), pdesys.name
             sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
             return sys, tspan
         end
