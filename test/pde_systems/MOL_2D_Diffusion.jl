@@ -47,7 +47,7 @@ using ModelingToolkit: Differential
     # Test against exact solution
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
     Ny = floor(Int64, (y_max - y_min) / dy) + 1
-    @variables u[1:Nx,1:Ny](t)
+
     r_space_x = x_min:dx:x_max
     r_space_y = y_min:dy:y_max
     asf = reshape([analytic_sol_func(t_max,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
@@ -55,12 +55,12 @@ using ModelingToolkit: Differential
     # Method of lines discretization
     discretization = MOLFiniteDifference([x=>dx,y=>dy],t;approx_order=order)
     prob = ModelingToolkit.discretize(pdesys,discretization)
-
+    grid = get_discrete(pdesys,discretization)
     # Solution of the ODE system
     sol = solve(prob,Tsit5())
 
     # Test against exact solution
-    sol′ = reshape([sol[u[(i-1)*Ny+j]][end] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+    sol′ = map(d -> sol[d][end], grid[u(t,x,y)])
     @test asf ≈ sol′ atol=0.4
 
     #Plot
