@@ -47,8 +47,6 @@ using ModelingToolkit: Differential
     # Solve ODE problem
     sol = solve(prob,Rodas4(),saveat=0.1)
 
-    solu = map(d -> sol[d][i],grid[u(t,x)])
-
     x_sol = dx
     t_sol = sol.t
 
