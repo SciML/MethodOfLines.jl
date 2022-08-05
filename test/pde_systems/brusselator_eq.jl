@@ -39,13 +39,13 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
 
               v(x,y,0) ~ v0(x,y,0),
               v(0,y,t) ~ v(1,y,t),
-              v(x,0,t) ~ v(x,1,t)] 
-       
+              v(x,0,t) ~ v(x,1,t)]
+
        @named pdesys = PDESystem(eq,bcs,domains,[x,y,t],[u(x,y,t),v(x,y,t)])
 
        # Method of lines discretization
        N = 32
-       
+
        dx = 1/N
        dy = 1/N
 
@@ -62,7 +62,7 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
        @time sol = solve(prob, TRBDF2(),saveat=0.01)
 
        # Solve reference problem
-       
+
        xyd_brusselator = range(0,stop=1,length=N)
        brusselator_f(x, y, t) = (((x-0.3)^2 + (y-0.6)^2) <= 0.1^2) * (t >= 1.1) * 5.
        limit(a, N) = a == N+1 ? 1 : a == 0 ? N : a
@@ -80,7 +80,7 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
            end
        end
        p = (3.4, 1., 10., step(xyd_brusselator))
-       
+
        function init_brusselator_2d(xyd)
            N = length(xyd)
            u = zeros(N, N, 2)
@@ -94,17 +94,16 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
        end
        u0_manual = init_brusselator_2d(xyd_brusselator)
        prob = ODEProblem(brusselator_2d_loop,u0_manual,(0.,11.5),p)
-       
+
        msol = solve(prob,TRBDF2(),saveat=0.01) # 2.771 s (5452 allocations: 65.73 MiB)
 
        # get variables for reshape
        Nx = floor(Int64, (x_max - x_min) / dx) + 1
        Ny = floor(Int64, (y_max - y_min) / dy) + 1
+       grid = get_discrete(pdesys, discretization)
+       u = grid[u(t, x, y)]
+       v = grid[v(t, x, y)]
 
-       @variables u[1:Nx,1:Ny](t)
-       @variables v[1:Nx,1:Ny](t)
-       
-       
        t = sol[t]
        @testset "." begin
        for k in div(length(t), 2):length(t)
@@ -114,11 +113,11 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
 
               solv = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))[2:end,2:end]
               msolv = msol.u[k][:,:,2]
-              @test solv ≈ msolv rtol = 0.1              
+              @test solv ≈ msolv rtol = 0.1
        end
        end
-   
-       
+
+
        # Nx = floor(Int64, (x_max - x_min) / dx) + 1
        # Ny = floor(Int64, (y_max - y_min) / dy) + 1
 
