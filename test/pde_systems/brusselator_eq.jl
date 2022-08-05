@@ -101,8 +101,8 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
        Nx = floor(Int64, (x_max - x_min) / dx) + 1
        Ny = floor(Int64, (y_max - y_min) / dy) + 1
        grid = get_discrete(pdesys, discretization)
-       u = grid[u(t, x, y)]
-       v = grid[v(t, x, y)]
+       u = grid[u(x, y, t)]
+       v = grid[v(x, y, t)]
 
        t = sol[t]
        @testset "." begin
