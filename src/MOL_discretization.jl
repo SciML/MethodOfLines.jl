@@ -99,7 +99,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
 
             # Set invalid corner points to zero
-            generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
+            generate_corner_eqs!(bceqs, s, derivweights, interiormap, pmap, ndims(s.discvars[eqvar]), eqvar)
 
             # Generate the equations for the interior points
             pdeeqs = discretize_equation(pde, interiormap.I[pde], eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap)

@@ -156,25 +156,35 @@ end
 
 #TODO: Benchmark and optimize this
 
-@inline function generate_corner_eqs!(bceqs, s, interiormap, N, u)
+@inline function generate_corner_eqs!(bceqs, s, derivweights, interiormap, periodicmap, N, u)
     interior = interiormap.I[interiormap.pde[u]]
+    pmap = periodicmap.map[operation(u)]
+    ufunc(u, I, x) = s.discvars[u][I]
     sd(i, j) = selectdim(interior, j, i)
     domain = setdiff(s.Igrid[u], interior)
+    args = params(u, s)
+
     II1 = unitindices(N)
     for j in 1:N
         I1 = II1[j]
         edge = sd(1, j)
-        offset = edge[1][j]-1
+        offset = edge[1][j] - 1
         for k in 1:offset
-            setdiff!(domain, vec(copy(edge).-[I1*k]))
+            setdiff!(domain, vec(copy(edge) .- [I1 * k]))
         end
         edge = sd(size(interior, j), j)
         offset = size(s.discvars[u], j) - size(interior, j)
         for k in 1:offset
-            setdiff!(domain, vec(copy(edge).+[I1*k]))
+            setdiff!(domain, vec(copy(edge) .+ [I1 * k]))
         end
     end
-    push!(bceqs, s.discvars[u][domain] .~ 0)
+    push!(bceqs, [s.discvars[u][II] ~ sum([
+        (
+            let x = args[j]
+                central_difference(derivweights.boundary[x], II, s, pmap[x], (j, x), u, ufunc)
+            end
+        )
+        for j in 1:N]) / N for II in domain])
 end
 
 """
