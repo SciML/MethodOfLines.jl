@@ -157,7 +157,7 @@ end
 #TODO: Benchmark and optimize this
 
 @inline function generate_corner_eqs!(bceqs, s, derivweights, interiormap, periodicmap, u)
-    N = ndims(s.discvars[eqvar])
+    N = ndims(s.discvars[u])
     if N == 1
         return
     end
