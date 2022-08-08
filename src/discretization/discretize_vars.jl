@@ -28,7 +28,6 @@ variable and create an array of symbolic variables to represent it in its discre
 - `Iaxies`: The dictionary of the dependant variables and their `CartesianIndices` of the discretization.
 - `Igrid`: Same as `axies` if `CenterAlignedGrid` is used. For `EdgeAlignedGrid`, one more index will be needed for extrapolation.
 - `x2i`: The dictionary of symbolic spatial variables their ordering.
-- `errvar`: A symbolic variable marking that a scheme has been incorrectly used.
 
 ## Examples
 
