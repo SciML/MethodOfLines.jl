@@ -156,7 +156,11 @@ end
 
 #TODO: Benchmark and optimize this
 
-@inline function generate_corner_eqs!(bceqs, s, derivweights, interiormap, periodicmap, N, u)
+@inline function generate_corner_eqs!(bceqs, s, derivweights, interiormap, periodicmap, u)
+    N = ndims(s.discvars[eqvar])
+    if N == 1
+        return
+    end
     interior = interiormap.I[interiormap.pde[u]]
     pmap = periodicmap.map[operation(u)]
     ufunc(u, I, x) = s.discvars[u][I]
