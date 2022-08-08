@@ -156,7 +156,7 @@ end
 
 #TODO: Benchmark and optimize this
 
-@inline function generate_corner_eqs!(bceqs, s, derivweights, interiormap, periodicmap, u)
+@inline function generate_corner_eqs!(observed, s, derivweights, interiormap, periodicmap, u)
     N = ndims(s.discvars[u])
     if N == 1
         return
@@ -182,13 +182,15 @@ end
             setdiff!(domain, vec(copy(edge) .+ [I1 * k]))
         end
     end
-    push!(bceqs, [s.discvars[u][II] ~ sum([
+    push!(observed, map(domain) do II
+        s.discvars[u][II] ~ sum([
         (
             let x = args[j]
                 central_difference(derivweights.boundary[x], II, s, pmap[x], (j, x), u, ufunc)
             end
         )
-        for j in 1:N]) / N for II in domain])
+        for j in 1:N]) / N
+    end)
 end
 
 """

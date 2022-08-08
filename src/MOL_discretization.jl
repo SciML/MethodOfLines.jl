@@ -35,6 +35,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     end
     alleqs = []
     bceqs = []
+    observed = []
     # * We wamt to do this in 2 passes
     # * First parse the system and BCs, replacing with DiscreteVariables and DiscreteDerivatives
     # * periodic parameters get type info on whether they are periodic or not, and if they join up to any other parameters
@@ -99,7 +100,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
 
             # Set invalid corner points to zero
-            generate_corner_eqs!(bceqs, s, derivweights, interiormap, pmap, eqvar)
+            generate_corner_eqs!(observed, s, derivweights, interiormap, pmap, eqvar)
+
 
             # Generate the equations for the interior points
             pdeeqs = discretize_equation(pde, interiormap.I[pde], eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap)
@@ -111,6 +113,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     u0 = !isempty(u0) ? reduce(vcat, u0) : u0
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
+    observed = reduce(vcat, observed)
     alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))
 
     # Finalize
@@ -123,12 +126,12 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # 0 ~ ...
             # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
             eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, vcat(alleqs, unique(bceqs)))
-            sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
+            sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), observed=observed, name=pdesys.name)
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
-            sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
+            sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), observed=observed, name=pdesys.name)
             return sys, tspan
         end
     catch e
