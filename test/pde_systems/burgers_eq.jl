@@ -198,15 +198,15 @@ end
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
     Ny = floor(Int64, (y_max - y_min) / dy) + 1
 
-    @variables u[1:Nx, 1:Ny](t)
+    # @variables u[1:Nx, 1:Ny](t)
 
-    anim = @animate for k in 1:length(t)
-           solu′ = reshape([sol.u[k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-           #solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
-           heatmap(solu′)
-    end
-    gif(anim, "plots/Burgers2Dsol.gif", fps = 5)
-    grid = get_discrete(pdesys, discretization)
+    # anim = @animate for k in 1:length(t)
+    #        solu′ = reshape([sol.u[k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+    #        #solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
+    #        heatmap(solu′)
+    # end
+    # gif(anim, "plots/Burgers2Dsol.gif", fps = 5)
+    # grid = get_discrete(pdesys, discretization)
 
 
     solu′ = map(d -> sol[d][end], grid[u(x, y, t)][3:end-2, 3:end-2])
