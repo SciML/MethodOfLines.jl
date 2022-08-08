@@ -6,7 +6,7 @@ Specified in https://repository.library.brown.edu/studio/item/bdr:297524/PDF/ (P
 
 Implementation *heavily* inspired by https://github.com/ranocha/HyperbolicDiffEq.jl/blob/84c2d882e0c8956457c7d662bf7f18e3c27cfa3d/src/finite_volumes/weno_jiang_shu.jl by H. Ranocha.
 """
-@inline function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, b, jx, u, dx::Number)
+function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, b, jx, u, dx::Number)
     j, x = jx
     ε = wenoscheme.epsilon
 
