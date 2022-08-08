@@ -113,7 +113,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     u0 = !isempty(u0) ? reduce(vcat, u0) : u0
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
-    observed = reduce(vcat, observed)
+    if !isempty(observed)
+        observed = reduce(vcat, observed)
+    end
     alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))
 
     # Finalize
