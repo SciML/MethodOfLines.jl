@@ -97,7 +97,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
                 generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
             end
             # Generate extrapolation eqs
-            generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
+            generate_extrap_eqs!(bceqs, observed, pde, eqvar, s, derivweights, interiormap, pmap)
 
             # Set invalid corner points to zero
             generate_corner_eqs!(observed, s, derivweights, interiormap, pmap, eqvar)
