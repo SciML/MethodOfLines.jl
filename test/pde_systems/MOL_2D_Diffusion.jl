@@ -51,7 +51,6 @@ using ModelingToolkit: Differential
     r_space_x = x_min:dx:x_max
     r_space_y = y_min:dy:y_max
     asf = reshape([analytic_sol_func(t_max,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
-    asf[1,1] = asf[1, end] = asf[end, 1] = asf[end, end] = 0.
     # Method of lines discretization
     discretization = MOLFiniteDifference([x=>dx,y=>dy],t;approx_order=order)
     prob = ModelingToolkit.discretize(pdesys,discretization)
@@ -122,7 +121,6 @@ end
     Nx = length(r_space_x)
     Ny = length(r_space_y)
     asf = reshape([analytic_sol_func(t_max,r_space_x[i],r_space_y[j]) for j in 1:Ny for i in 1:Nx],(Nx,Ny))
-    asf[1,1] = asf[1, end] = asf[end, 1] = asf[end, end] = 0.
 
     m = max(asf...)
     @test asf / m ≈ sol′ / m  atol=0.4 # TODO: use lower atol when g(x) is improved in MOL_discretize.jl
