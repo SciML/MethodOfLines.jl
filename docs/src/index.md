@@ -38,10 +38,11 @@ At the moment the package is able to discretize almost any system, with some ass
 - Boundary conditions in time are supplied as initial conditions, not at the end of the simulation interal. If your system requires a final condition, please use a change of variables to rectify this. This is unlikely to change due to upstream constraints.
 - Intergral equations are not supported.
 - That dependant variables always have the same argument signature, except in BCs.
-- That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`, or the same with lhs and rhs reversed. Note that this generalises to higher dimensions.
+- That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`, or the same with lhs and rhs reversed. Note that this generalises to higher dimensions. Please note that if you want to use a periodic condition on a dimension with WENO schemes, please use a periodic condition on all variables in that dimension.
 - That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.
 - That initial conditions are of the form `u(...) ~ ...`, and don't reference the initial time derivative.
 - That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))` is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product rule and use the linearity of the derivative operator, or define a new auxiliary dependant variable by adding an equation for it like `eqs = [Differential(x)(w(t,x))~ ... , w(t,x) ~ v(t,x)*u(t,x)]`, along with appropriate BCs/ICs. An exception to this is if the differential is a nonlinear or spherical laplacian, in which case only the innermost argument should be wrapped.
+- Note that the above also applies to mixed derivatives, please wrap the inner derivative.
 - That odd order derivatives do not multiply or divide each other. A workaround is to wrap all but one derivative per term in an auxiliary variable, such as `dxu(x, t) ~ Differential(x)(u(x, t))`.
 
 The performance hit from auxiliary variables should be negligable due to a structural simplification step.

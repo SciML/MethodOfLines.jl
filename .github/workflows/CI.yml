@@ -20,6 +20,7 @@ jobs:
           - Nonlinear_Diffusion_NU
           - 2D_Diffusion
           - Convection
+          - Convection_WENO
           - Higher_Order
           - Stationary
           - DAE

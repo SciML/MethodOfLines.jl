@@ -105,6 +105,55 @@ function generate_bc_eqs(s::DiscreteSpace{N,M,G}, boundaryvalfuncs, boundary::Ab
     end)
 end
 
+"""
+`generate_extrap_eqs`
+
+Pads the boundaries with extrapolation equations, extrapolated with 6th order lagrangian polynomials.
+Reuses `central_difference` as this already dispatches the correct stencil, given a `DerivativeOperator` which contains the correct weights.
+"""
+function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, periodicmap)
+    args = remove(arguments(u), s.time)
+    extents = interiormap.stencil_extents[pde]
+    vlower = interiormap.lower[pde]
+    vupper = interiormap.upper[pde]
+    pmap = periodicmap.map[operation(u)]
+    ufunc(u, I, x) = s.discvars[u][I]
+
+    eqmap = [[] for _ in CartesianIndices(s.discvars[u])]
+    for (j, x) in enumerate(args)
+        pmap[x] isa Val{true} && continue
+        ninterp = extents[j] - vlower[j]
+        I1 = unitindex(length(args), j)
+        while ninterp >= vlower[j]
+            for Il in (edge(interiormap, s, u, j, true) .+ (ninterp * I1,))
+                expr = central_difference(derivweights.boundary[x], Il, s, pmap[x], (j, x), u, ufunc)
+                push!(eqmap[Il], expr)
+            end
+            ninterp = ninterp - 1
+        end
+        ninterp = extents[j] - vupper[j]
+        while ninterp >= vupper[j]
+            for Iu in (edge(interiormap, s, u, j, false) .- (ninterp * I1,))
+                expr = central_difference(derivweights.boundary[x], Iu, s, pmap[x], (j, x), u, ufunc)
+                push!(eqmap[Iu], expr)
+            end
+            ninterp = ninterp - 1
+        end
+    end
+    # Overlap handling
+    for II in setdiff(collect(CartesianIndices(eqmap)), interiormap.I[pde])
+        rhss = eqmap[II]
+        if length(rhss) == 0
+            continue
+        elseif length(rhss) == 1
+            push!(eqs, s.discvars[u][II] ~ rhss[1])
+        else
+            n = length(rhss)
+            push!(eqs, s.discvars[u][II] ~ sum(rhss)/n)
+        end
+    end
+end
+
 #TODO: Benchmark and optimize this
 
 @inline function generate_corner_eqs!(bceqs, s, interiormap, N, u)

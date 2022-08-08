@@ -142,7 +142,7 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
             u => fill(first(@variables($sym(t))), ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            u => collect(first(@variables $sym[uaxes...](t)))
+            u => collect(first(@variables $sym(t)[uaxes...]))
         end
     end
 

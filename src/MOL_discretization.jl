@@ -40,16 +40,19 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # * periodic parameters get type info on whether they are periodic or not, and if they join up to any other parameters
     # * Then we can do the actual discretization by recursively indexing in to the DiscreteVariables
 
-    orders = Dict(map(x -> x => d_orders(x, pdeeqs, pdesys.bcs), allindvars))
+    pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), allindvars))
+    bcorders = Dict(map(x -> x => d_orders(x, bcs), allindvars))
+
+    orders = Dict(map(x -> x => collect(union(pdeorders[x], bcorders[x])), allindvars))
 
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
     # Create a map of each variable to their boundary conditions and get the initial condition
-    boundarymap, u0 = parse_bcs(pdesys.bcs, s, depvar_ops, tspan, orders)
-    # Get the interior and variable to solve for each equation
-    interiormap = InteriorMap(pdeeqs, boundarymap, s,)
+    boundarymap, u0 = parse_bcs(pdesys.bcs, s, depvar_ops, tspan, bcorders)
     # Generate a map of each variable to whether it is periodic in a given direction
     pmap = PeriodicMap(boundarymap, s)
+    # Get the interior and variable to solve for each equation
+    interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
@@ -92,9 +95,11 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             for boundary in reduce(vcat, collect(values(boundarymap[operation(eqvar)])))
                 generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
             end
+            # Generate extrapolation eqs
+            generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
 
             # Set invalid corner points to zero
-            generate_corner_eqs!(bceqs, s, interiormap, pde)
+            generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
 
             # Generate the equations for the interior points
             pdeeqs = discretize_equation(pde, interiormap.I[pde], eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap)
@@ -140,7 +145,15 @@ function discretize_equation(pde, interior, eqvar, depvars, s, derivweights, ind
     return vec(map(interior) do II
         boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
         rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
-        substitute(pde.lhs,rules) ~ substitute(pde.rhs,rules)
+        try
+            substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
+        catch e
+            println("A scheme has been incorrectly applied to the following equation: $pde.\n")
+            println("The following rules were constructed at index $II:")
+            display(rules)
+            rethrow(e)
+        end
+
     end)
 end
 

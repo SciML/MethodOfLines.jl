@@ -4,6 +4,7 @@ pages = [
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
     "Grid and Solution Retrieval" => "get_grid.md",
     "Boundary Conditions" => "boundary_conditions.md",
+    "Advection Schemes" => "advection_schemes.md",
     "Non-Uniform Rectilinear Grids" => "nonuniform.md",
     "Curvilinear Grids" => "curvilinear_grids.md",
     "How it Works" => "howitworks.md",

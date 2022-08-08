@@ -29,7 +29,7 @@ function CompleteCenteredDifference(derivative_order::Int,
                                                                                         x0,
                                                                                         left_boundary_x))
                                                               for x0 in L_boundary_deriv_spots]
-    low_boundary_coefs = convert(SVector{boundary_point_count}, vcat(_low_boundary_coefs))
+    low_boundary_coefs = convert(SVector{boundary_point_count}, _low_boundary_coefs)
 
     # _high_boundary_coefs    = SVector{boundary_stencil_length, T}[convert(SVector{boundary_stencil_length, T}, (1/dx^derivative_order) * calculate_weights(derivative_order, oneunit(T)*x0, reverse(right_boundary_x))) for x0 in R_boundary_deriv_spots]
     high_boundary_coefs = convert(SVector{boundary_point_count},
@@ -58,12 +58,10 @@ function CompleteCenteredDifference(derivative_order::Int,
     stencil_length = derivative_order + approximation_order - 1 +
                      (derivative_order + approximation_order) % 2
     boundary_stencil_length = derivative_order + approximation_order
-    stencil_x = zeros(T, stencil_length)
     boundary_point_count = endpoint = div(stencil_length, 2)
     len = length(x)
     dx = [x[i + 1] - x[i] for i in 1:(length(x) - 1)]
     interior_x = (boundary_point_count + 1):(len - boundary_point_count)
-    dummy_x = (-div(stencil_length, 2)):(div(stencil_length, 2) - 1)
     low_boundary_x = [zero(T); cumsum(dx[1:(boundary_stencil_length - 1)])]
     high_boundary_x = cumsum(dx[(end - boundary_stencil_length + 1):end])
     # Because it's a N x (N+2) operator, the last stencil on the sides are the [b,0,x,x,x,x] stencils, not the [0,x,x,x,x,x] stencils, since we're never solving for the derivative at the boundary point.

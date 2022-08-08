@@ -100,3 +100,4 @@ u(t, x_min, y) ~ u(t, x_max, y)
 
 v(t, x, y_max) ~ u(t, x_max, y)
 ```
+Please note that if you want to use a periodic condition on a dimension with WENO schemes, please use a periodic condition on all variables in that dimension.

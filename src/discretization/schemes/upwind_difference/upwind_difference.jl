@@ -66,7 +66,7 @@ function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, b, deri
     return dot(weights, ufunc(u, Itap, x))
 end
 
-@inline function upwind_difference(expr, d::Int, II::CartesianIndex, s::DiscreteSpace, b, depvars, derivweights, (j, x), u, central_ufunc, indexmap)
+function upwind_difference(expr, d::Int, II::CartesianIndex, s::DiscreteSpace, b, depvars, derivweights, (j, x), u, central_ufunc, indexmap)
     # TODO: Allow derivatives in expr
     expr = substitute(expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
     IfElse.ifelse(expr > 0,

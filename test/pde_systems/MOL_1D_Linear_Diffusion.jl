@@ -367,7 +367,7 @@ end
         prob = discretize(pdesys, disc)
 
         # Solve ODE problem
-        sol = solve(prob, Tsit5(), saveat=0.1)
+        sol = solve(prob, Rodas4(), saveat=0.1)
         x = (-1:dx:1)
         if disc.grid_align == center_align
             x = x[2:end-1]
@@ -469,7 +469,7 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Rodas4(), saveat=0.1)
 
     r = (0:dr:1)[2:end-1]
     t = sol.t
