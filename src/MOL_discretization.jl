@@ -48,7 +48,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
     # Create a map of each variable to their boundary conditions and get the initial condition
-    boundarymap, u0 = parse_bcs(pdesys.bcs, s, depvar_ops, tspan, bcorders)
+    boundarymap, u0, dtu0 = parse_bcs(pdesys.bcs, s, depvar_ops, tspan, bcorders)
     # Generate a map of each variable to whether it is periodic in a given direction
     pmap = PeriodicMap(boundarymap, s)
     # Get the interior and variable to solve for each equation
@@ -109,12 +109,14 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     end
 
     u0 = !isempty(u0) ? reduce(vcat, u0) : u0
+    dtu0 = !isempty(dtu0) ? reduce(vcat, dtu0) : dtu0
+
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
     alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))
 
     # Finalize
-    defaults = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps)
+    defaults = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? vcat(u0, dtu0) : vcat(u0, dtu0, pdesys.ps)
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
     # Combine PDE equations and BC equations
     try
@@ -129,7 +131,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
             sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
-            return sys, tspan
+            return ode_order_lowering(sys), tspan
         end
     catch e
         println("The system of equations is:")

@@ -134,13 +134,16 @@ function parse_bcs(bcs, s::DiscreteSpace, depvar_ops, tspan, orders)
 
     if t === nothing
         initmaps = s.ū
+        dtinitmaps = []
     else
         initmaps = substitute.(s.ū,[t=>tspan[1]])
+        dtinitmaps = Differential(t).(initmaps)
     end
 
     # Create some rules to match which bundary/variable a bc concerns
     # * Assume that the term of the condition is applied additively and has no multiplier/divisor/power etc.
     u0 = []
+    dtu0 = []
     bceqs = []
     ## BC matching rules, returns the variable and parameter the bc concerns
 
@@ -156,15 +159,26 @@ function parse_bcs(bcs, s::DiscreteSpace, depvar_ops, tspan, orders)
 
         depvars = depvar.(collect(union(depvarslhs, get_depvars(bc.rhs, depvar_ops))), (s,))
         if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
-            if t !== nothing && ((operation(bc.lhs) isa Sym) | (operation(bc.lhs) isa Term)) && !any(x -> isequal(x, t.val), arguments(bc.lhs))
-                # initial condition
-                # * Assume that the initial condition is not in terms of the initial derivative i.e. equation is first order in time
-                initindex = findfirst(isequal(bc.lhs), initmaps)
-                if initindex !== nothing
-                    #@show bcdepvar, bc, depvar(bcdepvar, s)
-                    args = params(depvar(bcdepvar, s), s)
-                    indexmap = Dict([args[i]=>i for i in 1:length(args)])
-                    push!(u0,vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,),valmaps(s, depvar(bcdepvar,s), depvars, indexmap))))
+            # Check if initial condition/derivative
+            is_u0 = (operation(bc.lhs) isa Sym) | (operation(bc.lhs) isa Term) && !any(x -> isequal(x, t.val), arguments(bc.lhs))
+            is_dtu0 = (operation(bc.lhs) isa Differential) && !any(x -> isequal(x, t.val), arguments(arguments(bc.lhs)))
+            if t !== nothing && (is_u0 | is_dtu0)
+                if is_u0
+                    # initial condition
+                    initindex = findfirst(isequal(bc.lhs), initmaps)
+                    if initindex !== nothing
+                        args = params(depvar(bcdepvar, s), s)
+                        indexmap = Dict([args[i] => i for i in 1:length(args)])
+                        push!(u0, vec(s.discvars[s.ū[initindex]] .=> substitute.((bc.rhs,), valmaps(s, depvar(bcdepvar, s), depvars, indexmap))))
+                    end
+                elseif is_dtu0
+                    # initial derivative
+                    initindex = findfirst(isequal(bc.lhs), dtinitmaps)
+                    if initindex !== nothing
+                        args = params(depvar(bcdepvar, s), s)
+                        indexmap = Dict([args[i] => i for i in 1:length(args)])
+                        push!(dtu0, vec(Differential(t).(s.discvars[s.ū[initindex]]) .=> substitute.((bc.rhs,), valmaps(s, depvar(bcdepvar, s), depvars, indexmap))))
+                    end
                 end
             else
                 # Split out additive terms
@@ -208,5 +222,5 @@ function parse_bcs(bcs, s::DiscreteSpace, depvar_ops, tspan, orders)
             end
         end
     end
-    return boundarymap, u0
+    return boundarymap, u0, dtu0
 end
