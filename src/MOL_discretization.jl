@@ -110,7 +110,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
     u0 = !isempty(u0) ? reduce(vcat, u0) : u0
     dtu0 = !isempty(dtu0) ? reduce(vcat, dtu0) : dtu0
-
+    Main.xx[] = u0, dtu0
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
     alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))
@@ -131,7 +131,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
             sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
-            return ode_order_lowering(sys), tspan
+            return sys, tspan
         end
     catch e
         println("The system of equations is:")
