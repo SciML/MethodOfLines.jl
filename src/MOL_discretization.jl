@@ -110,7 +110,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
     u0 = !isempty(u0) ? reduce(vcat, u0) : u0
     dtu0 = !isempty(dtu0) ? reduce(vcat, dtu0) : dtu0
-    Main.xx[] = u0, dtu0
+
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
     alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))
@@ -162,11 +162,11 @@ end
 function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
-        simpsys = structural_simplify(sys)
+        sys = structural_simplify(sys)
         if tspan === nothing
-            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
+            return prob = NonlinearProblem(sys, ones(length(sys.states)); discretization.kwargs...)
         else
-            return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
+            return prob = ODEProblem(sys, Pair[], tspan; discretization.kwargs...)
         end
     catch e
         error_analysis(sys, e)
