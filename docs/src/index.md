@@ -1,4 +1,4 @@
-# ["MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning"] (@id index)
+# [MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning] (@id index)
 
 [MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl)
 is a Julia package for automated finite difference discretization
