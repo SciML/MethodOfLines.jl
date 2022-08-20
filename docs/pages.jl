@@ -1,6 +1,13 @@
 pages = [
-    "MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning" => "index.md",
-    "Tutorials" => ["tutorials/brusselator.md", "tutorials/heat.md", "tutorials/params.md", "tutorials/heatss.md", "tutorials/sispde.md", "tutorials/icbc_sampled.md"],
+    "index.md",
+    "Tutorials" => [
+        "tutorials/brusselator.md",
+        "tutorials/heat.md",
+        "tutorials/params.md",
+        "tutorials/heatss.md",
+        "tutorials/sispde.md",
+        "tutorials/icbc_sampled.md",
+    ],
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
     "Grid and Solution Retrieval" => "get_grid.md",
     "Boundary Conditions" => "boundary_conditions.md",
@@ -10,7 +17,7 @@ pages = [
     "How it Works" => "howitworks.md",
     "Notes for Developers: Implement a Scheme" => "devnotes.md",
     "Generated Examples" => ["generated/bruss_code.md", "generated/bruss_ode_eqs.md"],
-    "API Reference" => ["api/discretization.md", "api/utils.md"]
+    "API Reference" => ["api/discretization.md", "api/utils.md"],
 
     # "Tutorial: Burgers" => "tutorials/burgers.md",
     # "Tutorial: 1D Linear Diffusion" => "tutorials/1d_linear_diffusion.md",

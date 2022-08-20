@@ -1,4 +1,4 @@
-# [MethodOfLines.jl] (@id index)
+# ["MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning"] (@id index)
 
 [MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl)
 is a Julia package for automated finite difference discretization
@@ -29,6 +29,34 @@ Boundary conditions include, but are not limited to:
 
 At the moment the centered difference, upwind difference, nonlinear laplacian and spherical laplacian schemes are implemented. If you know of a scheme with better stability or accuracy in any specific case, please post an issue with a link to a paper.
 
+## Installation
+
+Assuming that you already have Julia correctly installed, it suffices to import
+Optimization.jl in the standard way:
+
+```julia
+import Pkg
+Pkg.add("MethodOfLines")
+```
+The packages relevant to the core functionality of Optimization.jl will be imported
+accordingly and, in most cases, you do not have to worry about the manual
+installation of dependencies. However, you will need to add the specific optimizer
+packages.
+
+## Contributing
+
+- Please refer to the
+  [SciML ColPrac: Contributor's Guide on Collaborative Practices for Community Packages](https://github.com/SciML/ColPrac/blob/master/README.md)
+  for guidance on PRs, issues, and other matters relating to contributing to SciML.
+- See the [SciML Style Guide](https://github.com/SciML/SciMLStyle) for common coding practices and other style decisions.
+- There are a few community forums:
+    - The #diffeq-bridged and #sciml-bridged channels in the
+      [Julia Slack](https://julialang.org/slack/)
+    - The #diffeq-bridged and #sciml-bridged channels in the
+      [Julia Zulip](https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged)
+    - On the [Julia Discourse forums](https://discourse.julialang.org)
+    - See also [SciML Community page](https://sciml.ai/community/)
+
 ## [Known Limitations] (@id limitations)
 
 At the moment the package is able to discretize almost any system, with some assumptions listed below
@@ -43,10 +71,4 @@ At the moment the package is able to discretize almost any system, with some ass
 - That initial conditions are of the form `u(...) ~ ...`, and don't reference the initial time derivative.
 - That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))` is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product rule and use the linearity of the derivative operator, or define a new auxiliary dependant variable by adding an equation for it like `eqs = [Differential(x)(w(t,x))~ ... , w(t,x) ~ v(t,x)*u(t,x)]`, along with appropriate BCs/ICs. An exception to this is if the differential is a nonlinear or spherical laplacian, in which case only the innermost argument should be wrapped.
 - Note that the above also applies to mixed derivatives, please wrap the inner derivative.
-- That odd order derivatives do not multiply or divide each other. A workaround is to wrap all but one derivative per term in an auxiliary variable, such as `dxu(x, t) ~ Differential(x)(u(x, t))`.
-
-The performance hit from auxiliary variables should be negligable due to a structural simplification step.
-
-If any of these limitations are a problem for you please post an issue and we will prioritize removing them. If you discover a limitation that isn't listed here, pleae post an issue with example code.
-
-### If you have any usage questions or feature requests, please post an issue
+- That odd order derivatives do not multiply or divide each other. A workaround is to wrap all but one derivative per term in an auxiliary variable, such as `dxu(x, t) ~ Differential(x)(u(x, t))`. The performance hit from auxiliary variables should be negligable due to a structural simplification step.
