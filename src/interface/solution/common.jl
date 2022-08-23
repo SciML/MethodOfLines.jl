@@ -33,8 +33,8 @@ end
 
 Base.@propagate_inbounds function Base.getindex(A::PDESolution{T,N,S,D}, sym,
     args...) where {T,N,S,D<:MOLMetadata}
-    if issymbollike(sym)
-        i = sym_to_index(sym, A.original_sol)
+    if SciMLBase.issymbollike(sym)
+        i = SciMLBase.sym_to_index(sym, A.original_sol)
     else
         i = sym
     end
@@ -42,20 +42,20 @@ Base.@propagate_inbounds function Base.getindex(A::PDESolution{T,N,S,D}, sym,
     iv = nothing
     dv = nothing
     if i === nothing
-        iiv = sym_to_index(sym, A.ivs)
+        iiv = SciMLBase.sym_to_index(sym, A.ivs)
         if iiv !== nothing
             iv = A.ivs[iiv]
         end
-        idv = sym_to_index(sym, A.dvs)
+        idv = SciMLBase.sym_to_index(sym, A.dvs)
         if idv !== nothing
             dv = A.dvs[idv]
         end
-        if issymbollike(sym) && iv !== nothing && isequal(sym, iv)
+        if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
             A.ivdomains[iiv]
-        elseif issymbollike(sym) && dv !== nothing && isequal(sym, dv)
+        elseif SciMLBase.issymbollike(sym) && dv !== nothing && isequal(sym, dv)
             A.u[sym][args...]
         else
-            observed(A.original_sol, sym, args...)
+            SciMLBase.observed(A.original_sol, sym, args...)
         end
     elseif i isa Base.Integer || i isa AbstractRange || i isa AbstractVector{<:Base.Integer}
         A.original_sol[i, args...]

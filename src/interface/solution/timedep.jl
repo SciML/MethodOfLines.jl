@@ -11,12 +11,12 @@ function PDETimeSeriesSolution(sol::ODESolution{T}, metadata::MOLMetadata) where
     umap = Dict(map(discretespace.ū) do u
         let discu = discretespace.discvars[u]
             solu = map(CartesianIndices(discu)) do I
-                i = sym_to_index(discu[I], odesys)
+                i = SciMLBase.sym_to_index(discu[I], odesys)
                 # Handle Observed
                 if i !== nothing
                     sol.u[i]
                 else
-                    observed(sol, discu[I], :)
+                    SciMLBase.observed(sol, discu[I], :)
                 end
             end
             out = zeros(T, length(sol.t), size(discu)...)
@@ -29,7 +29,7 @@ function PDETimeSeriesSolution(sol::ODESolution{T}, metadata::MOLMetadata) where
     # Build Interpolations
     interp = build_interpolation(umap, ivs, ivgrid)
 
-    return PDETimeSeriesSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
+    return SciMLBase.PDETimeSeriesSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
         typeof(sol),typeof(sol.errors),typeof(sol.t),typeof(ivgrid),
         typeof(ivs),typeof(pdesys.dvs),typeof(sol.prob),typeof(sol.alg),
         typeof(interp)}(umap, sol, sol.errors, sol.t, ivgrid, ivs,
@@ -40,11 +40,11 @@ end
 
 Base.@propagate_inbounds function Base.getindex(A::PDETimeSeriesSolution{T,N,S,D},
     sym) where {T,N,S,D<:MOLMetadata}
-    if issymbollike(sym) || all(issymbollike, sym)
+    if SciMLBase.issymbollike(sym) || all(SciMLBase.issymbollike, sym)
         if sym isa AbstractArray
             return map(s -> A[s], collect(sym))
         end
-        i = sym_to_index(sym, A.original_sol)
+        i = SciMLBase.sym_to_index(sym, A.original_sol)
     else
         i = sym
     end
@@ -52,20 +52,20 @@ Base.@propagate_inbounds function Base.getindex(A::PDETimeSeriesSolution{T,N,S,D
     iv = nothing
     dv = nothing
     if i === nothing
-        iiv = sym_to_index(sym, A.ivs)
+        iiv = SciMLBase.sym_to_index(sym, A.ivs)
         if iiv !== nothing
             iv = A.ivs[iiv]
         end
-        idv = sym_to_index(sym, A.dvs)
+        idv = SciMLBase.sym_to_index(sym, A.dvs)
         if idv !== nothing
             dv = A.dvs[idv]
         end
-        if issymbollike(sym) && iv !== nothing && isequal(sym, iv)
+        if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
             A.ivdomain[iiv]
-        elseif issymbollike(sym) && dv !== nothing && isequal(sym, dv)
+        elseif SciMLBase.issymbollike(sym) && dv !== nothing && isequal(sym, dv)
             A.u[sym]
         else
-            observed(A.original_sol, sym, :)
+            SciMLBase.observed(A.original_sol, sym, :)
         end
     elseif i isa Base.Integer || i isa AbstractRange || i isa AbstractVector{<:Base.Integer}
         A.original_sol[i, :]
