@@ -22,25 +22,29 @@ A discretization algorithm.
 
 """
 struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
-    dxs
-    time
+    dxs::Any
+    time::Any
     approx_order::Int
-    advection_scheme
+    advection_scheme::Any
     grid_align::G
-    kwargs
+    kwargs::Any
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_scheme = UpwindScheme(), grid_align=CenterAlignedGrid(), upwind_order = nothing, kwargs...)
+function MOLFiniteDifference(dxs, time = nothing; approx_order = 2,
+                             advection_scheme = UpwindScheme(),
+                             grid_align = CenterAlignedGrid(), upwind_order = nothing,
+                             kwargs...)
     if upwind_order !== nothing
         @warn "`upwind_order` no longer does anything, and will be removed in a future release. See the docs for the current interface."
     end
     if approx_order % 2 != 0
         @warn "Discretization approx_order must be even, rounding up to $(approx_order+1)"
     end
-    @assert approx_order >= 1 "approx_order must be at least 1"
+    @assert approx_order>=1 "approx_order must be at least 1"
 
-    @assert (time isa Num) | (time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
+    @assert (time isa Num)|(time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
 
-    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order, advection_scheme, grid_align, kwargs)
+    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order,
+                                                   advection_scheme, grid_align, kwargs)
 end

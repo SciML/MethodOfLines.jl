@@ -8,50 +8,36 @@ function PDENoTimeSolution(sol::ODESolution{T}, metadata::MOLMetadata) where {T}
     ivgrid = (discretespace.grid[x] for x in ivs)
     # Reshape the solution to flat arrays
     umap = Dict(map(discretespace.ū) do u
-        let discu = discretespace.discvars[u]
-            solu = map(CartesianIndices(discu)) do I
-                i = sym_to_index(discu[I], odesys)
-                # Handle Observed
-                if i !== nothing
-                    sol.u[i]
-                else
-                    observed(sol, discu[I])
-                end
-            end
-            out = zeros(T, size(discu)...)
-            for I in CartesianIndices(discu)
-                out[I] .= solu[I]
-            end
-            u => out
-        end
-    end)
+                    let discu = discretespace.discvars[u]
+                        solu = map(CartesianIndices(discu)) do I
+                            i = sym_to_index(discu[I], odesys)
+                            # Handle Observed
+                            if i !== nothing
+                                sol.u[i]
+                            else
+                                observed(sol, discu[I])
+                            end
+                        end
+                        out = zeros(T, size(discu)...)
+                        for I in CartesianIndices(discu)
+                            out[I] .= solu[I]
+                        end
+                        u => out
+                    end
+                end)
     # Build Interpolations
     interp = build_interpolation(umap, ivs, ivgrid)
 
-    return PDENoTimeSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
-        typeof(sol),typeof(ivgrid),typeof(ivs),typeof(pdesys.dvs),typeof(sol.prob),typeof(sol.alg),
-        typeof(interp)}(umap, sol, ivgrid, ivs,
-        pdesys.dvs, metadata, sol.prob, sol.alg,
-        interp, sol.retcode)
+    return PDENoTimeSolution{T, length(discretespace.ū), typeof(umap), typeof(metadata),
+                             typeof(sol), typeof(ivgrid), typeof(ivs), typeof(pdesys.dvs),
+                             typeof(sol.prob), typeof(sol.alg),
+                             typeof(interp)}(umap, sol, ivgrid, ivs,
+                                             pdesys.dvs, metadata, sol.prob, sol.alg,
+                                             interp, sol.retcode)
 end
 
-struct PDENoTimeSolution{T,N,uType,Disc,Sol,domType,ivType,dvType,P, A,
-    IType} <: AbstractPDENoTimeSolution{T,N,uType,Disc}
-    u::uType
-    original_sol::Sol
-    ivdomain::domType
-    ivs::ivType
-    dvs::dvType
-    disc_data::Disc
-    prob::P
-    alg::A
-    interp::IType
-    retcode::Symbol
-end
-
-
-Base.@propagate_inbounds function Base.getindex(A::PDENoTimeSolution{T,N,S,D},
-    sym) where {T,N,S,D<:MOLMetadata}
+Base.@propagate_inbounds function Base.getindex(A::PDENoTimeSolution{T, N, S, D},
+                                                sym) where {T, N, S, D <: MOLMetadata}
     if issymbollike(sym) || all(issymbollike, sym)
         if sym isa AbstractArray
             return map(s -> A[s], collect(sym))

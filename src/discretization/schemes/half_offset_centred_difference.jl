@@ -6,7 +6,9 @@ TODO: consider refactoring this to harmonize with centered difference
 
 Each index corresponds to the weights and index for the derivative at index i+1/2
 """
-function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX}, II::CartesianIndex, s::DiscreteSpace, b, u, jx, len=0) where {T,N,Wind,DX<:Number}
+function get_half_offset_weights_and_stencil(D::DerivativeOperator{T, N, Wind, DX},
+                                             II::CartesianIndex, s::DiscreteSpace, b, u, jx,
+                                             len = 0) where {T, N, Wind, DX <: Number}
     j, x = jx
     len = len == 0 ? length(s, x) : len
     @assert II[j] != length(s, x)
@@ -18,22 +20,26 @@ function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX},
     if (II[j] <= D.boundary_point_count) & (b isa Val{false})
         weights = D.low_boundary_coefs[II[j]]
         offset = 1 - II[j]
-        Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
+        Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length - 1)]
     elseif (II[j] > (len - D.boundary_point_count)) & (b isa Val{false})
-        weights = D.high_boundary_coefs[len-II[j]]
+        weights = D.high_boundary_coefs[len - II[j]]
         offset = len - II[j]
-        Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):0]
+        Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):0]
     else
         weights = D.stencil_coefs
-        Itap = [wrapperiodic(II + i * I1, s, b, u, jx) for i in (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
+        Itap = [wrapperiodic(II + i * I1, s, b, u, jx)
+                for i in (1 - div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
     end
 
     return (weights, Itap)
 end
 
-function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX}, II::CartesianIndex, s::DiscreteSpace, b, u, jx, len=0) where {T,N,Wind,DX<:AbstractVector}
+function get_half_offset_weights_and_stencil(D::DerivativeOperator{T, N, Wind, DX},
+                                             II::CartesianIndex, s::DiscreteSpace, b, u, jx,
+                                             len = 0) where {T, N, Wind,
+                                                             DX <: AbstractVector}
     j, x = jx
-    @assert b isa Val{false} "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
+    @assert bisaVal{false} "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     len = len == 0 ? length(s, x) : len
     @assert II[j] != length(s, x)
 
@@ -44,14 +50,15 @@ function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX},
     if (II[j] <= D.boundary_point_count)
         weights = D.low_boundary_coefs[II[j]]
         offset = 1 - II[j]
-        Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
+        Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length - 1)]
     elseif (II[j] > (len - D.boundary_point_count))
-        weights = D.high_boundary_coefs[len-II[j]]
+        weights = D.high_boundary_coefs[len - II[j]]
         offset = len - II[j]
-        Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):0]
+        Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):0]
     else
-        weights = D.stencil_coefs[II[j]-D.boundary_point_count]
-        Itap = [II + i * I1 for i in (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
+        weights = D.stencil_coefs[II[j] - D.boundary_point_count]
+        Itap = [II + i * I1
+                for i in (1 - div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
     end
 
     return (weights, Itap)

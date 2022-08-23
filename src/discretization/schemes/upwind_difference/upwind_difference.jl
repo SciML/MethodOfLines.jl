@@ -78,19 +78,30 @@ end
     wind_ufunc(v, I, x) = s.discvars[v][I]
     # for all independent variables and dependant variables
     rules = vcat(#Catch multiplication
-        reduce(vcat, [reduce(vcat, [[@rule *(~~a, $(Differential(x)^d)(u), ~~b) => upwind_difference(*(~a..., ~b...), d, Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], depvars, derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap) for d in (
-            let orders = derivweights.orders[x]
-                orders[isodd.(orders)]
-            end
-        )] for x in params(u, s)]) for u in depvars]),
+                reduce(vcat,
+                    [reduce(vcat,
+                            [[@rule *(~~a, $(Differential(x)^d)(u), ~~b) =>
+                                    upwind_difference(*(~a..., ~b...), d, Idx(II, s, u, indexmap), s,
+                                                      pmap.map[operation(u)][x], depvars, derivweights,
+                                                      (x2i(s, u, x), x), u, wind_ufunc, indexmap)
+                              for d in (let orders = derivweights.orders[x]
+                                            orders[isodd.(orders)]
+                                        end)]
+                             for x in params(u, s)])
+                        for u in depvars]),
 
-        #Catch division and multiplication, see issue #1
-        reduce(vcat, [reduce(vcat, [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(*(~a..., ~b...) / ~c, d, Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], depvars, derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap) for d in (
-            let orders = derivweights.orders[x]
-                orders[isodd.(orders)]
-            end
-        )] for x in params(u, s)]) for u in depvars])
-    )
+                #Catch division and multiplication, see issue #1
+                reduce(vcat,
+                    [reduce(vcat,
+                            [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) =>
+                                    upwind_difference(*(~a..., ~b...) / ~c, d, Idx(II, s, u, indexmap),
+                                                    s, pmap.map[operation(u)][x], depvars, derivweights,
+                                                    (x2i(s, u, x), x), u, wind_ufunc, indexmap)
+                                for d in (let orders = derivweights.orders[x]
+                                            orders[isodd.(orders)]
+                                        end)]
+                                for x in params(u, s)])
+                        for u in depvars]))
 
     wind_rules = []
 
@@ -111,7 +122,10 @@ end
                 # for all odd orders
                 if length(oddorders) > 0
                     map(oddorders) do d
-                        (Differential(x)^d)(u) => upwind_difference(d, Idx(II, s, u, indexmap), s, pmap.map[operation(u)][x], derivweights, (j, x), u, wind_ufunc, true)
+                        (Differential(x)^d)(u) =>
+                            upwind_difference(d, Idx(II, s, u, indexmap), s,
+                                              pmap.map[operation(u)][x], derivweights,
+                                              (j, x), u, wind_ufunc, true)
                     end
                 else
                     []
