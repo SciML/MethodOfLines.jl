@@ -1,5 +1,5 @@
 
-function (sol::PDESolution{T,N,S,D})(args...;
+function (sol::SciMLBase.PDESolution{T,N,S,D})(args...;
     dv=nothing) where {T,N,S,D<:MOLMetadata}
     # Colon reconstructs on gridpoints
     args = map(enumerate(args)) do (i, arg)
@@ -31,7 +31,7 @@ function (sol::PDESolution{T,N,S,D})(args...;
 end
 
 
-Base.@propagate_inbounds function Base.getindex(A::PDESolution{T,N,S,D}, sym,
+Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D}, sym,
     args...) where {T,N,S,D<:MOLMetadata}
     if SciMLBase.issymbollike(sym)
         i = SciMLBase.sym_to_index(sym, A.original_sol)

@@ -1,5 +1,5 @@
 
-function PDETimeSeriesSolution(sol::ODESolution{T}, metadata::MOLMetadata) where {T}
+function PDETimeSeriesSolution(sol::SciMLBase.ODESolution{T}, metadata::MOLMetadata) where {T}
     odesys = sol.prob.f.sys
 
     pdesys = metadata.pdesys
@@ -38,7 +38,7 @@ function PDETimeSeriesSolution(sol::ODESolution{T}, metadata::MOLMetadata) where
         sol.retcode)
 end
 
-Base.@propagate_inbounds function Base.getindex(A::PDETimeSeriesSolution{T,N,S,D},
+Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDETimeSeriesSolution{T,N,S,D},
     sym) where {T,N,S,D<:MOLMetadata}
     if SciMLBase.issymbollike(sym) || all(SciMLBase.issymbollike, sym)
         if sym isa AbstractArray

@@ -20,4 +20,4 @@ function MOLMetadata(discretespace, disc, pdesys)
         disc, pdesys)
 end
 
-PDESolution(sol, metadata::MOLMetadata) = metadata.discretespace.time isa Nothing ? PDENoTimeSolution(sol, metadata) : PDETimeSeriesSolution(sol, metadata)
+SciMLBase.PDESolution(sol, metadata::MOLMetadata) = metadata.discretespace.time isa Nothing ? PDENoTimeSolution(sol, metadata) : PDETimeSeriesSolution(sol, metadata)
