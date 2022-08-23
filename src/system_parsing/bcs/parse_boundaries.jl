@@ -160,9 +160,11 @@ function parse_bcs(bcs, s::DiscreteSpace, depvar_ops, tspan, orders)
         depvars = depvar.(collect(union(depvarslhs, get_depvars(bc.rhs, depvar_ops))), (s,))
         if any(u -> isequal(operation(u), operation(bcdepvar)), s.ū)
             # Check if initial condition/derivative
-            @show bc, typeof(bc.lhs)
-            is_u0 = (operation(bc.lhs) isa Sym) | (operation(bc.lhs) isa Term) && !any(x -> isequal(x, t.val), arguments(bc.lhs))
-            is_dtu0 = (operation(bc.lhs) isa Differential) && !any(x -> isequal(x, t.val), arguments(first(arguments(bc.lhs))))
+            local is_u0, is_dtu0
+            if t !== nothing
+                is_u0 = (operation(bc.lhs) isa Sym) | (operation(bc.lhs) isa Term) && !any(x -> isequal(x, t.val), arguments(bc.lhs))
+                is_dtu0 = (operation(bc.lhs) isa Differential) && !any(x -> isequal(x, t.val), arguments(first(arguments(bc.lhs))))
+            end
             if t !== nothing && (is_u0 | is_dtu0)
                 if is_u0
                     # initial condition
