@@ -19,6 +19,12 @@ include("discretization/discretize_vars.jl")
 include("MOL_utils.jl")
 include("system_parsing/interior_map.jl")
 
+include("interface/solution/MOLMetadata.jl")
+include("interface/solution/solution_utils.jl")
+include("interface/solution/common.jl")
+include("interface/solution/timedep.jl")
+include("interface/solution/timeindep.jl")
+
 # Weight calculation
 include("discretization/schemes/fornberg_calculate_weights.jl")
 include("discretization/derivative_operator.jl")

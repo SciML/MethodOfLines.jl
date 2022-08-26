@@ -1,5 +1,5 @@
 """
-$(TYPEDEF)
+`MOLMetadata`
 
 A type used to store data about a PDESystem, and how it was discretized by MethodOfLines.jl.
 Used to unpack the solution.
