@@ -20,4 +20,6 @@ function MOLMetadata(discretespace, disc, pdesys)
         disc, pdesys)
 end
 
-SciMLBase.PDESolution(sol, metadata::MOLMetadata) = metadata.discretespace.time isa Nothing ? PDENoTimeSolution(sol, metadata) : PDETimeSeriesSolution(sol, metadata)
+SciMLBase.wrap_sol(sol, metadata::MOLMetadata) = metadata.discretespace.time isa Nothing ? PDENoTimeSolution(sol, metadata) : PDETimeSeriesSolution(sol, metadata)
+
+#! Which package for methods, dispatch problem
