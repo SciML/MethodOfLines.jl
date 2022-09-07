@@ -81,7 +81,23 @@ end
 
 # Must be defined due to ambiguity for sol[1]
 Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDETimeSeriesSolution{T,N,S,D},
-    i::Union{Colon, Int, <:AbstractArray}) where {T,N,S,D<:MOLMetadata}
+    i::Int) where {T,N,S,D<:MOLMetadata}
+    _getindex(A, i)
+end
+
+Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDETimeSeriesSolution{T,N,S,D},
+    i::Colon) where {T,N,S,D<:MOLMetadata}
+    _getindex(A, i)
+end
+
+Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDETimeSeriesSolution{T,N,S,D},
+    i::AbstractArray) where {T,N,S,D<:MOLMetadata}
+    _getindex(A, i)
+end
+
+# Must be defined due to ambiguity for sol[1]
+Base.@propagate_inbounds function _getindex(A::SciMLBase.PDETimeSeriesSolution{T,N,S,D},
+    i::Union{Colon,Int,<:AbstractArray}) where {T,N,S,D<:MOLMetadata}
     if i isa Base.Integer || i isa AbstractRange || i isa AbstractVector{<:Base.Integer}
         A.original_sol[i, :]
     else
