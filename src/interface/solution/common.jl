@@ -30,7 +30,7 @@ end
 Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D}, sym,
     args...) where {T,N,S,D<:MOLMetadata}
     if SciMLBase.issymbollike(sym)
-        i = SciMLBase.sym_to_index(sym, A.prob.f.sys.states)
+        i = sym_to_index(sym, A.prob.f.sys.states)
     else
         i = sym
     end
@@ -38,11 +38,11 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     iv = nothing
     dv = nothing
     if i === nothing
-        iiv = SciMLBase.sym_to_index(sym, A.ivs)
+        iiv = sym_to_index(sym, A.ivs)
         if iiv !== nothing
             iv = A.ivs[iiv]
         end
-        idv = SciMLBase.sym_to_index(sym, A.dvs)
+        idv = sym_to_index(sym, A.dvs)
         if idv !== nothing
             dv = A.dvs[idv]
         end
