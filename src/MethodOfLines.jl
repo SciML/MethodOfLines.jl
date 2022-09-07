@@ -8,7 +8,10 @@ using SymbolicUtils, Symbolics
 using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays
+using Interpolations
 import DomainSets
+
+import SciMLBase.wrap_sol
 
 # Interface
 include("interface/grid_types.jl")

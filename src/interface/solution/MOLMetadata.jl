@@ -9,17 +9,25 @@ Used to unpack the solution.
           MOLFiniteDifference object.
 - `pdesys`: a PDESystem object, used in the discretization.
 """
-struct MOLMetadata{Ds,Disc,PDE} <: SciMLBase.AbstractDiscretizationMetadata
+struct MOLMetadata{hasTime, Ds,Disc,PDE} <: SciMLBase.AbstractDiscretizationMetadata{hasTime}
     discretespace::Ds
     disc::Disc
     pdesys::PDE
+    function MOLMetadata(discretespace, disc, pdesys)
+        if discretespace.time isa Nothing
+            hasTime = Val(false)
+        else
+            hasTime = Val(true)
+        end
+        return new{hasTime, typeof(discretespace), typeof(disc), typeof(pdesys)}(discretespace,
+                                                                                 disc, pdesys)
+    end
 end
-
-function MOLMetadata(discretespace, disc, pdesys)
-    return MOLMetadata{typeof(discretespace),typeof(disc),typeof(pdesys)}(discretespace,
-        disc, pdesys)
-end
-
-SciMLBase.wrap_sol(sol, metadata::MOLMetadata) = metadata.discretespace.time isa Nothing ? PDENoTimeSolution(sol, metadata) : PDETimeSeriesSolution(sol, metadata)
 
 #! Which package for methods, dispatch problem
+
+#! where to intercept and wrap
+
+#! prob.f.sys
+
+#! 2d ODE nudge

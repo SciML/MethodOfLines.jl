@@ -28,7 +28,11 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
         @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin
         include("pde_systems/burgers_eq.jl") end
     end
+
     if GROUP == "All" || GROUP == "Interface"
+        @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
+            include("components/solution_interface.jl")
+        end
         @time @safetestset "MOLFiniteDifference Interface" begin include("pde_systems/MOLtest.jl") end
     end
 

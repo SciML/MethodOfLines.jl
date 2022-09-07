@@ -1,16 +1,16 @@
-function PDENoTimeSolution(sol::SciMLBase.ODESolution{T}, metadata::MOLMetadata) where {T}
+function SciMLBase.PDENoTimeSolution(sol::SciMLBase.ODESolution{T}, metadata::MOLMetadata) where {T}
     odesys = sol.prob.f.sys
 
     pdesys = metadata.pdesys
     discretespace = metadata.discretespace
 
     ivs = [discretespace.x̄...]
-    ivgrid = (discretespace.grid[x] for x in ivs)
+    ivgrid = ((discretespace.grid[x] for x in ivs)...,)
     # Reshape the solution to flat arrays
     umap = Dict(map(discretespace.ū) do u
         let discu = discretespace.discvars[u]
             solu = map(CartesianIndices(discu)) do I
-                i = SciMLBase.sym_to_index(discu[I], odesys)
+                i = sym_to_index(discu[I], odesys.states)
                 # Handle Observed
                 if i !== nothing
                     sol.u[i]
@@ -41,7 +41,7 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDENoTimeSolution{T
         if sym isa AbstractArray
             return map(s -> A[s], collect(sym))
         end
-        i = SciMLBase.sym_to_index(sym, A.original_sol)
+        i = sym_to_index(sym, A.prob.f.sys.states)
     else
         i = sym
     end
@@ -49,11 +49,11 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDENoTimeSolution{T
     iv = nothing
     dv = nothing
     if i === nothing
-        iiv = SciMLBase.sym_to_index(sym, A.ivs)
+        iiv = sym_to_index(sym, A.ivs)
         if iiv !== nothing
             iv = A.ivs[iiv]
         end
-        idv = SciMLBase.sym_to_index(sym, A.dvs)
+        idv = sym_to_index(sym, A.dvs)
         if idv !== nothing
             dv = A.dvs[idv]
         end

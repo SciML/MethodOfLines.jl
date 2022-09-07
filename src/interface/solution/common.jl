@@ -11,16 +11,12 @@ function (sol::SciMLBase.PDESolution{T,N,S,D})(args...;
     end
     # If no dv is given, return interpolations for every dv
     if dv === nothing
-        @assert length(args) == length(sol.ivs) "Not enough arguments for the number of
-                                                     independent variables (including time),
-                                                     got $(length(args)) expected
-                                                     $(length(sol.ivs) + 1)."
+        @assert length(args) == length(sol.ivs) "Not enough arguments for the number of independent variables  including time), got $(length(args)) expected $(length(sol.ivs) + 1)."
         return map(dvs) do dv
             ivs = arguments(dv)
             is = map(ivs) do iv
-                i = findfirst(iv, sol.ivs)
-                @assert i !== nothing "Independent variable $(iv) in
-                                       dependent variable $(dv) not found in the solution."
+                i = findfirst(isequal(arg), map(iv -> iv.val, sol.ivs))
+                @assert i !== nothing "Independent variable $(iv) in dependent variable $(dv) not found in the solution."
                 i
             end
 
@@ -34,7 +30,7 @@ end
 Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D}, sym,
     args...) where {T,N,S,D<:MOLMetadata}
     if SciMLBase.issymbollike(sym)
-        i = SciMLBase.sym_to_index(sym, A.original_sol)
+        i = SciMLBase.sym_to_index(sym, A.prob.f.sys.states)
     else
         i = sym
     end
