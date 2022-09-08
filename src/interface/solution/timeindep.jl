@@ -1,4 +1,4 @@
-function SciMLBase.PDENoTimeSolution(sol::SciMLBase.ODESolution{T}, metadata::MOLMetadata) where {T}
+function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metadata::MOLMetadata) where {T}
     odesys = sol.prob.f.sys
 
     pdesys = metadata.pdesys
@@ -20,9 +20,9 @@ function SciMLBase.PDENoTimeSolution(sol::SciMLBase.ODESolution{T}, metadata::MO
             end
             out = zeros(T, size(discu)...)
             for I in CartesianIndices(discu)
-                out[I] .= solu[I]
+                out[I] = solu[I]
             end
-            u => out
+            Num(u) => out
         end
     end)
     # Build Interpolations
@@ -37,36 +37,21 @@ end
 
 Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDENoTimeSolution{T,N,S,D},
     sym) where {T,N,S,D<:MOLMetadata}
-    if SciMLBase.issymbollike(sym) || all(SciMLBase.issymbollike, sym)
-        if sym isa AbstractArray
-            return map(s -> A[s], collect(sym))
-        end
-        i = sym_to_index(sym, A.prob.f.sys.states)
-    else
-        i = sym
-    end
-
     iv = nothing
     dv = nothing
-    if i === nothing
-        iiv = sym_to_index(sym, A.ivs)
-        if iiv !== nothing
-            iv = A.ivs[iiv]
-        end
-        idv = sym_to_index(sym, A.dvs)
-        if idv !== nothing
-            dv = A.dvs[idv]
-        end
-        if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
-            A.ivdomain[iiv]
-        elseif SciMLBase.issymbollike(sym) && dv !== nothing && isequal(sym, dv)
-            A.u[sym]
-        else
-            SciMLBase.observed(A.original_sol, sym)
-        end
-    elseif i isa Base.Integer || i isa AbstractRange || i isa AbstractVector{<:Base.Integer}
-        A.original_sol[i]
+    iiv = sym_to_index(sym, A.ivs)
+    if iiv !== nothing
+        iv = A.ivs[iiv]
+    end
+    idv = sym_to_index(sym, A.dvs)
+    if idv !== nothing
+        dv = A.dvs[idv]
+    end
+    if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
+        A.ivdomain[iiv]
+    elseif SciMLBase.issymbollike(sym) && dv !== nothing && isequal(sym, dv)
+        A.u[sym]
     else
-        error("Invalid indexing of solution")
+        error("Invalid indexing of solution. If you want to index a particular state in the solution, use sol.original_sol which contains the original NonlinearSolution.")
     end
 end

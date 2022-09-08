@@ -1,9 +1,9 @@
 # 1d wave equation
 # Packages and inclusions
-using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, NonlinearSolve, DomainSets
 using ModelingToolkit: Differential
 
-@testset "Test 00: Test solution interface, time dependent" begin
+@testset "Test 00a: Test solution interface, time dependent" begin
     # Parameters, variables, and derivatives
     @parameters t x y
     @variables u(..)
@@ -58,25 +58,16 @@ using ModelingToolkit: Differential
 
     @test sol[u(t, x, y)] == traditional_sol
 
-    @test sol[1] isa Float64
-    @test sol[:] isa Vector{Float64}
-    @test sol[1:2] isa Array{Float64,1}
-    @test sol[[1, 2, 3]] isa Array{Float64,1}
-    @test sol(pi / 2, pi / 2, pi / 2) isa Float64
-    @test sol(pi / 2, pi / 2, :) isa Vector{Float64}
-    @test sol(pi / 2, :, :) isa Matrix{Float64}
+    @test sol(pi / 2, pi / 2, pi / 2; dv = u(t, x, y)) isa Float64
+    @test sol(pi / 2, pi / 2, :) isa Vector{Vector{Float64}}
+    @test sol(pi / 2, :, :)[1] isa Matrix{Float64}
 
     @test sol[t] == sol.t
     @test (sol[x] == sol[y])
     @test (sol[y] isa StepRangeLen)
-
-    @variables u[1:9, 1:9](..)
-
-    @test sol[u[1, 2](t, x, y)] isa Float64
-    @test sol[u[5, 5](t, x, y)] isa Float64
 end
 
-@testset "Test 00: Test solution interface, time independent" begin
+@testset "Test 00b: Test solution interface, time independent" begin
     @parameters x y
     @variables u(..)
     Dxx = Differential(x)^2
@@ -106,12 +97,12 @@ end
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
     grid = get_discrete(pdesys, discretization)
 
-    solu = sol.original_sol[grid[u(x, y)]]
+    solu = map(d -> sol.original_sol[d], grid[u(x, y)])
 
     @test sol[u(x, y)] == solu
 
-    @test sol(pi / 4, pi / 4) isa Float64
-    @test sol(pi / 4, :) isa Vector{Float64}
+    @test sol(pi / 4, pi / 4, dv = u(x, y)) isa Float64
+    @test sol(pi / 4, :)[1] isa Vector{Float64}
 
     @test (sol[x] == sol[y])
     @test (sol[y] isa StepRangeLen)
