@@ -55,7 +55,7 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, :] ≈ u atol = 0.1
 end
 
 @testset "Test 00a: Dt(u(t,x)) ~ Dx(u(t,x))" begin
@@ -108,7 +108,7 @@ end
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, :] ≈ u atol = 0.1
 end
 
 @testset "Test 00b: Dt(u(t,x)) - Dx(u(t,x)) ~ 0" begin
@@ -161,7 +161,7 @@ end
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, :] ≈ u atol = 0.1
 end
 
 @testset "Test 00c: Dt(u(t,x)) + Dx(u(t,x)) ~ 0" begin
@@ -215,7 +215,7 @@ end
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, :] ≈ u atol = 0.1
 end
 
 @testset "Test 01: Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.001" begin
@@ -270,8 +270,7 @@ end
     # savefig("plots/MOL_Linear_Convection_Test01.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
-
+    @test sol[u(t, x)][end, :] ≈ u atol = 0.1
 end
 
 @testset "Test 02: Dt(u(t,x)) ~ -v*Dx(u(t,x))" begin
@@ -343,7 +342,7 @@ end
     # end
     # gif(anim, "plots/MOL_Linear_Convection_Test02.gif", fps = 5)
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, :] ≈ u atol = 0.1
 end
 @test_broken begin #@testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
     # Parameters, variables, and derivatives
@@ -413,7 +412,7 @@ end
     # savefig("plots/MOL_Linear_Convection_Test03.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, :] ≈ u atol = 0.1
 end
 
 @testset "Test 04: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=0.999 + 0.001 * t * x " begin
@@ -487,7 +486,7 @@ end
 
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, :] ≈ u atol = 0.1
 end
 
 
@@ -562,5 +561,5 @@ end
 
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, :] ≈ u atol = 0.1
 end
