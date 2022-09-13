@@ -41,16 +41,16 @@ using OrdinaryDiffEq
 sol = solve(prob, Tsit5(), saveat=0.2)
 
 # Plot results and compare with exact solution
-grid = get_discrete(pdesys, discretization)
-discrete_x = grid[x]
+discrete_x = sol[x]
 discrete_t = sol[t]
+solu = sol[u(t, x)]
 
 using Plots
 plt = plot()
 
 for i in 1:length(discrete_t)
-    plot!(discrete_x, map(d -> sol[d][i], grid[u(t, x)]), label="Numerical, t=$(discrete_t[i])")
-    scatter!(discrete_x, u_exact(x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
+    plot!(discrete_x, solu[i, :], label="Numerical, t=$(discrete_t[i])")
+    scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
 end
 display(plt)
 savefig("plot.png")
@@ -96,16 +96,17 @@ using OrdinaryDiffEq
 sol = solve(prob, Tsit5(), saveat=0.2)
 
 # Plot results and compare with exact solution
-grid = get_discrete(pdesys, discretization)
-discrete_x = grid[x]
+discrete_x = sol[x]
 discrete_t = sol[t]
+
+solu = sol[u(t, x)]
 
 using Plots
 plt = plot()
 
 for i in 1:length(discrete_t)
-    plot!(discrete_x, map(d -> sol[d][i], grid[u(t, x)]), label="Numerical, t=$(discrete_t[i])")
-    scatter!(discrete_x, u_exact(x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
+    plot!(discrete_x, solu[i, :], label="Numerical, t=$(discrete_t[i])")
+    scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
 end
 display(plt)
 savefig("plot.png")
@@ -152,16 +153,17 @@ using OrdinaryDiffEq
 sol = solve(prob, Tsit5(), saveat=0.2)
 
 # Plot results and compare with exact solution
-grid = get_discrete(pdesys, discretization)
-discrete_x = grid[x]
+discrete_x = sol[x]
 discrete_t = sol[t]
+
+solu = sol[u(t, x)]
 
 using Plots
 plt = plot()
 
 for i in 1:length(discrete_t)
-    plot!(discrete_x, map(d -> sol[d][i], grid[u(t,x)]), label="Numerical, t=$(discrete_t[i])")
-    scatter!(discrete_x, u_exact(x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
+    plot!(discrete_x, solu[i, :], label="Numerical, t=$(discrete_t[i])")
+    scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
 end
 display(plt)
 savefig("plot.png")

@@ -33,12 +33,10 @@ discretization = MOLFiniteDifference([x => dx, y => dy], nothing, approx_order=2
 prob = discretize(pdesys, discretization)
 sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
-grid = get_discrete(pdesys, discretization)
-
-u_sol = map(d -> sol[d], grid[u(x, y)])
+u_sol = sol[u(x, y)]
 
 using Plots
 
-heatmap(grid[x], grid[y], u_sol, xlabel="x values", ylabel="y values",
+heatmap(sol[x], sol[y], u_sol, xlabel="x values", ylabel="y values",
         title="Steady State Heat Equation")
 ```
