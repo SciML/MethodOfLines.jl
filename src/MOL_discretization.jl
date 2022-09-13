@@ -185,6 +185,8 @@ function get_discrete(pdesys, discretization)
     allindvars = remove(collect(filter(x->!(x isa Number), reduce(union, filter(xs->(!isequal(xs, [t])), map(arguments, alldepvars))))), t)
     #@show allindvars, typeof.(allindvars)
 
+    @warn "`get_discrete` is deprecated, The solution is now automatically wrapped in a PDESolution object, which retrieves the shaped solution much faster than the previously recommended method. See the documentation for more information."
+
     interface_errors(alldepvars, allindvars, discretization)
     # @show alldepvars
     # @show allindvars
