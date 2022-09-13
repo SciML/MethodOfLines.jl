@@ -95,6 +95,7 @@ end
 
     prob = discretize(pdesys, discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
+
     grid = get_discrete(pdesys, discretization)
 
     solu = map(d -> sol.original_sol[d], grid[u(x, y)])

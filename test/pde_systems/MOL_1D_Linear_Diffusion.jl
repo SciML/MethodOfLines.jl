@@ -136,8 +136,6 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    grid = get_discrete(pdesys, discretization)
-
     solu = sol[u(t, x)]
     # Test
     n = size(solu, 2)

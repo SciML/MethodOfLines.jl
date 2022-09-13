@@ -40,7 +40,7 @@ end
     @named pdesys = PDESystem([eq], bcs, domains, [x], [u(x)])
     discretization = MOLFiniteDifference([x => dx], nothing, approx_order=2)
     prob = discretize(pdesys, discretization)
-    grid = get_discrete(pdesys, discretization)
+
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
     sol′ = sol[u(x)]
     @test sol′ ≈ ones(4)
