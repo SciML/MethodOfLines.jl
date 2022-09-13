@@ -26,6 +26,26 @@ function (sol::SciMLBase.PDESolution{T,N,S,D})(args...;
     return sol.interp[dv](args...)
 end
 
+Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D},
+    sym) where {T,N,S,D<:MOLMetadata}
+    iv = nothing
+    dv = nothing
+    iiv = sym_to_index(sym, A.ivs)
+    if iiv !== nothing
+        iv = A.ivs[iiv]
+    end
+    idv = sym_to_index(sym, A.dvs)
+    if idv !== nothing
+        dv = A.dvs[idv]
+    end
+    if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
+        A.ivdomain[iiv]
+    elseif SciMLBase.issymbollike(sym) && dv !== nothing && isequal(sym, dv)
+        A.u[sym]
+    else
+        error("Invalid indexing of solution. $sym not found in solution.")
+    end
+end
 
 Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D}, sym,
     args...) where {T,N,S,D<:MOLMetadata}
