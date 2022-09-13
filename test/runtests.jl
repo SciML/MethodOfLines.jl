@@ -29,12 +29,6 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
         include("pde_systems/burgers_eq.jl") end
     end
 
-    if GROUP == "All" || GROUP == "Interface"
-        @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
-            include("components/solution_interface.jl")
-        end
-        @time @safetestset "MOLFiniteDifference Interface" begin include("pde_systems/MOLtest.jl") end
-    end
 
     if GROUP == "All" || GROUP == "Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin include("pde_systems/MOL_1D_Linear_Diffusion.jl") end
@@ -76,8 +70,14 @@ const is_TRAVIS = haskey(ENV,"TRAVIS")
         @time @safetestset "MOLFiniteDifference Interface: 1D Partial DAE" begin include("pde_systems/MOL_1D_PDAE.jl") end
     end
 
-
     if GROUP == "All" || GROUP == "Brusselator"
         @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin include("pde_systems/brusselator_eq.jl") end
+    end
+
+    if GROUP == "All" || GROUP == "Interface"
+        @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
+            include("components/solution_interface.jl")
+        end
+        @time @safetestset "MOLFiniteDifference Interface" begin include("pde_systems/MOLtest.jl") end
     end
 end

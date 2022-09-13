@@ -20,15 +20,26 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.ODESolution{T}, metadata
                         SciMLBase.observed(sol, discu[I], :)
                     end
                 end
-                out = zeros(T, length(sol.t), size(discu)...)
-                for I in CartesianIndices(discu)
-                    out[:, I] .= solu[I]
+                # Correct placement of time axis
+                if isequal(arguments(u)[1], discretespace.time.val)
+                    out = zeros(T, length(sol.t), size(discu)...)
+                    for I in CartesianIndices(discu)
+                        out[:, I] .= solu[I]
+                    end
+                elseif isequal(arguments(u)[end], discretespace.time.val)
+                    out = zeros(T, size(discu)..., length(sol.t))
+                    for I in CartesianIndices(discu)
+                        out[I, :] .= solu[I]
+                    end
+                else
+                    @assert false "The time variable must be the first or last argument of the dependent variable $u."
                 end
+
                 Num(u) => out
             end
         end)
         # Build Interpolations
-        interp = build_interpolation(umap, ivs, ivgrid)
+        interp = build_interpolation(umap, ivs, ivgrid, pdesys)
 
         return SciMLBase.PDETimeSeriesSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
             typeof(sol),typeof(sol.errors),typeof(sol.t),typeof(ivgrid),

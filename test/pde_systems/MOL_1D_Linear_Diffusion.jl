@@ -47,9 +47,9 @@ using ModelingToolkit: Differential
         # Solve ODE problem      # Solve ODE problem
         sol = solve(prob, Tsit5(), saveat=0.1)
 
-        x_disc = sol[x]
+        x_disc = sol[x][2:end-1]
         t_disc = sol[t]
-        u_approx = sol[u(t, x)]
+        u_approx = sol[u(t, x)][:, 2:end-1]
 
         # Test against exact solution
         for i in 1:length(sol)
@@ -137,7 +137,6 @@ end
     sol = solve(prob, Tsit5(), saveat=0.1)
 
     grid = get_discrete(pdesys, discretization)
-    solu = map(d -> sol[d][end], grid[u(t, x)])
 
     solu = sol[u(t, x)]
     # Test
@@ -267,7 +266,7 @@ end
             @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
             # test mass conservation
             integral_u_approx = sum(u_approx[i, :] * dx_)
-            @test integral_u_exact(t[i]) ≈ integral_u_approx atol = 0.01
+            @test integral_u_exact(solt[i]) ≈ integral_u_approx atol = 0.01
         end
     end
 end
@@ -308,12 +307,12 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
     u_approx = sol[u(t, x)]
-    x = sol[x]
-    t = sol[t]
+    discx = sol[x]
+    disct = sol[t]
 
     # Test against exact solution
     for i in 1:length(sol[t])
-        exact = u_exact(x, t[i])
+        exact = u_exact(discx, disct[i])
         @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
     end
 end
@@ -577,7 +576,7 @@ end
 
     # Test against exact solution
     for i in 1:length(sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, 2:end-1] atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, 2:end-1], atol=0.01))
         @test all(isapprox.(v_exact(x_sol, t_sol[i]), solv[i, 2:end-1], atol=0.01))
     end
 end
@@ -668,7 +667,7 @@ end
     end
 end
 
-@test_broken begin #@testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
+@testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
     # Method of Manufactured Solutions
     u_exact = (x, t) -> exp.(-t) * cos.(x)
     v_exact = (y, t) -> exp.(-t) * sin.(y)
@@ -724,8 +723,8 @@ end
 
     # Test against exact solution
     for i in 1:length(t_sol)
-        @test_broken all(isapprox.(u_exact(x_sol, t_sol[i]), solu1[i, :], atol=0.01))
-        @test_broken all(isapprox.(v_exact(y_sol, t_sol[i]), solu2[i, :], atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu1[i, :], atol=0.01))
+        @test all(isapprox.(v_exact(y_sol, t_sol[i]), solu2[i, :], atol=0.01))
     end
 end
 
