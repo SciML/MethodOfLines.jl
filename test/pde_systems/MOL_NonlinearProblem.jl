@@ -19,7 +19,7 @@ using DomainSets
     prob = NonlinearProblem(ns, zeros(4), [])
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
-    @test sol.u ≈ ones(4)
+    @test map(v -> sol[v], [a, b, c, d]) ≈ ones(4)
 end
 
 # Laplace's Equation, same as above but with MOL discretization
@@ -42,7 +42,7 @@ end
     prob = discretize(pdesys, discretization)
     grid = get_discrete(pdesys, discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
-    sol′ = map(d -> sol[d], grid[u(x)])
+    sol′ = sol[u(x)]
     @test sol′ ≈ ones(4)
 end
 
@@ -63,11 +63,10 @@ end
 
     @named pdesys = PDESystem([eq], bcs, domains, [x], [u(x)])
     discretization = MOLFiniteDifference([x => dx], nothing, approx_order=2)
-    grid = get_discrete(pdesys, discretization)
 
     prob = discretize(pdesys, discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
-    sol′ = map(d -> sol[d], grid[u(x)])
+    sol′ = sol[u(x)]
 
 
     @test sol′ ≈ 1.0:0.1:2.0
@@ -101,10 +100,11 @@ end
     discretization = MOLFiniteDifference([x => dx, y => dy], nothing, approx_order=2)
 
     prob = discretize(pdesys, discretization)
-    grid = get_discrete(pdesys, discretization)
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
-    xs, ys = [infimum(d.domain):dx:supremum(d.domain) for d in domains]
-    u_sol = map(d -> sol[d], grid[u(x, y)])
+
+    xs = sol[x]
+    ys = sol[y]
+    u_sol = sol[u(x, y)]
 
     # test boundary
     @test all(abs.(u_sol[:, 1]) .< eps(Float32))

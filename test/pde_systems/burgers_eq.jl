@@ -34,18 +34,17 @@ using StableRNGs
 
     sol = solve(prob, Tsit5())
 
-    grid = get_discrete(pdesys, disc)
-    x_disc = grid[x]
-    solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
+    x_disc = sol[x]
+    solu = sol[u(t, x)]
 
     # anim = @animate for (i, T) in enumerate(sol[t])
     #     plot(x_disc, solu[i], title="t = $T", xlabel="x", ylabel="u")
     # end
     # gif(anim, "burgers_upwind.gif", fps=10)
 
-    for (i, t) in enumerate(sol.t[1:end])
+    for (i, t) in enumerate(sol.t)
         u_analytic = analytic_u.([t], x_disc)
-        u_disc = solu[i]
+        u_disc = solu[i, :]
         @test all(isapprox.(u_analytic, u_disc, atol=1e-3))
     end
 end
@@ -81,18 +80,17 @@ end
 
     sol = solve(prob, Tsit5())
 
-    grid = get_discrete(pdesys, disc)
-    x_disc = grid[x]
-    solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
+    x_disc = sol[x]
+    solu = sol[u(t, x)]
 
     # anim = @animate for (i, T) in enumerate(sol[t])
     #     plot(x_disc, solu[i], title="t = $T", xlabel="x", ylabel="u")
     # end
     # gif(anim, "burgers_weno.gif", fps=4)
 
-    for (i, t) in enumerate(sol.t[1:end])
+    for (i, t) in enumerate(sol.t)
         u_analytic = analytic_u.([t], x_disc)
-        u_disc = solu[i]
+        u_disc = solu[i, :]
         @test all(isapprox.(u_analytic, u_disc, atol=1e-3))
     end
 end
@@ -130,15 +128,12 @@ end
 
     sol = solve(prob, Tsit5())
 
-    grid = get_discrete(pdesys, disc)
-    x_disc = grid[x]
-    x_disc = getfield.(x_disc, [:val])
+    x_disc = sol[x]
+    solu = sol[u(t, x)]
 
-    solu = [map(d -> sol[d][i], grid[u(t, x)]) for i in 1:length(sol[t])]
-
-    for (i, t_disc) in enumerate(sol.t[1:end])
+    for (i, t_disc) in enumerate(sol.t)
         u_analytic = analytic_u.([t_disc], x_disc)
-        u_disc = solu[i]
+        u_disc = solu[i, :]
         @test all(isapprox.(u_analytic, u_disc, atol=1 * 10^(-2.5)))
     end
 end

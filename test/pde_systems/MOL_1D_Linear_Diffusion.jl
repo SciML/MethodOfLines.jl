@@ -4,8 +4,6 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using ModelingToolkit: Differential
 
-const shouldplot = false
-
 # Tests
 @testset "Test 00: Dt(u(t,x)) ~ Dxx(u(t,x))" begin
     # Method of Manufactured Solutions
@@ -309,10 +307,10 @@ end
 
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
+    u_approx = sol[u(t, x)]
     x = sol[x]
     t = sol[t]
 
-    u_approx = sol[u(t, x)]
     # Test against exact solution
     for i in 1:length(sol[t])
         exact = u_exact(x, t[i])
@@ -405,9 +403,9 @@ end
     # Solve ODE problem
     sol = solve(prob, Rodas4(), reltol=1e-6, saveat=0.1)
 
+    u_approx = sol[u(t, x)]
     discx = sol[x]
     t = sol.t
-    u_approx = sol[u(t, x)]
 
     # Test against exact solution
     for i in 1:length(t)
@@ -453,7 +451,8 @@ end
     # Solve ODE problem
     sol = solve(prob, Rodas4(), saveat=0.1)
 
-    r = sol[r]
+    u_approx = sol[u(t, r)]
+    r = sol[r][2:end-1]
     t = sol[t]
     # if shouldplot
     #     anim = @animate for (i,T) in enumerate(t)
@@ -466,11 +465,10 @@ end
     # end
 
 
-    u_approx = sol[u(t, r)]
     # Test against exact solution
     for i in 1:length(t)
         exact = u_exact(r, t[i])
-        @test all(isapprox.(u_approx[i, :], exact, atol=0.06))
+        @test all(isapprox.(u_approx[i, 2:end-1], exact, atol=0.06))
     end
 end
 
@@ -509,7 +507,8 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    r = sol[r]
+    u_approx = sol[u(t, r)]
+    r = sol[r][2:end-1]
     t = sol[t]
 
     # if shouldplot
@@ -522,11 +521,10 @@ end
     #     gif(anim, "plots/MOL_Linear_Diffusion_1D_Test08.gif", fps = 5)
     # end
 
-    u_approx = sol[u(t, r)]
     # Test against exact solution
     for i in 1:length(t)
         exact = u_exact(r, t[i])
-        @test all(isapprox.(u_approx[i, :], exact, atol=0.06))
+        @test all(isapprox.(u_approx[i, 2:end-1], exact, atol=0.06))
     end
 end
 
@@ -572,15 +570,15 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    x_sol = sol[x]
+    x_sol = sol[x][2:end-1]
     t_sol = sol[t]
     solu = sol[u(t, x)]
     solv = sol[v(t, x)]
 
     # Test against exact solution
     for i in 1:length(sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :] atol=0.01))
-        @test all(isapprox.(v_exact(x_sol, t_sol[i]), solv[i, :], atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, 2:end-1] atol=0.01))
+        @test all(isapprox.(v_exact(x_sol, t_sol[i]), solv[i, 2:end-1], atol=0.01))
     end
 end
 
@@ -659,7 +657,7 @@ end
 
     x_sol = sol[x]
     y_sol = sol[y]
-    t_sol = sol.t
+    t_sol = sol[t]
     solu = sol[u(t, x)]
     solv = sol[v(t, y)]
 

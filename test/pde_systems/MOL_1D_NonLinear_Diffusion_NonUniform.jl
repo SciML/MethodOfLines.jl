@@ -53,12 +53,11 @@ using StableRNGs
     sol = solve(prob, Rosenbrock32())
 
     # Test against exact solution
-    r_space = dx
-    asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = length(dx)
-    @variables u(t)[1:Nx]
-    sol′ = [sol[u[i]][end] for i in 1:Nx]
-    @test asf ≈ sol′ atol = 0.1
+    x_disc = sol[x]
+    t_disc = sol[t]
+    asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
+    sol′ = sol[u(t, x)]
+    @test asf ≈ sol′[end, :] atol = 0.1
 
     # Plots
     #using Plots
@@ -173,13 +172,11 @@ end
 
 
     # Test against exact solution
-    r_space = dx
-    asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = length(dx)
-    @variables u(t)[1:Nx]
-    sol′ = [sol[u[i]][end] for i in 1:Nx]
-    @test asf ≈ sol′ atol = 0.01
-
+    x_disc = sol[x]
+    t_disc = sol[t]
+    asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
+    sol′ = sol[u(t, x)]
+    @test asf ≈ sol′[end, :] atol = 0.1
     # Plots
     #using Plots
     #plot(r_space, asf, seriestype = :scatter,label="analytic solution")
@@ -237,13 +234,11 @@ end
 
 
     # Test against exact solution
-    r_space = dx
-    asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = length(dx)
-    @variables u(t)[1:Nx]
-    sol′ = [sol[u[i]][end] for i in 1:Nx]
-    @test asf ≈ sol′ atol = 0.01
-
+    x_disc = sol[x]
+    t_disc = sol[t]
+    asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
+    sol′ = sol[u(t, x)]
+    @test asf ≈ sol′[end, :] atol = 0.1
     # Plots
     #using Plots
     #plot(r_space, asf, seriestype = :scatter,label="analytic solution")
@@ -355,13 +350,13 @@ end
     sol = solve(prob, Rosenbrock32()) # TODO: check warnings
 
     # Test against exact solution
-    r_space = dx
-    asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = length(dx)
-    @variables u(t)[1:Nx]
-    sol′ = [sol[u[i]][end] for i in 1:Nx]
+    x_disc = sol[x]
+    t_disc = sol[t]
+    asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
+    sol′ = sol[u(t, x)]
+    @test asf ≈ sol′[end, :] atol = 0.1
 
-    m = max(asf..., sol′...)
+    m = max(asf..., sol′[end, :]...)
     @test asf / m ≈ sol′ / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
@@ -415,13 +410,13 @@ end
     sol = solve(prob, Rosenbrock32()) # TODO: check warnings
 
     # Test against exact solution
-    r_space = dx
-    asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = length(dx)
-    @variables u(t)[1:Nx]
-    sol′ = [sol[u[i]][end] for i in 1:Nx]
+    x_disc = sol[x]
+    t_disc = sol[t]
+    asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
+    sol′ = sol[u(t, x)]
+    @test asf ≈ sol′[end, :] atol = 0.1
 
-    m = max(asf..., sol′...)
+    m = max(asf..., sol′[end, :]...)
     @test asf / m ≈ sol′ / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
@@ -476,14 +471,14 @@ end
     sol = solve(prob, Rosenbrock32())
 
     # Test against exact solution
-    r_space = dx
-    asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = length(dx)
-    @variables u(t)[1:Nx]
-    sol′ = [sol[u[i]][end] for i in 1:Nx]
+    x_disc = sol[x]
+    t_disc = sol[t]
+    asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
+    sol′ = sol[u(t, x)]
+    @test asf ≈ sol′[end, :] atol = 0.1
 
-    m = max(asf..., sol′...)
-    @test asf / m ≈ sol′ / m atol = 0.16
+    m = max(asf..., sol′[end, :]...)
+    @test asf / m ≈ sol′ / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -536,14 +531,14 @@ end
     sol = solve(prob, Rosenbrock32())
 
     # Test against exact solution
-    r_space = dx
-    asf = [analytic_sol_func(t_max, x) for x in r_space]
-    Nx = length(dx)
-    @variables u(t)[1:Nx]
-    sol′ = [sol[u[i]][end] for i in 1:Nx]
+    x_disc = sol[x]
+    t_disc = sol[t]
+    asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
+    sol′ = sol[u(t, x)]
+    @test asf ≈ sol′[end, :] atol = 0.1
 
-    m = max(asf..., sol′...)
-    @test asf / m ≈ sol′ / m atol = 0.16
+    m = max(asf..., sol′[end, :]...)
+    @test asf / m ≈ sol′ / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
