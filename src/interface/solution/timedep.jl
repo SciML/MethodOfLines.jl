@@ -39,7 +39,7 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.ODESolution{T}, metadata
             end
         end)
         # Build Interpolations
-        interp = build_interpolation(umap, ivs, ivgrid, pdesys)
+        interp = build_interpolation(umap, ivs, ivgrid, sol, pdesys)
 
         return SciMLBase.PDETimeSeriesSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
             typeof(sol),typeof(sol.errors),typeof(sol.t),typeof(ivgrid),
