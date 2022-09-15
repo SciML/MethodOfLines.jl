@@ -60,8 +60,8 @@ using ModelingToolkit: Differential
     asf[1, 1] = asf[1, end] = asf[end, 1] = asf[end, end] = 0.0
 
     # Test against exact solution
-    sol′ = sol[u(t, x, y)][end, :, :]
-    @test asf ≈ sol′ atol = 0.4
+    sol′ = sol[u(t, x, y)]
+    @test asf ≈ sol′[end, :, :] atol = 0.4
 
     #Plot
     #using Plots
@@ -123,6 +123,8 @@ end
     asf[1, 1] = asf[1, end] = asf[end, 1] = asf[end, end] = 0.0
 
     m = max(asf...)
+    sol′ = sol[u(t, x, y)]
+
     @test asf / m ≈ sol′[end, :, :] / m atol = 0.4 # TODO: use lower atol when g(x) is improved in MOL_discretize.jl
 
     #Plot
