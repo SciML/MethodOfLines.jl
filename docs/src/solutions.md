@@ -48,7 +48,7 @@ The original `ODESolution` is stored in `sol.original_sol`.
 
 To avoid wrapping entirely, use the `wrap` keyword argument to `solve`:
 ```julia
-sol = solve(prob, Tsit5(); wrap = Val{false})
+sol = solve(prob, Tsit5(); wrap = Val(false))
 ```
 ```
 > typeof(sol)
