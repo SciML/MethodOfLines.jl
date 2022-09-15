@@ -104,9 +104,9 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
        @testset "." begin
         for k in div(length(t), 2):length(t)
                 msolu = msol.u[k][:,:,1]
-                @test solu[k, 2:end, 2:end] ≈ msolu rtol = 0.1
+                @test solu[2:end, 2:end, k] ≈ msol[k][:, :, 1] rtol = 0.1
                 msolv = msol.u[k][:,:,2]
-                @test solv[k, 2:end, 2:end] ≈ msolv rtol = 0.1
+                @test solv[2:end, 2:end, k] ≈ msol[k][:, :, 2] rtol = 0.1
         end
        end
 
