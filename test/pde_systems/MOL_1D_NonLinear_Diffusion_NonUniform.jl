@@ -496,7 +496,7 @@ end
 
 end
 
-@test_broke begin #@testset "Test 03a: Dt(u(t,x)) ~ Dx(1. / (-1. + u(t,x)^2) * Dx(u(t,x)))" begin
+@test_broken begin #@testset "Test 03a: Dt(u(t,x)) ~ Dx(1. / (-1. + u(t,x)^2) * Dx(u(t,x)))" begin
 
     # Variables, parameters, and derivatives
     @parameters t x
