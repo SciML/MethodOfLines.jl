@@ -56,7 +56,7 @@ using ModelingToolkit: Differential
     sol = solve(prob, Tsit5())
     r_space_x = sol[x]
     r_space_y = sol[y]
-    asf = [analytic_sol_func(t_max, X, Y) for X in r_space_x for Y in r_space_y]
+    asf = [analytic_sol_func(t_max, X, Y) for X in r_space_x, Y in r_space_y]
     asf[1, 1] = asf[1, end] = asf[end, 1] = asf[end, end] = 0.0
 
     # Test against exact solution
@@ -119,7 +119,7 @@ end
     sol = solve(prob, Tsit5())
     r_space_x = sol[x]
     r_space_y = sol[y]
-    asf = [analytic_sol_func(t_max, X, Y) for X in r_space_x for Y in r_space_y]
+    asf = [analytic_sol_func(t_max, X, Y) for X in r_space_x, Y in r_space_y]
     asf[1, 1] = asf[1, end] = asf[end, 1] = asf[end, end] = 0.0
 
     m = max(asf...)
