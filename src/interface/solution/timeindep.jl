@@ -3,7 +3,7 @@ function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metada
 
     pdesys = metadata.pdesys
     discretespace = metadata.discretespace
-
+    # Extract axies
     ivs = [discretespace.x̄...]
     ivgrid = ((discretespace.grid[x] for x in ivs)...,)
     # Reshape the solution to flat arrays
