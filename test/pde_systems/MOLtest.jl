@@ -3,6 +3,7 @@ using ModelingToolkit: operation, istree, arguments
 using DomainSets
 using NonlinearSolve
 using StableRNGs
+using Test
 
 # # Define some variables
 @testset "Heat Equation 1D 2 variables" begin
@@ -186,7 +187,7 @@ end
     domains = [t ∈ Interval(0.0, 10.0),
         x ∈ Interval(0.0, ℓ)]
 
-    @named pdesys = PDESystem(diff_eq, bcs, domains, [t, x], [c(x, t)])
+    @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
 
     # Method of lines discretization
     dx = 0.1

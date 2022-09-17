@@ -38,16 +38,9 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
     using OrdinaryDiffEq
     sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
-    u = asf.(x_interval)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
     # Plot and save results
-
-    # Test
-    t_f = size(sol, 3)
-
-    x_sol = x_interval
-    t_f = size(sol, 3)
-    exact = u
     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
     # plot!(x_sol, sol.u[end], label="Numeric solution")
     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
@@ -55,7 +48,7 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
 
 @testset "Test 00a: Dt(u(t,x)) ~ Dx(u(t,x))" begin
@@ -91,16 +84,9 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
-    u = asf.(x_interval)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
     # Plot and save results
-
-    # Test
-    t_f = size(sol, 3)
-
-    x_sol = x_interval
-    t_f = size(sol, 3)
-    exact = u
     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
     # plot!(x_sol, sol.u[end], label="Numeric solution")
     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
@@ -108,7 +94,7 @@ end
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
 
 @testset "Test 00b: Dt(u(t,x)) - Dx(u(t,x)) ~ 0" begin
@@ -144,16 +130,9 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
-    u = asf.(x_interval)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
     # Plot and save results
-
-    # Test
-    t_f = size(sol, 3)
-
-    x_sol = x_interval
-    t_f = size(sol, 3)
-    exact = u
     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
     # plot!(x_sol, sol.u[end], label="Numeric solution")
     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
@@ -161,7 +140,7 @@ end
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
 
 @testset "Test 00c: Dt(u(t,x)) + Dx(u(t,x)) ~ 0" begin
@@ -198,16 +177,9 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
 
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
-    u = asf.(x_interval)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
     # Plot and save results
-
-    # Test
-    t_f = size(sol, 3)
-
-    x_sol = x_interval
-    t_f = size(sol, 3)
-    exact = u
     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
     # plot!(x_sol, sol.u[end], label="Numeric solution")
     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
@@ -215,7 +187,7 @@ end
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
 
 @testset "Test 01: Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.001" begin
@@ -253,25 +225,17 @@ end
 
 
     # Test
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
-    u = asf.(x_interval)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
     # Plot and save results
-
-    # Test
-    t_f = size(sol, 3)
-
-    x_sol = x_interval
-    t_f = size(sol, 3)
-    exact = u
     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
     # plot!(x_sol, sol.u[end], label="Numeric solution")
     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    # savefig("plots/MOL_Linear_Convection_Test01.png")
+    # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
-
+    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
 
 @testset "Test 02: Dt(u(t,x)) ~ -v*Dx(u(t,x))" begin
@@ -319,31 +283,17 @@ end
     # savefig("MOL_1D_Linear_Convection_Test02.png")
 
     # Test
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
-    u = asf.(x_interval)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
     # Plot and save results
-
-    # Test
-    t_f = size(sol, 3)
-
-    x_sol = x_interval
-    t_f = size(sol, 3)
-    exact = u
     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
     # plot!(x_sol, sol.u[end], label="Numeric solution")
     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    # savefig("plots/MOL_1D_Linear_Convection_Test02.png")
+    # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    # savefig("plots/MOL_Linear_Convection_Test02.png")
-    # plot()
-    # anim = @animate for i in eachindex(sol.t)
-    #     plot!(x_sol, sol.u[i], label="Numeric solution at $(sol.t[i])")
-    # end
-    # gif(anim, "plots/MOL_Linear_Convection_Test02.gif", fps = 5)
-
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
 @test_broken begin #@testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
     # Parameters, variables, and derivatives
@@ -396,24 +346,17 @@ end
     # savefig("MOL_1D_Linear_Convection_Test03.png")
 
     # Test
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
-    u = asf.(x_interval)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
     # Plot and save results
-
-    # Test
-    t_f = size(sol, 3)
-
-    x_sol = x_interval
-    t_f = size(sol, 3)
-    exact = u
     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
     # plot!(x_sol, sol.u[end], label="Numeric solution")
     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    # savefig("plots/MOL_Linear_Convection_Test03.png")
+    # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
 
 @testset "Test 04: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=0.999 + 0.001 * t * x " begin
@@ -463,31 +406,17 @@ end
     # savefig("MOL_1D_Linear_Convection_Test04.png")
 
     # Test
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
-    u = asf.(x_interval)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
     # Plot and save results
-
-    # Test
-    t_f = size(sol, 3)
-
-    x_sol = x_interval
-    t_f = size(sol, 3)
-    exact = u
     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
     # plot!(x_sol, sol.u[end], label="Numeric solution")
     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    # savefig("plots/MOL_Linear_Convection_Test04.png")
-
-    # plot()
-    # anim = @animate for i in eachindex(sol.t)
-    #     plot!(x_sol, sol.u[i], label="Numeric solution at $(sol.t[i])")
-    # end
-    # gif(anim, "plots/MOL_Linear_Convection_Test04.gif", fps = 5)
+    # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
 
 
@@ -538,29 +467,15 @@ end
     # savefig("MOL_1D_Linear_Convection_Test04.png")
 
     # Test
-    x_interval = infimum(domains[2].domain)+dx:dx:supremum(domains[2].domain)
-    u = asf.(x_interval)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
     # Plot and save results
-
-    # Test
-    t_f = size(sol, 3)
-
-    x_sol = x_interval
-    t_f = size(sol, 3)
-    exact = u
     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
     # plot!(x_sol, sol.u[end], label="Numeric solution")
     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    # savefig("plots/MOL_Linear_Convection_Test04.png")
-
-    # plot()
-    # anim = @animate for i in eachindex(sol.t)
-    #     plot!(x_sol, sol.u[i], label="Numeric solution at $(sol.t[i])")
-    # end
-    # gif(anim, "plots/MOL_Linear_Convection_Test04.gif", fps = 5)
+    # savefig("plots/MOL_Linear_Convection_Test00.png")
 
 
-
-    @test sol.u[end] ≈ u atol = 0.1
+    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end

@@ -4,8 +4,6 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using ModelingToolkit: Differential
 
-const shouldplot = false
-
 # Tests
 @testset "Test 00: Dt(u(t,x)) ~ Dxx(u(t,x))" begin
     # Method of Manufactured Solutions
@@ -49,18 +47,14 @@ const shouldplot = false
         # Solve ODE problem      # Solve ODE problem
         sol = solve(prob, Tsit5(), saveat=0.1)
 
-        if disc.grid_align == center_align
-            x = (0.0:dx_:Float64(π))[2:end-1]
-        else
-            x = ((0.0-dx_/2):dx_:(Float64(π)+dx_/2))[2:end-1]
-        end
-        t = sol.t
+        x_disc = sol[x][2:end-1]
+        t_disc = sol[t]
+        u_approx = sol[u(t, x)][:, 2:end-1]
 
         # Test against exact solution
         for i in 1:length(sol)
-            exact = u_exact(x, t[i])
-            u_approx = sol.u[i]
-            @test all(isapprox.(u_approx, exact, atol=0.01))
+            exact = u_exact(x_disc, t_disc[i])
+            @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
         end
     end
 end
@@ -97,14 +91,15 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
+    solu = sol[u(t, x)]
     # Test
-    n = size(sol, 1)
-    t_f = size(sol, 3)
-    @test sol[end] ≈ zeros(n) atol = 0.001
+    n = size(solu, 2)
+
+    @test solu[end, :] ≈ zeros(n) atol = 0.001
 end
 
 @testset "Test 02: Dt(u(t,x)) ~ Dx(D(t,x))*Dx(u(t,x))+D(t,x)*Dxx(u(t,x))" begin
-#@test_broken begin
+    #@test_broken begin
     # Parameters, variables, and derivatives
     @parameters t x
     @variables u(..) D(..)
@@ -141,13 +136,11 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    grid = get_discrete(pdesys, discretization)
-    solu = map(d -> sol[d][end], grid[u(t, x)])
-
+    solu = sol[u(t, x)]
     # Test
-    n = size(solu)
-    t_f = size(sol, 3)
-    @test solu ≈ zeros(n) atol = 0.01
+    n = size(solu, 2)
+
+    @test solu[end, :] ≈ zeros(n) atol = 0.001
 end
 
 @testset "Test 03: Dt(u(t,x)) ~ Dxx(u(t,x)), homogeneous Neumann BCs, order 8" begin
@@ -187,13 +180,8 @@ end
         # Solve ODE problem
         sol = solve(prob, Tsit5(), saveat=0.1)
 
-        if disc.grid_align == center_align
-            x_sol = dx[2:end-1]
-        else
-            x_sol = ((0.0-dx_/2):dx_:(Float64(π)+dx_/2))[2:end-1]
-
-        end
-        t_sol = sol.t
+        x_sol = sol[x]
+        t_sol = sol[t]
 
         # Plots
         # if shouldplot
@@ -206,12 +194,12 @@ end
         #     gif(anim, "plots/MOL_Linear_Diffusion_1D_Test03_$disc.gif", fps = 5)
         # end
 
+        u_approx = sol[u(t, x)]
         # Test against exact solution
         for i in 1:length(sol)
             exact = u_exact(x_sol, t_sol[i])
-            u_approx = sol.u[i]
-            @test all(isapprox.(u_approx, exact, atol=0.01))
-            @test sum(u_approx) ≈ 0 atol = 1e-10
+            @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
+            @test sum(u_approx[i, :]) ≈ 0 atol = 1e-10
         end
     end
 end
@@ -254,12 +242,8 @@ end
         # Solve ODE problem
         sol = solve(prob, Tsit5(), saveat=0.1)
 
-        if disc.grid_align == center_align
-            x = dx[2:end-1]
-        else
-            x = ((0.0-dx_/2):dx_:(Float64(π)+dx_/2))[2:end-1]
-        end
-        t = sol.t
+        solx = sol[x]
+        solt = sol[t]
 
         # # Plots
         # if shouldplot
@@ -273,14 +257,14 @@ end
         # end
         # Test against exact solution
         # exact integral based on Neumann BCs
-        integral_u_exact = t -> sum(sol.u[1] * dx_) + 2 * (exp(-t) - 1)
-        for i in 1:length(sol)
-            exact = u_exact(x, t[i])
-            u_approx = sol.u[i]
-            @test all(isapprox.(u_approx, exact, atol=0.01))
+        u_approx = sol[u(t, x)]
+        integral_u_exact = t -> sum(u_approx[1, :] * dx_) + 2 * (exp(-t) - 1)
+        for i in 1:length(solt)
+            exact = u_exact(solx, solt[i])
+            @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
             # test mass conservation
-            integral_u_approx = sum(u_approx * dx_)
-            @test integral_u_exact(t[i]) ≈ integral_u_approx atol = 0.01
+            integral_u_approx = sum(u_approx[i, :] * dx_)
+            @test integral_u_exact(solt[i]) ≈ integral_u_approx atol = 0.01
         end
     end
 end
@@ -320,14 +304,14 @@ end
 
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
-    x = dx[2:end-1]
-    t = sol.t
+    u_approx = sol[u(t, x)]
+    discx = sol[x]
+    disct = sol[t]
 
     # Test against exact solution
-    for i in 1:length(sol)
-        exact = u_exact(x, t[i])
-        u_approx = sol.u[i]
-        @test all(isapprox.(u_approx, exact, atol=0.01))
+    for i in 1:length(sol[t])
+        exact = u_exact(discx, disct[i])
+        @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
     end
 end
 
@@ -360,7 +344,7 @@ end
     dx = 0.01
     order = 4
     discretization = MOLFiniteDifference([x => dx], t; approx_order=order)
-    discretization_edge = MOLFiniteDifference([x => dx], t; approx_order=order, grid_align = edge_align)
+    discretization_edge = MOLFiniteDifference([x => dx], t; approx_order=order, grid_align=edge_align)
 
     for disc ∈ [discretization, discretization_edge]
         # Convert the PDE problem into an ODE problem
@@ -368,20 +352,14 @@ end
 
         # Solve ODE problem
         sol = solve(prob, Rodas4(), saveat=0.1)
-        x = (-1:dx:1)
-        if disc.grid_align == center_align
-            x = x[2:end-1]
-        else
-            x = (-1.0+dx/2):dx:(1.0-dx/2)
-
-        end
-        t = sol.t
+        x_disc = sol[x]
+        t_disc = sol[t]
+        u_approx = sol[u(t, x)]
 
         # Test against exact solution
-        for i in 1:length(sol)
-            exact = u_exact(x, t[i])
-            u_approx = sol.u[i]
-            @test all(isapprox.(u_approx, exact, atol=0.1))
+        for i in 1:length(sol[t])
+            exact = u_exact(x_disc, t_disc[i])
+            @test all(isapprox.(u_approx[i, :], exact, atol=0.1))
         end
     end
 end
@@ -422,16 +400,15 @@ end
     # Solve ODE problem
     sol = solve(prob, Rodas4(), reltol=1e-6, saveat=0.1)
 
-    grid = get_discrete(pdesys, discretization)
-    discx = grid[x][2:end-1]
+    u_approx = sol[u(t, x)]
+    discx = sol[x]
     t = sol.t
 
     # Test against exact solution
-    for i in 1:length(sol)
+    for i in 1:length(t)
 
         exact = u_exact(discx, t[i])
-        u_approx = sol.u[i]
-        @test all(isapprox.(u_approx, exact, atol=0.06))
+        @test all(isapprox.(u_approx[i, :], exact, atol=0.06))
     end
 end
 
@@ -471,8 +448,9 @@ end
     # Solve ODE problem
     sol = solve(prob, Rodas4(), saveat=0.1)
 
-    r = (0:dr:1)[2:end-1]
-    t = sol.t
+    u_approx = sol[u(t, r)]
+    r = sol[r][2:end-1]
+    t = sol[t]
     # if shouldplot
     #     anim = @animate for (i,T) in enumerate(t)
     #         exact = u_exact(r, T)
@@ -485,10 +463,9 @@ end
 
 
     # Test against exact solution
-    for i in 1:length(sol)
+    for i in 1:length(t)
         exact = u_exact(r, t[i])
-        u_approx = sol.u[i]
-        @test all(isapprox.(u_approx, exact, atol=0.06))
+        @test all(isapprox.(u_approx[i, 2:end-1], exact, atol=0.06))
     end
 end
 
@@ -527,8 +504,9 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    r = (0:dr:1)[2:end-1]
-    t = sol.t
+    u_approx = sol[u(t, r)]
+    r = sol[r][2:end-1]
+    t = sol[t]
 
     # if shouldplot
     #     anim = @animate for (i,T) in enumerate(t)
@@ -541,10 +519,9 @@ end
     # end
 
     # Test against exact solution
-    for i in 1:length(sol)
+    for i in 1:length(t)
         exact = u_exact(r, t[i])
-        u_approx = sol.u[i]
-        @test all(isapprox.(u_approx, exact, atol=0.06))
+        @test all(isapprox.(u_approx[i, 2:end-1], exact, atol=0.06))
     end
 end
 
@@ -590,13 +567,15 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    x_sol = dx[2:end-1]
-    t_sol = sol.t
+    x_sol = sol[x][2:end-1]
+    t_sol = sol[t]
+    solu = sol[u(t, x)]
+    solv = sol[v(t, x)]
 
     # Test against exact solution
     for i in 1:length(sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), sol.u[i][1:l-2], atol=0.01))
-        @test all(isapprox.(v_exact(x_sol, t_sol[i]), sol.u[i][l-1:end], atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, 2:end-1], atol=0.01))
+        @test all(isapprox.(v_exact(x_sol, t_sol[i]), solv[i, 2:end-1], atol=0.01))
     end
 end
 
@@ -673,18 +652,20 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    x_sol = dx[2:end-1]
-    y_sol = dy[2:end-1]
-    t_sol = sol.t
+    x_sol = sol[x]
+    y_sol = sol[y]
+    t_sol = sol[t]
+    solu = sol[u(t, x)]
+    solv = sol[v(t, y)]
 
     # Test against exact solution
     for i in 1:length(sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), sol.u[i][1:l-2], atol=0.01))
-        @test all(isapprox.(v_exact(y_sol, t_sol[i]), sol.u[i][l-1:end], atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :], atol=0.01))
+        @test all(isapprox.(v_exact(y_sol, t_sol[i]), solv[i, :], atol=0.01))
     end
 end
 
-@test_broken begin #@testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
+@testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
     # Method of Manufactured Solutions
     u_exact = (x, t) -> exp.(-t) * cos.(x)
     v_exact = (y, t) -> exp.(-t) * sin.(y)
@@ -731,18 +712,17 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    grid = get_discrete(pdesys, discretization)
-    solu1 = [map(d -> sol[d][ti], grid[u[1](t, x)]) for ti in 1:length(sol[t])]
-    solu2 = [map(d -> sol[d][ti], grid[u[2](t, x)]) for ti in eachindex(sol[t])]
+    solu1 = sol[u[1](t, x)]
+    solu2 = sol[u[2](t, y)]
 
-    x_sol = grid[x]
-    y_sol = grid[y]
-    t_sol = sol.t
+    x_sol = sol[x]
+    y_sol = sol[y]
+    t_sol = sol[t]
 
     # Test against exact solution
     for i in 1:length(t_sol)
-        @test_broken all(isapprox.(u_exact(x_sol, t_sol[i]), solu1[i], atol=0.01))
-        @test_broken all(isapprox.(v_exact(y_sol, t_sol[i]), solu2[i], atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu1[i, :], atol=0.01))
+        @test all(isapprox.(v_exact(y_sol, t_sol[i]), solu2[i, :], atol=0.01))
     end
 end
 
@@ -785,13 +765,15 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat=0.1)
 
-    x_sol = dx[2:end-1]
-    t_sol = sol.t
+    x_sol = sol[x]
+    t_sol = sol[t]
+    solu = sol[u(t, x)]
+    solv = sol[v(t)]
 
     # Test against exact solution
     for i in 1:length(sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), sol.u[i][1:length(x_sol)], atol=0.01))
-        @test v_exact(t_sol[i]) ≈ sol.u[i][end] atol = 0.01
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :], atol=0.01))
+        @test v_exact(t_sol[i]) ≈ solv[i] atol = 0.01
     end
 end
 

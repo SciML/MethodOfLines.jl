@@ -43,16 +43,18 @@ using ModelingToolkit: Differential
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys,discretization)
-    grid = get_discrete(pdesys,discretization)
     # Solve ODE problem
     sol = solve(prob,Rodas4(),saveat=0.1)
 
-    x_sol = dx
-    t_sol = sol.t
+    x_sol = sol[x]
+    t_sol = sol[t]
+
+    solu = sol[u(t,x)]
+    solv = sol[v(t,x)]
 
     # Test against exact solution
     for i in 1:length(t_sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), map(d -> sol[d][i],grid[u(t,x)]), atol=0.01))
-        @test all(isapprox.(v_exact(x_sol, t_sol[i]), map(d -> sol[d][i],grid[v(t,x)]), atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :], atol=0.01))
+        @test all(isapprox.(v_exact(x_sol, t_sol[i]), solv[i, :], atol=0.01))
     end
 end
