@@ -120,18 +120,14 @@ println("Solve:")
 ```
 
 ## Extracting results
-To retrieve your solution, for example for `u`, use `sol[u]`. To get the time axis, use `sol.t`.
-
-Due to current limitations in the `sol` interface, above 1 discretized dimension the result must be manually reshaped to correctly display the result, best done with the help of the `get_discrete` helper function. Here is an example of how to do this:
-
+To retrieve your solution, for example for `u`, use `sol[u(t, x, y)]`. To get the independent variable axes, use for example `sol[t]`. For more information on the solution interface, [see this page](@ref sol)
 ```julia
-grid = get_discrete(pdesys, discretization)
-discrete_x = grid[x]
-discrete_y = grid[y]
+discrete_x = sol[x]
+discrete_y = sol[y]
 discrete_t = sol[t]
 
-solu = [map(d -> sol[d][i], grid[u(x, y, t)]) for i in 1:length(sol[t])]
-solv = [map(d -> sol[d][i], grid[v(x, y, t)]) for i in 1:length(sol[t])]
+solu = sol[u(t, x, y)]
+solv = sol[v(t, x, y)]
 ```
 
 The result after plotting an animation:
@@ -140,7 +136,7 @@ For `u`:
 ```julia
 using Plots
 anim = @animate for k in 1:length(discrete_t)
-    heatmap(solu[k][2:end, 2:end], title="$(discrete_t[k])") # 2:end since end = 1, periodic condition
+    heatmap(solu[k, 2:end, 2:end], title="$(discrete_t[k])") # 2:end since end = 1, periodic condition
 end
 gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
 ```       
@@ -149,7 +145,7 @@ gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
 For `v`:
 ```julia
 anim = @animate for k in 1:length(discrete_t)
-    heatmap(solv[k][2:end, 2:end], title="$(discrete_t[k])")
+    heatmap(solv[k, 2:end, 2:end], title="$(discrete_t[k])")
 end
 gif(anim, "plots/Brusselator2Dsol_v.gif", fps = 8)
 ```       

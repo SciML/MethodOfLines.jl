@@ -97,24 +97,17 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
 
        msol = solve(prob,TRBDF2(),saveat=0.01) # 2.771 s (5452 allocations: 65.73 MiB)
 
-       # get variables for reshape
-       Nx = floor(Int64, (x_max - x_min) / dx) + 1
-       Ny = floor(Int64, (y_max - y_min) / dy) + 1
-       grid = get_discrete(pdesys, discretization)
-       u = grid[u(x, y, t)]
-       v = grid[v(x, y, t)]
+       solu = sol[u(x, y, t)]
+       solv = sol[v(x, y, t)]
 
        t = sol[t]
        @testset "." begin
-       for k in div(length(t), 2):length(t)
-              solu = reshape([sol[u[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))[2:end,2:end]
-              msolu = msol.u[k][:,:,1]
-              @test solu ≈ msolu rtol = 0.1
-
-              solv = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))[2:end,2:end]
-              msolv = msol.u[k][:,:,2]
-              @test solv ≈ msolv rtol = 0.1
-       end
+        for k in div(length(t), 2):length(t)
+                msolu = msol.u[k][:,:,1]
+                @test solu[2:end, 2:end, k] ≈ msol[k][:, :, 1] rtol = 0.1
+                msolv = msol.u[k][:,:,2]
+                @test solv[2:end, 2:end, k] ≈ msol[k][:, :, 2] rtol = 0.1
+        end
        end
 
 

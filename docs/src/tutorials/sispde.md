@@ -82,17 +82,11 @@ prob = discretize(pdesys, discretization);
 sol = solve(prob, Tsit5(), saveat=0.2);
 
 # Retriving the results
-grid = get_discrete(pdesys, discretization)
-discrete_x = grid[x]
+discrete_x = sol[x]
 discrete_t = sol[t]
-solS = [map(d -> sol[d][i], grid[S(t, x)]) for i in 1:length(sol[t])]
-solI = [map(d -> sol[d][i], grid[I(t, x)]) for i in 1:length(sol[t])]
-S_solution = zeros(length(discrete_t), length(discrete_x))
-I_solution = zeros(length(discrete_t), length(discrete_x))
-for i in 1:length(discrete_t)
-    S_solution[i, :] = solS[i]
-    I_solution[i, :] = solI[i]
-end
+S_solution = sol[S(t, x)]
+I_solution = sol[I(t, x)]
+
 p = surface(discrete_x, discrete_t, S_solution)
 display(p)
 ```

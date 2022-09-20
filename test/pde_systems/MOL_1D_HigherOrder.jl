@@ -114,11 +114,11 @@ end
 
     @test sol.retcode == :Success
 
-    xs = domains[1].domain.lower+dx+dx+dx:dx:domains[1].domain.upper
-    ts = sol.t
+    xs = sol[x]
+    ts = sol[t]
 
-    u_predict = sol.u
-    u_real = [[u_analytic(x, t) for x in xs] for t in ts]
+    u_predict = sol[u(x,t)]
+    u_real = [u_analytic(x, t) for t in ts, x in xs ]
 
 
        # anim = @animate for (i,T) in enumerate(ts)

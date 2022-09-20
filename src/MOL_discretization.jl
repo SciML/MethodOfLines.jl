@@ -119,18 +119,19 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     defaults = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? vcat(u0, dtu0) : vcat(u0, dtu0, pdesys.ps)
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
     # Combine PDE equations and BC equations
+    metadata = MOLMetadata(s, discretization, pdesys)
     try
         if t === nothing
             # At the time of writing, NonlinearProblems require that the system of equations be in this form:
             # 0 ~ ...
             # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
             eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, vcat(alleqs, unique(bceqs)))
-            sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
+            sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name, metadata=metadata)
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
-            sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name)
+            sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name, metadata=metadata)
             return sys, tspan
         end
     catch e
@@ -185,6 +186,8 @@ function get_discrete(pdesys, discretization)
     # Get all independent variables in the correct type, removing time from the list
     allindvars = remove(collect(filter(x->!(x isa Number), reduce(union, filter(xs->(!isequal(xs, [t])), map(arguments, alldepvars))))), t)
     #@show allindvars, typeof.(allindvars)
+
+    @warn "`get_discrete` is deprecated, The solution is now automatically wrapped in a PDESolution object, which retrieves the shaped solution much faster than the previously recommended method. See the documentation for more information."
 
     interface_errors(alldepvars, allindvars, discretization)
     # @show alldepvars
