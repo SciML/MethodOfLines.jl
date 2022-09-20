@@ -44,27 +44,37 @@ There are of course more specific schemes that are used to improve stability/spe
 
 Please submit an issue if you know of any special cases which impact stability or accuracy that are not implemented, with links to papers and/or code that demonstrates the special case.
 """
-function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, depvars, pde::Equation, derivweights::DifferentialDiscretizer, pmap, indexmap)
-
+function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, depvars,
+                                          pde::Equation,
+                                          derivweights::DifferentialDiscretizer, pmap,
+                                          indexmap)
     terms = split_terms(pde, s.x̄)
 
     # Standard cartesian centered difference scheme
-    central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+    central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights,
+                                                             pmap, indexmap, terms)
 
     # Advection rules
     if derivweights.advection_scheme isa UpwindScheme
-        advection_rules = generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+        advection_rules = generate_winding_rules(II, s, depvars, derivweights, pmap,
+                                                 indexmap, terms)
     elseif derivweights.advection_scheme isa WENOScheme
-        advection_rules = generate_WENO_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+        advection_rules = generate_WENO_rules(II, s, depvars, derivweights, pmap, indexmap,
+                                              terms)
     else
         @assert false "Unsupported advection scheme $(derivweights.advection_scheme) encountered."
     end
 
     # Nonlinear laplacian scheme
-    nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+    nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, pmap, indexmap,
+                                               terms)
 
     # Spherical diffusion scheme
-    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, pmap, indexmap, split_additive_terms(pde))
+    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars,
+                                                                   derivweights, pmap,
+                                                                   indexmap,
+                                                                   split_additive_terms(pde))
 
-    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules))
+    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules),
+                vec(central_deriv_rules_cartesian), vec(advection_rules))
 end

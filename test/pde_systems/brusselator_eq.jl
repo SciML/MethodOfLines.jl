@@ -4,7 +4,7 @@ using DomainSets
 # using Plots
 
 # local sol
-begin #@testset "Test 01: Brusselator equation 2D" begin
+begin @testset "Test 01: Brusselator equation 2D" begin
        @parameters x y t
        @variables u(..) v(..)
        Dt = Differential(t)
