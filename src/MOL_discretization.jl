@@ -142,8 +142,10 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem,
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
-
-            sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name, metadata=metadata)
+            sys = ODESystem(vcat(alleqs, unique(bceqs)), t,
+                            vec(reduce(vcat, vec(alldepvarsdisc))), ps,
+                            defaults = Dict(defaults), name = pdesys.name,
+                            metadata = metadata)
             return sys, tspan
         end
     catch e
