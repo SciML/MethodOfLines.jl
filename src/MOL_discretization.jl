@@ -129,6 +129,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem,
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] :
          first.(pdesys.ps)
     # Combine PDE equations and BC equations
+    metadata = MOLMetadata(s, discretization, pdesys)
     try
         if t === nothing
             # At the time of writing, NonlinearProblems require that the system of equations be in this form:
@@ -141,9 +142,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem,
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
-            sys = ODESystem(vcat(alleqs, unique(bceqs)), t,
-                            vec(reduce(vcat, vec(alldepvarsdisc))), ps,
-                            defaults = Dict(defaults), name = pdesys.name)
+
+            sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name, metadata=metadata)
             return sys, tspan
         end
     catch e
@@ -207,6 +207,8 @@ function get_discrete(pdesys, discretization)
                                               filter(xs -> (!isequal(xs, [t])),
                                                      map(arguments, alldepvars))))), t)
     #@show allindvars, typeof.(allindvars)
+
+    @warn "`get_discrete` is deprecated, The solution is now automatically wrapped in a PDESolution object, which retrieves the shaped solution much faster than the previously recommended method. See the documentation for more information."
 
     interface_errors(alldepvars, allindvars, discretization)
     # @show alldepvars

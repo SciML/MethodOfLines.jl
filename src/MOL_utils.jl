@@ -82,14 +82,9 @@ end
 
 """
     unitindex(N, j)
-Get a `CartesianIndex` of `j`-th canonical vector of length `N`.
+Get a unit `CartesianIndex` in dimension `j` of length `N`.
 """
-@inline function unitindex(N, j)
-    N == 0 && return CartesianIndex()
-    null = zeros(Int, N)
-    null[j] = 1
-    CartesianIndex(Tuple(null))
-end
+unitindex(N, j) = CartesianIndex(ntuple(i -> i == j, N))
 
 function _split_terms(term)
     S = Symbolics

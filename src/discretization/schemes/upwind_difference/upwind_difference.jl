@@ -62,6 +62,7 @@ in the direction of `x`
 function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, b,
                            derivweights, jx, u, ufunc, ispositive)
     j, x = jx
+    # return if this is an ODE
     ndims(u, s) == 0 && return Num(0)
     D = if !ispositive
         derivweights.windmap[1][Differential(x)^d]

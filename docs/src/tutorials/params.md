@@ -30,15 +30,17 @@ prob = discretize(pdesys,discretization) # This gives an ODEProblem since it's t
 
 sol = solve(prob,Tsit5())
 
-grid = get_discrete(pdesys, discretization)
-discrete_x = grid[x]
+discrete_x = sol[x]
 discrete_t = sol[t]
+
+solu = sol[u(t, x)]
+solv = sol[v(t, x)]
 
 using Plots
 
 anim = @animate for i in 1:length(t)
-    p1 = plot(discrete_x, map(d -> sol[d][i], grid[u(t, x)]), label="u, t=$(discrete_t[i])[1:9] "; legend=false, xlabel="x",ylabel="u",ylim=[0,1])
-    p2 = plot(discrete_x, map(d -> sol[d][i], grid[v(t, x)]), label="v, t=$(discrete_t[i])"; legend=false, xlabel="x", ylabel="v",ylim=[0, 1])
+    p1 = plot(discrete_x, solu[i, :], label="u, t=$(discrete_t[i])[1:9] "; legend=false, xlabel="x",ylabel="u",ylim=[0,1])
+    p2 = plot(discrete_x, solv[i, :], label="v, t=$(discrete_t[i])"; legend=false, xlabel="x", ylabel="v",ylim=[0, 1])
     plot(p1, p2)
 end
 gif(anim, "plot.gif",fps=30)
@@ -80,15 +82,16 @@ for (Dnval, Dpval) in zip(rand(10), rand(10))
     push!(sols, solve(newprob, Tsit5()));
 end
 
-grid = get_discrete(pdesys, discretization)
-discrete_x = grid[x]
 
 using Plots
 for (j, sol) in enumerate(sols)
+    discrete_x = sol[x]
     discrete_t = sol[t]
+    solu = sol[u(t, x)]
+    solv = sol[v(t, x)]
     anim = @animate for i in 1:length(discrete_t)
-        p1 = plot(discrete_x, map(d -> sol[d][i], grid[u(t, x)]), label="u, t=$(discrete_t[i])"; legend=false, xlabel="x",ylabel="u",ylim=[0,1])
-        p2 = plot(discrete_x, map(d -> sol[d][i], grid[v(t, x)]), label="v, t=$(discrete_t[i])"; legend=false, xlabel="x", ylabel="v",ylim=[0, 1])
+        p1 = plot(discrete_x, solu[i, :], label="u, t=$(discrete_t[i])"; legend=false, xlabel="x",ylabel="u",ylim=[0,1])
+        p2 = plot(discrete_x, solv[i, :], label="v, t=$(discrete_t[i])"; legend=false, xlabel="x", ylabel="v",ylim=[0, 1])
         plot(p1, p2)
     end
     gif(anim, "plot_$j.gif",fps=10)
