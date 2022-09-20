@@ -1,4 +1,4 @@
-# Solution Retrieval - PDESolutions(@id sol)
+# [Solution Retrieval - PDESolutions](@id sol)
 
 MethodOfLines automatically wraps the `ODESolution` that results from its generated `ODEProblem` in 
 a `PDESolution` object, reshaping it and providing a convenient interface for accessing your results,
