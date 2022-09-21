@@ -1,4 +1,4 @@
-# get_discrete (@id get_grid)
+# [`get_discrete`](@id get_grid)
 
 !!! warn
     This method is deprecated in favour of the newer [solution interface](@ref sol), and has much worse performance. These methods will now only work with `sol.original_sol`.
