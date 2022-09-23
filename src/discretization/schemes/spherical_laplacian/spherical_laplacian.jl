@@ -52,7 +52,6 @@ end
                 push!(spherical_diffusion_rules, t => r(t))
             end
             catch e
-                @show t, r
                 rethrow(e)
             end
         end
