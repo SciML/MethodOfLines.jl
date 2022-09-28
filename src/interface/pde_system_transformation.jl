@@ -75,7 +75,7 @@ function create_aux_variable!(eqs, bcs, v, term)
     rule = term => newvar
     # apply the replacement rule to the equations and boundary conditions
     for (i, eq) in enumerate(eqs)
-        eqs[i] = substitute(eq.lhs, rule) ~ substitute(eq.rhs, rule)
+        eqs[i] = substitute(eq.lhs, rule) ~ 0
     end
     for (i, bc) in enumerate(bcs)
         bcs[i] = substitute(bc.lhs, rule) ~ substitute(bc.rhs, rule)

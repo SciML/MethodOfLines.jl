@@ -22,11 +22,11 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     boundarymap, u0 = parse_bcs(pdesys.bcs, v, bcorders)
 
     # Transform system so that it is compatible with the discretization
-    pdesys = transform_pde_system(pdesys, depvar_ops)
+    pdesys = transform_pde_system(pdesys, v)
     bcs = pdesys.bcs
     domain = pdesys.domain
 
-    interface_errors(alldepvars, allindvars, discretization)
+    interface_errors(v.ū, v.x̄, discretization)
     # @show alldepvars
     # @show allindvars
 

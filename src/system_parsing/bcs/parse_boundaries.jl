@@ -55,6 +55,8 @@ struct FinalCondition <: AbstractTruncatingBoundary
     order
 end
 
+sort_by_order(tcs::Vector{<:AbstractTruncatingBoundary}) =
+
 struct PeriodicBoundary <: AbstractBoundary
     u
     x
