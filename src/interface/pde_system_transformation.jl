@@ -95,6 +95,7 @@ function create_aux_variable!(eqs, bcs, v, term)
     end
     # ! Work out how many boundaries are in the map and create rules for each
     # ! Calculate how many new bcs are needed and add them to the list of bcs
+end
 
 function check_mixed_differentials(ivs)
     S = Symbolics
