@@ -8,11 +8,11 @@ variable and create an array of symbolic variables to represent it in its discre
 ## Arguments
 
 - `domain`: The domain of the space.
-- `depvars`: The independent variables to be discretizated.
-- `indepvars`: The independent variables.
+- `vars`: A `VariableMap` object that contains the dependant and independent variables and
+    other important values.
 - `discretization`: The discretization algorithm.
 
-## Fields
+## Properties
 
 - `ū`: The vector of dependant variables.
 - `args`: The dictionary of the operations of dependant variables and the corresponding arguments,
@@ -72,30 +72,27 @@ Dict{Sym{Real, Base.ImmutableDict{DataType, Any}}, StepRangeLen{Float64, Base.Tw
 ```
 """
 struct DiscreteSpace{N,M,G}
-    ū
-    args
+    vars
     discvars
-    time
-    x̄ # Note that these aren't necessarily @parameters
     axies
     grid
     dxs
     Iaxies
     Igrid
-    x2i
 end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
 
-function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference{G}) where {G}
-    t = discretization.time
+function DiscreteSpace(domain, vars, discretization::MOLFiniteDifference{G}) where {G}
+    x̄ = vars.x̄
+    depvars = vars.ū
     nspace = length(x̄)
     # Discretize space
     axies = map(x̄) do x
-        xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
+        xdomain = vars.domains[x]
         dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
-        discx = dx isa Number ? (DomainSets.infimum(xdomain.domain):dx:DomainSets.supremum(xdomain.domain)) : dx
-        xhigh = DomainSets.supremum(xdomain.domain)
+        discx = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
+        xhigh = xdomain[2]
         if discx[end] != xhigh
             @warn "d$x for $x does not divide domain exactly, adding grid point at $x = $(xhigh))."
             discx = collect(discx)
@@ -146,11 +143,18 @@ function DiscreteSpace(domain, depvars, x̄, discretization::MOLFiniteDifference
         end
     end
 
-    args = [operation(u) => arguments(u) for u in depvars]
 
-    x̄2dim = [x̄[i] => i for i in 1:nspace]
-    dim2x̄ = [i => x̄[i] for i in 1:nspace]
-    return DiscreteSpace{nspace,length(depvars),G}(depvars, Dict(args), Dict(depvarsdisc), discretization.time, x̄, axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), Dict(x̄2dim))
+    return DiscreteSpace{nspace,length(depvars),G}(Dict(depvarsdisc), discretization.time, axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
+end
+
+import Base.getproperty
+
+function Base.getproprty(s::DiscreteSpace, p::Symbol)
+    if p in [:ū, :x̄, :time, :args, :x2i, :i2x]
+        getfield(s.vars, p)
+    else
+        getfield(s, p)
+    end
 end
 
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
@@ -186,16 +190,7 @@ end
 """
 A function that returns what to replace independent variables with in boundary equations
 """
-@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I) where {N,M,G}
-    u = depvar(u_,s)
-    map(params(u, s)) do x
-        if isequal(x, x_)
-            x => (I[x2i(s, u, x)] == 1 ? first(s.axies[x]) : last(s.axies[x]))
-        else
-            x => s.grid[x][I[x2i(s, u, x)]]
-        end
-    end
-end
+axiesvals(v::DiscreteSpace, u_, x_, I) = axiesvals(s.vars, u_, x_, I)
 
 gridvals(s::DiscreteSpace{N}, u) where N = ndims(u,s) == 0 ? [] : map(y-> [x => s.grid[x][y.I[x2i(s, u, x)]] for x in params(u,s)],s.Igrid[u])
 gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where N = ndims(u,s) == 0 ? [] : [x => s.grid[x][I[x2i(s,u,x)]] for x in params(u, s)]
@@ -232,6 +227,6 @@ end
 end
 
 
-depvar(u, s::DiscreteSpace) = operation(u)(s.args[operation(u)]...)
+depvar(u, s::DiscreteSpace) = depvar(u, s.vars)
 
-x2i(s::DiscreteSpace, u, x) = findfirst(isequal(x), remove(s.args[operation(u)], s.time))
+x2i(s::DiscreteSpace, u, x) = x2i(s.vars, u, x)

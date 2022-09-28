@@ -7,32 +7,29 @@ function interface_errors(depvars, indvars, discretization)
 end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
-    pdeeqs = [eq.lhs - eq.rhs ~ 0 for eq in pdesys.eqs]
-    bcs = pdesys.bcs
-    domain = pdesys.domain
-
     t = discretization.time
 
-    depvar_ops = map(x -> operation(x.val), pdesys.depvars)
-    # Get all dependent variables in the correct type
-    alldepvars = get_all_depvars(pdesys, depvar_ops)
-    alldepvars = filter(u -> !any(map(x -> x isa Number, arguments(u))), alldepvars)
-    # Get all independent variables in the correct type, removing time from the list
-    allindvars = remove(collect(filter(x -> !(x isa Number), reduce(union, filter(xs -> (!isequal(xs, [t])), map(arguments, alldepvars))))), t)
-    #@show allindvars, typeof.(allindvars)
+    v = VariableMap(pdesys, discretization)
+
+    tspan = v.intervals[t]
+
+    pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), all_ivs(v)))
+    bcorders = Dict(map(x -> x => d_orders(x, bcs), all_ivs(v)))
+
+    orders = Dict(map(x -> x => collect(union(pdeorders[x], bcorders[x])), all_ivs(v)))
+
+    # Create a map of each variable to their boundary conditions and get the initial condition
+    boundarymap, u0 = parse_bcs(pdesys.bcs, v, bcorders)
+
+    # Transform system so that it is compatible with the discretization
+    pdesys = transform_pde_system(pdesys, depvar_ops)
+    bcs = pdesys.bcs
+    domain = pdesys.domain
 
     interface_errors(alldepvars, allindvars, discretization)
     # @show alldepvars
     # @show allindvars
 
-    # Get tspan
-    tspan = nothing
-    # Check that inputs make sense
-    if t !== nothing
-        tdomain = pdesys.domain[findfirst(d -> isequal(t.val, d.variables), pdesys.domain)]
-        @assert tdomain.domain isa DomainSets.Interval
-        tspan = (DomainSets.infimum(tdomain.domain), DomainSets.supremum(tdomain.domain))
-    end
     alleqs = []
     bceqs = []
     # * We wamt to do this in 2 passes
@@ -40,15 +37,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # * periodic parameters get type info on whether they are periodic or not, and if they join up to any other parameters
     # * Then we can do the actual discretization by recursively indexing in to the DiscreteVariables
 
-    pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), allindvars))
-    bcorders = Dict(map(x -> x => d_orders(x, bcs), allindvars))
-
-    orders = Dict(map(x -> x => collect(union(pdeorders[x], bcorders[x])), allindvars))
-
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
-    # Create a map of each variable to their boundary conditions and get the initial condition
-    boundarymap, u0 = parse_bcs(pdesys.bcs, s, depvar_ops, tspan, bcorders)
     # Generate a map of each variable to whether it is periodic in a given direction
     pmap = PeriodicMap(boundarymap, s)
     # Get the interior and variable to solve for each equation
