@@ -38,6 +38,28 @@ function differential_order(eq, x::Symbolics.Symbolic)
 end
 
 """
+Finds the derivative or depvar within a term
+"""
+function find_derivative(term, depvar_op)
+    S = Symbolics
+    SU = SymbolicUtils
+    orders = Set{Int}()
+    if S.istree(eq)
+        op = SU.operation(term)
+        if (op isa Differential) | isequal(op, depvar_op)
+            return term
+        else
+            for arg in SU.arguments(term)
+                res = find_derivative(arg, depvar_op)
+                if res !== nothing
+                    return res
+                end
+            end
+        end
+    end
+    return nothing
+end
+"""
 find all the dependent variables given by depvar_ops in an expression
 """
 function get_depvars(eq, depvar_ops)
@@ -59,8 +81,12 @@ function get_depvars(eq, depvar_ops)
     return depvars
 end
 
-@inline function get_all_depvars(pdesys, depvar_ops)
-    pdeeqs = pdesys.eqs # Vector
+@inline function get_all_depvars(pdeeqs, depvar_ops)
+    return collect(mapreduce(x -> get_depvars(x.lhs, depvar_ops), union, pdeeqs) ∪ mapreduce(x -> get_depvars(x.rhs, depvar_ops), union, pdeeqs))
+end
+
+@inline function get_all_depvars(pdesys::PDESystem, depvar_ops)
+    pdeeqs = pdesys.eqs
     return collect(mapreduce(x -> get_depvars(x.lhs, depvar_ops), union, pdeeqs) ∪ mapreduce(x -> get_depvars(x.rhs, depvar_ops), union, pdeeqs))
 end
 
@@ -259,3 +285,5 @@ function generate_coordinates(i::Int, stencil_x, dummy_x,
     end
     return stencil_x
 end
+
+subs_alleqs!(eqs, rules) = map!(eq -> substitute(eq, rules), eqs, eqs)

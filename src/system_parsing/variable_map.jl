@@ -9,12 +9,12 @@ struct VariableMap
     i2x
 end
 
-function VariableMap(pdesys, discretization)
+function VariableMap(eqs, indvars, depvars, domain, discretization)
     time = discretization.time
 
-    depvar_ops = map(x -> operation(x.val), pdesys.depvars)
+    depvar_ops = map(u -> operation(u.val), depvars)
     # Get all dependent variables in the correct type
-    alldepvars = get_all_depvars(pdesys, depvar_ops)
+    alldepvars = get_all_depvars(eqs, depvar_ops)
     ū = filter(u -> !any(map(x -> x isa Number, arguments(u))), alldepvars)
     # Get all independent variables in the correct type
     x̄ = remove(collect(filter(x -> !(x isa Number), reduce(union, map(arguments, alldepvars)))), t)
@@ -28,7 +28,7 @@ function VariableMap(pdesys, discretization)
     args = [operation(u) => arguments(u) for u in ū]
     x̄2dim = [x̄[i] => i for i in 1:nspace]
     dim2x̄ = [i => x̄[i] for i in 1:nspace]
-    return VariableMap(ū, x̄, time, Dict(intervals), Dict(args), depvar_ops, Dict(x̄2dim), Dict(dim2x̄))
+    return VariableMap(depvars, indvars, time, Dict(intervals), Dict(args), depvar_ops, Dict(x̄2dim), Dict(dim2x̄))
 end
 
 params(u, v::VariableMap) = s.args[operation(u)]

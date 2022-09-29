@@ -14,14 +14,15 @@ struct LowerBoundary <: AbstractTruncatingBoundary
     depvars
     indvars
     eq
-    function LowerBoundary(u, t, x, eq, v)
+    order
+    function LowerBoundary(u, t, x, order, eq, v)
         depvars_lhs = get_depvars(eq.lhs, v.depvar_ops)
         depvars_rhs = get_depvars(eq.rhs, v.depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         #depvars =  filter(u -> !any(map(x-> x isa Number, arguments(u))), depvars)
 
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
-        return new(u, x, depvar.(depvars, [v]), first(allx̄), eq)
+        return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
 
@@ -31,13 +32,14 @@ struct UpperBoundary <: AbstractTruncatingBoundary
     depvars
     indvars
     eq
-    function UpperBoundary(u, t, x, eq, s, depvar_ops)
+    order
+    function UpperBoundary(u, t, x, term, eq, v)
         depvars_lhs = get_depvars(eq.lhs, depvar_ops)
         depvars_rhs = get_depvars(eq.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
 
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
-        return new(u, x, depvar.(depvars, [s]), first(allx̄), eq)
+        return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
 
@@ -54,8 +56,6 @@ struct FinalCondition <: AbstractTruncatingBoundary
     rhs
     order
 end
-
-sort_by_order(tcs::Vector{<:AbstractTruncatingBoundary}) =
 
 struct PeriodicBoundary <: AbstractBoundary
     u
