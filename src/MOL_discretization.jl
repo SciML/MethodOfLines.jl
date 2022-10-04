@@ -8,8 +8,10 @@ end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
     t = discretization.time
-
-    v = VariableMap(pdesys, discretization)
+    ############################
+    # System Parsing and Transformation
+    ############################
+    v = VariableMap(pdesys, t)
 
     tspan = t !== nothing ? v.intervals[t] : nothing
 
@@ -25,11 +27,14 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
     # Transform system so that it is compatible with the discretization
     pdesys = transform_pde_system!(v, boundarymap, pmap, pdesys)
-    domain = pdesys.domain
 
     interface_errors(v.ū, v.x̄, discretization)
     # @show alldepvars
     # @show allindvars
+
+    ############################
+    # Discretization of system
+    ############################
 
     alleqs = []
     bceqs = []
@@ -39,7 +44,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # * Then we can do the actual discretization by recursively indexing in to the DiscreteVariables
 
     # Create discretized space and variables, this is called `s` throughout
-    s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
+    s = DiscreteSpace(v, discretization)
     # Get the interior and variable to solve for each equation
     interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
     # Generate finite difference weights
@@ -81,7 +86,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
 
             # Generate the boundary conditions for the correct variable
-            for boundary in reduce(vcat, collect(values(boundarymap[operation(eqvar)])))
+            for boundary in reduce(vcat, boundarymap[operation(eqvar)][s.x̄])
                 generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
             end
             # Generate extrapolation eqs
