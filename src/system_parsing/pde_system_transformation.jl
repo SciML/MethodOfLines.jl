@@ -1,8 +1,11 @@
-function transform_pde_system(sys::PDESystem, discretization, v)
+"""
+Replace the PDESystem with an equivalent PDESystem which is compatible with MethodOfLines, mutates boundarymap, pmap and v
+"""
+function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
     eqs = [eq.lhs - eq.rhs ~ 0 for eq in sys.eqs]
     bcs = sys.bcs
-    done = false
-    # Replace bad terms until the system comes up clean
+    local done
+    # Replace bad terms with a greedy strategy until the system comes up clean
     while !done
         done = true
         for eq in eqs
@@ -16,15 +19,15 @@ function transform_pde_system(sys::PDESystem, discretization, v)
             # Replace incompatible terms with auxiliary variables
             elseif badterm !== nothing
                 # mutates eqs, bcs and v, we remake a fresh v at the end
-                create_aux_variable!(eqs, bcs, v, badterm)
+                create_aux_variable!(eqs, bcs, boundarymap, pmap, v, badterm)
                 done = false
                 break
             end
         end
     end
-    v = VariableMap(eqs, v.x̄, v.ū, sys.domains, discretization)
+
     sys = PDESystem(eqs, bcs, sys.domains, sys.ivs, Num.(v.ū), ps = sys.ps, name = sys.name)
-    return sys, v
+    return sys
 end
 
 """
@@ -83,15 +86,22 @@ function descend_to_incompatible(term, v)
     end
 end
 
-function create_aux_variable!(eqs, bcs, v, term)
+function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     S = Symbolics
     SU = SymbolicUtils
     t = v.time
     newbcs = []
 
-    # generate replacement rules for incompatible terms
+    oldū = v.ū
+    old_depvar_ops = v.depvar_ops
+
     # create a new variable
     newvar = S.diff2term(term)
+    newop = operation(newvar)
+    newargs = arguments(newvar)
+
+    # update_varmap
+    update_varmap!(v, newvar)
     # generate the replacement rule
     rule = term => newvar
     # apply the replacement rule to the equations and boundary conditions
@@ -103,29 +113,80 @@ function create_aux_variable!(eqs, bcs, v, term)
     end
     # add the new equation
     neweq = newvar ~ term
+
     push!(eqs, neweq.lhs - neweq.rhs ~ 0)
     # add the new variable to the list of dependent variables
     push!(dvs, newvar)
     # generate replacement rules for initial conditions
-    orders = Dict(map(x -> x => d_orders_with0(x, term), all_ivs(v)))
-    sorted_ics = sort(mapreduce(dv -> boundarymap[dv][t], vcat, v.ū), by=tc->tc.order)
 
-    icrules = map(reverse(sorted_ics)) do ic
-        ic isa FinalCondition && throw(ArgumentError("Final conditions are not yet supported"))
-        if ic.order !== 0
-            (Differential(ic.x)^ic.order)(operation(ic.u)(v.args[operation(ic.u)])) => ic.rhs
-        else
-            operation(ic.u)(v.args[operation(ic.u)]...) => ic.rhs
+    newbcs = []
+
+    for dv in old_depvar_ops
+        for iv in all_ivs(v)
+            # if this is a periodic boundary, just add a new periodic condition
+            if pmap[dv][iv] isa Val{true}
+                args = substitute.(newargs, (x=>v.intervals[iv][1],))
+                push!(newbcs, PeriodicBoundary(newop(args...), iv))
+                continue
+            end
+            boundaries = boundarymap[dv][iv]
+            generate_aux_bcs!(newbcs, newop, term, boundaries, v)
         end
     end
 
-    newics =  map(reverse(orders[t])) do o
-        args = arguments(newvar)
-        args = substitute.(args, (x=>v.intervals[t][1],))
-        lhsvar = o == 0 ? operation(newvar)(args...) : (Derivative(t)^o)(operation(newvar)(args...))
-        lhsvar ~ expand_derivatives(substitute(term, icrules))
-    end
+    newbcs = vcat(newics, newbcs)
 
-    # ! Work out how many boundaries are in the map and create rules for each
-    # ! Calculate how many new bcs are needed and add them to the list of bcs
+    # add the new bc equations
+    append!(bcs, map(bc -> bc.eq, newbcs))
+
+    # Add the new boundary conditions and initial conditions to the boundarymap
+    merge!(boundarymap, Dict(newop => Dict(iv => [] for iv in all_ivs(v))))
+    merge!(pmap.map, Dict(newop => Dict(iv => Val{false}() for iv in all_ivs(v))))
+    for bc in newbcs
+        push!(boundarymap[newop][bc.x], bc)
+        if bc isa PeriodicBoundary
+            pmap[newop][bc.x] = Val{true}()
+        end
+    end
+    # update pmap
+end
+
+function generate_bc_rules(bcs, v)
+    bcs = reverse(sort(bcs, by = bc -> bc.order))
+    map(bcs) do bc
+        if bc.order !== 0
+            bcrule_lhs = (Differential(bc.x)^bc.order)(operation(bc.u)(v.args[operation(bc.u)]))
+            bcterm = (Differential(bc.x)^bc.order)(bc.u)
+        else
+            bcrule_lhs = operation(bc.u)(v.args[operation(bc.u)]...)
+            bcterm = bc.u
+        end
+        rhs = solve_for(bc.eq, bcterm)
+        bcrule_lhs => rhs
+    end
+end
+
+function generate_aux_bcs!(newbcs, newop, term, bcs, v)
+    t = v.time
+    rules = generate_bc_rules(bcs, v)
+    for bc in bcs
+        iv = bc.x
+        val = isupper(bc) ? v.intervals[iv][2] : v.intervals[iv][1]
+        args = arguments(newvar)
+        args = substitute.(args, (iv=>val,))
+        bcdv = newop(args...)
+        deriv = bc.order == 0 ? identity : (Derivative(iv)^bc.order)
+
+        bclhs = deriv(bcdv)
+        # ! catch faliures to expand and throw a better error
+        bcrhs = expand_derivatives(substitute(deriv(term), rules))
+        eq = bclhs ~ bcrhs
+
+        newbc = if isupper(bc)
+            UpperBoundary(bcdv, t, iv, bc.order, eq)
+        else
+            LowerBoundary(bcdv, t, iv, bc.order, eq)
+        end
+        push!(newbcs, newbc)
+    end
 end
