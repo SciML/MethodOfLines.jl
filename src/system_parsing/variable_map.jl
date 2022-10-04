@@ -12,7 +12,7 @@ end
 function VariableMap(eqs, indvars, depvars, domain, discretization)
     time = discretization.time
 
-    depvar_ops = map(u -> operation(u.val), depvars)
+    depvar_ops = map(u -> operation(u isa Num ? u.val : u), depvars)
     # Get all dependent variables in the correct type
     alldepvars = get_all_depvars(eqs, depvar_ops)
     ū = filter(u -> !any(map(x -> x isa Number, arguments(u))), alldepvars)
@@ -31,9 +31,16 @@ function VariableMap(eqs, indvars, depvars, domain, discretization)
     return VariableMap(depvars, indvars, time, Dict(intervals), Dict(args), depvar_ops, Dict(x̄2dim), Dict(dim2x̄))
 end
 
+function update_varmap!(v, newdv)
+    push!(v.ū, newdv)
+    merge!(v.args, Dict(operation(newdv) => arguments(newdv)))
+    push!(v.depvar_ops, operation(unwrap(newdv)))
+end
+
+
 params(u, v::VariableMap) = s.args[operation(u)]
 
-all_ivs(v::VariableMap) = remove(s.args[operation(u)], s.time)
+all_ivs(v::VariableMap) = v.time === nothing ? v.x̄ : v.x̄ ∪ [v.time]
 
 depvar(u, v::VariableMap) = operation(u)(v.args[operation(u)]...)
 

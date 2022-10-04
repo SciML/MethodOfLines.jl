@@ -33,7 +33,7 @@ struct UpperBoundary <: AbstractTruncatingBoundary
     indvars
     eq
     order
-    function UpperBoundary(u, t, x, term, eq, v)
+    function UpperBoundary(u, t, x, order, eq, v)
         depvars_lhs = get_depvars(eq.lhs, depvar_ops)
         depvars_rhs = get_depvars(eq.rhs, depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
@@ -41,20 +41,6 @@ struct UpperBoundary <: AbstractTruncatingBoundary
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
-end
-
-struct InitialCondition <: AbstractTruncatingBoundary
-    u
-    x
-    rhs
-    order
-end
-
-struct FinalCondition <: AbstractTruncatingBoundary
-    u
-    x
-    rhs
-    order
 end
 
 struct PeriodicBoundary <: AbstractBoundary
@@ -124,19 +110,19 @@ end
 
 edge(s, b, interiormap) = edge(interiormap, s, b.u, x2i(s, b.u, b.x), !isupper(b))
 
-function _time_rules(s, orders, u, val)
-    t = v.time
-    args = v.args[operation(u)]
-    args = substitute.(args, (t => val,))
-    varrule = operation(u)(args...) => [operation(u)(args...), t, 0]
-    return vcat([(Differential(t)^d)(operation(u)(args...)) => [operation(u)(args...), t, d] for d in reverse(orders[t])], varrule)
-end
-
 function _boundary_rules(v, orders, u, x, val)
         args = v.args[operation(u)]
         args = substitute.(args, (x=>val,))
         varrule = operation(u)(args...) => [operation(u)(args...), x]
-        return vcat([(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x] for d in reverse(orders[x])], Differential(v.time)(operation(u)(args...)) => [operation(u)(args...), x], varrule)
+
+        spacerules = [(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x, d] for d in reverse(orders[x])]
+
+        if x !== v.time
+            timerules = Differential(v.time)(operation(u)(args...)) => [operation(u)(args...), v.time, d]
+            return vcat(spacerules, timerules, varrule)
+        else
+            return vcat(spacerules, varrule)
+        end
 end
 
 function generate_boundary_matching_rules(v, orders)
@@ -145,9 +131,9 @@ function generate_boundary_matching_rules(v, orders)
     upperboundary(x) = v.intervals[x][2]
 
     # Rules to match boundary conditions on the lower boundaries
-    lower = Dict([operation(u) => Dict([x => _boundary_rules(v, orders, u, x, lowerboundary(x)) for x in params(u, v)]) for u in v.ū])
+    lower = Dict([operation(u) => Dict([x => _boundary_rules(v, orders, u, x, lowerboundary(x)) for x in vcat(params(u, v), v.time)]) for u in v.ū])
 
-    upper = Dict([operation(u) => Dict([x => _boundary_rules(v, orders, u, x, upperboundary(x)) for x in params(u, v)]) for u in v.ū])
+    upper = Dict([operation(u) => Dict([x => _boundary_rules(v, orders, u, x, upperboundary(x)) for x in vcat(params(u, v), v.time)]) for u in v.ū])
 
     return (lower, upper)
 end
@@ -159,12 +145,6 @@ function parse_bcs(bcs, v::VariableMap, orders)
     t = v.time
     tspan = v.intervals[t]
     depvar_ops = v.depvar_ops
-
-    local initmaps, finalmaps
-    if t !== nothing
-        initmaps = reduce(vcat, _time_rules.((v,), (orders,), v.ū, (tspan[1],)))
-        finalmaps = reduce(vcat, _time_rules.((v,), (orders,), v.ū, (tspan[2],)))
-    end
 
     # Create some rules to match which bundary/variable a bc concerns
     # * Assume that the term of the condition is applied additively and has no multiplier/divisor/power etc.
@@ -189,7 +169,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
                     # Get the matched variables from the rule
                     u_, x_, order = r.second
                     # Mark the boundary
-                    boundary = InitialCondition(u_, t, bc.rhs, order)
+                    boundary = LowerBoundary(u_, s.time, x_, order, bc, v)
                     break
                 end
             end
@@ -200,7 +180,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
                         # Get the matched variables from the rule
                         u_, x_, order = r.second
                         # Mark the boundary
-                        boundary = FinalCondition(u_, t, bc.rhs, order)
+                        boundary = UpperBoundary(u_, s.time, x_, order, bc, v)
                         break
                     end
                 end
@@ -221,7 +201,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
                 # Get the matched variables from the rule
                 u_, x_ = r.second
                 # Mark the boundary
-                boundary = LowerBoundary(u_, s.time, x_, bc, v, depvar_ops)
+                boundary = LowerBoundary(u_, v, x_, order, bc, v)
                 # do it again for the upper end to check for periodic, but only check the current depvar and indvar
                 for term_ in setdiff(terms, [term]), r_ in upper_boundary_rules[operation(u_)][x_]
                     if subsmatch(term_, r_)
@@ -237,7 +217,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
             for term in terms, r in reduce(vcat, reduce(vcat, collect.(values.(collect(values(upper_boundary_rules))))))
                 if subsmatch(term, r)
                     u_, x_ = r.second
-                    boundary = UpperBoundary(u_, s.time, x_, bc, v, depvar_ops)
+                    boundary = UpperBoundary(u_, v, x_, order, bc, v)
                     break
                 end
             end
