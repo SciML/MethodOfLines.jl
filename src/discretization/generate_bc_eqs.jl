@@ -28,7 +28,7 @@ end
 
 function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
     return mapreduce(vcat, values(boundarymap)) do boundaries
-        map(reduce(vcat, values(boundaries))) do b
+        map(reduce(vcat, boundaries[s.x̄])) do b
             if b isa PeriodicBoundary
                 II -> []
             else

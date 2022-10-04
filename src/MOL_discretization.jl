@@ -11,7 +11,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
     v = VariableMap(pdesys, discretization)
 
-    tspan = v.intervals[t]
+    tspan = t !== nothing ? v.intervals[t] : nothing
 
     pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), all_ivs(v)))
     bcorders = Dict(map(x -> x => d_orders(x, bcs), all_ivs(v)))
@@ -24,8 +24,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pmap = PeriodicMap(boundarymap, s)
 
     # Transform system so that it is compatible with the discretization
-    pdesys = transform_pde_system(pdesys, v)
-    bcs = pdesys.bcs
+    pdesys = transform_pde_system!(v, boundarymap, pmap, pdesys)
     domain = pdesys.domain
 
     interface_errors(v.ū, v.x̄, discretization)

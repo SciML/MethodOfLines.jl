@@ -9,17 +9,15 @@ struct VariableMap
     i2x
 end
 
-function VariableMap(eqs, indvars, depvars, domain, discretization)
-    time = discretization.time
-
+function VariableMap(eqs, indvars, depvars, domain, time)
     depvar_ops = map(u -> operation(u isa Num ? u.val : u), depvars)
     # Get all dependent variables in the correct type
     alldepvars = get_all_depvars(eqs, depvar_ops)
     ū = filter(u -> !any(map(x -> x isa Number, arguments(u))), alldepvars)
     # Get all independent variables in the correct type
-    x̄ = remove(collect(filter(x -> !(x isa Number), reduce(union, map(arguments, alldepvars)))), t)
-
-    intervals = Dict(map(x̄) do x
+    allivs = collect(filter(x -> !(x isa Number), reduce(union, map(arguments, alldepvars))))
+    x̄ = remove(allivs, time)
+    intervals = Dict(map(allivs) do x
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
         x => (DomainSets.infimum(xdomain.domain), DomainSets.supremum(xdomain.domain))
     end)
