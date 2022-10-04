@@ -149,7 +149,7 @@ end
 
 import Base.getproperty
 
-function Base.getproprty(s::DiscreteSpace, p::Symbol)
+function Base.getproperty(s::DiscreteSpace, p::Symbol)
     if p in [:ū, :x̄, :time, :args, :x2i, :i2x]
         getfield(s.vars, p)
     else
