@@ -64,14 +64,15 @@ end
 Substitute rules in all equations and bcs inplace
 """
 function  subs_alleqs!(eqs, bcs, rules)
+    subs_alleqs!(eqs, rules)
+    subs_alleqs!(bcs, rules)
+end
+
+function subs_alleqs!(eqs, rules)
     for (i, eq) in enumerate(eqs)
         eqs[i] = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
     end
-    for (i, bc) in enumerate(bcs)
-        bcs[i] = substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
-    end
 end
-
 """
 
 end
