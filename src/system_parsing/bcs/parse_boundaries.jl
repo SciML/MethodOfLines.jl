@@ -85,8 +85,6 @@ idx(b::UpperBoundary, s) = length(s, b.x)
 
 
 # indexes for Iedge depending on boundary type
-isupper(::InitialCondition) = false
-isupper(::FinalCondition) = true
 isupper(::LowerBoundary) = false
 isupper(::UpperBoundary) = true
 isupper(::PeriodicBoundary) = false

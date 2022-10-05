@@ -134,7 +134,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
         end
     end
 
-    newbcs = vcat(newics, newbcs)
+    newbcs = unique(newbcs)
 
     # add the new bc equations
     append!(bcs, map(bc -> bc.eq, newbcs))
