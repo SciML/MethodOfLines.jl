@@ -59,6 +59,22 @@ function find_derivative(term, depvar_op)
     end
     return nothing
 end
+
+"""
+Substitute rules in all equations and bcs inplace
+"""
+function  subs_alleqs!(eqs, bcs, rules)
+    for (i, eq) in enumerate(eqs)
+        eqs[i] = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
+    end
+    for (i, bc) in enumerate(bcs)
+        bcs[i] = substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
+    end
+end
+
+"""
+
+end
 """
 find all the dependent variables given by depvar_ops in an expression
 """

@@ -11,24 +11,22 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     ############################
     # System Parsing and Transformation
     ############################
+    # Parse the variables in to the right form and store useful information about the system
     v = VariableMap(pdesys, t)
-
+    # Check for basic interface errors
+    interface_errors(v.ū, v.x̄, discretization)
+    # Extract tspan
     tspan = t !== nothing ? v.intervals[t] : nothing
-
-    pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), all_ivs(v)))
-    bcorders = Dict(map(x -> x => d_orders(x, bcs), all_ivs(v)))
-
-    orders = Dict(map(x -> x => collect(union(pdeorders[x], bcorders[x])), all_ivs(v)))
-
-    # Create a map of each variable to their boundary conditions and get the initial condition
+    # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap, u0 = parse_bcs(pdesys.bcs, v, bcorders)
     # Generate a map of each variable to whether it is periodic in a given direction
     pmap = PeriodicMap(boundarymap, s)
-
     # Transform system so that it is compatible with the discretization
     pdesys = transform_pde_system!(v, boundarymap, pmap, pdesys)
 
-    interface_errors(v.ū, v.x̄, discretization)
+    pdeeqs = pdesys.eqs
+    bcs = pdesys.bcs
+
     # @show alldepvars
     # @show allindvars
 
@@ -47,6 +45,11 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     s = DiscreteSpace(v, discretization)
     # Get the interior and variable to solve for each equation
     interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
+    # Get the derivative orders appearing in each equation
+    pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), all_ivs(v)))
+    bcorders = Dict(map(x -> x => d_orders(x, bcs), all_ivs(v)))
+    orders = Dict(map(x -> x => collect(union(pdeorders[x], bcorders[x])), all_ivs(v)))
+
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
@@ -102,7 +105,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         end
     end
 
-    u0 = !isempty(u0) ? reduce(vcat, u0) : u0
+    u0 = generate_ic_defaults(boundarymap, s)
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
     alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))

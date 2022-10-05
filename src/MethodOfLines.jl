@@ -5,6 +5,7 @@ using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: operation, istree, arguments, variable
 using SymbolicUtils, Symbolics
+using Symbolics: unwrap, solve_for, expand_derivatives, diff2term
 using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays
@@ -39,6 +40,7 @@ include("discretization/schemes/extrapolation_weights.jl")
 include("discretization/differential_discretizer.jl")
 
 # System Parsing
+include("system_parsing/variable_map.jl")
 include("system_parsing/bcs/parse_boundaries.jl")
 include("system_parsing/bcs/periodic_map.jl")
 include("system_parsing/pde_system_transformation.jl")

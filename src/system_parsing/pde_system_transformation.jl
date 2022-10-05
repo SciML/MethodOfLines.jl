@@ -96,7 +96,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     old_depvar_ops = v.depvar_ops
 
     # create a new variable
-    newvar = S.diff2term(term)
+    newvar = diff2term(term)
     newop = operation(newvar)
     newargs = arguments(newvar)
 
@@ -105,12 +105,8 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     # generate the replacement rule
     rule = term => newvar
     # apply the replacement rule to the equations and boundary conditions
-    for (i, eq) in enumerate(eqs)
-        eqs[i] = substitute(eq.lhs, rule) ~ 0
-    end
-    for (i, bc) in enumerate(bcs)
-        bcs[i] = substitute(bc.lhs, rule) ~ substitute(bc.rhs, rule)
-    end
+    subs_alleqs!(eqs, bcs, rule)
+
     # add the new equation
     neweq = newvar ~ term
 
@@ -120,7 +116,6 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     # generate replacement rules for initial conditions
 
     newbcs = []
-
     for dv in old_depvar_ops
         for iv in all_ivs(v)
             # if this is a periodic boundary, just add a new periodic condition
@@ -133,12 +128,9 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
             generate_aux_bcs!(newbcs, newop, term, boundaries, v)
         end
     end
-
     newbcs = unique(newbcs)
-
     # add the new bc equations
     append!(bcs, map(bc -> bc.eq, newbcs))
-
     # Add the new boundary conditions and initial conditions to the boundarymap
     merge!(boundarymap, Dict(newop => Dict(iv => [] for iv in all_ivs(v))))
     merge!(pmap.map, Dict(newop => Dict(iv => Val{false}() for iv in all_ivs(v))))

@@ -9,7 +9,7 @@ struct VariableMap
     i2x
 end
 
-function VariableMap(eqs, indvars, depvars, domain, time)
+function VariableMap(eqs, depvars, domain, time)
     depvar_ops = map(u -> operation(u isa Num ? u.val : u), depvars)
     # Get all dependent variables in the correct type
     alldepvars = get_all_depvars(eqs, depvar_ops)
@@ -21,13 +21,14 @@ function VariableMap(eqs, indvars, depvars, domain, time)
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
         x => (DomainSets.infimum(xdomain.domain), DomainSets.supremum(xdomain.domain))
     end)
-    time = discretization.time
     nspace = length(x̄)
     args = [operation(u) => arguments(u) for u in ū]
     x̄2dim = [x̄[i] => i for i in 1:nspace]
     dim2x̄ = [i => x̄[i] for i in 1:nspace]
-    return VariableMap(depvars, indvars, time, Dict(intervals), Dict(args), depvar_ops, Dict(x̄2dim), Dict(dim2x̄))
+    return VariableMap(alldepvars, x̄, time, Dict(intervals), Dict(args), depvar_ops, Dict(x̄2dim), Dict(dim2x̄))
 end
+
+VariableMap(pdesys::PDESystem, t) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.domain, t)
 
 function update_varmap!(v, newdv)
     push!(v.ū, newdv)
