@@ -10,7 +10,8 @@ struct VariableMap
 end
 
 function VariableMap(eqs, depvars, domain, time)
-    depvar_ops = map(u -> operation(u isa Num ? u.val : u), depvars)
+    time = safe_unwrap(time)
+    depvar_ops = get_ops(depvars)
     # Get all dependent variables in the correct type
     alldepvars = get_all_depvars(eqs, depvar_ops)
     ū = filter(u -> !any(map(x -> x isa Number, arguments(u))), alldepvars)
@@ -37,7 +38,7 @@ function update_varmap!(v, newdv)
 end
 
 
-params(u, v::VariableMap) = s.args[operation(u)]
+params(u, v::VariableMap) = v.args[operation(u)]
 
 all_ivs(v::VariableMap) = v.time === nothing ? v.x̄ : v.x̄ ∪ [v.time]
 

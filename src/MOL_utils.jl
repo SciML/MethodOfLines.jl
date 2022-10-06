@@ -68,14 +68,8 @@ function  subs_alleqs!(eqs, bcs, rules)
     subs_alleqs!(bcs, rules)
 end
 
-function subs_alleqs!(eqs, rules)
-    for (i, eq) in enumerate(eqs)
-        eqs[i] = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
-    end
-end
-"""
+subs_alleqs!(eqs, rules) = map!(eq -> substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules), eqs)
 
-end
 """
 find all the dependent variables given by depvar_ops in an expression
 """
@@ -106,6 +100,8 @@ end
     pdeeqs = pdesys.eqs
     return collect(mapreduce(x -> get_depvars(x.lhs, depvar_ops), union, pdeeqs) ∪ mapreduce(x -> get_depvars(x.rhs, depvar_ops), union, pdeeqs))
 end
+
+get_ops(depvars) = map(u -> operation(safe_unwrap(u)), depvars)
 
 """
 A function that creates a tuple of CartesianIndices of unit length and `N` dimensions, one pointing along each dimension.
@@ -251,7 +247,7 @@ subsmatch(expr, rule) = isequal(substitute(expr, rule), expr) ? false : true
 subsmatch(eq::Equation, rule) = subsmatch(eq.lhs, rule) | subsmatch(eq.rhs, rule)
 #substitute(eq::Equation, rules) = substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules)
 
-remove(args, t) = filter(x -> t === nothing || !isequal(x, t.val), args)
+remove(args, t) = filter(x -> t === nothing || !isequal(safe_unwrap(x), safe_unwrap(t)), args)
 remove(v::AbstractVector, a::Number) = filter(x -> !isequal(x, a), v)
 
 
@@ -280,7 +276,7 @@ end
     return I
 end
 
-d_orders(x, pdeeqs) = reverse(sort(collect(union((differential_order(pde.rhs, x) for pde in pdeeqs)..., (differential_order(pde.lhs, x) for pde in pdeeqs)...))))
+d_orders(x, pdeeqs) = reverse(sort(collect(union((differential_order(pde.rhs, safe_unwrap(x)) for pde in pdeeqs)..., (differential_order(pde.lhs, safe_unwrap(x)) for pde in pdeeqs)...))))
 
 insert(args...) = insert!(args[1], args[2:end]...)
 
@@ -303,4 +299,4 @@ function generate_coordinates(i::Int, stencil_x, dummy_x,
     return stencil_x
 end
 
-subs_alleqs!(eqs, rules) = map!(eq -> substitute(eq, rules), eqs, eqs)
+safe_unwrap(x) = x isa Num ? x.val : x

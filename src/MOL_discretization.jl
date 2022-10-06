@@ -17,10 +17,12 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     interface_errors(v.ū, v.x̄, discretization)
     # Extract tspan
     tspan = t !== nothing ? v.intervals[t] : nothing
+    # Find the derivative orders in the bcs
+    bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
-    boundarymap, u0 = parse_bcs(pdesys.bcs, v, bcorders)
+    boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
     # Generate a map of each variable to whether it is periodic in a given direction
-    pmap = PeriodicMap(boundarymap, s)
+    pmap = PeriodicMap(boundarymap, v)
     # Transform system so that it is compatible with the discretization
     pdesys = transform_pde_system!(v, boundarymap, pmap, pdesys)
 
