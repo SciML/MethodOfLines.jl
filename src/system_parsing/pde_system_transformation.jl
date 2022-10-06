@@ -29,7 +29,7 @@ function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
         end
     end
 
-    sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū), ps=sys.ps, name=sys.name)
+    sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū), sys.ps, name=sys.name)
     return sys
 end
 
