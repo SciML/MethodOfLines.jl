@@ -21,12 +21,12 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.ODESolution{T}, metadata
                     end
                 end
                 # Correct placement of time axis
-                if isequal(arguments(u)[1], discretespace.time.val)
+                if isequal(arguments(u)[1], discretespace.time)
                     out = zeros(T, length(sol.t), size(discu)...)
                     for I in CartesianIndices(discu)
                         out[:, I] .= solu[I]
                     end
-                elseif isequal(arguments(u)[end], discretespace.time.val)
+                elseif isequal(arguments(u)[end], discretespace.time)
                     out = zeros(T, size(discu)..., length(sol.t))
                     for I in CartesianIndices(discu)
                         out[I, :] .= solu[I]

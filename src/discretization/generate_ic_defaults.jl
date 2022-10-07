@@ -12,7 +12,7 @@ function generate_ic_defaults(boundarymap, s)
             D = tc.order == 0 ? identity : (Differential(t)^tc.order)
             defaultvars = D.(s.discvars[depvar(tc.u, s)])
             broadcastable_rhs = (solve_for(tc.eq, D(tc.u)),)
-            vec(defaultvars .=> substitute.(broadcastable_rhs, valmaps(s, depvar(tc.u,s), depvars, indexmap)))
+            vec(defaultvars .=> substitute.(broadcastable_rhs, valmaps(s, depvar(tc.u,s), tc.depvars, indexmap)))
         end
     else
         u0 = []

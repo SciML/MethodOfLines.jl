@@ -38,7 +38,7 @@ function update_varmap!(v, newdv)
 end
 
 
-params(u, v::VariableMap) = v.args[operation(u)]
+params(u, v::VariableMap) = remove(v.args[operation(u)], v.time)
 
 all_ivs(v::VariableMap) = v.time === nothing ? v.x̄ : v.x̄ ∪ [v.time]
 
@@ -49,6 +49,6 @@ x2i(v::VariableMap, u, x) = findfirst(isequal(x), remove(v.args[operation(u)], v
 @inline function axiesvals(v::VariableMap, u_, x_, I)
     u = depvar(u_, v)
     map(params(u, v)) do x
-        x => (I[x2i(s, u, x)] == 1 ? v.intervals[x][1] : v.intervals[x][2])
+        x => (I[x2i(v, u, x)] == 1 ? v.intervals[x][1] : v.intervals[x][2])
     end
 end

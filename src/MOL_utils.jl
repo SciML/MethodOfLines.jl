@@ -68,7 +68,7 @@ function  subs_alleqs!(eqs, bcs, rules)
     subs_alleqs!(bcs, rules)
 end
 
-subs_alleqs!(eqs, rules) = map!(eq -> substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules), eqs)
+subs_alleqs!(eqs, rules) = map!(eq -> substitute(eq.lhs, rules) ~ substitute(eq.rhs, rules), eqs, eqs)
 
 """
 find all the dependent variables given by depvar_ops in an expression
