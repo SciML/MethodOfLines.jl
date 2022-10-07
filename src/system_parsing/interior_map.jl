@@ -27,7 +27,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, p
 
     interior = map(pdes) do pde
         u = varmap[pde]
-        boundaries = reduce(vcat, collect(values(boundarymap[operation(u)])))
+        boundaries = mapreduce(x -> boundarymap[operation(u)][x], vcat, s.x̄)
         n = ndims(u, s)
         lower = zeros(Int, n)
         upper = zeros(Int, n)

@@ -191,7 +191,7 @@ end
 """
 A function that returns what to replace independent variables with in boundary equations
 """
-axiesvals(v::DiscreteSpace, u_, x_, I) = axiesvals(s.vars, u_, x_, I)
+axiesvals(s::DiscreteSpace, u_, x_, I) = axiesvals(s.vars, u_, x_, I)
 
 gridvals(s::DiscreteSpace{N}, u) where N = ndims(u,s) == 0 ? [] : map(y-> [x => s.grid[x][y.I[x2i(s, u, x)]] for x in params(u,s)],s.Igrid[u])
 gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where N = ndims(u,s) == 0 ? [] : [x => s.grid[x][I[x2i(s,u,x)]] for x in params(u, s)]

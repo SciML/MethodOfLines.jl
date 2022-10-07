@@ -4,6 +4,9 @@ function interface_errors(depvars, indvars, discretization)
     for x in indvars
         @assert findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs) !== nothing "Variable $x has no step size"
     end
+    if !(typeof(discretization.advection_scheme) ∈ [UpwindScheme, WENOScheme])
+        throw(ArgumentError("Only `UpwindScheme()` and `WENOScheme()` are supported advection schemes."))
+    end
 end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
@@ -60,8 +63,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     ####
     for pde in pdeeqs
         # Read the dependent variables on both sides of the equation
-        depvars_lhs = get_depvars(pde.lhs, depvar_ops)
-        depvars_rhs = get_depvars(pde.rhs, depvar_ops)
+        depvars_lhs = get_depvars(pde.lhs, v.depvar_ops)
+        depvars_rhs = get_depvars(pde.rhs, v.depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         depvars = filter(u -> !any(map(x -> x isa Number, arguments(u))), depvars)
 
@@ -82,6 +85,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             eqvar = interiormap.var[pde]
 
+            eqvarbcs = mapreduce(x -> boundarymap[operation(eqvar)][x], vcat, s.x̄)
+
             # * Assumes that all variables have same dimensionality
             args = params(eqvar, s)
             indexmap = Dict([args[i] => i for i in 1:length(args)])
@@ -91,7 +96,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
 
             # Generate the boundary conditions for the correct variable
-            for boundary in reduce(vcat, boundarymap[operation(eqvar)][s.x̄])
+            for boundary in eqvarbcs
                 generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
             end
             # Generate extrapolation eqs

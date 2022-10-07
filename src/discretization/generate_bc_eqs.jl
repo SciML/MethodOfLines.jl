@@ -19,7 +19,6 @@ function generate_bc_eqs!(bceqs, s::DiscreteSpace{N}, boundaryvalfuncs, interior
         end
     end
 
-
     push!(bceqs, vec(map(edge(s, boundary, interiormap)) do II
         disc[II] ~ disc[II + Ioffset]
     end))
@@ -28,7 +27,7 @@ end
 
 function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
     return mapreduce(vcat, values(boundarymap)) do boundaries
-        map(reduce(vcat, boundaries[s.x̄])) do b
+        map(mapreduce(x -> boundaries[x], vcat, s.x̄)) do b
             if b isa PeriodicBoundary
                 II -> []
             else
