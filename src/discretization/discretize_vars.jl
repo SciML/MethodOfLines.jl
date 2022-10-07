@@ -83,13 +83,14 @@ end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
 
-function DiscreteSpace(domain, vars, discretization::MOLFiniteDifference{G}) where {G}
+function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     x̄ = vars.x̄
+    t = vars.time
     depvars = vars.ū
     nspace = length(x̄)
     # Discretize space
     axies = map(x̄) do x
-        xdomain = vars.domains[x]
+        xdomain = vars.intervals[x]
         dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
         discx = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
         xhigh = xdomain[2]
@@ -105,7 +106,7 @@ function DiscreteSpace(domain, vars, discretization::MOLFiniteDifference{G}) whe
     # center_align is recommended for Dirichlet BCs
     # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
 
-    grid = generate_grid(x̄, axies, domain, discretization)
+    grid = generate_grid(x̄, axies, vars.intervals, discretization)
 
     dxs = map(x̄) do x
         discx = Dict(grid)[x]
@@ -144,7 +145,7 @@ function DiscreteSpace(domain, vars, discretization::MOLFiniteDifference{G}) whe
     end
 
 
-    return DiscreteSpace{nspace,length(depvars),G}(Dict(depvarsdisc), discretization.time, axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
+    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
 end
 
 import Base.getproperty
@@ -210,17 +211,17 @@ map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} 
     return axies
 end
 
-@inline function generate_grid(x̄, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:EdgeAlignedGrid}
+@inline function generate_grid(x̄, axies, intervals, discretization::MOLFiniteDifference{G}) where {G<:EdgeAlignedGrid}
     dict = Dict(axies)
     return map(x̄) do x
-        xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
+        xdomain = intervals[x]
         dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
         if dict[x] isa StepRangeLen
-            x => (DomainSets.infimum(xdomain.domain)-dx/2):dx:(DomainSets.supremum(xdomain.domain)+dx/2)
+            x => (xdomain[1]-dx/2):dx:(xdomain[2]+dx/2)
         else
             discx = [(dict[x][i]+dict[x][i+1])/2 for i in 1:length(dict[x])-1]
-            pushfirst!(discx, discx[1] - 2*(discx[1] - infimum(xdomain.domain)))
-            push!(discx, discx[end] + 2*(supremum(xdomain.domain) - discx[end]))
+            pushfirst!(discx, discx[1] - 2*(discx[1] - xdomain[1]))
+            push!(discx, discx[end] + 2*(xdomain[2] - discx[end]))
             x => discx
         end
     end
