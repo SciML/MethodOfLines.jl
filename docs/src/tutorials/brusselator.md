@@ -120,14 +120,14 @@ println("Solve:")
 ```
 
 ## Extracting results
-To retrieve your solution, for example for `u`, use `sol[u(t, x, y)]`. To get the independent variable axes, use for example `sol[t]`. For more information on the solution interface, [see this page](@ref sol)
+To retrieve your solution, for example for `u`, use `sol[u(x, y, t)]`. To get the independent variable axes, use for example `sol[t]`. For more information on the solution interface, [see this page](@ref sol)
 ```julia
 discrete_x = sol[x]
 discrete_y = sol[y]
 discrete_t = sol[t]
 
-solu = sol[u(t, x, y)]
-solv = sol[v(t, x, y)]
+solu = sol[u(x, y, t)]
+solv = sol[v(x, y, t)]
 ```
 
 The result after plotting an animation:
