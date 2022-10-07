@@ -43,7 +43,21 @@ function filter_equivalent_differentials(term, differential, v)
         op = SU.operation(term)
         if op isa Differential && isequal(op.x, differential.x)
             return filter_equivalent_differentials(SU.arguments(term)[1], differential, v)
-        elseif any(isequal(op), v.depvar_ops)
+        else
+            return check_deriv_arg(term, v)
+        end
+    else
+        return term, true
+    end
+end
+
+"""
+Check that term is a compatible derivative argument, and return the term if it is not and whether to expand.
+"""
+function check_deriv_arg(term, v)
+    if istree(term)
+        op = operation(term)
+        if any(isequal(op), v.depvar_ops)
             return nothing, false
         else
             if length(get_depvars(term, v.depvar_ops)) == 0
@@ -58,7 +72,31 @@ function filter_equivalent_differentials(term, differential, v)
 end
 
 """
-Finds incompatible terms in the equations and replaces them with auxiliary variables, or expanded derivatives.
+Check if term is a compatible part of a nonlinear laplacian, including spherical laplacian, and return the argument to the innermost derivative if it is.
+"""
+function nonlinlap_check(term, differential, v)
+    if istree(term)
+        op = operation(term)
+        if op in [*, /]
+            args = arguments(term)
+            if operation args[1] == *
+                term = args[1]
+                args = arguments(term)
+            end
+            derivs = findall(args) do arg
+                op = operation(arg)
+                op isa Differential && isequal(op.x, differential.x)
+            end
+            if length(derivs) == 1
+                return arguments(derivs[1])[1]
+            end
+        end
+    end
+    return nothing
+end
+
+"""
+Finds incompatible terms in the equations and returns them with the incompatible part and whether to expand the term.
 """
 function descend_to_incompatible(term, v)
     S = Symbolics
@@ -67,7 +105,14 @@ function descend_to_incompatible(term, v)
         op = SU.operation(term)
         if op isa Differential
             if any(isequal(op.x), all_ivs(v))
-                badterm, shouldexpand = filter_equivalent_differentials(term, op, v)
+                nonlinlapterm = nonlinlap_check(term, v)
+
+                if nonlinlapterm !== nothing
+                    badterm, shouldexpand = check_deriv_arg(nonlinlapterm, op, v)
+                else
+                    badterm, shouldexpand = filter_equivalent_differentials(term, op, v)
+                end
+
                 if badterm !== nothing
                     return (term, badterm, shouldexpand)
                 else
@@ -83,10 +128,8 @@ function descend_to_incompatible(term, v)
                 return res
             end
         end
-        return (nothing, nothing, false)
-    else
-        return (nothing, nothing, false)
     end
+    return (nothing, nothing, false)
 end
 
 """
@@ -120,13 +163,11 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     # add the new equation
     neweq = newvar ~ term
 
-    newdepvars = get_depvars(term, v.depvar_ops)
+    newdepvars = [get_depvars(term, v.depvar_ops)...]
     neweqops = get_ops(newdepvars)
 
+    # Add the new equation to the equation list
     push!(eqs, neweq.lhs - neweq.rhs ~ 0)
-    # add the new variable to the list of dependent variables
-    push!(dvs, newvar)
-    # generate replacement rules for initial conditions
 
     newbcs = []
     # get a dict of each iv to all the bcs that depend on it
@@ -142,7 +183,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     for dv in neweqops
         for iv in all_ivs(v)
             # if this is a periodic boundary, just add a new periodic condition
-            if pmap[dv][iv] isa Val{true}
+            if pmap.map[dv][iv] isa Val{true}
                 args = substitute.(newargs, (x => v.intervals[iv][1],))
                 push!(newbcs, PeriodicBoundary(newop(args...), iv))
                 continue
@@ -150,8 +191,8 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
             bcs = boundarymap[dv][iv]
             length(bcs) == 0 && continue
 
-            generate_aux_bcs!(newbcs, newop, term, filter(isupper, bcs), v, rulesforeachboundary(iv, true))
-            generate_aux_bcs!(newbcs, newop, term, filter(!isupper, bcs), v, rulesforeachboundary(iv, false))
+            generate_aux_bcs!(newbcs, newvar, term, filter(isupper, bcs), v, rulesforeachboundary(iv, true))
+            generate_aux_bcs!(newbcs, newvar, term, filter(!isupper, bcs), v, rulesforeachboundary(iv, false))
         end
     end
     newbcs = unique(newbcs)
@@ -163,7 +204,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     for bc in newbcs
         push!(boundarymap[newop][bc.x], bc)
         if bc isa PeriodicBoundary
-            pmap[newop][bc.x] = Val{true}()
+            pmap.map[newop][bc.x] = Val{true}()
         end
     end
     # update pmap
@@ -181,11 +222,12 @@ function generate_bc_rules(bcs, v)
     end
 end
 
-function generate_aux_bcs!(newbcs, newop, term, bcs, v, rules)
+function generate_aux_bcs!(newbcs, newvar, term, bcs, v, rules)
     t = v.time
     for bc in bcs
         iv = bc.x
         val = isupper(bc) ? v.intervals[iv][2] : v.intervals[iv][1]
+        newop = operation(newvar)
         args = arguments(newvar)
         args = substitute.(args, (iv => val,))
         bcdv = newop(args...)
