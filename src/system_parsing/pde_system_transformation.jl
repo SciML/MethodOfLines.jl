@@ -105,7 +105,7 @@ function descend_to_incompatible(term, v)
         op = SU.operation(term)
         if op isa Differential
             if any(isequal(op.x), all_ivs(v))
-                nonlinlapterm = nonlinlap_check(term, v)
+                nonlinlapterm = nonlinlap_check(term, op, v)
 
                 if nonlinlapterm !== nothing
                     badterm, shouldexpand = check_deriv_arg(nonlinlapterm, op, v)
@@ -188,11 +188,11 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
                 push!(newbcs, PeriodicBoundary(newop(args...), iv))
                 continue
             end
-            bcs = boundarymap[dv][iv]
+            boundaries = boundarymap[dv][iv]
             length(bcs) == 0 && continue
 
-            generate_aux_bcs!(newbcs, newvar, term, filter(isupper, bcs), v, rulesforeachboundary(iv, true))
-            generate_aux_bcs!(newbcs, newvar, term, filter(!isupper, bcs), v, rulesforeachboundary(iv, false))
+            generate_aux_bcs!(newbcs, newvar, term, filter(isupper, boundaries), v, rulesforeachboundary(iv, true))
+            generate_aux_bcs!(newbcs, newvar, term, filter(!isupper, boundaries), v, rulesforeachboundary(iv, false))
         end
     end
     newbcs = unique(newbcs)
@@ -213,11 +213,10 @@ end
 function generate_bc_rules(bcs, v)
     bcs = reverse(sort(bcs, by=bc -> bc.order))
     map(bcs) do bc
-        deriv = bc.order == 0 ? identity : (Derivative(iv)^bc.order)
-        bcrule_lhs = deriv(operation(bc.u)(v.args[operation(bc.u)]))
+        deriv = bc.order == 0 ? identity : (Differential(bc.x)^bc.order)
+        bcrule_lhs = deriv(operation(bc.u)(v.args[operation(bc.u)]...))
         bcterm = deriv(bc.u)
         rhs = solve_for(bc.eq, bcterm)
-
         bcrule_lhs => rhs
     end
 end
@@ -225,13 +224,13 @@ end
 function generate_aux_bcs!(newbcs, newvar, term, bcs, v, rules)
     t = v.time
     for bc in bcs
-        iv = bc.x
-        val = isupper(bc) ? v.intervals[iv][2] : v.intervals[iv][1]
+        x = bc.x
+        val = isupper(bc) ? v.intervals[x][2] : v.intervals[x][1]
         newop = operation(newvar)
         args = arguments(newvar)
-        args = substitute.(args, (iv => val,))
+        args = substitute.(args, (x => val,))
         bcdv = newop(args...)
-        deriv = bc.order == 0 ? identity : (Derivative(iv)^bc.order)
+        deriv = bc.order == 0 ? identity : (Differential(x)^bc.order)
 
         bclhs = deriv(bcdv)
         # ! catch faliures to expand and throw a better error message
@@ -239,9 +238,9 @@ function generate_aux_bcs!(newbcs, newvar, term, bcs, v, rules)
         eq = bclhs ~ bcrhs
 
         newbc = if isupper(bc)
-            UpperBoundary(bcdv, t, iv, bc.order, eq)
+            UpperBoundary(bcdv, t, x, bc.order, eq, v)
         else
-            LowerBoundary(bcdv, t, iv, bc.order, eq)
+            LowerBoundary(bcdv, t, x, bc.order, eq, v)
         end
         push!(newbcs, newbc)
     end
