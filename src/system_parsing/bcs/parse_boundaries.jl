@@ -46,6 +46,7 @@ end
 struct PeriodicBoundary <: AbstractBoundary
     u
     x
+    eq
 end
 
 getvars(b::AbstractBoundary) = (b.u, b.x)
@@ -171,7 +172,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
                 # do it again for the upper end to check for periodic, but only check the current depvar and indvar
                 for term_ in setdiff(terms, [term]), r_ in upper_boundary_rules[operation(u_)][x_]
                     if subsmatch(term_, r_)
-                        boundary = PeriodicBoundary(u_, x_)
+                        boundary = PeriodicBoundary(u_, x_, bc)
                     end
                 end
 

@@ -1,7 +1,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using ModelingToolkit: Differential
 
-@testset "Test 00: Dtt(u) + Dtx(u(t,x)) - Dxx(u(t,x)) ~ 0" begin
+@testset "Test 00: Dtt(u) + Dtx(u(t,x)) - Dxx(u(t,x)) ~ Dxx(x)" begin
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -15,15 +15,15 @@ using ModelingToolkit: Differential
     xmin = -0.1118033987645
     xmax = 0.33541019624
 
-    eq  = [Dtt(u(t, x)) + Dtx(u(t, x)) - Dxx(u(t, x)) ~ 0]
+    eq  = [Dtt(u(t, x)) + Dtx(u(t, x)) - Dxx(u(t, x)) ~ Dxx(x)]
 
-    bcs = [u(0, x) ~ asf(0, x),
-           Dt(u(0, x)) ~ aDtf(0, x),
+    bcs = [u(1e-9, x) ~ asf(1e-9, x),
+           Dt(u(1e-9, x)) ~ aDtf(1e-9, x),
            u(t, xmin) ~ 0,
            u(t, xmax) ~ 0]
 
 
-    domain = [t ∈ Interval(0.0, 1.0),
+    domain = [t ∈ Interval(1e-9, 1.0),
               x ∈ Interval(xmin, xmax)]
 
     @named pdesys = PDESystem(eq, bcs, domain, [t, x], [u(t,x)])
@@ -32,12 +32,46 @@ using ModelingToolkit: Differential
     discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     prob = discretize(pdesys, discretization)
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, Rodas5P())
 
     xdisc = sol[x]
     tdisc = sol[t]
     usol = sol[u(t,x)]
 
     asol = [asf(t, x) for t in tdisc, x in xdisc]
+    @test usol ≈ asol atol = 1e-3
+end
+
+@testset "Test 01: Dt(u) ~ Dxy(u)" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxy = Differential(x)*Differential(y)
+
+    eq  = [Dt(u(t, x, y)) ~ Dxy(u(t, x, y))]
+
+    bcs = [u(0, x, y) ~ sinpi(x + y),
+           u(t, 0, y) ~ u(t, 1, y),
+           u(t, x, 0) ~ u(t, x, 1)]
+
+    domain = [t ∈ Interval(0.0, 1.0),
+              x ∈ Interval(0.0, 1.0),
+              y ∈ Interval(0.0, 1.0)]
+
+    @named pdesys = PDESystem(eq, bcs, domain, [t, x, y], [u(t,x,y)])
+
+    dx = 0.1
+    dy = 0.1
+    discretization = MOLFiniteDifference([x => dx, y => dy], t)
+
+    prob = discretize(pdesys, discretization)
+    sol = solve(prob, Rodas5P())
+
+    xdisc = sol[x]
+    ydisc = sol[y]
+    tdisc = sol[t]
+    usol = sol[u(t,x,y)]
+
+    asol = [sin(2pi*(t + x + y)) for t in tdisc, x in xdisc, y in ydisc]
     @test usol ≈ asol atol = 1e-3
 end

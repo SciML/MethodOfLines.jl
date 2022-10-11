@@ -163,6 +163,8 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     # add the new equation
     neweq = newvar ~ term
 
+    @warn "Incompatible term found. Adding auxiliary equation $(neweq) to the system."
+
     newdepvars = [get_depvars(term, v.depvar_ops)...]
     neweqops = get_ops(newdepvars)
 
@@ -184,8 +186,9 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
         for iv in all_ivs(v)
             # if this is a periodic boundary, just add a new periodic condition
             if pmap.map[dv][iv] isa Val{true}
-                args = substitute.(newargs, (x => v.intervals[iv][1],))
-                push!(newbcs, PeriodicBoundary(newop(args...), iv))
+                args1 = substitute.(newargs, (iv => v.intervals[iv][1],))
+                args2 = substitute.(newargs, (iv => v.intervals[iv][2],))
+                push!(newbcs, PeriodicBoundary(newop(args1...), iv, newop(args1...) ~ newop(args2...)))
                 continue
             end
             boundaries = boundarymap[dv][iv]
