@@ -71,6 +71,8 @@ end
 function Base.display(pdesol::SciMLBase.PDESolution{T,N,S,D}) where {T, N, S, D <: MOLMetadata}
     sys = pdesol.disc_data.pdesys
     println("PDESolution:")
+    println("  Return Code:")
+    println("    $(pdesol.retcode)")
     println("  Dependent variables:")
     for key in keys(pdesol.u)
         println("    $(key): $(size(pdesol.u[key])) sized solution")
