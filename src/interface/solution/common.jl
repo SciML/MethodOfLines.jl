@@ -68,30 +68,6 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     end
 end
 
-function Base.display(pdesol::SciMLBase.PDESolution{T,N,S,D}) where {T, N, S, D <: MOLMetadata}
-    sys = pdesol.disc_data.pdesys
-    println("PDESolution:")
-    println("  Dependent variables:")
-    for key in keys(pdesol.u)
-        println("    $(key): $(size(pdesol.u[key])) sized solution")
-    end
-    println("  Domain:")
-    for (i, xdisc) in enumerate(pdesol.ivdomain)
-        x = pdesol.ivs[i]
-        if all([xdisc[i+1] - xdisc[i] ≈ xdisc[2] - xdisc[1] for i in 1:length(xdisc)-1])
-            step = xdisc[2] - xdisc[1]
-            println("    $(x) ∈ ($(xdisc[1]), $(xdisc[end])) with $(length(xdisc)) points, step size $(step)")
-        else
-            avgstep = sum([xdisc[i+1] - xdisc[i] for i in 1:length(xdisc)-1]) / (length(xdisc)-1)
-            println("    $(x) ∈ ($(xdisc[1]), $(xdisc[end])) with $(length(xdisc)) non-uniform points. average step size $(avgstep)")
-        end
-    end
-    println("  From system:")
-    println("    Equations:")
-    latexify(sys.eqs) |> display
-    println("    Boundary/Initial Conditions:")
-    latexify(sys.bcs) |> display
-end
 
 #=
 # * Commented due to excessive compile time

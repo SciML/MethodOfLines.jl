@@ -9,13 +9,9 @@ using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays
 using Interpolations
-using Latexify
 import DomainSets
 
-# To Extend
 import SciMLBase.wrap_sol
-import Base.display
-
 
 # Interface
 include("interface/grid_types.jl")
