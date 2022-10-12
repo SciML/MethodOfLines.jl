@@ -48,9 +48,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         @time @safetestset "MOLFiniteDifference Utils" begin
             include("utils_test.jl")
         end
-        # @time @safetestset "Discretization of space and grid types" begin
-        #     include("components/DiscreteSpace.jl")
-        # end
+        @time @safetestset "Discretization of space and grid types" begin
+            include("components/DiscreteSpace.jl")
+        end
         @time @safetestset "Variable PDE mapping and interior construction" begin
             include("components/interiormap_test.jl")
         end
