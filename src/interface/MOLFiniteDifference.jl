@@ -27,11 +27,13 @@ struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
     approx_order::Int
     advection_scheme
     grid_align::G
+    should_transform::Bool
+    use_ODAE::Bool
     kwargs
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_scheme = UpwindScheme(), grid_align=CenterAlignedGrid(), upwind_order = nothing, kwargs...)
+function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_scheme = UpwindScheme(), grid_align=CenterAlignedGrid(), upwind_order = nothing, should_transform = true, use_ODAE = true,kwargs...)
     if upwind_order !== nothing
         @warn "`upwind_order` no longer does anything, and will be removed in a future release. See the docs for the current interface."
     end

@@ -27,7 +27,19 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Generate a map of each variable to whether it is periodic in a given direction
     pmap = PeriodicMap(boundarymap, v)
     # Transform system so that it is compatible with the discretization
-    pdesys = transform_pde_system!(v, boundarymap, pmap, pdesys)
+    if discretization.should_transform
+        pdesys = transform_pde_system!(v, boundarymap, pmap, pdesys)
+    end
+
+    # Check if the boundaries warrant using ODAEProblem, as long as this is allowed in the interface
+    use_ODAE = discretization.use_ODAE
+    if use_ODAE
+        bcivmap = reduce((d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap)))
+        allbcs = mapreduce(x -> bcivmap(x), vcat, s.x̄)
+        if all(bc -> bc.order > 0, allbcs)
+            use_ODAE = false
+        end
+    end
 
     pdeeqs = pdesys.eqs
     bcs = pdesys.bcs
@@ -38,7 +50,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     ############################
     # Discretization of system
     ############################
-
     alleqs = []
     bceqs = []
     # * We wamt to do this in 2 passes
@@ -121,7 +132,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     defaults = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps)
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
     # Combine PDE equations and BC equations
-    metadata = MOLMetadata(s, discretization, pdesys)
+    metadata = MOLMetadata(s, discretization, pdesys, use_ODAE)
     try
         if t === nothing
             # At the time of writing, NonlinearProblems require that the system of equations be in this form:
@@ -169,7 +180,11 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
         if tspan === nothing
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
         else
-            return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
+            if getfield(sys, :metadata) <: MOLMetadata && getfield(sys, :metadata).use_ODAE
+                return prob = ODAEProblem(simpsys, ones(length(simpsys.states)), tspan; discretization.kwargs...)
+            else
+                return prob = ODEProblem(simpsys, ones(length(simpsys.states)), tspan; discretization.kwargs...)
+            end
         end
     catch e
         error_analysis(sys, e)
