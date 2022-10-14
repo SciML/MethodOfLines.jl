@@ -33,7 +33,8 @@ discretization = MOLFiniteDifference(dxs,
                                       <your choice of continuous variable, usually time>; 
                                       advection_scheme = <UpwindScheme() or WENOScheme()>, 
                                       approx_order = <Order of derivative approximation, starting from 2> 
-                                      grid_align = <your grid type choice>)
+                                      grid_align = <your grid type choice>,
+                                      should_transform = <Whether to automatically transform the PDESystem (see below)>)
 prob = discretize(pdesys, discretization)
 ```
 Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`.
@@ -49,4 +50,8 @@ Currently supported grid types: `center_align` and `edge_align`. Edge align will
 
 `edge_align`: offset grid, set halfway between the points that would be generated with center_align, with extra points at either end that are above and below the supremum and infimum by `dx/2`. This improves accuracy for Neumann BCs.
 
-Any unrecognized keyword arguments will be passed to the `ODEProblem` constructor, see [its documentation](https://mtk.sciml.ai/stable/systems/ODESystem/#Standard-Problem-Constructors) for available options.
+`should_transform`: Whether to automatically transform the system to make it compatible, defaults to true. If your system has no mixed derivatives, all derivatives are purely of a dependent variable i.e. Dx(u(t,x)) not Dx(v(t,x)*u(t,x)) excepting nonlinear and spherical laplacians for which this holds for the innermost derivative argument, and no expandable derivatives, this can be set to false for better discretization performance.
+
+`use_ODAE`: MethodOfLines automatically makes use of `ODAEProblem` where relevant, which improves performance for DAEs (as discretized PDEs are in general). To force MethodOfines to use `ODEProblem` please set this to false.
+
+Any unrecognized keyword arguments will be passed to the `ODEProblem` or `ODAEProblem` constructor, see [its documentation](https://mtk.sciml.ai/stable/systems/ODESystem/#Standard-Problem-Constructors) for available options.
