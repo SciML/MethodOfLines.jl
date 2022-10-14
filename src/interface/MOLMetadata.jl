@@ -10,6 +10,7 @@ struct MOLMetadata{N, M, Ds, Disc, PDE}
     discretespace::Ds
     disc::Disc
     pdesys::PDE
+    use_ODAE::Bool
 end
 
 function MOLMetadata(discretespace, disc, pdesys)
