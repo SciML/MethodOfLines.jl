@@ -67,12 +67,4 @@ end
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
     sol = solve(prob, SSPRK33(), dt = 0.005, saveat = 0.01);
-
-    xdisc = sol[x]
-    ydisc = sol[y]
-    tdisc = sol[t]
-    usol = sol[u(t,x,y)]
-
-    asol = [sin(2pi*(t + x + y)) for t in tdisc, x in xdisc, y in ydisc]
-    @test usol ≈ asol atol = 1e-3
 end
