@@ -44,5 +44,5 @@ function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_sche
 
     @assert (time isa Num) | (time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
 
-    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order, advection_scheme, grid_align, kwargs)
+    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order, advection_scheme, grid_align, should_transform, use_ODAE, kwargs)
 end
