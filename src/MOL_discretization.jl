@@ -35,7 +35,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     use_ODAE = discretization.use_ODAE
     if use_ODAE
         bcivmap = reduce((d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap)))
-        allbcs = mapreduce(x -> bcivmap(x), vcat, s.x̄)
+        allbcs = mapreduce(x -> bcivmap(x), vcat, v.x̄)
         if all(bc -> bc.order > 0, allbcs)
             use_ODAE = false
         end

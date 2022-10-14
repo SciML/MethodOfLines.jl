@@ -79,7 +79,7 @@ function nonlinlap_check(term, differential, v)
         op = operation(term)
         if op in [*, /]
             args = arguments(term)
-            if operation args[1] == *
+            if operation(args[1]) == *
                 term = args[1]
                 args = arguments(term)
             end
