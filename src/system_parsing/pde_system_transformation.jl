@@ -108,7 +108,7 @@ function descend_to_incompatible(term, v)
                 nonlinlapterm = nonlinlap_check(term, op, v)
 
                 if nonlinlapterm !== nothing
-                    badterm, shouldexpand = check_deriv_arg(nonlinlapterm, op, v)
+                    badterm, shouldexpand = check_deriv_arg(nonlinlapterm, v)
                 else
                     badterm, shouldexpand = filter_equivalent_differentials(term, op, v)
                 end
