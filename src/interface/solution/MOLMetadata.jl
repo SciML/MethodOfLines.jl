@@ -13,21 +13,14 @@ struct MOLMetadata{hasTime, Ds,Disc,PDE} <: SciMLBase.AbstractDiscretizationMeta
     discretespace::Ds
     disc::Disc
     pdesys::PDE
-    function MOLMetadata(discretespace, disc, pdesys)
+    use_ODAE::Bool
+    function MOLMetadata(discretespace, disc, pdesys, use_ODAE)
         if discretespace.time isa Nothing
             hasTime = Val(false)
         else
             hasTime = Val(true)
         end
         return new{hasTime, typeof(discretespace), typeof(disc), typeof(pdesys)}(discretespace,
-                                                                                 disc, pdesys)
+                                                                                 disc, pdesys, use_ODAE)
     end
 end
-
-#! Which package for methods, dispatch problem
-
-#! where to intercept and wrap
-
-#! prob.f.sys
-
-#! 2d ODE nudge

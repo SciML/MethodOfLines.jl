@@ -30,10 +30,10 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
 
     v = MethodOfLines.VariableMap(pdesys, disc)
 
-    s = MethodOfLines.DiscreteSpace(v, disc)x_min:dx:x_max
-    discy = y_min:dy:y_max
+    s = MethodOfLines.DiscreteSpace(v, disc)
 
-    grid = Dict([x => discx, y => discy])
+    discx = x_min:dx:x_max
+    discy = y_min:dy:y_max
 
     @test s.grid[x] == discx
     @test s.grid[y] == discy

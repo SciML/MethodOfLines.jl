@@ -35,7 +35,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     use_ODAE = discretization.use_ODAE
     if use_ODAE
         bcivmap = reduce((d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap)))
-        allbcs = mapreduce(x -> bcivmap(x), vcat, v.x̄)
+        allbcs = mapreduce(x -> bcivmap[x], vcat, v.x̄)
         if all(bc -> bc.order > 0, allbcs)
             use_ODAE = false
         end
@@ -180,7 +180,7 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
         if tspan === nothing
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
         else
-            if getfield(sys, :metadata) <: MOLMetadata && getfield(sys, :metadata).use_ODAE
+            if getfield(sys, :metadata) isa MOLMetadata && getfield(sys, :metadata).use_ODAE
                 return prob = ODAEProblem(simpsys, ones(length(simpsys.states)), tspan; discretization.kwargs...)
             else
                 return prob = ODEProblem(simpsys, ones(length(simpsys.states)), tspan; discretization.kwargs...)
