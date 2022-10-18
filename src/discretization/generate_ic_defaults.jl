@@ -1,7 +1,6 @@
-function generate_ic_defaults(boundarymap, s)
+function generate_ic_defaults(tconds, s)
     t = s.time
     if s.time !== nothing
-        tconds = mapreduce(u -> boundarymap[u][t], vcat, operation.(s.ū))
         u0 = mapreduce(vcat, tconds) do tc
             if isupper(tc)
                 throw(ArgumentError("Upper boundary condition $(tc.eq) on time variable is not supported, please use a change of variables `t => -τ` to make this an initial condition."))

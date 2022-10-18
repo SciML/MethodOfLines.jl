@@ -69,6 +69,14 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
+    ics = t === nothing ? [] : mapreduce(u -> boundarymap[u][t], vcat, operation.(s.ū))
+
+    bcmap = Dict(map(collect(keys(boundarymap))) do u
+        u => Dict(map(s.x̄) do x
+            x => boundarymap[u][x]
+        end)
+    end)
+
     ####
     # Loop over equations, Discretizing them and their dependent variables' boundary conditions
     ####
@@ -96,15 +104,15 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             eqvar = interiormap.var[pde]
 
-            eqvarbcs = mapreduce(x -> boundarymap[operation(eqvar)][x], vcat, s.x̄)
+            eqvarbcs = mapreduce(x -> bcmap[operation(eqvar)][x], vcat, s.x̄)
 
-            # * Assumes that all variables have same dimensionality
+            # * Assumes that all variables in the equation have same dimensionality except edgevals
             args = params(eqvar, s)
             indexmap = Dict([args[i] => i for i in 1:length(args)])
 
             # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
             # Generate replacement rule gen closures for the boundary values like u(t, 1)
-            boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
+            boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
 
             # Generate the boundary conditions for the correct variable
             for boundary in eqvarbcs
@@ -123,7 +131,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         end
     end
 
-    u0 = generate_ic_defaults(boundarymap, s)
+    u0 = generate_ic_defaults(ics, s)
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
     alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))

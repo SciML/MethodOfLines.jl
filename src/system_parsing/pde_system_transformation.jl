@@ -15,12 +15,15 @@ function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
             term, badterm, shouldexpand = descend_to_incompatible(eq.lhs, v)
             # Expand derivatives where possible
             if shouldexpand
+                @show term
+                @warn "Expanding derivatives in term $term."
                 rule = term => expand_derivatives(term)
                 subs_alleqs!(eqs, bcs, rule)
                 done = false
                 break
                 # Replace incompatible terms with auxiliary variables
             elseif badterm !== nothing
+                @show term
                 # mutates eqs, bcs and v, we remake a fresh v at the end
                 create_aux_variable!(eqs, bcs, boundarymap, pmap, v, badterm)
                 done = false
