@@ -180,6 +180,7 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
         if tspan === nothing
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
         else
+            # Use ODAE if nessesary
             if getfield(sys, :metadata) isa MOLMetadata && getfield(sys, :metadata).use_ODAE
                 return prob = ODAEProblem(simpsys, ones(length(simpsys.states)), tspan; discretization.kwargs...)
             else
