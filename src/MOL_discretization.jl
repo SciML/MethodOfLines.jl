@@ -62,9 +62,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Get the interior and variable to solve for each equation
     interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
     # Get the derivative orders appearing in each equation
-    pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), all_ivs(v)))
-    bcorders = Dict(map(x -> x => d_orders(x, bcs), all_ivs(v)))
-    orders = Dict(map(x -> x => collect(union(pdeorders[x], bcorders[x])), all_ivs(v)))
+    pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), v.x̄))
+    bcorders = Dict(map(x -> x => d_orders(x, bcs), v.x̄))
+    orders = Dict(map(x -> x => collect(union(pdeorders[x], bcorders[x])), v.x̄))
 
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
