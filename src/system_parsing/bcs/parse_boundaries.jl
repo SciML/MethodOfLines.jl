@@ -130,9 +130,9 @@ function generate_boundary_matching_rules(v, orders)
     upperboundary(x) = v.intervals[x][2]
 
     # Rules to match boundary conditions on the lower boundaries
-    lower = Dict([operation(u) => Dict([x => _boundary_rules(v, orders, u, x, lowerboundary(x)) for x in vcat(params(u, v), v.time)]) for u in v.ū])
+    lower = Dict([operation(u) => Dict([x => _boundary_rules(v, orders, u, x, lowerboundary(x)) for x in all_params(u, v)]) for u in v.ū])
 
-    upper = Dict([operation(u) => Dict([x => _boundary_rules(v, orders, u, x, upperboundary(x)) for x in vcat(params(u, v), v.time)]) for u in v.ū])
+    upper = Dict([operation(u) => Dict([x => _boundary_rules(v, orders, u, x, upperboundary(x)) for x in all_params(u, v)]) for u in v.ū])
 
     return (lower, upper)
 end

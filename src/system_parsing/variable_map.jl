@@ -42,6 +42,8 @@ params(u, v::VariableMap) = remove(v.args[operation(u)], v.time)
 
 all_ivs(v::VariableMap) = v.time === nothing ? v.x̄ : v.x̄ ∪ [v.time]
 
+all_params(u, v::VariableMap) = v.args[operation(u)]
+
 depvar(u, v::VariableMap) = operation(u)(v.args[operation(u)]...)
 
 x2i(v::VariableMap, u, x) = findfirst(isequal(x), remove(v.args[operation(u)], v.time))
