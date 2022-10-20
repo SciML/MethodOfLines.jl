@@ -9,18 +9,28 @@ Used to unpack the solution.
           MOLFiniteDifference object.
 - `pdesys`: a PDESystem object, used in the discretization.
 """
-struct MOLMetadata{hasTime, Ds,Disc,PDE} <: SciMLBase.AbstractDiscretizationMetadata{hasTime}
+struct MOLMetadata{hasTime, Ds,Disc,PDE, M} <: SciMLBase.AbstractDiscretizationMetadata{hasTime}
     discretespace::Ds
     disc::Disc
     pdesys::PDE
     use_ODAE::Bool
-    function MOLMetadata(discretespace, disc, pdesys, use_ODAE)
+    metadata::M
+    function MOLMetadata(discretespace, disc, pdesys, use_ODAE, metadata = nothing)
+        metaref = Ref{Any}()
+        metaref[] = metadata
         if discretespace.time isa Nothing
             hasTime = Val(false)
         else
             hasTime = Val(true)
         end
-        return new{hasTime, typeof(discretespace), typeof(disc), typeof(pdesys)}(discretespace,
-                                                                                 disc, pdesys, use_ODAE)
+        return new{hasTime, typeof(discretespace),
+                   typeof(disc), typeof(pdesys),
+                   typeof(metadata)}(discretespace,
+                                                                                 disc, pdesys, use_ODAE,
+                                                                                 metadata)
     end
+end
+
+function add_metadata!(meta::MOLMetadata, metadata)
+    meta.metadata[] = metadata
 end

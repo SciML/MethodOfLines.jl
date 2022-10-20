@@ -190,9 +190,10 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
         else
             # Use ODAE if nessesary
             if getfield(sys, :metadata) isa MOLMetadata && getfield(sys, :metadata).use_ODAE
-                return prob = ODAEProblem(simpsys, ones(length(simpsys.states)), tspan; discretization.kwargs...)
+                add_metadata!(simpsys.metadata, DAEProblem(simpsys; discretization.kwargs...))
+                return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
             else
-                return prob = ODEProblem(simpsys, ones(length(simpsys.states)), tspan; discretization.kwargs...)
+                return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
             end
         end
     catch e

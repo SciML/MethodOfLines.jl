@@ -4,20 +4,11 @@ struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
     dxs
     time
     approx_order::Int
-    upwind_order::Int
+    advection_scheme
     grid_align::G
-end
-
-# Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, upwind_order = 1, grid_align=CenterAlignedGrid())
-    
-    if approx_order % 2 != 0
-        @warn "Discretization approx_order must be even, rounding up to $(approx_order+1)"
-    end
-    @assert approx_order >= 1 "approx_order must be at least 1"
-    @assert upwind_order >= 1 "upwind_order must be at least 1"
-    
-    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order, upwind_order, grid_align)
+    should_transform::Bool
+    use_ODAE::Bool
+    kwargs
 end
 ```
 
@@ -53,6 +44,6 @@ Currently supported `grid_align`: `center_align` and `edge_align`. Edge align wi
 
 `should_transform`: Whether to automatically transform the system to make it compatible with MethodOfLines where possible, defaults to true. If your system has no mixed derivatives, all derivatives are purely of a dependent variable i.e. Dx(u(t,x)) not Dx(v(t,x)*u(t,x)) excepting nonlinear and spherical laplacians for which this holds for the innermost derivative argument, and no expandable derivatives, this can be set to false for better discretization performance.
 
-`use_ODAE`: MethodOfLines automatically makes use of `ODAEProblem` where relevant, which improves performance for DAEs (as discretized PDEs are in general). To force MethodOfines to use `ODEProblem` please set this to false.
+`use_ODAE`: MethodOfLines will automatically make use of `ODAEProblem` where relevant, which improves performance for DAEs (as discretized PDEs are in general), if this is set to true. Defaults to false.
 
 Any unrecognized keyword arguments will be passed to the `ODEProblem` or `ODAEProblem` constructor, see [its documentation](https://mtk.sciml.ai/stable/systems/ODESystem/#Standard-Problem-Constructors) for available options.

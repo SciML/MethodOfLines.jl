@@ -11,7 +11,7 @@ function generate_ic_defaults(tconds, s)
             D = ic.order == 0 ? identity : (Differential(t)^ic.order)
             defaultvars = D.(s.discvars[depvar(ic.u, s)])
             broadcastable_rhs = [solve_for(ic.eq, D(ic.u))]
-            @show ic, defaultvars, broadcastable_rhs
+            out = substitute.(broadcastable_rhs, valmaps(s, depvar(ic.u,s), ic.depvars, indexmap))
             vec(defaultvars .=> substitute.(broadcastable_rhs, valmaps(s, depvar(ic.u,s), ic.depvars, indexmap)))
         end
     else

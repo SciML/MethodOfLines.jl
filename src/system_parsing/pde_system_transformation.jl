@@ -15,7 +15,6 @@ function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
             term, badterm, shouldexpand = descend_to_incompatible(eq.lhs, v)
             # Expand derivatives where possible
             if shouldexpand
-                @show term
                 @warn "Expanding derivatives in term $term."
                 rule = term => expand_derivatives(term)
                 subs_alleqs!(eqs, bcs, rule)
@@ -77,21 +76,32 @@ end
 """
 Check if term is a compatible part of a nonlinear laplacian, including spherical laplacian, and return the argument to the innermost derivative if it is.
 """
-function nonlinlap_check(term, differential, v)
+function nonlinlap_check(term, differential)
     if istree(term)
         op = operation(term)
-        if op in [*, /]
+        if (op == *) || (op == /)
             args = arguments(term)
-            if operation(args[1]) == *
+            if istree(args[1]) && operation(args[1]) == *
                 term = args[1]
                 args = arguments(term)
+            elseif istree(args[1]) && operation(args[1]) == /
+                term = args[1]
+                denominator = arguments(term)[2]
+                has_derivatives(denominator) && return nothing
+                args = arguments(term)
+                if istree(args[1]) && operation(args[1]) == *
+                    term = args[1]
+                    args = arguments(term)
+                end
             end
-            derivs = findall(args) do arg
+
+            is = findall(args) do arg
                 op = operation(arg)
                 op isa Differential && isequal(op.x, differential.x)
             end
-            if length(derivs) == 1
-                return arguments(derivs[1])[1]
+            if length(is) == 1
+                i = first(is)
+                return arguments(args[i])[1]
             end
         end
     end
@@ -108,7 +118,7 @@ function descend_to_incompatible(term, v)
         op = SU.operation(term)
         if op isa Differential
             if any(isequal(op.x), all_ivs(v))
-                nonlinlapterm = nonlinlap_check(term, op, v)
+                nonlinlapterm = nonlinlap_check(arguments(term)[1], op)
 
                 if nonlinlapterm !== nothing
                     badterm, shouldexpand = check_deriv_arg(nonlinlapterm, v)

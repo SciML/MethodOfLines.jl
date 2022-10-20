@@ -142,7 +142,6 @@ Creates a map of boundaries for each variable to be used later when discretizing
 """
 function parse_bcs(bcs, v::VariableMap, orders)
     t = v.time
-    tspan = v.intervals[t]
     depvar_ops = v.depvar_ops
 
     # Create some rules to match which bundary/variable a bc concerns

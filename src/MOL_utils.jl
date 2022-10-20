@@ -38,6 +38,22 @@ function differential_order(eq, x::Symbolics.Symbolic)
 end
 
 """
+Determine whether a term has a derivative anywhere in it.
+"""
+function has_derivatives(term)
+    if istree(term)
+        op = operation(term)
+        if op isa Differential
+            return true
+        else
+            return any(has_derivatives, arguments(term))
+        end
+    else
+        return false
+    end
+end
+
+"""
 Finds the derivative or depvar within a term
 """
 function find_derivative(term, depvar_op)
