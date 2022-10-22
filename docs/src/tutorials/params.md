@@ -48,7 +48,7 @@ gif(anim, "plot.gif",fps=30)
 
 ## Remake with different parameter values
 
-The system does not need to be re-discretized every time we want to plot with different parameters, the system can be remade with new parameters with `remake`. See the `ModelingToolkit.jl` [docs](https://mtk.sciml.ai/stable/tutorials/ode_modeling/#Algebraic-relations-and-structural-simplification) for more ways to manipulate a `prob` post discretization.
+The system does not need to be re-discretized every time we want to plot with different parameters, the system can be remade with new parameters with `remake`. See the `ModelingToolkit.jl` [docs](https://docs.sciml.ai/ModelingToolkit/stable/tutorials/ode_modeling/#Algebraic-relations-and-structural-simplification) for more ways to manipulate a `prob` post discretization.
 
 ```@example params2
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets

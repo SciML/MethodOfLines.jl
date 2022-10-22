@@ -42,7 +42,7 @@ on a timespan of ``t \in [0,11.5]``.
 
 ## Solving with MethodOfLines
 
-With `ModelingToolkit.jl`, we first symbolicaly define the system, see also the docs for [`PDESystem`](https://mtk.sciml.ai/stable/systems/PDESystem/):
+With `ModelingToolkit.jl`, we first symbolicaly define the system, see also the docs for [`PDESystem`](https://docs.sciml.ai/ModelingToolkit/stable/systems/PDESystem/):
 
 ```julia
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
@@ -112,7 +112,7 @@ println("Discretization:")
 ```
 
 ## Solving the problem
-Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://diffeq.sciml.ai/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/) and [SteadyStateDiffEq.jl](https://diffeq.sciml.ai/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl). `Tsit5()` is a good first choice of solver for many problems.
+Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](http://docs.sciml.ai/NonlinearSolve/stable/solvers/NonlinearSystemSolvers/) and [SteadyStateDiffEq.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl). `Tsit5()` is a good first choice of solver for many problems.
 
 ```julia
 println("Solve:")
