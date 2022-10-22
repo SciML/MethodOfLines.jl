@@ -20,7 +20,7 @@ makedocs(sitename = "MethodOfLines.jl",
          modules = [MethodOfLines],
          format = Documenter.HTML(analytics = "UA-90474609-3",
                                   assets = ["assets/favicon.ico"],
-                                  canonical = "https://methodoflines.sciml.ai/stable/"),
+                                  canonical = "https://docs.sciml.ai/MethodOfLines/stable/"),
          pages = pages)
 
 deploydocs(repo = "github.com/SciML/MethodOfLines.jl"; push_preview = true)
