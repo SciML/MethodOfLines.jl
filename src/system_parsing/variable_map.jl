@@ -18,7 +18,6 @@ function VariableMap(eqs, depvars, domain, time)
     # Get all independent variables in the correct type
     allivs = collect(filter(x -> !(x isa Number), reduce(union, map(arguments, alldepvars))))
     x̄ = remove(allivs, time)
-    @show x̄, eltype(x̄), typeof(safe_unwrap(time))
     intervals = Dict(map(allivs) do x
         xdomain = domain[findfirst(d -> isequal(x, d.variables), domain)]
         x => (DomainSets.infimum(xdomain.domain), DomainSets.supremum(xdomain.domain))
@@ -30,7 +29,8 @@ function VariableMap(eqs, depvars, domain, time)
     return VariableMap(alldepvars, x̄, time, Dict(intervals), Dict(args), depvar_ops, Dict(x̄2dim), Dict(dim2x̄))
 end
 
-VariableMap(pdesys::PDESystem, disc) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.domain, disc.time)
+VariableMap(pdesys::PDESystem, disc::MOLFiniteDifference) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.domain, disc.time)
+VariableMap(pdesys::PDESystem, t) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.domain, t)
 
 function update_varmap!(v, newdv)
     push!(v.ū, newdv)
