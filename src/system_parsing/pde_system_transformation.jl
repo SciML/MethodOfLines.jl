@@ -5,7 +5,7 @@ Modified copilot explanation:
 
 """
 function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
-    eqs = [eq.lhs - eq.rhs ~ 0 for eq in sys.eqs]
+    eqs = sys.eqs
     bcs = sys.bcs
     done = false
     # Replace bad terms with a greedy strategy until the system comes up clean
@@ -32,6 +32,12 @@ function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
 
     sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū), sys.ps, name=sys.name)
     return sys, pmap
+end
+
+function cardinalize_eqs!(pdesys)
+    for (i, eq) in enumerate(pdesys.eqs)
+        pdesys.eqs[i] = eq.lhs - eq.rhs ~ 0
+    end
 end
 
 """

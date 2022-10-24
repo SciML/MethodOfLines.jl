@@ -11,6 +11,8 @@ end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
     t = discretization.time
+    cardinalize_eqs!(pdesys)
+
     ############################
     # System Parsing and Transformation
     ############################
@@ -60,6 +62,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(v, discretization)
     # Get the interior and variable to solve for each equation
+    #TODO: do the interiormap before and independent of the discretization i.e. `s`
     interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
     # Get the derivative orders appearing in each equation
     pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), v.x̄))
