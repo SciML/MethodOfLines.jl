@@ -420,7 +420,7 @@ end
 end
 
 
-@testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0 + 1e-6 * t * sinpi(x)" begin
+@testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
     # Parameters, variables, and derivatives
     @parameters t x
     @variables v(..) u(..)
@@ -429,7 +429,7 @@ end
 
     # 1D PDE and boundary conditions
     eq = [Dt(u(t, x)) ~ -Dx(v(t, x) * u(t, x)),
-        v(t, x) ~ 1.0 + 1e-6 * t * sinpi(x)]
+        v(t, x) ~ 1.0 ]
     asf(x) = (0.5 / (0.2 * sqrt(2.0 * 3.1415))) * exp(-(x - 1.0)^2 / (2.0 * 0.2^2))
 
     bcs = [u(0, x) ~ asf(x),
@@ -453,7 +453,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, QBDF(), saveat=0.1)
+    sol = solve(prob, FBDF(), saveat=0.1)
 
     # Plot and save results
     # using Plots
