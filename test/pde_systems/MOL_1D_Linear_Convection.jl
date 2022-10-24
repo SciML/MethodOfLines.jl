@@ -409,7 +409,7 @@ end
 end
 
 
-@test_broken begin #@testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0 + 1e-9 * t * sinpi(x)" begin
+@test_broken begin #@testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
     # Parameters, variables, and derivatives
     @parameters t x
     @variables v(..) u(..)
@@ -452,6 +452,6 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
     @test_broken sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    # Too dispersive ^
 end
