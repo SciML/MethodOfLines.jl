@@ -2,7 +2,7 @@
 A helper function to compute the coefficients of a derivative operator including the boundary coefficients in the centered scheme.
 """
 function CompleteCenteredDifference(derivative_order::Int,
-                                    approximation_order::Int, dx::T) where {T <: Real, N}
+                                    approximation_order::Int, dx::T) where {T <: Real}
     @assert approximation_order>1 "approximation_order must be greater than 1."
     stencil_length = derivative_order + approximation_order - 1 +
                      (derivative_order + approximation_order) % 2
@@ -54,7 +54,7 @@ end
 
 function CompleteCenteredDifference(derivative_order::Int,
                                     approximation_order::Int,
-                                    x::AbstractVector{T}) where {T <: Real, N}
+                                    x::AbstractVector{T}) where {T <: Real}
     stencil_length = derivative_order + approximation_order - 1 +
                      (derivative_order + approximation_order) % 2
     boundary_stencil_length = derivative_order + approximation_order

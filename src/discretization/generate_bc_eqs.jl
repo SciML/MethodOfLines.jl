@@ -179,7 +179,7 @@ end
 """
 Create a vector containing indices of the corners of the domain.
 """
-@inline function findcorners(s::DiscreteSpace, lower, upper, u) where {M}
+@inline function findcorners(s::DiscreteSpace, lower, upper, u)
     args = remove(arguments(u), s.time)
     if any(lower.==0) && any(upper.==0)
         return CartesianIndex{2}[]

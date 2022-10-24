@@ -4,7 +4,7 @@ A helper function to compute the coefficients of a derivative operator including
 """
 function CompleteUpwindDifference(derivative_order::Int,
                                   approximation_order::Int, dx::T,
-                                  offside::Int = 0) where {T <: Real, N}
+                                  offside::Int = 0) where {T <: Real}
     @assert offside>-1 "Number of offside points should be non-negative"
 
     stencil_length = derivative_order + approximation_order
@@ -60,7 +60,7 @@ end
 
 function CompleteUpwindDifference(derivative_order::Int,
                                   approximation_order::Int, x::AbstractVector{T},
-                                  offside::Int = 0) where {T <: Real, N}
+                                  offside::Int = 0) where {T <: Real}
     @assert offside>-1 "Number of offside points should be non-negative"
 
     stencil_length = derivative_order + approximation_order
