@@ -46,4 +46,5 @@ Currently supported `grid_align`: `center_align` and `edge_align`. Edge align wi
 
 `use_ODAE`: MethodOfLines will automatically make use of `ODAEProblem` where relevant, which improves performance for DAEs (as discretized PDEs are in general), if this is set to true. Defaults to false.
 
-Any unrecognized keyword arguments will be passed to the `ODEProblem` or `ODAEProblem` constructor, see [its documentation](https://mtk.sciml.ai/stable/systems/ODESystem/#Standard-Problem-Constructors) for available options.
+Any unrecognized keyword arguments will be passed to the `ODEProblem` constructor, see [its documentation](https://docs.sciml.ai/ModelingToolkit/stable/systems/ODESystem/#Standard-Problem-Constructors) for available options.
+
