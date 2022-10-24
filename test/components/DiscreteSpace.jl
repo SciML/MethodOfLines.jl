@@ -43,8 +43,6 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
 
     #@test all([all(I[i] .∈ (collect(s.Igrid),)) for I in values(s.Iedges), i in [1,2]])
 
-    @test all(s.Iaxies[u] == s.Igrid[u] for u in depvars)
-
 end
 
 @testset "Test 02: discretization of variables, edge aligned grid" begin
@@ -85,7 +83,5 @@ end
     @test s.axies[y] != s.grid[y]
 
     #@test all([all(I[i] .∈ (collect(s.Igrid),)) for I in values(s.Iedges), i in [1,2]])
-
-    @test all(s.Iaxies[u] != s.Igrid[u] for u in depvars)
 
 end
