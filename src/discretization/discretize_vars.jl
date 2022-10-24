@@ -91,7 +91,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     # Discretize space
     axies = map(x̄) do x
         xdomain = vars.intervals[x]
-        dx = discretization.dxs[findfirst(dxs -> isequal(safe_unwrap(x), safe_unwrap(dxs[1])), discretization.dxs)][2]
+        dx = discretization.dxs[x]
         discx = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
         xhigh = xdomain[2]
         if discx[end] != xhigh

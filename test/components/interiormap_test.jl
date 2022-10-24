@@ -1,4 +1,4 @@
-using MethodOfLines, ModelingToolkit, DomainSets
+using MethodOfLines, ModelingToolkit, DomainSets, Test
 using Combinatorics: permutations
 
 
