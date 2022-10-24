@@ -33,7 +33,7 @@ using ModelingToolkit: Differential
     discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     prob = discretize(pdesys, discretization)
-    sol = solve(prob, Rodas5P())
+    sol = solve(prob, FBDF())
 
     xdisc = sol[x]
     tdisc = sol[t]
@@ -66,5 +66,5 @@ end
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
-    sol = solve(prob, SSPRK33(), dt = 0.005, saveat = 0.01);
+    sol = solve(prob, FBDF(), dt = 0.005, saveat = 0.01);
 end
