@@ -116,7 +116,7 @@ function _boundary_rules(v, orders, u, x, val)
 
         spacerules = [(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x, d] for d in reverse(orders[x])]
 
-        if x !== v.time
+        if v.time !== nothing && x !== v.time
             timerules = [Differential(v.time)(operation(u)(args...)) => [operation(u)(args...), v.time, d] for d in reverse(orders[v.time])]
             return vcat(spacerules, timerules, varrule)
         else
