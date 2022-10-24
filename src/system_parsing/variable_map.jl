@@ -34,7 +34,7 @@ VariableMap(pdesys::PDESystem, t) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.d
 function update_varmap!(v, newdv)
     push!(v.ū, newdv)
     merge!(v.args, Dict(operation(newdv) => arguments(newdv)))
-    push!(v.depvar_ops, operation(unwrap(newdv)))
+    push!(v.depvar_ops, operation(safe_unwrap(newdv)))
 end
 
 

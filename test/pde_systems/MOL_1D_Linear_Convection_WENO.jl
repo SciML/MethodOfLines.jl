@@ -420,7 +420,7 @@ end
 end
 
 
-@test_broken begin #@testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t,x)=0.999 + 0.001 * t * x " begin
+@testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0 + 1e-6 * t * sinpi(x)" begin
     # Parameters, variables, and derivatives
     @parameters t x
     @variables v(..) u(..)
@@ -429,13 +429,12 @@ end
 
     # 1D PDE and boundary conditions
     eq = [Dt(u(t, x)) ~ -Dx(v(t, x) * u(t, x)),
-        v(t, x) ~ 0.999 + 0.001 * t * x]
+        v(t, x) ~ 1.0 + 1e-6 * t * sinpi(x)]
     asf(x) = (0.5 / (0.2 * sqrt(2.0 * 3.1415))) * exp(-(x - 1.0)^2 / (2.0 * 0.2^2))
 
     bcs = [u(0, x) ~ asf(x),
         u(t, 0) ~ u(t, 2),
-        v(0, x) ~ 0.999,
-        v(t, 0) ~ v(t, 2)]
+        v(0, x) ~ v(t, 2)]
 
     # Space and time domains
     domains = [t ∈ Interval(0.0, 2.0),
@@ -454,7 +453,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
+    sol = solve(prob, QBDF(), saveat=0.1)
 
     # Plot and save results
     # using Plots

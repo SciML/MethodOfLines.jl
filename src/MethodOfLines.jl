@@ -5,7 +5,7 @@ using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: operation, istree, arguments, variable
 using SymbolicUtils, Symbolics
-using Symbolics: unwrap, solve_for, expand_derivatives, diff2term
+using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename, similarterm
 using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays

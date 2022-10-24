@@ -22,9 +22,8 @@ function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
                 break
                 # Replace incompatible terms with auxiliary variables
             elseif badterm !== nothing
-                @show term
                 # mutates eqs, bcs and v, we remake a fresh v at the end
-                create_aux_variable!(eqs, bcs, boundarymap, pmap, v, badterm)
+                pmap = create_aux_variable!(eqs, bcs, boundarymap, pmap, v, badterm)
                 done = false
                 break
             end
@@ -32,7 +31,7 @@ function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
     end
 
     sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū), sys.ps, name=sys.name)
-    return sys
+    return sys, pmap
 end
 
 """
@@ -162,7 +161,17 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     newbcs = []
 
     # create a new variable
-    newvar = diff2term(term)
+    if istree(term)
+        op = operation(term)
+        if op isa Differential
+            newvar = diff2term(term)
+        else
+            newvar = ex2term(term, v)
+        end
+    else
+        throw(ArgumentError("Term is not a tree, got $(term), this should never happen!"))
+    end
+
     newop = operation(newvar)
     newargs = arguments(newvar)
 
@@ -170,6 +179,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     update_varmap!(v, newvar)
     # generate the replacement rule
     rule = term => newvar
+
     # apply the replacement rule to the equations and boundary conditions
     subs_alleqs!(eqs, bcs, rule)
 
@@ -215,14 +225,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     # add the new bc equations
     append!(bcs, map(bc -> bc.eq, newbcs))
     # Add the new boundary conditions and initial conditions to the boundarymap
-    merge!(boundarymap, Dict(newop => Dict(iv => [] for iv in all_ivs(v))))
-    merge!(pmap.map, Dict(newop => Dict(iv => Val{false}() for iv in all_ivs(v))))
-    for bc in newbcs
-        push!(boundarymap[newop][bc.x], bc)
-        if bc isa PeriodicBoundary
-            pmap.map[newop][bc.x] = Val{true}()
-        end
-    end
+    update_boundarymap!(boundarymap, pmap.map, newbcs, newop, v)
     # update pmap
 end
 
@@ -260,4 +263,12 @@ function generate_aux_bcs!(newbcs, newvar, term, bcs, v, rules)
         end
         push!(newbcs, newbc)
     end
+end
+
+function update_boundarymap!(boundarymap, pmap::Dict{K,V}, bcs, newop, v) where {K,V}
+    merge!(boundarymap, Dict(newop => Dict(iv => [] for iv in all_ivs(v))))
+    for bc in bcs
+        push!(boundarymap[newop][bc.x], bc)
+    end
+    pmap = PeriodicMap(boundarymap, v)
 end

@@ -79,7 +79,7 @@ end
 """
 Substitute rules in all equations and bcs inplace
 """
-function  subs_alleqs!(eqs, bcs, rules)
+function subs_alleqs!(eqs, bcs, rules)
     subs_alleqs!(eqs, rules)
     subs_alleqs!(bcs, rules)
 end
@@ -316,3 +316,21 @@ function generate_coordinates(i::Int, stencil_x, dummy_x,
 end
 
 safe_unwrap(x) = x isa Num ? x.val : x
+
+
+"""
+    ex2term(x::Term) -> Symbolic
+    ex2term(x) -> x
+
+Convert a Term to a variable `Term`. Note that it only takes a `Term`
+not a `Num`.
+```
+"""
+function ex2term(term, v)
+    istree(term) || return term
+    termdvs = collect(get_depvars(term, v.depvar_ops))
+    symdvs = filter(u -> all(x -> !(safe_unwrap(x) isa Number), arguments(u)), termdvs)
+    exdv = last(sort(symdvs, by=u -> length(arguments(u))))
+    name = Symbol("⟦" * string(term) * "⟧")
+    return setname(similarterm(exdv, rename(operation(exdv), name), arguments(exdv)), name)
+end
