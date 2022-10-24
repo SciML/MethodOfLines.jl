@@ -111,11 +111,11 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     dxs = map(x̄) do x
         discx = Dict(grid)[x]
         if discx isa StepRangeLen
-            x => discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
+            x => discretization.dxs[x]
         elseif discx isa AbstractVector # is an abstract vector but not StepRangeLen
             x => [discx[i+1] - discx[i] for i in 1:length(x)]
         else
-            throw(ArgumentError("Supplied d$x is not a Number or AbstractVector, got $(typeof(discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2])) for $x"))
+            throw(ArgumentError("Supplied d$x is not a Number or AbstractVector, got $(typeof(discretization.dxs[x])) for $x"))
         end
     end
 
@@ -215,7 +215,7 @@ end
     dict = Dict(axies)
     return map(x̄) do x
         xdomain = intervals[x]
-        dx = discretization.dxs[findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs)][2]
+        dx = discretization.dxs[x]
         if dict[x] isa StepRangeLen
             x => (xdomain[1]-dx/2):dx:(xdomain[2]+dx/2)
         else

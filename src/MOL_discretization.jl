@@ -2,7 +2,7 @@
 
 function interface_errors(depvars, indvars, discretization)
     for x in indvars
-        @assert findfirst(dxs -> isequal(x, dxs[1].val), discretization.dxs) !== nothing "Variable $x has no step size"
+        @assert haskey(discretization.dxs, Num(x)) || haskey(discretization.dxs, x) "Variable $x has no step size"
     end
     if !(typeof(discretization.advection_scheme) ∈ [UpwindScheme, WENOScheme])
         throw(ArgumentError("Only `UpwindScheme()` and `WENOScheme()` are supported advection schemes."))
