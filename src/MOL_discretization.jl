@@ -231,6 +231,7 @@ function get_discrete(pdesys, discretization)
     end
 
     s = DiscreteSpace(v, discretization)
+
     return Dict(vcat([Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]))
 end
 
