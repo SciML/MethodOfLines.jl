@@ -189,6 +189,7 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
     try
         simpsys = structural_simplify(sys)
         if tspan === nothing
+            add_metadata!(simpsys.metadata, sys)
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
         else
             # Use ODAE if nessesary
@@ -196,6 +197,7 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
                 add_metadata!(simpsys.metadata, DAEProblem(simpsys; discretization.kwargs...))
                 return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
             else
+                add_metadata!(simpsys.metadata, sys)
                 return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
             end
         end
@@ -205,39 +207,31 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
 end
 
 function get_discrete(pdesys, discretization)
-    domain = pdesys.domain
-
     t = discretization.time
+    cardinalize_eqs!(pdesys)
 
-    depvar_ops = map(x->operation(x.val),pdesys.depvars)
-    # Get all dependent variables in the correct type
-    alldepvars = get_all_depvars(pdesys, depvar_ops)
-    alldepvars = filter(u -> !any(map(x-> x isa Number, arguments(u))), alldepvars)
-    # Get all independent variables in the correct type, removing time from the list
-    allindvars = remove(collect(filter(x->!(x isa Number), reduce(union, filter(xs->(!isequal(xs, [t])), map(arguments, alldepvars))))), t)
-    #@show allindvars, typeof.(allindvars)
-
-    @warn "`get_discrete` is deprecated, The solution is now automatically wrapped in a PDESolution object, which retrieves the shaped solution much faster than the previously recommended method. See the documentation for more information."
-
-    interface_errors(alldepvars, allindvars, discretization)
-    # @show alldepvars
-    # @show allindvars
-
-    # Get tspan
-    tspan = nothing
-    # Check that inputs make sense
-    if t !== nothing
-        tdomain = pdesys.domain[findfirst(d->isequal(t.val, d.variables), pdesys.domain)]
-        @assert tdomain.domain isa DomainSets.Interval
-        tspan = (DomainSets.infimum(tdomain.domain), DomainSets.supremum(tdomain.domain))
+    ############################
+    # System Parsing and Transformation
+    ############################
+    # Parse the variables in to the right form and store useful information about the system
+    v = VariableMap(pdesys, t)
+    # Check for basic interface errors
+    interface_errors(v.ū, v.x̄, discretization)
+    # Extract tspan
+    tspan = t !== nothing ? v.intervals[t] : nothing
+    # Find the derivative orders in the bcs
+    bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
+    # Create a map of each variable to their boundary conditions including initial conditions
+    boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
+    # Generate a map of each variable to whether it is periodic in a given direction
+    pmap = PeriodicMap(boundarymap, v)
+    # Transform system so that it is compatible with the discretization
+    if discretization.should_transform
+        pdesys, pmap = transform_pde_system!(v, boundarymap, pmap, pdesys)
     end
-    alleqs = []
-    bceqs = []
 
-    # Create discretized space and variables
-    s = DiscreteSpace(domain, alldepvars, allindvars, discretization)
-
-    return Dict(vcat([Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]) )
+    s = DiscreteSpace(v, discretization)
+    return Dict(vcat([Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]))
 end
 
 function ModelingToolkit.ODEFunctionExpr(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
