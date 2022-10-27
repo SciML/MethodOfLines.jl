@@ -166,8 +166,8 @@ nvars(::DiscreteSpace{N,M}) where {N,M} = M
 
 Fillter out the time variable and get the spatial variables of `u` in `s`.
 """
-params(u,s::DiscreteSpace) = remove(s.args[operation(u)], s.time)
-Base.ndims(u,s::DiscreteSpace) = length(params(u,s))
+params(u, s::DiscreteSpace) = remove(s.args[operation(u)], s.time)
+Base.ndims(u, s::DiscreteSpace) = length(params(u, s))
 
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])
 Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])
@@ -181,7 +181,7 @@ of `II` that corresponds to only the spatial arguments of `u`.
 """
 @inline function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     # We need to construct a new index as indices may be of different size
-    length(params(u,s)) == 0 && return CartesianIndex()
+    length(params(u, s)) == 0 && return CartesianIndex()
     is = [II[indexmap[x]] for x in params(u, s)]
 
     II = CartesianIndex(is...)
@@ -191,10 +191,19 @@ end
 """
 A function that returns what to replace independent variables with in boundary equations
 """
-axiesvals(s::DiscreteSpace, u_, x_, I) = axiesvals(s.vars, u_, x_, I)
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I) where {N,M,G}
+    u = depvar(u_, s)
+    map(params(u, s)) do x
+        if isequal(x, x_)
+            x => (I[x2i(s, u, x)] == 1 ? first(s.axies[x]) : last(s.axies[x]))
+        else
+            x => s.grid[x][I[x2i(s, u, x)]]
+        end
+    end
+end
 
-gridvals(s::DiscreteSpace{N}, u) where N = ndims(u,s) == 0 ? [] : map(y-> [x => s.grid[x][y.I[x2i(s, u, x)]] for x in params(u,s)],s.Igrid[u])
-gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where N = ndims(u,s) == 0 ? [] : [x => s.grid[x][I[x2i(s,u,x)]] for x in params(u, s)]
+gridvals(s::DiscreteSpace{N}, u) where {N} = ndims(u, s) == 0 ? [] : map(y -> [x => s.grid[x][y.I[x2i(s, u, x)]] for x in params(u, s)], s.Igrid[u])
+gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where {N} = ndims(u, s) == 0 ? [] : [x => s.grid[x][I[x2i(s, u, x)]] for x in params(u, s)]
 
 
 varmaps(s::DiscreteSpace, depvars, II, indexmap) = [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
@@ -219,9 +228,9 @@ end
         if dict[x] isa StepRangeLen
             x => (xdomain[1]-dx/2):dx:(xdomain[2]+dx/2)
         else
-            discx = [(dict[x][i]+dict[x][i+1])/2 for i in 1:length(dict[x])-1]
-            pushfirst!(discx, discx[1] - 2*(discx[1] - xdomain[1]))
-            push!(discx, discx[end] + 2*(xdomain[2] - discx[end]))
+            discx = [(dict[x][i] + dict[x][i+1]) / 2 for i in 1:length(dict[x])-1]
+            pushfirst!(discx, discx[1] - 2 * (discx[1] - xdomain[1]))
+            push!(discx, discx[end] + 2 * (xdomain[2] - discx[end]))
             x => discx
         end
     end

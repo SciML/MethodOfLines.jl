@@ -25,9 +25,9 @@ struct MOLMetadata{hasTime, Ds,Disc,PDE, M} <: SciMLBase.AbstractDiscretizationM
         end
         return new{hasTime, typeof(discretespace),
                    typeof(disc), typeof(pdesys),
-                   typeof(metadata)}(discretespace,
+                   typeof(metaref)}(discretespace,
                                                                                  disc, pdesys, use_ODAE,
-                                                                                 metadata)
+                                                                                 metaref)
     end
 end
 
