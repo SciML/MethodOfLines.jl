@@ -29,7 +29,7 @@ using ModelingToolkit: Differential
 
     @named pdesys = PDESystem(eq, bcs, domain, [t, x], [u(t,x)])
 
-    dx = (xmax-xmin)/80
+    dx = (xmax-xmin)/20
     discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     prob = discretize(pdesys, discretization)
@@ -67,4 +67,5 @@ end
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
     sol = solve(prob, FBDF(), saveat = 0.1);
+    @test sol.retcode == :Success
 end
