@@ -14,7 +14,8 @@ function VariableMap(eqs, depvars, domain, time)
     depvar_ops = get_ops(depvars)
     # Get all dependent variables in the correct type
     alldepvars = get_all_depvars(eqs, depvar_ops)
-    ū = filter(u -> !any(map(x -> x isa Number, arguments(u))), alldepvars)
+    # Filter out boundaries
+    ū = filter(u -> !any(x -> x isa Number, arguments(u)), alldepvars)
     # Get all independent variables in the correct type
     allivs = collect(filter(x -> !(x isa Number), reduce(union, map(arguments, alldepvars))))
     x̄ = remove(allivs, time)
@@ -26,7 +27,7 @@ function VariableMap(eqs, depvars, domain, time)
     args = [operation(u) => arguments(u) for u in ū]
     x̄2dim = [x̄[i] => i for i in 1:nspace]
     dim2x̄ = [i => x̄[i] for i in 1:nspace]
-    return VariableMap(alldepvars, x̄, time, Dict(intervals), Dict(args), depvar_ops, Dict(x̄2dim), Dict(dim2x̄))
+    return VariableMap(ū, x̄, time, Dict(intervals), Dict(args), depvar_ops, Dict(x̄2dim), Dict(dim2x̄))
 end
 
 VariableMap(pdesys::PDESystem, disc::MOLFiniteDifference) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.domain, disc.time)
