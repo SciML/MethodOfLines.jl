@@ -229,7 +229,7 @@ end
 
 function generate_code(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference,filename="code.jl")
     code = ODEFunctionExpr(pdesys, discretization)
-    rm(filename)
+    rm(filename; force = true)
     open(filename, "a") do io
         println(io, code)
     end
