@@ -5,8 +5,8 @@ Modified copilot explanation:
 
 """
 function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
-    eqs = sys.eqs
-    bcs = sys.bcs
+    eqs = copy(sys.eqs)
+    bcs = copy(sys.bcs)
     done = false
     # Replace bad terms with a greedy strategy until the system comes up clean
     while !done
