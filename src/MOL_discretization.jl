@@ -227,7 +227,7 @@ function ModelingToolkit.ODEFunctionExpr(pdesys::PDESystem,discretization::Metho
     end
 end
 
-function generate_code(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference,filename="code.jl")
+function generate_code(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference,filename="generated_code_of_pdesys.jl")
     code = ODEFunctionExpr(pdesys, discretization)
     rm(filename; force = true)
     open(filename, "a") do io
