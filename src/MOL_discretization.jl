@@ -186,8 +186,10 @@ end
 
 function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
+    println("Bop!")
     try
         simpsys = structural_simplify(sys)
+        println("Bip!")
         if tspan === nothing
             add_metadata!(simpsys.metadata, sys)
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
