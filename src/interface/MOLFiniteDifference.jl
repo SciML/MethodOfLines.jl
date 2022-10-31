@@ -18,6 +18,8 @@ A discretization algorithm.
 - `approx_order`: The order of the derivative approximation.
 - `advection_scheme`: The scheme to be used to discretize advection terms, i.e. first order spatial derivatives and associated coefficients. Defaults to `UpwindScheme()`. WENOScheme() is also available, and is more stable and accurate at the cost of complexity.
 - `grid_align`: The grid alignment types. See [`CenterAlignedGrid()`](@ref) and [`EdgeAlignedGrid()`](@ref).
+- `use_ODAE`: If `true`, the discretization will use the `ODAEproblem` constructor.
+    Defaults to `false`.
 - `kwargs`: Any other keyword arguments you want to pass to the `ODEProblem`.
 
 """
@@ -27,11 +29,13 @@ struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
     approx_order::Int
     advection_scheme
     grid_align::G
+    should_transform::Bool
+    use_ODAE::Bool
     kwargs
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_scheme = UpwindScheme(), grid_align=CenterAlignedGrid(), upwind_order = nothing, kwargs...)
+function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_scheme = UpwindScheme(), grid_align=CenterAlignedGrid(), upwind_order = nothing, should_transform = true, use_ODAE = false, kwargs...)
     if upwind_order !== nothing
         @warn "`upwind_order` no longer does anything, and will be removed in a future release. See the docs for the current interface."
     end
@@ -42,5 +46,7 @@ function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_sche
 
     @assert (time isa Num) | (time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
 
-    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order, advection_scheme, grid_align, kwargs)
+    dxs = dxs isa Dict ? dxs : Dict(dxs)
+
+    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order, advection_scheme, grid_align, should_transform, use_ODAE, kwargs)
 end

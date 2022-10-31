@@ -37,6 +37,8 @@ using ModelingToolkit: Differential
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
     discretization = MOLFiniteDifference([x=>dx],t, approx_order=4)
     prob = discretize(pdesys,discretization)
+
+    sol = solve(prob, FBDF())
 end
 
 # Beam Equation with Velocity
@@ -73,6 +75,8 @@ end
     @named pdesys = PDESystem(eqs,bcs,domains,[t,x],[u(t,x),v(t,x)])
     discretization = MOLFiniteDifference([x=>dx],t, approx_order=4)
     prob = discretize(pdesys,discretization)
+
+    sol = solve(prob, FBDF())
 end
 
 @test_broken begin#@testset "KdV Single Soliton equation" begin
@@ -104,13 +108,11 @@ end
     # Discretization
     dx = 0.4; dt = 0.2
 
-    fail
-
     discretization = MOLFiniteDifference([x=>dx],t;upwind_order=1,grid_align=center_align)
     @named pdesys = PDESystem(eq,bcs,domains,[x,t],[u(x,t)])
     prob = discretize(pdesys,discretization)
 
-    sol = solve(prob,Rosenbrock23(),saveat=0.1,dt=dt)
+    sol = solve(prob,FBDF(),saveat=0.1)
 
     @test sol.retcode == :Success
 
@@ -129,5 +131,5 @@ end
        # gif(anim, "plots/MOL_Higher_order_1D_KdV_single_soliton.gif", fps = 5)
 
 
-    @test all(isapprox.(u_predict, u_real, rtol = 0.03))
+    @test_broken all(isapprox.(u_predict, u_real, rtol = 0.03))
 end

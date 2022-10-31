@@ -1,4 +1,4 @@
-function BoundaryInterpolatorExtrapolator(approximation_order::Int, dx::T) where {T<:Real,N}
+function BoundaryInterpolatorExtrapolator(approximation_order::Int, dx::T) where {T<:Real}
     @assert approximation_order > 1 "approximation_order must be greater than 1."
     stencil_length = approximation_order - 1 + (approximation_order) % 2
     boundary_stencil_length = approximation_order   # Add 1 since there is an extra 0 weight for the current index
@@ -42,7 +42,7 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int, dx::T) where
 end
 
 function BoundaryInterpolatorExtrapolator(approximation_order::Int,
-    x::AbstractVector{T}) where {T<:Real,N}
+    x::AbstractVector{T}) where {T<:Real}
     stencil_length = approximation_order - 1 +
                      (approximation_order) % 2
 
