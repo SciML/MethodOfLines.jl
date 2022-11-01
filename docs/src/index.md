@@ -8,7 +8,7 @@ It uses symbolic expressions for systems of partial differential equations as de
 
 It is a SciML "Discretizer" package, a class of packages which export the methods:
 - `discretize(sys::PDESystem, disc::D) where {D <: AbstractDiscretization}`, which returns an `AbstractSciMLProblem` to be solved with the ecosystem's solvers.
-- `symbolic_discretize(sys::PDESystem, disc::D) where {D <: AbstractDiscretization}`, which returns an `AbstractSciMLSystem` from `ModelingToolkit.jl`.
+- `symbolic_discretize(sys::PDESystem, disc::D) where {D <: AbstractDiscretization}`, which returns an `AbstractSystem` from `ModelingToolkit.jl`.
 
 A Discretizer also optionally provides automatic solution wrapping, for easing the retrieval of shaped portions of the solution, and multi dimensional interpolations. This feature is provided by `MethodOfLines.jl`, see the [solution interface](@ref sol) page for more information.
 
