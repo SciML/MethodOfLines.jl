@@ -6,6 +6,14 @@ of symbolicaly-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
 
+It is a SciML "Discretizer" package, a class of packages which export the methods:
+- `discretize(sys::PDESystem, disc::D) where {D <: AbstractDiscretization}`, which returns an `AbstractSciMLProblem` to be solved with the ecosystem's solvers.
+- `symbolic_discretize(sys::PDESystem, disc::D) where {D <: AbstractDiscretization}`, which returns an `AbstractSciMLSystem` from `ModelingToolkit.jl`.
+
+A Discretizer also optionally provides automatic solution wrapping, for easing the retrieval of shaped portions of the solution, and multi dimensional interpolations. This feature is provided by `MethodOfLines.jl`, see the [solution interface](@ref sol) page for more information.
+
+The `AbstractDiscretization` that `MethodOfLines.jl` provides is the [`MOLFiniteDifference`](@ref molfd), see its documentation for full information about interface options.
+
 The package's handling is quite general, it is recommended to try out your system of equations and post an issue if you run in to trouble. If you want to solve it, we want to support it.
 
 Issues with questions on usage are also welcome as they help us improve the docs.
