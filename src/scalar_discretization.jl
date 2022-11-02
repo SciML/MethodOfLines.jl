@@ -34,6 +34,7 @@ end
 
 function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, metadata)
     t = metadata.discretespace.time
+    name = metadata.pdesys.name
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
     alleqs = vcat(alleqs, unique(bceqs))
@@ -45,12 +46,12 @@ function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, meta
             # 0 ~ ...
             # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
             eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, alleqs)
-            sys = NonlinearSystem(eqs, alldepvarsdisc, ps, defaults=defaults, name=pdesys.name, metadata=metadata)
+            sys = NonlinearSystem(eqs, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata)
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
-            sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults=defaults, name=pdesys.name, metadata=metadata)
+            sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata)
             return sys, tspan
         end
     catch e
