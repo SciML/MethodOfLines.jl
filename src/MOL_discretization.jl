@@ -11,6 +11,7 @@ end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
     t = discretization.time
+    disc_strategy = discretization.disc_strategy
     cardinalize_eqs!(pdesys)
 
     ############################
@@ -107,81 +108,25 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
             eqvar = interiormap.var[pde]
 
-            eqvarbcs = mapreduce(x -> bcmap[operation(eqvar)][x], vcat, s.x̄)
-
             # * Assumes that all variables in the equation have same dimensionality except edgevals
             args = params(eqvar, s)
             indexmap = Dict([args[i] => i for i in 1:length(args)])
-
-            # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
-            # Generate replacement rule gen closures for the boundary values like u(t, 1)
-            boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
-
-            # Generate the boundary conditions for the correct variable
-            for boundary in eqvarbcs
-                generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
-            end
-            # Generate extrapolation eqs
-            generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
-
-            # Set invalid corner points to zero
-            generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
-
+            if disc_strategy isa ScalarizedDiscretization
             # Generate the equations for the interior points
-            pdeeqs = discretize_equation(pde, interiormap.I[pde], eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap)
-
-            push!(alleqs, pdeeqs)
+                discretize_equation!(alleqs, bceqs, pde, interiormap.I[pde], eqvar, bcmap,
+                                     depvars, s, derivweights, indexmap, pmap)
+            else
+                throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
+            end
         end
     end
 
-    u0 = generate_ic_defaults(ics, s)
-    bceqs = reduce(vcat, bceqs)
-    alleqs = reduce(vcat, alleqs)
-    alldepvarsdisc = unique(reduce(vcat, vec.(values(s.discvars))))
-
-    # Finalize
-    defaults = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps)
+    defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
     # Combine PDE equations and BC equations
     metadata = MOLMetadata(s, discretization, pdesys, use_ODAE)
-    try
-        if t === nothing
-            # At the time of writing, NonlinearProblems require that the system of equations be in this form:
-            # 0 ~ ...
-            # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
-            eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, vcat(alleqs, unique(bceqs)))
-            sys = NonlinearSystem(eqs, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name, metadata=metadata)
-            return sys, nothing
-        else
-            # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
-            sys = ODESystem(vcat(alleqs, unique(bceqs)), t, vec(reduce(vcat, vec(alldepvarsdisc))), ps, defaults=Dict(defaults), name=pdesys.name, metadata=metadata)
-            return sys, tspan
-        end
-    catch e
-        println("The system of equations is:")
-        println(vcat(alleqs, unique(bceqs)))
-        println()
-        println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
-        println()
-        rethrow(e)
-    end
-end
-
-function discretize_equation(pde, interior, eqvar, depvars, s, derivweights, indexmap, boundaryvalfuncs, pmap::PeriodicMap{hasperiodic}) where {hasperiodic}
-    return vec(map(interior) do II
-        boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
-        rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
-        try
-            substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
-        catch e
-            println("A scheme has been incorrectly applied to the following equation: $pde.\n")
-            println("The following rules were constructed at index $II:")
-            display(rules)
-            rethrow(e)
-        end
-
-    end)
+    return generate_system(alleqs, bceqs, ics, ps, defaults, tspan, metadata)
 end
 
 function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
