@@ -9,7 +9,7 @@ Used to unpack the solution.
           MOLFiniteDifference object.
 - `pdesys`: a PDESystem object, used in the discretization.
 """
-struct MOLMetadata{hasTime, Ds,Disc,PDE, M} <: SciMLBase.AbstractDiscretizationMetadata{hasTime}
+struct MOLMetadata{hasTime, Ds,Disc,PDE, M, Strat} <: SciMLBase.AbstractDiscretizationMetadata{hasTime}
     discretespace::Ds
     disc::Disc
     pdesys::PDE
@@ -25,7 +25,7 @@ struct MOLMetadata{hasTime, Ds,Disc,PDE, M} <: SciMLBase.AbstractDiscretizationM
         end
         return new{hasTime, typeof(discretespace),
                    typeof(disc), typeof(pdesys),
-                   typeof(metaref)}(discretespace,
+                   typeof(metaref), typeof(disc.disc_strategy)}(discretespace,
                                                                                  disc, pdesys, use_ODAE,
                                                                                  metaref)
     end

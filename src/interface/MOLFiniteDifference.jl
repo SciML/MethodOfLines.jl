@@ -23,7 +23,7 @@ A discretization algorithm.
 - `kwargs`: Any other keyword arguments you want to pass to the `ODEProblem`.
 
 """
-struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
+struct MOLFiniteDifference{G,D} <: DiffEqBase.AbstractDiscretization
     dxs
     time
     approx_order::Int
@@ -31,11 +31,12 @@ struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
     grid_align::G
     should_transform::Bool
     use_ODAE::Bool
+    disc_strategy::D
     kwargs
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_scheme = UpwindScheme(), grid_align=CenterAlignedGrid(), upwind_order = nothing, should_transform = true, use_ODAE = false, kwargs...)
+function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_scheme = UpwindScheme(), grid_align=CenterAlignedGrid(), discretization_strategy = ScalarizedDiscretization(), upwind_order = nothing, should_transform = true, use_ODAE = false, kwargs...)
     if upwind_order !== nothing
         @warn "`upwind_order` no longer does anything, and will be removed in a future release. See the docs for the current interface."
     end
@@ -48,5 +49,5 @@ function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_sche
 
     dxs = dxs isa Dict ? dxs : Dict(dxs)
 
-    return MOLFiniteDifference{typeof(grid_align)}(dxs, time, approx_order, advection_scheme, grid_align, should_transform, use_ODAE, kwargs)
+    return MOLFiniteDifference{typeof(grid_align), typeof(discretization_strategy)}(dxs, time, approx_order, advection_scheme, grid_align, should_transform, use_ODAE, discretization_strategy, kwargs)
 end

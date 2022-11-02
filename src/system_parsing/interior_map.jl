@@ -38,7 +38,6 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, p
         end
         push!(vlower, pde => lower)
         push!(vupper, pde => upper)
-        args = remove(arguments(u), s.time)
         #TODO: Allow assymmetry
         pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
 
@@ -49,12 +48,22 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, p
         upper = [max(e, u) for (e, u) in zip(stencil_extents, upper)]
 
         # Don't update this x2i, it is correct.
-        pde => s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
+        pde => generate_interior(lower, upper, u, s, discretization)
     end
 
 
     pdemap = [k.second => k.first for k in varmap]
     return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(extents))
+end
+
+function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
+    args = remove(arguments(u), s.time)
+    return s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
+end
+
+function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G, D}) where {G, D<:ArrayDiscretization}
+    args = remove(arguments(u), s.time)
+    return [(1+lower[x2i(s, u, x)], length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]
 end
 
 function calculate_stencil_extents(s, u, discretization, orders, pmap)

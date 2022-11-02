@@ -1,4 +1,4 @@
-function generate_ic_defaults(tconds, s)
+function generate_ic_defaults(tconds, s, ::ScalarizedDiscretization)
     t = s.time
     if s.time !== nothing
         u0 = mapreduce(vcat, tconds) do ic

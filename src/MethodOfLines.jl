@@ -21,6 +21,7 @@ import Base.display
 # Interface
 include("interface/grid_types.jl")
 include("interface/scheme_types.jl")
+include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
 
 include("discretization/discretize_vars.jl")
@@ -64,6 +65,7 @@ include("discretization/generate_ic_defaults.jl")
 
 # Main
 include("error_analysis.jl")
+include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete
