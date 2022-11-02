@@ -32,12 +32,11 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     push!(alleqs, eqs)
 end
 
-function generate_system(alleqs, bceqs, ics, ps, defaults, tspan, metadata)
-    u0 = generate_ic_defaults(ics, s)
+function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, metadata)
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
     alleqs = vcat(alleqs, unique(bceqs))
-    alldepvarsdisc = vec(reduce(vcat, vec(unique(reduce(vcat, vec.(values(s.discvars)))))))
+    alldepvarsdisc = vec(reduce(vcat, vec(unique(reduce(vcat, vec.(values(discvars)))))))
     # Finalize
     try
         if t === nothing

@@ -115,21 +115,23 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             args = params(eqvar, s)
             indexmap = Dict([args[i] => i for i in 1:length(args)])
             if disc_strategy isa ScalarizedDiscretization
-            # Generate the equations for the interior points
+                # Generate the equations for the interior points
                 discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                                     depvars, s, derivweights, indexmap, pmap)
+                    depvars, s, derivweights, indexmap, pmap)
             else
                 throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
             end
         end
     end
 
+    u0 = generate_ic_defaults(ics, s, disc_strategy)
+
     defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
     # Combine PDE equations and BC equations
     metadata = MOLMetadata(s, discretization, pdesys, use_ODAE)
 
-    return generate_system(alleqs, bceqs, ics, ps, defaults, tspan, metadata)
+    return generate_system(alleqs, bceqs, ics, s.discvars, defaults, ps, tspan, metadata)
 end
 
 function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
