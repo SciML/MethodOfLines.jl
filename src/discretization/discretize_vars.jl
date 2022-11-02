@@ -79,6 +79,7 @@ struct DiscreteSpace{N,M,G}
     dxs
     Iaxies
     Igrid
+    index_syms
 end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
@@ -144,8 +145,10 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
         end
     end
 
+    isyms = @. Symbol("i_"*string(unwrap(x̄)))
+    symindices = Dict(x .=> @syms $(map(sym -> oftype(sym, Int), isyms)...))
 
-    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
+    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), symindices)
 end
 
 import Base.getproperty
