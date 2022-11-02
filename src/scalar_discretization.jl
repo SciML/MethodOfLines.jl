@@ -33,6 +33,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
 end
 
 function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, metadata)
+    t = metadata.discretespace.time
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
     alleqs = vcat(alleqs, unique(bceqs))
