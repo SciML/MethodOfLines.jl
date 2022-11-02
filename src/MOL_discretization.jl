@@ -7,6 +7,9 @@ function interface_errors(depvars, indvars, discretization)
     if !(typeof(discretization.advection_scheme) ∈ [UpwindScheme, WENOScheme])
         throw(ArgumentError("Only `UpwindScheme()` and `WENOScheme()` are supported advection schemes."))
     end
+    if !(typeof(discretization.disc_strategy) ∈ [ScalarizedDiscretization])
+        throw(ArgumentError("Only `ScalarizedDiscretization()` are supported discretization strategies."))
+    end
 end
 
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
