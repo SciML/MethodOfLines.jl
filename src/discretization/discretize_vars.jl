@@ -250,9 +250,9 @@ x2i(s::DiscreteSpace, u, x) = x2i(s.vars, u, x)
 
 varmaps(s, interior, depvars) = map(u -> u => s.discvars[u][get_interior(u, s, interior)...], depvars)
 
-@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, b::AbstractTruncatingBoundary, interior) where {N,M,G}
-    u = depvar(u_, s)
-    map(params(u, s)) do x
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, b::AbstractTruncatingBoundary, interior) where {N,M,G}
+    u_, x_ = getvars(b)
+    map(params(u_, s)) do x
         if isequal(x, x_)
             x => s.axies[x][idx(b, s)]
         else
