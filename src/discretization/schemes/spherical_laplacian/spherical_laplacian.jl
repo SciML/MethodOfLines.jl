@@ -26,12 +26,12 @@ function spherical_diffusion(innerexpr, II, derivweights, s, b, depvars, r, u)
     # Catch the r ≈ 0 case
     if Symbolics.unwrap(substitute(r, _rsubs(r, II))) ≈ 0
         D_2_u = central_difference(D_2, II, s, b, (s.x2i[r], r), u, ufunc_u)
-        return 3exprhere*D_2_u # See appendix B of the paper
+        return 3exprhere * D_2_u # See appendix B of the paper
     end
     D_1_u = central_difference(D_1, II, s, b, (s.x2i[r], r), u, ufunc_u)
     # See scheme 1 in appendix A of the paper
 
-    return exprhere*(D_1_u/Num(substitute(r, _rsubs(r, II))) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, b, depvars, r, u))
+    return exprhere * (D_1_u / Num(substitute(r, _rsubs(r, II))) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, b, depvars, r, u))
 end
 
 @inline function generate_spherical_diffusion_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
@@ -48,9 +48,51 @@ end
     for t in terms
         for r in rules
             try
-            if r(t) !== nothing
-                push!(spherical_diffusion_rules, t => r(t))
+                if r(t) !== nothing
+                    push!(spherical_diffusion_rules, t => r(t))
+                end
+            catch e
+                rethrow(e)
             end
+        end
+    end
+    return spherical_diffusion_rules
+end
+
+########################################################################################
+# Stencil interface
+########################################################################################
+#TODO: Decouple this from old discretization interface
+function spherical_diffusion(innerexpr, II, derivweights, s, b, depvars, r, u)
+    args = params(u, s)
+    ranges = map(x -> axes(s.grid[x])[1], args)
+    interior = map(x -> interior[x], args)
+    is = map(x -> s.index_syms[x], args)
+
+    II = CartesianIndex(is...)
+
+    deriv_expr = spherical_laplacian(innerexpr, II, derivweights, s, b, depvars, x, u)
+
+    return FillArrayMaker(deriv_expr, is, ranges, interior)
+end
+
+@inline function generate_spherical_diffusion_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
+    rules = reduce(vcat, [vec([@rule *(~~a, 1 / (r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), interior, derivweights, s, pmap.map[operation(u)][r], depvars, r, u), ~b...)
+                               for r in params(u, s)]) for u in depvars])
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), interior, derivweights, s, pmap.map[operation(u)][r], depvars, r, u))
+                                           for r in params(u, s)]) for u in depvars]))
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), interior, derivweights, s, pmap.map[operation(u)][r], depvars, r, u)
+                                           for r in params(u, s)]) for u in depvars]))
+
+    spherical_diffusion_rules = []
+    for t in terms
+        for r in rules
+            try
+                if r(t) !== nothing
+                    push!(spherical_diffusion_rules, t => r(t))
+                end
             catch e
                 rethrow(e)
             end

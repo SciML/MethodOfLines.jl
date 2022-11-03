@@ -63,7 +63,7 @@ end
 
 function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G, D}) where {G, D<:ArrayDiscretization}
     args = remove(arguments(u), s.time)
-    return [(1+lower[x2i(s, u, x)], length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]
+    return Dict([x => 1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)] for x in args])
 end
 
 function calculate_stencil_extents(s, u, discretization, orders, pmap)

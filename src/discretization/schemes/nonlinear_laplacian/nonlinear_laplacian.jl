@@ -87,3 +87,42 @@ end
     end
     return nonlinlap_rules
 end
+
+########################################################################################
+# Stencil interface
+########################################################################################
+
+#TODO: Decouple this from old implementation
+
+function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::DiscreteSpace{N}, b, depvars, x, u) where {N}
+    args = params(u, s)
+    ranges = map(x -> axes(s.grid[x])[1], args)
+    interior = map(x -> interior[x], args)
+    is = map(x -> s.index_syms[x], args)
+
+    II = CartesianIndex(is...)
+
+    deriv_expr = cartesian_nonlinear_laplacian(expr, II, derivweights, s, b, depvars, x, u)
+
+    return FillArrayMaker(deriv_expr, is, ranges, interior)
+end
+
+@inline function generate_nonlinlap_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
+    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c..., cartesian_nonlinear_laplacian(*(a..., b...), interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u) / ~a)) => cartesian_nonlinear_laplacian(1 / ~a, interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(b..., c..., cartesian_nonlinear_laplacian(1 / ~a, interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u)) for x in params(u, s)]) for u in depvars]))
+
+    nonlinlap_rules = []
+    for t in terms
+        for r in rules
+            if r(t) !== nothing
+                push!(nonlinlap_rules, t => r(t))
+            end
+        end
+    end
+    return nonlinlap_rules
+end
