@@ -14,11 +14,11 @@ function half_offset_centered_difference(D::DerivativeOperator, interior, s, b, 
 
     if b isa Val{false}
         lowerops = map(interior[x][1]:D.boundary_point_count) do iboundary
-            (lower_boundary_deriv(D, udisc, iboundary, j, is, interior), iboundary)
+            lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
         end
 
         upperops = map((lenx-D.boundary_point_count+1):(interior[x][end]+offset)) do iboundary
-            (upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx), iboundary)
+            upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
         end
     else
         lowerops = []
@@ -28,7 +28,7 @@ function half_offset_centered_difference(D::DerivativeOperator, interior, s, b, 
     interiorop = interior_deriv(D, udisc,
                                 (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2)),
                                 jx, is, interior, b)
-    boundaryoppairs = prepare_boundary_ops(vcat(lowerops, upperops))
+    boundaryoppairs = vcat(lowerops, upperops)
 
     return NullBG_Arraymaker(ranges, vcat((interior...) => interiorop, boundaryoppairs))
 end

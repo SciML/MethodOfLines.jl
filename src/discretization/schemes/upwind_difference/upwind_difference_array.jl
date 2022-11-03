@@ -13,7 +13,7 @@ function _upwind_difference(D, interior, ranges, is, s,
         upperops = []
         if b isa Val{false}
             lowerops = map(interior[x][1]:D.offside) do iboundary
-                (lower_boundary_deriv(D, udisc, iboundary, j, is, interior), iboundary)
+                lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
             end
         else
             upperops = []
@@ -22,14 +22,14 @@ function _upwind_difference(D, interior, ranges, is, s,
     else
         if b isa Val{false}
             upperops = map((lenx-D.boundary_point_count+1):interior[x][end]) do iboundary
-                (upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx), iboundary)
+                upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
             end
         else
             lowerops = []
         end
         interiorop = interior_deriv(D, udisc, 0:D.stencil_length-1, jx, is, args, interior, b)
     end
-    boundaryoppairs = prepare_boundary_ops(vcat(lowerops, upperops))
+    boundaryoppairs = vcat(lowerops, upperops)
 
     NullBG_ArrayMaker(ranges, vcat((interior...) => interiorop, boundaryoppairs))
 end

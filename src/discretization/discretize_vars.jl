@@ -145,7 +145,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
         end
     end
 
-    isyms = @. Symbol("i_"*string(unwrap(x̄)))
+    isyms = @. Symbol("i_" * string(unwrap(x̄)))
     symindices = Dict(x .=> @syms $(map(sym -> oftype(sym, Int), isyms)...))
 
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), symindices)
@@ -194,7 +194,7 @@ end
 """
 A function that returns what to replace independent variables with in boundary equations
 """
-@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I) where {N,M,G}
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I::CartesianIndex) where {N,M,G}
     u = depvar(u_, s)
     map(params(u, s)) do x
         if isequal(x, x_)
@@ -243,3 +243,20 @@ end
 depvar(u, s::DiscreteSpace) = depvar(u, s.vars)
 
 x2i(s::DiscreteSpace, u, x) = x2i(s.vars, u, x)
+
+########################################################################################
+# Stencil interface
+########################################################################################
+
+varmaps(s, interior, depvars) = map(u -> u => s.discvars[u][get_interior(u, s, interior)...], depvars)
+
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, b::AbstractTruncatingBoundary, interior) where {N,M,G}
+    u = depvar(u_, s)
+    map(params(u, s)) do x
+        if isequal(x, x_)
+            x => s.axies[x][idx(b, s)]
+        else
+            x => s.grid[x][interior[x]]
+        end
+    end
+end

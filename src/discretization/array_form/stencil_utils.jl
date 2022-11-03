@@ -1,13 +1,26 @@
 function lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
     weights = D.low_boundary_coefs[iboundary]
     taps = 1:D.boundary_stencil_length
-    BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
+    prepare_boundary_op((BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior),
+            iboundary), interior, j)
 end
 
 function upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
-    weights = D.low_boundary_coefs[lenx-iboundary+1]
-    taps = (lenx+D.boundary_stencil_length+1):lenx
-    BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
+    weights = D.high_boundary_coefs[lenx-iboundary+1]
+    taps = (lenx-D.boundary_stencil_length+1):lenx
+    prepare_boundary_op((BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior),
+            iboundary), interior, j)
+end
+
+function prepare_boundary_op(boundaryop, interior, j)
+    function maketuple(i)
+        out = map(1:length(interior)) do k
+            k == j ? i : interior[k]
+        end
+        return (out...)
+    end
+    (op, iboundary) = boundaryop
+    return maketuple(iboundary) => op
 end
 
 function prepare_boundary_ops(boundaryops, interior, j)
@@ -47,10 +60,9 @@ function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
         end
     end
     expr = dot(weights, udisc[I...])
-    symindices = setdiff(1:length(args), j)
+    symindices = setdiff(1:length(args), [j])
     output_idx = (is[symindices]...)
-    ranges = Dict(output_idx .=> interior[symindices])
-    return ArrayOp(Array{symtype(expr),length(output_idx)}, output_idx, expr, +, nothing, ranges)
+    return FillArrayOp(expr, output_idx, interior[symindices])
 end
 
 function InteriorDerivArrayOp(weights, taps, u, udisc, jx, output_idx, interior)
@@ -64,8 +76,7 @@ function InteriorDerivArrayOp(weights, taps, u, udisc, jx, output_idx, interior)
         end
     end
     expr = dot(weights, udisc[I])
-    ranges = Dict(output_idx .=> interior) # hope this doesn't check bounds eagerly
-    return ArrayOp(Array{symtype(expr),length(output_idx)}, output_idx, expr, +, nothing, ranges)
+    return FillArrayOp(expr, output_idx, interior)
 end
 
 function FillArrayOp(expr, output_idx, interior)
@@ -73,8 +84,14 @@ function FillArrayOp(expr, output_idx, interior)
     return ArrayOp(Array{symtype(expr),length(output_idx)}, output_idx, expr, +, nothing, ranges)
 end
 
-NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}(last.(ranges...), vcat((ranges...) => 0, ops) )
+NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}(last.(ranges...), vcat((ranges...) => 0, ops))
 
 FillArrayMaker(expr, is, ranges, interior) = NullBG_ArrayMaker(ranges, [FillArrayOp(expr, is, interior)])
 
 ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}(last.(ranges), [(ranges...) => udisc])
+
+#####
+
+get_interior(u, s, interior) = map(x -> interior[x], params(u, s))
+get_ranges(u, s) = map(x -> s.grid[x], params(u, s))
+get_is(u, s) = map(x -> s.index_syms, params(u, s))

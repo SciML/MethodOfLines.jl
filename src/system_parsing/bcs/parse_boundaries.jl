@@ -22,7 +22,7 @@ struct LowerBoundary <: AbstractTruncatingBoundary
         #depvars =  filter(u -> !any(map(x-> x isa Number, arguments(u))), depvars)
 
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t), arguments(u)), depvars)))
-        return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
+        return new(u, x, depvar.(depvars, [v]), first(allx̄), eq.lhs - eq.rhs ~ 0, order)
     end
 end
 
@@ -39,7 +39,7 @@ struct UpperBoundary <: AbstractTruncatingBoundary
         depvars = collect(depvars_lhs ∪ depvars_rhs)
 
         allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t), arguments(u)), depvars)))
-        return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
+        return new(u, x, depvar.(depvars, [v]), first(allx̄), eq.lhs - eq.rhs ~ 0, order)
     end
 end
 
@@ -84,6 +84,8 @@ end
 idx(b::LowerBoundary, s) = 1
 idx(b::UpperBoundary, s) = length(s, b.x)
 
+offset(b::LowerBoundary, i, len) = i
+offset(b::UpperBoundary, i, len) = len - i + 1
 
 # indexes for Iedge depending on boundary type
 isupper(::LowerBoundary) = false
