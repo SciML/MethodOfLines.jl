@@ -104,7 +104,7 @@ function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::Discrete
 
     deriv_expr = cartesian_nonlinear_laplacian(expr, II, derivweights, s, b, depvars, x, u)
 
-    return FillArrayMaker(deriv_expr, is, ranges, interior)
+    return FillArrayMaker(deriv_expr, is, interior, interior)
 end
 
 @inline function generate_nonlinlap_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)

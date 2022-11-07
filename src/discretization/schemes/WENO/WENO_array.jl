@@ -84,7 +84,7 @@ function weno(interior, s::DiscreteSpace, wenoscheme::WENOScheme, b, jx, u, dx::
     hm = wm1 * hm1 + wm2 * hm2 + wm3 * hm3
 
     expr = (hp - hm) / dx
-    return NullBG_ArrayMaker(ranges, [FillArrayOp(expr, is, interior)])
+    return FillArrayOp(expr, is, interior)
 end
 
 function weno(II::CartesianIndex, s::DiscreteSpace, b, jx, u, dx::AbstractVector)

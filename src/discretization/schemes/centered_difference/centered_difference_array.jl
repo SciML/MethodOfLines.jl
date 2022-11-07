@@ -27,7 +27,7 @@ function central_difference(D::DerivativeOperator, interior, s, b, jx, u, udisc)
 
     interiorop = interior_deriv(D, udisc, half_range(D.stencil_length), jx, is, interior, b)
 
-    return NullBG_Arraymaker(ranges, vcat((interior...) => interiorop, boundaryoppairs))
+    return Construct_Arraymaker(interior, vcat((interior...) => interiorop, boundaryoppairs))
 end
 
 @inline function generate_cartesian_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)

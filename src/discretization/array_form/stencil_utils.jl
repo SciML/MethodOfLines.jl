@@ -6,7 +6,7 @@ function lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
 end
 
 function upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
-    weights = D.high_boundary_coefs[lenx-iboundary+1]
+    weights = D.high_boundary_coefs[iboundary]
     taps = (lenx-D.boundary_stencil_length+1):lenx
     prepare_boundary_op((BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior),
             iboundary), interior, j)
@@ -84,11 +84,12 @@ function FillArrayOp(expr, output_idx, interior)
     return ArrayOp(Array{symtype(expr),length(output_idx)}, output_idx, expr, +, nothing, ranges)
 end
 
-NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}(last.(ranges...), vcat((ranges...) => 0, ops))
+NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}((last.(ranges)...), vcat((ranges...) => 0, ops))
+Construct_ArrayMaker(ranges, ops) = ArrayMaker{Real}((last.(ranges)...), ops)
 
 FillArrayMaker(expr, is, ranges, interior) = NullBG_ArrayMaker(ranges, [FillArrayOp(expr, is, interior)])
 
-ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}(last.(ranges), [(ranges...) => udisc])
+ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}((last.(ranges)...), [(ranges...) => udisc])
 
 #####
 

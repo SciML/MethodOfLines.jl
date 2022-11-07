@@ -73,7 +73,7 @@ function spherical_diffusion(innerexpr, II, derivweights, s, b, depvars, r, u)
 
     deriv_expr = spherical_laplacian(innerexpr, II, derivweights, s, b, depvars, x, u)
 
-    return FillArrayMaker(deriv_expr, is, ranges, interior)
+    return FillArrayOp(deriv_expr, is, interior)
 end
 
 @inline function generate_spherical_diffusion_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)

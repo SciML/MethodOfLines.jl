@@ -30,5 +30,5 @@ function half_offset_centered_difference(D::DerivativeOperator, interior, s, b, 
                                 jx, is, interior, b)
     boundaryoppairs = vcat(lowerops, upperops)
 
-    return NullBG_Arraymaker(ranges, vcat((interior...) => interiorop, boundaryoppairs))
+    return Construct_ArrayMaker(interior, vcat((interior...) => interiorop, boundaryoppairs))
 end
