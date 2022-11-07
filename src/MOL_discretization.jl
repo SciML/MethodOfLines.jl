@@ -4,11 +4,11 @@ function interface_errors(depvars, indvars, discretization)
     for x in indvars
         @assert haskey(discretization.dxs, Num(x)) || haskey(discretization.dxs, x) "Variable $x has no step size"
     end
-    if !(typeof(discretization.advection_scheme) ∈ [UpwindScheme, WENOScheme])
-        throw(ArgumentError("Only `UpwindScheme()` and `WENOScheme()` are supported advection schemes."))
+    if !(typeof(discretization.advection_scheme) ∈ ALLOWED_ADVECTION_SCHEMES)
+        throw(ArgumentError("Only $(ALLOWED_ADVECTION_SCHEMES...) are supported advection schemes."))
     end
-    if !(typeof(discretization.disc_strategy) ∈ [ScalarizedDiscretization])
-        throw(ArgumentError("Only `ScalarizedDiscretization()` are supported discretization strategies."))
+    if !(typeof(discretization.disc_strategy) ∈ ALLOWED_DISCRETIZATION_STRATEGIES)
+        throw(ArgumentError("Only $(ALLOWED_DISCRETIZATION_STRATEGIES...) are supported discretization strategies."))
     end
 end
 
@@ -114,13 +114,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             # * Assumes that all variables in the equation have same dimensionality except edgevals
             args = params(eqvar, s)
             indexmap = Dict([args[i] => i for i in 1:length(args)])
-            if disc_strategy isa ScalarizedDiscretization
                 # Generate the equations for the interior points
-                discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                    depvars, s, derivweights, indexmap, pmap)
-            else
-                throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
-            end
+            discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
+                                 depvars, s, derivweights, indexmap, pmap, disc_strategy)
         end
     end
 

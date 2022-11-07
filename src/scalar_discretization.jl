@@ -1,4 +1,4 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}) where {hasperiodic}
+function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}, ::ScalarizedDiscretization) where {hasperiodic}
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
     # Generate replacement rule gen closures for the boundary values like u(t, 1)
     boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)

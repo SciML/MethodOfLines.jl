@@ -20,3 +20,5 @@ struct ScalarizedDiscretization <: AbstractDiscretizationStrategy end
 # This method means that Symbolics.build_function can generate looped code, which compiles
 # much faster than the scalar method.
 struct ArrayDiscretization <: AbstractDiscretizationStrategy end
+
+ALLOWED_DISCRETIZATION_STRATEGIES = [ScalarizedDiscretization, ArrayDiscretization]
