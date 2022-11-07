@@ -1,34 +1,33 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}) where {hasperiodic}
+function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}, ::ArrayDiscretization) where {hasperiodic}
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
-    # Generate replacement rule gen closures for the boundary values like u(t, 1)
-    boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
+
     # Find boundaries for this equation
     eqvarbcs = mapreduce(x -> bcmap[operation(eqvar)][x], vcat, s.x̄)
-    # Generate the boundary conditions for the correct variable
-    for boundary in eqvarbcs
-        generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
-    end
-    # Generate extrapolation eqs
-    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
-
     # Extract Interior
     interior = interiormap.I[pde]
 
+    # Generate the boundary conditions for the correct variable
+    boundary_op_pairs = generate_bc_op_pairs(s, eqvarbcs, derivweights, interior)
     # Generate the discrete form ODEs for the interior
-    eqs = vec(map(interior) do II
-        boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
-        rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
+    pdeinterior = begin
+        rules = vcat(generate_finite_difference_rules(interior, s, depvars, pde, derivweights, pmap, indexmap), arrayvalmaps(s, eqvar, depvars, interior))
         try
-            substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
+            broadcast_substitute(pde.lhs, rules)
         catch e
             println("A scheme has been incorrectly applied to the following equation: $pde.\n")
-            println("The following rules were constructed at index $II:")
+            println("The following rules were constructed:")
             display(rules)
             rethrow(e)
         end
+    end
+    interior = get_interior(eqvar, s, interior)
+    ranges = get_ranges(eqvar, s)
+    bg = s.discvars[eqvar]
 
-    end)
-    push!(alleqs, eqs)
+    eqarray = 0 .~ ArrayMaker{Real}((last.(ranges)...), vcat((ranges...) => bg,
+                                              (interior...) => pdeinterior,
+                                              boundary_op_pairs))
+    push!(alleqs, eqarray)
 end
 
 function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, metadata)
@@ -44,7 +43,6 @@ function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, meta
             # At the time of writing, NonlinearProblems require that the system of equations be in this form:
             # 0 ~ ...
             # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
-            eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, alleqs)
             sys = NonlinearSystem(eqs, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata)
             return sys, nothing
         else
