@@ -92,7 +92,7 @@ function boundary_value_maps(II::CartesianIndex, s::DiscreteSpace{N,M,G}, bounda
 end
 
 
-function generate_bc_eqs(s::DiscreteSpace{N,M,G}, boundaryvalfuncs, boundary::AbstractTruncatingBoundary, interiormap, indexmap) where {N, M, G}
+function generate_bc_eqs(s::DiscreteSpace{N,M,G}, boundaryvalfuncs, boundary::AbstractEquationBoundary, interiormap, indexmap) where {N, M, G}
     bc = boundary.eq
     return vec(map(edge(s, boundary, interiormap)) do II
         boundaryvalrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)

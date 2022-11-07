@@ -6,6 +6,11 @@ abstract type AbstractBoundary end
 
 abstract type AbstractTruncatingBoundary <: AbstractBoundary end
 
+abstract type AbstractLowerBoundary <: AbstractTruncatingBoundary end
+
+abstract type AbstractUpperBoundary <: AbstractTruncatingBoundary end
+
+
 abstract type AbstractExtendingBoundary <: AbstractBoundary end
 
 struct LowerBoundary <: AbstractTruncatingBoundary
@@ -26,7 +31,7 @@ struct LowerBoundary <: AbstractTruncatingBoundary
     end
 end
 
-struct UpperBoundary <: AbstractTruncatingBoundary
+struct UpperBoundary <: AbstractUpperBoundary
     u
     x
     depvars
@@ -42,6 +47,20 @@ struct UpperBoundary <: AbstractTruncatingBoundary
         return new(u, x, depvar.(depvars, [v]), first(allx̄), eq.lhs - eq.rhs ~ 0, order)
     end
 end
+
+const AbstractEquationBoundary = Union{LowerBoundary, UpperBoundary}
+
+struct LowerInterpolatingBoundary <: AbstractLowerBoundary
+    u
+    x
+end
+
+struct UpperInterpolatingBoundary <: AbstractUpperBoundary
+    u
+    x
+end
+
+const AbstractInterpolatingBoundary = Union{LowerInterpolatingBoundary, UpperInterpolatingBoundary}
 
 struct PeriodicBoundary <: AbstractBoundary
     u
@@ -84,12 +103,17 @@ end
 idx(b::LowerBoundary, s) = 1
 idx(b::UpperBoundary, s) = length(s, b.x)
 
-offset(b::LowerBoundary, i, len) = i
-offset(b::UpperBoundary, i, len) = len - i + 1
+ordering(::LowerBoundary) = 1
+ordering(::UpperBoundary) = 1
+ordering(::LowerInterpolatingBoundary) = 2
+ordering(::UpperInterpolatingBoundary) = 2
+
+offset(::AbstractLowerBoundary, i, len) = i
+offset(::AbstractUpperBoundary, i, len) = len - i + 1
 
 # indexes for Iedge depending on boundary type
-isupper(::LowerBoundary) = false
-isupper(::UpperBoundary) = true
+isupper(::AbstractLowerBoundary) = false
+isupper(::AbstractUpperBoundary) = true
 isupper(::PeriodicBoundary) = false
 
 @inline function edge(interiormap, s, u, j, islower)

@@ -75,54 +75,94 @@ function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, deriv
     return vcat(depvarderivbcmaps, depvarbcmaps)
 end
 
-function generate_bc_op_pair(s, boundaries, derivweights, interior)
-    return map(enumerate(boundaries)) do (iboundary, boundary)
-        if boundary isa AbstractTruncatingBoundary
-            bc = boundary.eq
+function generate_bc_op_pair(s, b::AbstractEquationBoundary, iboundary, derivweights)
+    bc = boundary.eq
 
-            boundaryvalrules = boundary_value_maps(interior, s, boundary, derivweights, s.indexmap)
-            varrules = varrules(s, interior, depvars)
-            valrules = axiesvals(s, boundary, interior)
-            rules = vcat(boundaryvalrules, varrules, valrules)
+    boundaryvalrules = boundary_value_maps(interior, s, b, derivweights, s.indexmap)
+    varrules = varrules(s, interior, depvars)
+    valrules = axiesvals(s, b, interior)
+    rules = vcat(boundaryvalrules, varrules, valrules)
 
-            ranges = map(depvars(boundary.u, s)) do x
-                if x == boundary.x
-                    offset(boundary, iboundary, length(s, x))
-                else
-                    interior[x]
-                end
-            end
-
-            (ranges...) => sub(bc.lhs, rules)
-        elseif boundary isa PeriodicBoundary
-            u_, x_ = getvars(boundary)
-            discu = s.discvars[depvar(u_, s)]
-            j = x2i(s, depvar(u_, s), x_)
-            # * Assume that the periodic BC is of the simple form u(t,0) ~ u(t,1)
-            Ioffset = unitindex(N, j)*(length(s, x_) - 1)
-            is = get_is(u_, s)
-            idxs = map(1:length(is))
-                if i == j
-                    1
-                else
-                    is[i]
-                end
-            I = CartesianIndex(idxs...)
-            expr = discu[I] - discu[I + Ioffset]
-            ranges = map(depvars(u_, s)) do x
-                if x == x_
-                    1
-                else
-                    interior[x]
-                end
-            end
-            symindices = setdiff(1:ndims(u, s), [j])
-
-            (ranges...) => FillArrayOp(expr, filter(x -> x isa Sym, idxs), ranges[symindices])
+    ranges = map(depvars(b.u, s)) do x
+        if x == b.x
+            offset(b, iboundary, length(s, x))
         else
-            error("Unknown boundary type")
+            interior[x]
         end
     end
+
+    (ranges...) => broadcast_substitute(bc.lhs, rules)
+end
+
+function generate_bc_op_pair(s, b::PeriodicBoundary, iboundary, derivweights)
+    u_, x_ = getvars(b)
+    discu = s.discvars[depvar(u_, s)]
+    j = x2i(s, depvar(u_, s), x_)
+    # * Assume that the periodic BC is of the simple form u(t,0) ~ u(t,1)
+    Ioffset = unitindex(N, j)*(length(s, x_) - 1)
+    is = get_is(u_, s)
+    idxs = map(1:length(is))
+        if i == j
+            1
+        else
+            is[i]
+        end
+    I = CartesianIndex(idxs...)
+    expr = discu[I] - discu[I + Ioffset]
+    ranges = map(depvar(u_, s)) do x
+        if x == x_
+            1
+        else
+            interior[x]
+        end
+    end
+    symindices = setdiff(1:ndims(u, s), [j])
+
+    (ranges...) => FillArrayOp(expr, filter(x -> x isa Sym, idxs), ranges[symindices])
+end
+
+function generate_bc_op_pair(s, b::AbstractInterpolatingBoundary, iboundary, derivweights)
+    u_, x_ = getvars(b)
+
+    j = x2i(s, depvar(u_, s), x_)
+    u = depvar(u_, s)
+
+    udisc = s.discvars[u]
+    D = derivweights.boundary[x_]
+    if isupper(b)
+        lenx = length(s, x_)
+        boffset = offset(b, iboundary, lenx)
+
+        weights = D.high_boundary_coefs[iboundary]
+        taps = setdiff((lenx-D.boundary_stencil_length+1):lenx, [boffset])
+    else
+        weights = D.low_boundary_coefs[iboundary]
+        taps = setdiff(1:D.boundary_stencil_length, [iboundary])
+    end
+
+    ranges = map(u) do x
+        if x == x_
+            1
+        else
+            interior[x]
+        end
+    end
+
+    (ranges...) = BoundaryDerivArrayOp(weights, taps, udisc, j, get_is(u_),
+                                       get_interior(u, s, interior))
+end
+
+function generate_bc_op_pairs(s, boundaries, derivweights, interior)
+    lowerboundaries = sort(filter(b -> b isa AbstractLowerBoundary, boundaries), by=ordering)
+    upperboundaries = sort(filter(b -> b isa AbstractUpperBoundary, boundaries), by=ordering)
+
+    lowerpairs = map(enumerate(lowerboundaries)) do (iboundary, boundary)
+        generate_bc_op_pair(s, boundary, iboundary, derivweights)
+    end
+    upperpairs = map(enumerate(upperboundaries)) do (iboundary, boundary)
+        generate_bc_op_pair(s, boundary, iboundary, derivweights)
+    end
+    return vcat(lowerpairs, upperpairs)
 end
 
 #TODO: Work out Extrap Eqs
