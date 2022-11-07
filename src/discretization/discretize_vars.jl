@@ -209,9 +209,9 @@ gridvals(s::DiscreteSpace{N}, u) where {N} = ndims(u, s) == 0 ? [] : map(y -> [x
 gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where {N} = ndims(u, s) == 0 ? [] : [x => s.grid[x][I[x2i(s, u, x)]] for x in params(u, s)]
 
 
-varmaps(s::DiscreteSpace, depvars, II, indexmap) = [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
+varmaps(s::DiscreteSpace, depvars, II::CartesianIndex, indexmap) = [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
 
-valmaps(s::DiscreteSpace, u, depvars, II, indexmap) = length(II) == 0 ? [] : vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
+valmaps(s::DiscreteSpace, u, depvars, II::CartesianIndex, indexmap) = length(II) == 0 ? [] : vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
 
 valmaps(s, u, depvars, indexmap) = valmaps.([s], [u], [depvars], s.Igrid[u], [indexmap])
 
@@ -249,6 +249,10 @@ x2i(s::DiscreteSpace, u, x) = x2i(s.vars, u, x)
 ########################################################################################
 
 varmaps(s, interior, depvars) = map(u -> u => s.discvars[u][get_interior(u, s, interior)...], depvars)
+
+gridvals(s, u, interior) = map(x -> x => s.grid[get_interior(u, s, interior)...], params(u, s))
+
+arrayvalmaps(s, u, depvars, interior) = vcat(varmaps(s, interior, depvars), gridvals(s, u, interior))
 
 @inline function axiesvals(s::DiscreteSpace{N,M,G}, b::AbstractTruncatingBoundary, interior) where {N,M,G}
     u_, x_ = getvars(b)
