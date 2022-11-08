@@ -148,7 +148,7 @@ function generate_bc_op_pair(s, b::AbstractInterpolatingBoundary, iboundary, der
         end
     end
 
-    (ranges...) = BoundaryDerivArrayOp(weights, taps, udisc, j, get_is(u_),
+    (ranges...) => BoundaryDerivArrayOp(weights, taps, udisc, j, get_is(u_),
                                        get_interior(u, s, interior))
 end
 

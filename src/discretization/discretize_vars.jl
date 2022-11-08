@@ -84,7 +84,7 @@ end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
 
-function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
+function DiscreteSpace(vars, discretization::MOLFiniteDifference{G,S}) where {G,S}
     x̄ = vars.x̄
     t = vars.time
     depvars = vars.ū
@@ -134,14 +134,15 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
         else
             sym = nameof(op)
         end
+        prepare = S <: ArrayDiscretization ? identity : collect
         if t === nothing
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
-            u => collect(first(@variables $sym[uaxes...]))
+            u => prepare(first(@variables $sym[uaxes...]))
         elseif isequal(SymbolicUtils.arguments(u), [t])
             u => fill(first(@variables($sym(t))), ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            u => collect(first(@variables $sym(t)[uaxes...]))
+            u => prepare(first(@variables $sym(t)[uaxes...]))
         end
     end
 

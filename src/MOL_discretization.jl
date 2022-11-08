@@ -38,7 +38,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     end
 
     # Check if the boundaries warrant using ODAEProblem, as long as this is allowed in the interface
-    use_ODAE = discretization.use_ODAE
+    use_ODAE = t === nothing ? false : discretization.use_ODAE
+
     if use_ODAE
         bcivmap = reduce((d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap)))
         allbcs = mapreduce(x -> bcivmap[x], vcat, v.x̄)
@@ -54,19 +55,14 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # @show allindvars
 
     ############################
-    # Discretization of system
+    # Discretization of system - Function boundary here for pseudospectral
     ############################
     alleqs = []
     bceqs = []
-    # * We wamt to do this in 2 passes
-    # * First parse the system and BCs, replacing with DiscreteVariables and DiscreteDerivatives
-    # * periodic parameters get type info on whether they are periodic or not, and if they join up to any other parameters
-    # * Then we can do the actual discretization by recursively indexing in to the DiscreteVariables
 
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(v, discretization)
     # Get the interior and variable to solve for each equation
-    #TODO: do the interiormap before and independent of the discretization i.e. `s`
     interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
     # Get the derivative orders appearing in each equation
     pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), v.x̄))
@@ -121,6 +117,12 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     end
 
     u0 = generate_ic_defaults(ics, s, disc_strategy)
+
+    #! Temporarily scalarize for compatibility until MTK supports Array equations
+    if disc_strategy isa ArrayDiscretization
+        alleqs = mapreduce(eq -> vec(scalarize(eq)), vcat, alleqs)
+        u0 = mapreduce(def -> vec(scalarize(def)), vcat, u0)
+    end
 
     defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)

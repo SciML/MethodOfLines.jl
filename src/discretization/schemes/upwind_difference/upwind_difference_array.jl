@@ -18,7 +18,7 @@ function _upwind_difference(D, interior, is, s,
         else
             upperops = []
         end
-        interiorop = interior_deriv(D, -D.stencil_length+1:0, jx, args, interior, b)
+        interiorop = interior_deriv(D, udisc, -D.stencil_length+1:0, j, is, interior, b)
     else
         if b isa Val{false}
             upperops = map((lenx-D.boundary_point_count+1):interior[x][end]) do iboundary
@@ -27,7 +27,7 @@ function _upwind_difference(D, interior, is, s,
         else
             lowerops = []
         end
-        interiorop = interior_deriv(D, udisc, 0:D.stencil_length-1, jx, is, args, interior, b)
+        interiorop = interior_deriv(D, udisc, 0:D.stencil_length-1, j, is, interior, b)
     end
     boundaryoppairs = vcat(lowerops, upperops)
 

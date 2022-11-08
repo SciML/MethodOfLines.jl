@@ -35,19 +35,17 @@ function prepare_boundary_ops(boundaryops, interior, j)
     end
 end
 
-function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, u, udisc, offsets, jx, is, interior, b) where {T,N,Wind,DX<:Number}
-    j, x = jx
+function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, offsets, j, is, interior, b) where {T,N,Wind,DX<:Number}
     weights = D.stencil_coefs
     taps = offsets .+ is[j]
-    InteriorDerivArrayOp(weights, taps, u, udisc, jx, is, interior)
+    InteriorDerivArrayOp(weights, taps, udisc, j, is, interior)
 end
 
-function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, u, udisc, offsets, jx, is, interior, b) where {T,N,Wind,DX<:AbstractVector}
+function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, offsets, j, is, interior, b) where {T,N,Wind,DX<:AbstractVector}
     @assert b isa Val{false} "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
-    j, x = jx
     weights = D.stencil_coefs[is[j]-D.boundary_point_count]
     taps = offsets .+ is[j]
-    InteriorDerivArrayOp(weights, taps, u, udisc, jx, is, interior)
+    InteriorDerivArrayOp(weights, taps, udisc, j, is, interior)
 end
 
 function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
@@ -65,12 +63,11 @@ function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
     return FillArrayOp(expr, output_idx, interior[symindices])
 end
 
-function InteriorDerivArrayOp(weights, taps, u, udisc, jx, output_idx, interior)
+function InteriorDerivArrayOp(weights, taps, udisc, j, output_idx, interior)
     # * I Possibly needs updating
-    j, x = jx
     I = map(1:ndims(udisc)) do i
         if i == j
-            wrapperiodic.(taps, [s], [b], [u], [jx])
+            wrapperiodic.(taps, [size(udisc, j)], [b])
         else
             output_idx[i]
         end

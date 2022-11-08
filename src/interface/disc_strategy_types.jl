@@ -1,6 +1,8 @@
 # Discretization strategies
 # -------------------------
 abstract type AbstractDiscretizationStrategy end
+
+abstract type AbstractSpaceDomainStrategy end
 # The following are the discretization strategies that are currently implemented.
 #
 # Scalar discretization
@@ -12,13 +14,13 @@ abstract type AbstractDiscretizationStrategy end
 #
 # This is the default strategy, and is used when the `discretization_strategy`
 # keyword argument is not specified.
-struct ScalarizedDiscretization <: AbstractDiscretizationStrategy end
+struct ScalarizedDiscretization <: AbstractSpaceDomainStrategy end
 
 # Array discretization
 # ~~~~~~~~~~~~~~~~~~~~~
 # This discretization strategy discretizes the PDESystem into an ArrayMaker of ODEs.
 # This method means that Symbolics.build_function can generate looped code, which compiles
 # much faster than the scalar method.
-struct ArrayDiscretization <: AbstractDiscretizationStrategy end
+struct ArrayDiscretization <: AbstractSpaceDomainStrategy end
 
 ALLOWED_DISCRETIZATION_STRATEGIES = [ScalarizedDiscretization, ArrayDiscretization]
