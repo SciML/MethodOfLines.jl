@@ -24,6 +24,7 @@ include("interface/scheme_types.jl")
 include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
 
+include("discretization/array_form/stencil_utils.jl")
 include("discretization/discretize_vars.jl")
 include("MOL_utils.jl")
 include("system_parsing/interior_map.jl")
@@ -50,7 +51,7 @@ include("system_parsing/bcs/parse_boundaries.jl")
 include("system_parsing/bcs/periodic_map.jl")
 include("system_parsing/pde_system_transformation.jl")
 
-# Schemes
+# Scalarized Schemes
 include("discretization/schemes/centered_difference/centered_difference.jl")
 include("discretization/schemes/upwind_difference/upwind_difference.jl")
 include("discretization/schemes/half_offset_centred_difference.jl")
@@ -58,9 +59,17 @@ include("discretization/schemes/nonlinear_laplacian/nonlinear_laplacian.jl")
 include("discretization/schemes/spherical_laplacian/spherical_laplacian.jl")
 include("discretization/schemes/WENO/WENO.jl")
 
-# System Discretization
+# Array Schemes
+include("discretization/schemes/centered_difference/centered_difference_array.jl")
+include("discretization/schemes/upwind_difference/upwind_difference_array.jl")
+include("discretization/array_form/half_offset_centered_difference_array.jl")
+#TODO: Properly seperate laplacian schemes
+include("discretization/schemes/WENO/WENO_array.jl")
+
+# Acalarized System Discretization
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
+include("discretization/generate_array_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
 
 # Main
