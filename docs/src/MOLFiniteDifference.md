@@ -29,7 +29,7 @@ discretization = MOLFiniteDifference(dxs,
                                       use_ODAE = <Whether to use ODAEProblem>)
 prob = discretize(pdesys, discretization)
 ```
-Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`. If the value given for a dimension is a subtype of `Integer`, the domain for that variable will be discretized in to  that integer number of equally spaced points.
+Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`. If the value given for a dimension is a subtype of `Integer`, the domain for that variable will be discretized in to that integer number of equally spaced points.
 
 For a non uniform rectilinear grid, replace any or all of the step sizes with the grid you'd like to use with that variable, must be an `AbstractVector` but not a `StepRangeLen`.
 
