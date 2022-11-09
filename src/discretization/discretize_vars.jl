@@ -146,8 +146,8 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G,S}) where {G,
         end
     end
 
-    isyms = @. Symbol("i_" * string(unwrap(x̄)))
-    symindices = Dict(x .=> @syms $(map(sym -> oftype(sym, Int), isyms)...))
+    isyms = @. Symbol("i_" * string(unwrap(x̄)) * "::Int")
+    symindices = Dict(x̄ .=> map(sym -> Sym{Int, Nothing}(sym, nothing), isyms))
 
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), symindices)
 end

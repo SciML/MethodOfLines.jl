@@ -29,5 +29,5 @@ function half_offset_centered_difference(D::DerivativeOperator, interior, s, b, 
                                 j, is, interior, b)
     boundaryoppairs = vcat(lowerops, upperops)
 
-    return Construct_ArrayMaker(interior, vcat((interior...) => interiorop, boundaryoppairs))
+    return Construct_ArrayMaker(interior, vcat(Tuple(interior) => interiorop, boundaryoppairs))
 end

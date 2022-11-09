@@ -102,7 +102,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         else
             # make sure there is only one set of independent variables per equation
             @assert length(allx̄) == 1
-            pdex̄ = first(allx̄)
             @assert length(indvars) == 1
 
             eqvar = interiormap.var[pde]

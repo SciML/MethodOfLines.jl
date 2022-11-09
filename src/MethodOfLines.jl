@@ -23,10 +23,20 @@ include("interface/grid_types.jl")
 include("interface/scheme_types.jl")
 include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
+include("discretization/derivative_operator.jl")
 
+# Utils
 include("discretization/array_form/stencil_utils.jl")
-include("discretization/discretize_vars.jl")
 include("MOL_utils.jl")
+
+# System Parsing
+include("system_parsing/variable_map.jl")
+include("system_parsing/bcs/parse_boundaries.jl")
+include("system_parsing/bcs/periodic_map.jl")
+include("system_parsing/pde_system_transformation.jl")
+
+# Var Discretization and interior map
+include("discretization/discretize_vars.jl")
 include("system_parsing/interior_map.jl")
 
 # Solution Interface
@@ -38,18 +48,12 @@ include("interface/solution/timeindep.jl")
 
 # Weight calculation
 include("discretization/schemes/fornberg_calculate_weights.jl")
-include("discretization/derivative_operator.jl")
 include("discretization/schemes/centered_difference/centered_diff_weights.jl")
 include("discretization/schemes/upwind_difference/upwind_diff_weights.jl")
 include("discretization/schemes/half_offset_weights.jl")
 include("discretization/schemes/extrapolation_weights.jl")
 include("discretization/differential_discretizer.jl")
 
-# System Parsing
-include("system_parsing/variable_map.jl")
-include("system_parsing/bcs/parse_boundaries.jl")
-include("system_parsing/bcs/periodic_map.jl")
-include("system_parsing/pde_system_transformation.jl")
 
 # Scalarized Schemes
 include("discretization/schemes/centered_difference/centered_difference.jl")

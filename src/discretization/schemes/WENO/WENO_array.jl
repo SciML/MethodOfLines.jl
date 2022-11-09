@@ -18,7 +18,7 @@ function weno(interior, s::DiscreteSpace, wenoscheme::WENOScheme, b, jx, u, dx::
             is[i]
         end
     end
-    II = CartesianIndex(II...)
+    II = CartesianIndex(II)
     I1 = unitindex(ndims(u, s), j)
 
     udisc = s.discvars[u]

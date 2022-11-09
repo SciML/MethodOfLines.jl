@@ -100,7 +100,7 @@ function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::Discrete
     interior = map(x -> interior[x], args)
     is = map(x -> s.index_syms[x], args)
 
-    II = CartesianIndex(is...)
+    II = CartesianIndex(is)
 
     deriv_expr = cartesian_nonlinear_laplacian(expr, II, derivweights, s, b, depvars, x, u)
 

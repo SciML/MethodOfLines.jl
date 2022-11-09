@@ -31,7 +31,7 @@ function _upwind_difference(D, interior, is, s,
     end
     boundaryoppairs = vcat(lowerops, upperops)
 
-    Construct_ArrayMaker(interior, vcat((interior...) => interiorop, boundaryoppairs))
+    Construct_ArrayMaker(interior, vcat(Tuple(interior) => interiorop, boundaryoppairs))
 end
 
 """

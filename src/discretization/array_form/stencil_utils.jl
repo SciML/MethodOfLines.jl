@@ -17,7 +17,7 @@ function prepare_boundary_op(boundaryop, interior, j)
         out = map(1:length(interior)) do k
             k == j ? i : interior[k]
         end
-        return (out...)
+        return Tuple(out)
     end
     (op, iboundary) = boundaryop
     return maketuple(iboundary) => op
@@ -28,7 +28,7 @@ function prepare_boundary_ops(boundaryops, interior, j)
         out = map(1:length(interior)) do k
             k == j ? i : interior[k]
         end
-        return (out...)
+        return Tuple(out)
     end
     return map(boundaryops) do (op, iboundary)
         maketuple(iboundary) => op
@@ -59,7 +59,7 @@ function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
     end
     expr = dot(weights, udisc[I...])
     symindices = setdiff(1:length(args), [j])
-    output_idx = (is[symindices]...)
+    output_idx = Tuple(is[symindices])
     return FillArrayOp(expr, output_idx, interior[symindices])
 end
 
@@ -81,12 +81,12 @@ function FillArrayOp(expr, output_idx, interior)
     return ArrayOp(Array{symtype(expr),length(output_idx)}, output_idx, expr, +, nothing, ranges)
 end
 
-NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}((last.(ranges)...), vcat((ranges...) => 0, ops))
-Construct_ArrayMaker(ranges, ops) = ArrayMaker{Real}((last.(ranges)...), ops)
+NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}(Tuple(last.(ranges)), vcat(Tuple(ranges) => 0, ops))
+Construct_ArrayMaker(ranges, ops) = ArrayMaker{Real}(Tuple(last.(ranges)), ops)
 
 FillArrayMaker(expr, is, ranges, interior) = NullBG_ArrayMaker(ranges, [FillArrayOp(expr, is, interior)])
 
-ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}((last.(ranges)...), [(ranges...) => udisc])
+ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}(Tuple(last.(ranges)), [Tuple(ranges) => udisc])
 
 #####
 

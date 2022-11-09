@@ -24,8 +24,8 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     ranges = get_ranges(eqvar, s)
     bg = s.discvars[eqvar]
 
-    eqarray = 0 .~ ArrayMaker{Real}((last.(ranges)...), vcat((ranges...) => bg,
-                                              (interior...) => pdeinterior,
+    eqarray = 0 .~ ArrayMaker{Real}(Tuple(last.(ranges)), vcat(Tuple(ranges) => bg,
+                                              Tuple(interior) => pdeinterior,
                                               boundary_op_pairs))
     push!(alleqs, eqarray)
 end

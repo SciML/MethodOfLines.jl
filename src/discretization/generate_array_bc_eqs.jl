@@ -91,7 +91,7 @@ function generate_bc_op_pair(s, b::AbstractEquationBoundary, iboundary, derivwei
         end
     end
 
-    (ranges...) => broadcast_substitute(bc.lhs, rules)
+    Tuple(ranges) => broadcast_substitute(bc.lhs, rules)
 end
 
 function generate_bc_op_pair(s, b::PeriodicBoundary, iboundary, derivweights)
@@ -107,7 +107,7 @@ function generate_bc_op_pair(s, b::PeriodicBoundary, iboundary, derivweights)
         else
             is[i]
         end
-    I = CartesianIndex(idxs...)
+    I = CartesianIndex(idxs)
     expr = discu[I] - discu[I + Ioffset]
     ranges = map(depvar(u_, s)) do x
         if x == x_
@@ -118,7 +118,7 @@ function generate_bc_op_pair(s, b::PeriodicBoundary, iboundary, derivweights)
     end
     symindices = setdiff(1:ndims(u, s), [j])
 
-    (ranges...) => FillArrayOp(expr, filter(x -> x isa Sym, idxs), ranges[symindices])
+    Tuple(ranges) => FillArrayOp(expr, filter(x -> x isa Sym, idxs), ranges[symindices])
 end
 
 function generate_bc_op_pair(s, b::AbstractInterpolatingBoundary, iboundary, derivweights)
@@ -148,7 +148,7 @@ function generate_bc_op_pair(s, b::AbstractInterpolatingBoundary, iboundary, der
         end
     end
 
-    (ranges...) => BoundaryDerivArrayOp(weights, taps, udisc, j, get_is(u_),
+    Tuple(ranges) => BoundaryDerivArrayOp(weights, taps, udisc, j, get_is(u_, s),
                                        get_interior(u, s, interior))
 end
 
