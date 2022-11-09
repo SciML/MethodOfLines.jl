@@ -91,7 +91,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     # Discretize space
     axies = map(x̄) do x
         xdomain = vars.intervals[x]
-        dx = discretization.dxs[x]
+        dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
         discx = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
         xhigh = xdomain[2]
         if discx[end] != xhigh
@@ -111,7 +111,8 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     dxs = map(x̄) do x
         discx = Dict(grid)[x]
         if discx isa StepRangeLen
-            x => discretization.dxs[x]
+            xdomain = vars.intervals[x]
+            x => prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
         elseif discx isa AbstractVector # is an abstract vector but not StepRangeLen
             x => [discx[i+1] - discx[i] for i in 1:length(x)]
         else
@@ -157,6 +158,10 @@ function Base.getproperty(s::DiscreteSpace, p::Symbol)
         getfield(s, p)
     end
 end
+
+prepare_dx(dx::Integer, xdomain, ::CenterAlignedGrid) = (xdomain[2] - xdomain[1])/(dx - 1)
+prepare_dx(dx::Integer, xdomain, ::EdgeAlignedGrid) = (xdomain[2] - xdomain[1])/dx
+prepare_dx(dx, xdomain, ::AbstractGrid) = dx
 
 nparams(::DiscreteSpace{N,M}) where {N,M} = N
 nvars(::DiscreteSpace{N,M}) where {N,M} = M

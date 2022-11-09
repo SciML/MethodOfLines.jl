@@ -126,9 +126,9 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization
-    dx = 0.1
+    N = 11
     order = 2
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => N], t)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
