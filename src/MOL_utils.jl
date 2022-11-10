@@ -273,21 +273,23 @@ half_range(x) = -div(x, 2):div(x, 2)
     I1 = unitindex(N, j)
     # -1 because of the relation u[1] ~ u[end]
     if I[j] <= 1
-        I = I + I1 * (l - 1)
+        return I + I1 * (l - 1)
     elseif I[j] > l
-        I = I - I1 * (l - 1)
+        return I - I1 * (l - 1)
+    else
+        return I
     end
-    return I
 end
 
-@inline function _wrapperiodic(i::Integer, l)
+@inline function _wrapperiodic(i, l)
     # -1 because of the relation u[1] ~ u[end]
     if i <= 1
-        i = i + (l - 1)
+        return i + (l - 1)
     elseif i > l
-        i = i - (l - 1)
+        return i = i - (l - 1)
+    else
+        return i
     end
-    return i
 end
 
 """
@@ -302,12 +304,11 @@ end
     return I
 end
 
-@inline function wrapperiodic(i::Integer, l, ::Val{true})
-    j, x = jx
+@inline function wrapperiodic(i, l, ::Val{true})
     return _wrapperiodic(i, l)
 end
 
-@inline function wrapperiodic(i::Integer, l, ::Val{false})
+@inline function wrapperiodic(i, l, ::Val{false})
     return i
 end
 

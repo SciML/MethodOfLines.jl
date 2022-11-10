@@ -8,7 +8,7 @@ Based on https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretiz
 
 See scheme 1 in appendix A. The r = 0 case is treated in a later appendix
 """
-function spherical_diffusion(innerexpr, II, derivweights, s, b, depvars, r, u)
+function spherical_diffusion(innerexpr, II::CartesianIndex, derivweights, s, b, depvars, r, u)
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     D_1 = derivweights.map[Differential(r)]
     D_2 = derivweights.map[Differential(r)^2]
@@ -63,15 +63,14 @@ end
 # Stencil interface
 ########################################################################################
 #TODO: Decouple this from old discretization interface
-function spherical_diffusion(innerexpr, II, derivweights, s, b, depvars, r, u)
+function spherical_diffusion(innerexpr, interior, derivweights, s, b, depvars, r, u)
     args = params(u, s)
-    ranges = map(x -> axes(s.grid[x])[1], args)
     interior = map(x -> interior[x], args)
     is = map(x -> s.index_syms[x], args)
 
     II = CartesianIndex(is)
 
-    deriv_expr = spherical_laplacian(innerexpr, II, derivweights, s, b, depvars, x, u)
+    deriv_expr = spherical_laplacian(innerexpr, II, derivweights, s, b, depvars, r, u)
 
     return FillArrayOp(deriv_expr, is, interior)
 end

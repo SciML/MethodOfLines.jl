@@ -1,4 +1,4 @@
-@inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, b, ispositive, u, jx) where {T,N,Wind,DX<:Number}
+@inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, II::CartesianIndex, s, b, ispositive, u, jx) where {T,N,Wind,DX<:Number}
     j, x = jx
     I1 = unitindex(ndims(u, s), j)
     if !ispositive
@@ -23,7 +23,7 @@
     return weights, Itap
 end
 
-@inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, b, ispositive, u, jx) where {T,N,Wind,DX<:AbstractVector}
+@inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, II::CartesianIndex, s, b, ispositive, u, jx) where {T,N,Wind,DX<:AbstractVector}
     j, x = jx
     @assert b isa Val{false} "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     I1 = unitindex(ndims(u, s), j)

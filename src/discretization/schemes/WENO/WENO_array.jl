@@ -7,9 +7,8 @@ function weno(interior, s::DiscreteSpace, wenoscheme::WENOScheme, b, jx, u, dx::
     ε = wenoscheme.epsilon
 
     args = params(u, s)
-    ranges = map(x -> axes(s.grid[x])[1], args)
-    interior = map(x -> interior[x], args)
-    is = map(x -> s.index_syms[x], args)
+    interior = get_interior(u, s, interior)
+    is = get_is(u, s)
 
     II = map(1:ndims(udisc)) do i
         if i == j
@@ -87,7 +86,7 @@ function weno(interior, s::DiscreteSpace, wenoscheme::WENOScheme, b, jx, u, dx::
     return FillArrayOp(expr, is, interior)
 end
 
-function weno(II::CartesianIndex, s::DiscreteSpace, b, jx, u, dx::AbstractVector)
+function weno(interior, s::DiscreteSpace, b, jx, u, dx::AbstractVector)
     @assert false "WENO scheme not implemented for nonuniform grids."
 end
 

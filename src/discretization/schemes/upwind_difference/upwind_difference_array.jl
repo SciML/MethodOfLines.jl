@@ -5,14 +5,13 @@
 function _upwind_difference(D, interior, is, s,
                             b, jx, u, udisc, ispositive)
     args = params(u, s)
-    is = map(x -> s.index_syms[x], args)
 
     j, x = jx
     lenx = length(s, x)
     if ispositive
         upperops = []
         if b isa Val{false}
-            lowerops = map(interior[x][1]:D.offside) do iboundary
+            lowerops = map(interior[j][1]:D.offside) do iboundary
                 lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
             end
         else
@@ -21,7 +20,7 @@ function _upwind_difference(D, interior, is, s,
         interiorop = interior_deriv(D, udisc, -D.stencil_length+1:0, j, is, interior, b)
     else
         if b isa Val{false}
-            upperops = map((lenx-D.boundary_point_count+1):interior[x][end]) do iboundary
+            upperops = map((lenx-D.boundary_point_count+1):interior[j][end]) do iboundary
                 upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
             end
         else
@@ -57,15 +56,13 @@ end
 function upwind_difference(expr, d::Int, interior, s::DiscreteSpace, b,
                            depvars, derivweights, (j, x), u, udisc, indexmap)
     # TODO: Allow derivatives in expr
-    interior = map(x -> interior[x], params(u, s))
-    is = map(x -> s.index_syms[x], params(u, s))
-    expr = substitute(expr, valmaps(s, u, depvars, Idx(CartesianIndex(is...),
-                      s, depvar(u, s), indexmap), indexmap))
 
-    exprarr = FillArrayMaker(expr, is, interior, interior)
+    valrules = arrayvalmaps(s, u, depvars, interior)
+    exprarr = broadcast_substitute(expr, valrules)
+
     IfElse.ifelse.(exprarr .> 0,
-        exprarr .* upwind_difference(d, interior, is, s, b, derivweights, (j, x), u, udisc, true),
-        exprarr .* upwind_difference(d, interior, is, s, b, derivweights, (j, x), u, udisc, false))
+        exprarr .* upwind_difference(d, get_interior(u, s, interior), get_is(u, s), s, b, derivweights, (j, x), u, udisc, true),
+        exprarr .* upwind_difference(d, get_interior(u, s, interior), get_is(u, s), s, b, derivweights, (j, x), u, udisc, false))
 end
 
 @inline function generate_winding_rules(interior, s::DiscreteSpace, depvars,

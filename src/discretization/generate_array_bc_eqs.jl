@@ -43,16 +43,19 @@ function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, deriv
     boundary_vs = map(s.ū) do v
         substitute(v, xrule)
     end
-    boundary_vs = filter(xs -> any(x -> safe_unwrap(x) isa Number, xs), map(arguments, boundary_vs))
+    boundary_vs = filter(v -> any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary_vs)
+    non_boundary_vs = filter(v -> any(x -> !(safe_unwrap(x) isa Number), arguments(v)), boundary_vs)
 
     depvarderivbcmaps = [(Differential(x_)^d)(v_) => bc_deriv(derivweights.halfoffsetmap[1][Differential(x_)^d], boundary, s.discvars[u], j, get_is(v_, s), get_interior(v_, s, interior), get_ranges(v_, s)) for v_ in boundary_vs, d in derivweights.orders[x_]]
 
     depvarbcmaps = [v_ => bc_deriv(derivweights.interpmap[x_], boundary, s.discvars[u], j, get_is(v_, s), get_interior(v_, s, interior), get_ranges(v_, s)) for v_ in boundary_vs]
 
-    return vcat(depvarderivbcmaps, depvarbcmaps)
+    varrules = varmaps(s, interior, non_boundary_vs)
+
+    return vcat(depvarderivbcmaps, depvarbcmaps, varrules)
 end
 
-function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:CenterAlignedGrid}
+function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, derivweights) where {N,M,G<:CenterAlignedGrid}
     u_, x_ = getvars(boundary)
     x = x_
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
@@ -66,25 +69,29 @@ function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, deriv
     boundary_vs = map(s.ū) do v
         substitute(v, xrule)
     end
-    boundary_vs = filter(xs -> any(x -> safe_unwrap(x) isa Number, xs), map(arguments, boundary_vs))
+    boundary_vs = filter(v -> any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary_vs)
+    non_boundary_vs = filter(v -> any(x -> !(safe_unwrap(x) isa Number), arguments(v)), boundary_vs)
 
     depvarderivbcmaps = vec([(Differential(x_)^d)(v_) => bc_deriv(derivweights.map[Differential(x_)^d], boundary, s.discvars[depvar(v_, s)], j, get_is(v_, s), get_interior(v_, s, interior), get_ranges(v_, s)) for v_ in boundary_vs, d in derivweights.orders[x_]])
 
     depvarbcmaps = [v_ => bc_var(boundary, s.discvars[depvar(v_, s)], j, get_is(v_, s), get_interior(v_, s, interior), get_ranges(v_, s)) for v_ in boundary_vs]
 
-    return vcat(depvarderivbcmaps, depvarbcmaps)
+    varrules = varmaps(s, interior, non_boundary_vs)
+
+    return vcat(depvarderivbcmaps, depvarbcmaps, varrules)
 end
 
-function generate_bc_op_pair(s, b::AbstractEquationBoundary, iboundary, derivweights)
-    bc = boundary.eq
+function generate_bc_op_pair(s, b::AbstractEquationBoundary, interior, iboundary, derivweights)
+    bc = b.eq
 
-    boundaryvalrules = boundary_value_maps(interior, s, b, derivweights, s.indexmap)
-    varrules = varrules(s, interior, depvars)
+    u_, x_ = getvars(b)
+
+    boundaryvalrules = boundary_value_rules(interior, s, b, derivweights)
     valrules = axiesvals(s, b, interior)
-    rules = vcat(boundaryvalrules, varrules, valrules)
+    rules = vcat(boundaryvalrules, valrules)
 
-    ranges = map(depvars(b.u, s)) do x
-        if x == b.x
+    ranges = map(params(u_, s)) do x
+        if isequal(x, x_)
             offset(b, iboundary, length(s, x))
         else
             interior[x]
@@ -94,7 +101,7 @@ function generate_bc_op_pair(s, b::AbstractEquationBoundary, iboundary, derivwei
     Tuple(ranges) => broadcast_substitute(bc.lhs, rules)
 end
 
-function generate_bc_op_pair(s, b::PeriodicBoundary, iboundary, derivweights)
+function generate_bc_op_pair(s, b::PeriodicBoundary, interior, iboundary, derivweights)
     u_, x_ = getvars(b)
     discu = s.discvars[depvar(u_, s)]
     j = x2i(s, depvar(u_, s), x_)
@@ -121,7 +128,7 @@ function generate_bc_op_pair(s, b::PeriodicBoundary, iboundary, derivweights)
     Tuple(ranges) => FillArrayOp(expr, filter(x -> x isa Sym, idxs), ranges[symindices])
 end
 
-function generate_bc_op_pair(s, b::AbstractInterpolatingBoundary, iboundary, derivweights)
+function generate_bc_op_pair(s, b::AbstractInterpolatingBoundary, interior, iboundary, derivweights)
     u_, x_ = getvars(b)
 
     j = x2i(s, depvar(u_, s), x_)
@@ -157,10 +164,10 @@ function generate_bc_op_pairs(s, boundaries, derivweights, interior)
     upperboundaries = sort(filter(b -> b isa AbstractUpperBoundary, boundaries), by=ordering)
 
     lowerpairs = map(enumerate(lowerboundaries)) do (iboundary, boundary)
-        generate_bc_op_pair(s, boundary, iboundary, derivweights)
+        generate_bc_op_pair(s, boundary, interior, iboundary, derivweights)
     end
     upperpairs = map(enumerate(upperboundaries)) do (iboundary, boundary)
-        generate_bc_op_pair(s, boundary, iboundary, derivweights)
+        generate_bc_op_pair(s, boundary, interior, iboundary, derivweights)
     end
     return vcat(lowerpairs, upperpairs)
 end

@@ -260,7 +260,7 @@ gridvals(s, u, interior) = map(x -> x => s.grid[get_interior(u, s, interior)...]
 
 arrayvalmaps(s, u, depvars, interior) = vcat(varmaps(s, interior, depvars), gridvals(s, u, interior))
 
-@inline function axiesvals(s::DiscreteSpace{N,M,G}, b::AbstractTruncatingBoundary, interior) where {N,M,G}
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, b::AbstractEquationBoundary, interior) where {N,M,G}
     u_, x_ = getvars(b)
     map(params(u_, s)) do x
         if isequal(x, x_)

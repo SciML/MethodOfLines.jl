@@ -13,7 +13,7 @@ abstract type AbstractUpperBoundary <: AbstractTruncatingBoundary end
 
 abstract type AbstractExtendingBoundary <: AbstractBoundary end
 
-struct LowerBoundary <: AbstractTruncatingBoundary
+struct LowerBoundary <: AbstractLowerBoundary
     u
     x
     depvars

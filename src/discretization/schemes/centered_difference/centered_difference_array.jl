@@ -4,19 +4,18 @@
 
 function central_difference(D::DerivativeOperator, interior, s, b, jx, u, udisc)
     args = params(u, s)
-    ranges = map(x -> axes(s.grid[x])[1], args)
-    interior = map(x -> interior[x], args)
-    is = map(x -> s.index_syms[x], args)
+    interior = get_interior(u, s, interior)
+    is = get_is(u, s)
 
     j, x = jx
     lenx = length(s, x)
 
     if b isa Val{false}
-        lowerops = map(interior[x][1]:D.boundary_point_count) do iboundary
+        lowerops = map(interior[j][1]:D.boundary_point_count) do iboundary
             lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
         end
 
-        upperops = map((lenx-D.boundary_point_count+1):interior[x][end]) do iboundary
+        upperops = map((lenx-D.boundary_point_count+1):interior[j][end]) do iboundary
             upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
         end
     else
@@ -36,7 +35,7 @@ end
                           [[(Differential(x)^d)(u) =>
                               central_difference(derivweights.map[Differential(x)^d],
                                                  interior, s, pmap.map[operation(u)][x],
-                                                 (x2i(s, u, x), x), u, central_ufunc)
+                                                 (x2i(s, u, x), x), u, s.discvars[u])
                              for d in (let orders = derivweights.orders[x]
                                            orders[iseven.(orders)]
                                        end)]

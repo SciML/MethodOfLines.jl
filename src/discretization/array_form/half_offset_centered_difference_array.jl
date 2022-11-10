@@ -4,19 +4,19 @@
 
 function half_offset_centered_difference(D::DerivativeOperator, interior, s, b, jx, u, udisc, len)
     args = params(u, s)
-    interior = map(x -> interior[x], args)
-    is = map(x -> s.index_syms[x], args)
+    interior = get_interior(u, s, interior)
+    is = get_is(u, s)
 
     j, x = jx
     offset = len == 0 ? 0 : -1
     lenx = len == 0 ? length(s, x) : len
 
     if b isa Val{false}
-        lowerops = map(interior[x][1]:D.boundary_point_count) do iboundary
+        lowerops = map(interior[j][1]:D.boundary_point_count) do iboundary
             lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
         end
 
-        upperops = map((lenx-D.boundary_point_count+1):(interior[x][end]+offset)) do iboundary
+        upperops = map((lenx-D.boundary_point_count+1):(interior[j][end]+offset)) do iboundary
             upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
         end
     else

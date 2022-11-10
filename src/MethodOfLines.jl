@@ -5,7 +5,8 @@ using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: operation, istree, arguments, variable
 using SymbolicUtils, Symbolics
-using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename, similarterm
+using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename,
+    similarterm, symtype, ArrayOp, ArrayMaker
 using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays
@@ -28,6 +29,7 @@ include("discretization/derivative_operator.jl")
 # Utils
 include("discretization/array_form/stencil_utils.jl")
 include("MOL_utils.jl")
+include("broadcast_substitute.jl")
 
 # System Parsing
 include("system_parsing/variable_map.jl")
@@ -39,13 +41,6 @@ include("system_parsing/pde_system_transformation.jl")
 include("discretization/discretize_vars.jl")
 include("system_parsing/interior_map.jl")
 
-# Solution Interface
-include("interface/solution/MOLMetadata.jl")
-include("interface/solution/solution_utils.jl")
-include("interface/solution/common.jl")
-include("interface/solution/timedep.jl")
-include("interface/solution/timeindep.jl")
-
 # Weight calculation
 include("discretization/schemes/fornberg_calculate_weights.jl")
 include("discretization/schemes/centered_difference/centered_diff_weights.jl")
@@ -53,7 +48,6 @@ include("discretization/schemes/upwind_difference/upwind_diff_weights.jl")
 include("discretization/schemes/half_offset_weights.jl")
 include("discretization/schemes/extrapolation_weights.jl")
 include("discretization/differential_discretizer.jl")
-
 
 # Scalarized Schemes
 include("discretization/schemes/centered_difference/centered_difference.jl")
@@ -70,18 +64,31 @@ include("discretization/array_form/half_offset_centered_difference_array.jl")
 #TODO: Properly seperate laplacian schemes
 include("discretization/schemes/WENO/WENO_array.jl")
 
-# Acalarized System Discretization
+# System Discretization
 include("discretization/generate_finite_difference_rules.jl")
-include("discretization/generate_bc_eqs.jl")
-include("discretization/generate_array_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
+
+# Scalarized Discretization
+include("discretization/generate_bc_eqs.jl")
+include("scalar_discretization.jl")
+
+# Array Discretization
+include("discretization/generate_array_bc_eqs.jl")
+include("array_discretization.jl")
+
+# Solution Interface
+include("interface/solution/MOLMetadata.jl")
+include("interface/solution/solution_utils.jl")
+include("interface/solution/common.jl")
+include("interface/solution/timedep.jl")
+include("interface/solution/timeindep.jl")
 
 # Main
 include("error_analysis.jl")
-include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 
-export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete
+export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
+    grid_align, edge_align, center_align, get_discrete
 export UpwindScheme, WENOScheme
 
 end
