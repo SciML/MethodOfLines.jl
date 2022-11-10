@@ -1,4 +1,4 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}, ::ArrayDiscretization) where {hasperiodic}
+function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}, ::ArrayDiscretization, verbose) where {hasperiodic}
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
 
     # Find boundaries for this equation
@@ -11,11 +11,14 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     # Generate the discrete form ODEs for the interior
     pdeinterior = begin
         rules = vcat(generate_finite_difference_rules(interior, s, depvars, pde, derivweights, pmap, indexmap), arrayvalmaps(s, eqvar, depvars, interior))
+        if verbose
+            println("Schemes Applied: The following rules were applied for the PDE $pde with the var $eqvar:")
+        end
         try
-            broadcast_substitute(pde.lhs, rules)
+            broadcast_substitute(pde.lhs, rules, verbose)
         catch e
             println("A scheme has been incorrectly applied to the following equation: $pde.\n")
-            println("The following rules were constructed:")
+            println("The follor wing rules were constructed:")
             display(rules)
             rethrow(e)
         end
@@ -23,7 +26,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     interior = get_interior(eqvar, s, interior)
     ranges = get_ranges(eqvar, s)
     bg = s.discvars[eqvar]
-
+    #TODO: Allow T
     eqarray = 0 .~ ArrayMaker{Real}(Tuple(last.(ranges)), vcat(Tuple(ranges) => bg,
                                               Tuple(interior) => pdeinterior,
                                               boundary_op_pairs))

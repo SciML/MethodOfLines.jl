@@ -68,7 +68,7 @@ function spherical_diffusion(innerexpr, interior, derivweights, s, b, depvars, r
     interior = map(x -> interior[x], args)
     is = map(x -> s.index_syms[x], args)
 
-    II = CartesianIndex(is)
+    II = CartesianIndex(Tuple(wrap.(is)))
 
     deriv_expr = spherical_laplacian(innerexpr, II, derivweights, s, b, depvars, r, u)
 

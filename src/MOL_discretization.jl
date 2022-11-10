@@ -111,16 +111,17 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             indexmap = Dict([args[i] => i for i in 1:length(args)])
                 # Generate the equations for the interior points
             discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                                 depvars, s, derivweights, indexmap, pmap, disc_strategy)
+                                 depvars, s, derivweights, indexmap, pmap, disc_strategy,
+                                 discretization.verbose_schemes)
         end
     end
 
     u0 = generate_ic_defaults(ics, s, disc_strategy)
-
+    display(alleqs)
     #! Temporarily scalarize for compatibility until MTK supports Array equations
     if disc_strategy isa ArrayDiscretization
-        alleqs = mapreduce(eq -> vec(scalarize(eq)), vcat, alleqs)
-        u0 = mapreduce(def -> vec(scalarize(def)), vcat, u0)
+        alleqs = mapreduce(eq -> symtype(eq) <: AbstractArray ? vec(scalarize(eq)) : eq, vcat, alleqs)
+        u0 = mapreduce(def -> symtype(def) <: AbstractArray ? vec(scalarize(def)) : def, vcat, u0)
     end
 
     defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))

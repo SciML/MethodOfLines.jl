@@ -5,8 +5,8 @@ using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: operation, istree, arguments, variable
 using SymbolicUtils, Symbolics
-using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename,
-    similarterm, symtype, ArrayOp, ArrayMaker
+using Symbolics: wrap, unwrap, solve_for, expand_derivatives, diff2term, setname, rename,
+    similarterm, symtype, ArrayOp, ArrayMaker, scalarize
 using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays

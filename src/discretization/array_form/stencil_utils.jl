@@ -6,7 +6,7 @@ function lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
 end
 
 function upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
-    weights = D.high_boundary_coefs[iboundary]
+    weights = D.high_boundary_coefs[lenx - iboundary + 1]
     taps = (lenx-D.boundary_stencil_length+1):lenx
     prepare_boundary_op((BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior),
             iboundary), interior, j)
@@ -82,18 +82,24 @@ end
 
 function FillArrayOp(expr, output_idx, interior)
     ranges = Dict(output_idx .=> interior) # hope this doesn't check bounds eagerly
-    return ArrayOp(Array{symtype(expr),length(output_idx)}, output_idx, expr, +, nothing, ranges)
+    return ArrayOp(Array{symtype(expr),length(output_idx)},
+                   output_idx, expr, +, nothing, ranges)
 end
 
-NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}(Tuple(last.(ranges)), vcat(Tuple(ranges) => 0, ops))
-Construct_ArrayMaker(ranges, ops) = ArrayMaker{Real}(Tuple(last.(ranges)), ops)
+NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)),
+                                                  vcat(Tuple(ranges) => 0, ops))
+Construct_ArrayMaker(ranges,
+                     ops) = ArrayMaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)), ops)
 
-FillArrayMaker(expr, is, ranges, interior) = NullBG_ArrayMaker(ranges, [FillArrayOp(expr, is, interior)])
+FillArrayMaker(expr, is,
+               ranges, interior) = NullBG_ArrayMaker(ranges,
+                                                     [FillArrayOp(expr, is, interior)])
 
-ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}(Tuple(last.(ranges)), [Tuple(ranges) => udisc])
+ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)),
+                                                 [Tuple(ranges) => udisc])
 
 #####
 
 get_interior(u, s, interior) = map(x -> interior[x], params(u, s))
-get_ranges(u, s) = map(x -> s.grid[x], params(u, s))
+get_ranges(u, s) = map(x -> first(axes(s.grid[x])), params(u, s))
 get_is(u, s) = map(x -> s.index_syms[x], params(u, s))

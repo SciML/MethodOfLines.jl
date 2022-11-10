@@ -256,7 +256,7 @@ x2i(s::DiscreteSpace, u, x) = x2i(s.vars, u, x)
 
 varmaps(s, interior, depvars) = map(u -> u => s.discvars[u][get_interior(u, s, interior)...], depvars)
 
-gridvals(s, u, interior) = map(x -> x => s.grid[get_interior(u, s, interior)...], params(u, s))
+gridvals(s, u, interior) = map(x -> x => s.grid[x][get_interior(u, s, interior)...], params(u, s))
 
 arrayvalmaps(s, u, depvars, interior) = vcat(varmaps(s, interior, depvars), gridvals(s, u, interior))
 

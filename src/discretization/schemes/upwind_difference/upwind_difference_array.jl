@@ -113,14 +113,14 @@ end
         mapreduce(vcat, params(u, s)) do x
             j = x2i(s, u, x)
             is = get_is(u, s)
-            interior = get_interior(u, s, interior)
+            uinterior = get_interior(u, s, interior)
             let orders = derivweights.orders[x]
                 oddorders = orders[isodd.(orders)]
                 # for all odd orders
                 if length(oddorders) > 0
                     map(oddorders) do d
                         (Differential(x)^d)(u) =>
-                          upwind_difference(d, interior, is, s, pmap.map[operation(u)][x],
+                          upwind_difference(d, uinterior, is, s, pmap.map[operation(u)][x],
                                             derivweights, (j, x), u, s.discvars[u], true)
                     end
                 else
