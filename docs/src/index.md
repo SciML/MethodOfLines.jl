@@ -77,3 +77,59 @@ At the moment the package is able to discretize almost any system, with some ass
 - That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.
 - That odd order derivatives do not multiply or divide each other. A workaround is to wrap all but one derivative per term in an auxiliary variable, such as `dxu(x, t) ~ Differential(x)(u(x, t))`. The performance hit from auxiliary variables should be negligable due to a structural simplification step.
 - That the WENO scheme must be used when there are mixed derivatives.
+
+
+## Reproducibility
+```@raw html
+<details><summary>The documentation of this SciML package was built using these direct dependencies,</summary>
+```
+```@example
+using Pkg # hide
+Pkg.status() # hide
+```
+```@raw html
+</details>
+```
+```@raw html
+<details><summary>and using this machine and Julia version.</summary>
+```
+```@example
+using InteractiveUtils # hide
+versioninfo() # hide
+```
+```@raw html
+</details>
+```
+```@raw html
+<details><summary>A more complete overview of all dependencies and their versions is also provided.</summary>
+```
+```@example
+using Pkg # hide
+Pkg.status(;mode = PKGMODE_MANIFEST) # hide
+```
+```@raw html
+</details>
+```
+```@raw html
+You can also download the 
+<a href="
+```
+```@eval
+using TOML
+version = TOML.parse(read("../../Project.toml",String))["version"]
+name = TOML.parse(read("../../Project.toml",String))["name"]
+link = "https://github.com/SciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Manifest.toml"
+```
+```@raw html
+">manifest</a> file and the
+<a href="
+```
+```@eval
+using TOML
+version = TOML.parse(read("../../Project.toml",String))["version"]
+name = TOML.parse(read("../../Project.toml",String))["name"]
+link = "https://github.com/SciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Project.toml"
+```
+```@raw html
+">project</a> file.
+```
