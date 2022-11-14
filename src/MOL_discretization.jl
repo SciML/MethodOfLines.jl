@@ -120,7 +120,15 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     display(alleqs)
     #! Temporarily scalarize for compatibility until MTK supports Array equations
     if disc_strategy isa ArrayDiscretization
-        alleqs = mapreduce(eq -> symtype(eq) <: AbstractArray ? vec(scalarize(eq)) : eq, vcat, alleqs)
+        try
+            alleqs = mapreduce(eq -> symtype(eq) <: AbstractArray ? vec(scalarize(eq)) : eq, vcat, alleqs)
+        catch e
+            #dump stacktrace to file
+            open("stacktrace.jl", "w") do f
+                showerror(f, e, catch_backtrace())
+                println(f, "\n###############################################\n")
+            end
+        end
         u0 = mapreduce(def -> symtype(def) <: AbstractArray ? vec(scalarize(def)) : def, vcat, u0)
     end
 
