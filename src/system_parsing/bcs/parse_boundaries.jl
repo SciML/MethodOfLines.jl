@@ -49,6 +49,16 @@ struct PeriodicBoundary <: AbstractBoundary
     eq
 end
 
+struct InterfaceBoundary{IsUpper_u, IsUpper_u2} <: AbstractBoundary
+    u
+    u2
+    x
+    x2
+    eq
+end
+
+(b::InterfaceBoundary)(I, s, jx) = wrapinterface(I, s, b, jx)
+
 getvars(b::AbstractBoundary) = (b.u, b.x)
 
 @inline function isperiodic(bmps, u, x)
@@ -72,11 +82,27 @@ end
     end
 end
 
+function isperiodic(b1::InterfaceBoundary{b1u, b1u2}, b2::InterfaceBoundary{b2u, b2u2}) where {b1u, b1u2, b2u, b2u2}
+    us_equal = isequal(operation(b1.u), operation(b2.u2)) && isequal(operation(b2.u), operation(b1.u2))
+    xs_equal = issequal(b1.x, b2.x2) && isequal(b1.x2, b2.x)
+    return us_equal && xs_equal
+end
+
+@inline function isinterface(b)
+    if b isa InterfaceBoundary
+        return Val(true)
+    else
+        return Val(false)
+    end
+end
+
 @inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
     # This x2i is correct
     dim = x2i(s, depvar(b.u, s), b.x)
     @assert dim !== nothing "Internal Error: Variable $(b.x) not found in $(depvar(b.u, s)), when parsing boundary condition $(b)"
-
+    if b isa InterfaceBoundary && isupper(b)
+        return
+    end
     lower[dim] = lower[dim] + !isupper(b)
     upper[dim] = upper[dim] + isupper(b)
 end
@@ -89,6 +115,7 @@ idx(b::UpperBoundary, s) = length(s, b.x)
 isupper(::LowerBoundary) = false
 isupper(::UpperBoundary) = true
 isupper(::PeriodicBoundary) = false
+isupper(::InterfaceBoundary{Val{IsUpper_u}}) where IsUpper_u = IsUpper_u
 
 @inline function edge(interiormap, s, u, j, islower)
     I = interiormap.I[interiormap.pde[depvar(u, s)]]
@@ -169,9 +196,12 @@ function parse_bcs(bcs, v::VariableMap, orders)
                 # Mark the boundary
                 boundary = LowerBoundary(u_, t, x_, order, bc, v)
                 # do it again for the upper end to check for periodic, but only check the current depvar and indvar
-                for term_ in setdiff(terms, [term]), r_ in upper_boundary_rules[operation(u_)][x_]
+                for term_ in setdiff(terms, [term]), r_ in reduce(vcat, reduce(vcat, collect.(values.(collect(values(upper_boundary_rules))))))
                     if subsmatch(term_, r_)
-                        boundary = PeriodicBoundary(u_, x_, bc)
+                        u__, x__, order__ = r_.second
+                        @assert ndims(u_, s) == ndims(u__, s) "Invalid Interface Boundary $bc: Dependent variables $(u_) and $(u__) have different numbers of dimensions."
+                        boundary = (InterfaceBoundary{Val(false), Val(true)}(u_, u__, x_, x__, u_ ~ u__),
+                                    InterfaceBoundary{Val(true), Val(false)}(u_, u__, x_, x__, u_ ~ u__))
                     end
                 end
 
@@ -189,8 +219,12 @@ function parse_bcs(bcs, v::VariableMap, orders)
             end
         end
         @assert boundary !== nothing "Boundary condition $bc is not on a boundary of the domain, or is not a valid boundary condition"
-
-        push!(boundarymap[operation(boundary.u)][boundary.x], boundary)
+        if boundary isa Tuple
+            push!(boundarymap[operation(boundary[1].u)][boundary[1].x], boundary[1])
+            push!(boundarymap[operation(boundary[2].u)][boundary[2].x], boundary[2])
+        else
+            push!(boundarymap[operation(boundary.u)][boundary.x], boundary)
+        end
     end
     return boundarymap
 end

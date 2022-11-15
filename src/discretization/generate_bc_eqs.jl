@@ -25,10 +25,29 @@ function generate_bc_eqs!(bceqs, s::DiscreteSpace{N}, boundaryvalfuncs, interior
 
 end
 
+function generate_bc_eqs!(bceqs, s::DiscreteSpace, boundaryvalfuncs, interiormap, boundary::InterfaceBoundary)
+    isupper(boundary) && return
+    u_ = boundary.u
+    x_ = boundary.x
+    u__ = boundary.u2
+    x__ = boundary.x2
+    N = ndims(u_, s)
+    j = x2i(s, depvar(u_, s), x_)
+    # * Assume that the interface BC is of the simple form u(t,0) ~ u(t,1)
+    Ioffset = unitindex(N, j) * (length(s, x__) - 1)
+    disc1 = s.discvars[depvar(u_, s)]
+    disc2 = s.discvars[depvar(u__, s)]
+
+    push!(bceqs, vec(map(edge(s, boundary, interiormap)) do II
+        disc1[II] ~ disc2[II+Ioffset]
+    end))
+
+end
+
 function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
     return mapreduce(vcat, values(boundarymap)) do boundaries
         map(mapreduce(x -> boundaries[x], vcat, s.x̄)) do b
-            if b isa PeriodicBoundary
+            if b isa InterfaceBoundary
                 II -> []
             else
                 II -> boundary_value_maps(II, s, b, derivweights, indexmap)

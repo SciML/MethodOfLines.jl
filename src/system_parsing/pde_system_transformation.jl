@@ -101,8 +101,12 @@ function nonlinlap_check(term, differential)
             end
 
             is = findall(args) do arg
-                op = operation(arg)
-                op isa Differential && isequal(op.x, differential.x)
+                if istree(arg)
+                    op = operation(arg)
+                    op isa Differential && isequal(op.x, differential.x)
+                else
+                    false
+                end
             end
             if length(is) == 1
                 i = first(is)
