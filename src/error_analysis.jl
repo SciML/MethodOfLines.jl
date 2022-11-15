@@ -1,8 +1,10 @@
 function error_analysis(sys, e)
+    eqs = sys.eqs
+    states = sys.states
+    t = sys.iv
+    println("The system of equations is:")
+    println(eqs)
     if e isa ModelingToolkit.ExtraVariablesSystemException
-        eqs = sys.eqs
-        states = sys.states
-        t = sys.iv
 
         rs = [Differential(t)(state) => state for state in states]
         extrastates = [state for state in states]
@@ -16,8 +18,6 @@ function error_analysis(sys, e)
                 end
             end
         end
-        println("The system of equations is:")
-        println(eqs)
         println()
         println("There are $(length(states)) variables and $(length(eqs)) equations.\n")
         println("The variables without time derivatives are:")

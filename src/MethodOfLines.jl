@@ -5,6 +5,7 @@ using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: operation, istree, arguments, variable
 using SymbolicUtils, Symbolics
+using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename, similarterm
 using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays
@@ -20,12 +21,14 @@ import Base.display
 # Interface
 include("interface/grid_types.jl")
 include("interface/scheme_types.jl")
+include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
 
 include("discretization/discretize_vars.jl")
 include("MOL_utils.jl")
 include("system_parsing/interior_map.jl")
 
+# Solution Interface
 include("interface/solution/MOLMetadata.jl")
 include("interface/solution/solution_utils.jl")
 include("interface/solution/common.jl")
@@ -39,13 +42,13 @@ include("discretization/schemes/centered_difference/centered_diff_weights.jl")
 include("discretization/schemes/upwind_difference/upwind_diff_weights.jl")
 include("discretization/schemes/half_offset_weights.jl")
 include("discretization/schemes/extrapolation_weights.jl")
-
 include("discretization/differential_discretizer.jl")
 
 # System Parsing
+include("system_parsing/variable_map.jl")
 include("system_parsing/bcs/parse_boundaries.jl")
-
 include("system_parsing/bcs/periodic_map.jl")
+include("system_parsing/pde_system_transformation.jl")
 
 # Schemes
 include("discretization/schemes/centered_difference/centered_difference.jl")
@@ -57,11 +60,12 @@ include("discretization/schemes/WENO/WENO.jl")
 
 # System Discretization
 include("discretization/generate_finite_difference_rules.jl")
-
 include("discretization/generate_bc_eqs.jl")
+include("discretization/generate_ic_defaults.jl")
 
 # Main
 include("error_analysis.jl")
+include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete

@@ -3,7 +3,7 @@ A helper function to compute the coefficients of a derivative operator including
 """
 function CompleteHalfCenteredDifference(derivative_order::Int,
                                         approximation_order::Int,
-                                        dx::T) where {T <: Real, N}
+                                        dx::T) where {T <: Real}
     @assert approximation_order>1 "approximation_order must be greater than 1."
     centered_stencil_length = approximation_order + 2 * Int(floor(derivative_order / 2)) +
                               (approximation_order % 2)
@@ -55,7 +55,7 @@ end
 
 function CompleteHalfCenteredDifference(derivative_order::Int,
                                         approximation_order::Int,
-                                        x::T) where {T <: AbstractVector{<:Real}, N}
+                                        x::T) where {T <: AbstractVector{<:Real}}
     @assert approximation_order>1 "approximation_order must be greater than 1."
     centered_stencil_length = approximation_order + 2 * Int(floor(derivative_order / 2)) +
                               (approximation_order % 2)

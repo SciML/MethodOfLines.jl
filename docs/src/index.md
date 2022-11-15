@@ -6,6 +6,14 @@ of symbolicaly-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
 
+It is a SciML "Discretizer" package, a class of packages which export the methods:
+- `discretize(sys::PDESystem, disc::D) where {D <: AbstractDiscretization}`, which returns an `AbstractSciMLProblem` to be solved with the ecosystem's solvers.
+- `symbolic_discretize(sys::PDESystem, disc::D) where {D <: AbstractDiscretization}`, which returns an `AbstractSystem` from `ModelingToolkit.jl`.
+
+A Discretizer also optionally provides automatic solution wrapping, for easing the retrieval of shaped portions of the solution, and multi dimensional interpolations. This feature is provided by `MethodOfLines.jl`, see the [solution interface](@ref sol) page for more information.
+
+The `AbstractDiscretization` that `MethodOfLines.jl` provides is the [`MOLFiniteDifference`](@ref molfd), see its documentation for full information about interface options.
+
 The package's handling is quite general, it is recommended to try out your system of equations and post an issue if you run in to trouble. If you want to solve it, we want to support it.
 
 Issues with questions on usage are also welcome as they help us improve the docs.
@@ -62,13 +70,66 @@ packages.
 At the moment the package is able to discretize almost any system, with some assumptions listed below
 
 - That the grid is cartesian.
-- That the equation is first order in time.
 - Boundary conditions in time are supplied as initial conditions, not at the end of the simulation interal. If your system requires a final condition, please use a change of variables to rectify this. This is unlikely to change due to upstream constraints.
 - Intergral equations are not supported.
 - That dependant variables always have the same argument signature, except in BCs.
 - That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`, or the same with lhs and rhs reversed. Note that this generalises to higher dimensions. Please note that if you want to use a periodic condition on a dimension with WENO schemes, please use a periodic condition on all variables in that dimension.
 - That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.
-- That initial conditions are of the form `u(...) ~ ...`, and don't reference the initial time derivative.
-- That simple derivative terms are purely of a dependant variable, for example `Dx(u(t,x,y))` is allowed but `Dx(u(t,x,y)*v(t,x,y))`, `Dx(u(t,x)+1)` or `Dx(f(u(t,x)))` are not. As a workaround please expand such terms with the product rule and use the linearity of the derivative operator, or define a new auxiliary dependant variable by adding an equation for it like `eqs = [Differential(x)(w(t,x))~ ... , w(t,x) ~ v(t,x)*u(t,x)]`, along with appropriate BCs/ICs. An exception to this is if the differential is a nonlinear or spherical laplacian, in which case only the innermost argument should be wrapped.
-- Note that the above also applies to mixed derivatives, please wrap the inner derivative.
 - That odd order derivatives do not multiply or divide each other. A workaround is to wrap all but one derivative per term in an auxiliary variable, such as `dxu(x, t) ~ Differential(x)(u(x, t))`. The performance hit from auxiliary variables should be negligable due to a structural simplification step.
+- That the WENO scheme must be used when there are mixed derivatives.
+
+
+## Reproducibility
+```@raw html
+<details><summary>The documentation of this SciML package was built using these direct dependencies,</summary>
+```
+```@example
+using Pkg # hide
+Pkg.status() # hide
+```
+```@raw html
+</details>
+```
+```@raw html
+<details><summary>and using this machine and Julia version.</summary>
+```
+```@example
+using InteractiveUtils # hide
+versioninfo() # hide
+```
+```@raw html
+</details>
+```
+```@raw html
+<details><summary>A more complete overview of all dependencies and their versions is also provided.</summary>
+```
+```@example
+using Pkg # hide
+Pkg.status(;mode = PKGMODE_MANIFEST) # hide
+```
+```@raw html
+</details>
+```
+```@raw html
+You can also download the 
+<a href="
+```
+```@eval
+using TOML
+version = TOML.parse(read("../../Project.toml",String))["version"]
+name = TOML.parse(read("../../Project.toml",String))["name"]
+link = "https://github.com/SciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Manifest.toml"
+```
+```@raw html
+">manifest</a> file and the
+<a href="
+```
+```@eval
+using TOML
+version = TOML.parse(read("../../Project.toml",String))["version"]
+name = TOML.parse(read("../../Project.toml",String))["name"]
+link = "https://github.com/SciML/"*name*".jl/tree/gh-pages/v"*version*"/assets/Project.toml"
+```
+```@raw html
+">project</a> file.
+```

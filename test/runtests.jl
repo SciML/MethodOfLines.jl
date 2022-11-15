@@ -1,5 +1,4 @@
 using SafeTestsets
-import Base.Threads.@spawn
 
 const GROUP = get(ENV, "GROUP", "All")
 const is_APPVEYOR = Sys.iswindows() && haskey(ENV, "APPVEYOR")
@@ -105,4 +104,10 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/burgers_eq.jl")
         end
     end
+
+    # if GROUP == "All" || GROUP == "Mixed_Derivatives"
+    #     @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
+    #         include("pde_systems/MOL_Mixed_Deriv.jl")
+    #     end
+    # end
 end

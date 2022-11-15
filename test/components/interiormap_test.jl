@@ -1,4 +1,4 @@
-using MethodOfLines, ModelingToolkit, DomainSets
+using MethodOfLines, ModelingToolkit, DomainSets, Test
 using Combinatorics: permutations
 
 
@@ -30,11 +30,9 @@ using Combinatorics: permutations
     # Test centered order
     disc = MOLFiniteDifference([x=>dx], t)
 
-    depvar_ops = map(x->operation(x.val),pdesys.depvars)
-    depvars = MethodOfLines.get_all_depvars(pdesys, depvar_ops)
-    indvars = MethodOfLines.remove(collect(reduce(union,filter(xs->!isequal(xs, [t]), map(arguments, depvars)))),t)
+    v = MethodOfLines.VariableMap(pdesys, disc)
 
-    s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
+    s = MethodOfLines.DiscreteSpace(v, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
@@ -73,12 +71,9 @@ end
     # Test centered order
     disc = MOLFiniteDifference([x=>dx, t=>dx])
 
-    depvar_ops = map(x->operation(x.val),pdesys.depvars)
-    depvars = MethodOfLines.get_all_depvars(pdesys, depvar_ops)
-    indvars = collect(reduce(union,filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
+    v = MethodOfLines.VariableMap(pdesys, disc)
 
-     s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
-
+    s = MethodOfLines.DiscreteSpace(v, disc)
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
         @test m == [2 0 2; 0 3 3; 4 4 4] # Test the matrix is the identity matrix
@@ -115,11 +110,8 @@ end
     # Test centered order
     disc = MOLFiniteDifference([x=>dx, t=>1.0])
 
-    depvar_ops = map(x->operation(x.val),pdesys.depvars)
-    depvars = MethodOfLines.get_all_depvars(pdesys, depvar_ops)
-    indvars = collect(reduce(union,filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
-
-    s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
+    v = MethodOfLines.VariableMap(pdesys, disc)
+    s = MethodOfLines.DiscreteSpace(v, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
@@ -158,12 +150,9 @@ end
     # Test centered order
     disc = MOLFiniteDifference([x=>dx, t=>1.0])
 
-    depvar_ops = map(x->operation(x.val),pdesys.depvars)
-    depvars = MethodOfLines.get_all_depvars(pdesys, depvar_ops)
-    indvars = collect(reduce(union,filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
+    v = MethodOfLines.VariableMap(pdesys, disc)
 
-    s = MethodOfLines.DiscreteSpace(domains, depvars, indvars, disc)
-
+    s = MethodOfLines.DiscreteSpace(v, disc)
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
         @test m == [2 2 0; 1 0 1; 0 1 2]
