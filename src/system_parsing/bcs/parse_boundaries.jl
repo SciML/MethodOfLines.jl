@@ -57,12 +57,16 @@ struct InterfaceBoundary{IsUpper_u,IsUpper_u2} <: AbstractBoundary
     eq
 end
 
+function isequal(i1::InterfaceBoundary, i2::InterfaceBoundary)
+    return isequal(i1.u, i2.u) && isequal(i1.u2, i2.u2) && isequal(i1.x, i2.x) && isequal(i1.x2, i2.x2)
+end
+
 getvars(b::AbstractBoundary) = (b.u, b.x)
 
 @inline function isperiodic(bmps, u, x)
     if !isempty(bmps[operation(u)][x])
         # Being explicit hoping the compiler will optimize this away
-        if first(bmps[operation(u)][x]) isa PeriodicBoundary
+        if all(haslowerupper(filter_interfaces(bmps[operation(u)][x])))
             return Val(true)
         else
             return Val(false)
@@ -109,6 +113,8 @@ function haslowerupper(bs)
     return haslower, hasupper
 end
 
+has_interfaces(bmps) = any(b - > isa InterfaceBoundary, reduce(vcat, reduce(vcat, collect.(values.(collect(values(boundarymap)))))))
+
 @inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
     # This x2i is correct
     dim = x2i(s, depvar(b.u, s), b.x)
@@ -128,7 +134,7 @@ idx(b::UpperBoundary, s) = length(s, b.x)
 isupper(::LowerBoundary) = false
 isupper(::UpperBoundary) = true
 isupper(::PeriodicBoundary) = false
-isupper(::InterfaceBoundary{Val{IsUpper_u}}) where {IsUpper_u} = IsUpper_u
+isupper(::InterfaceBoundary{IsUpper_u}) where {IsUpper_u} = IsUpper_u isa Val{true} ? true : false
 
 @inline function edge(interiormap, s, u, j, islower)
     I = interiormap.I[interiormap.pde[depvar(u, s)]]

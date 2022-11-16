@@ -34,7 +34,11 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pmap = PeriodicMap(boundarymap, v)
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
-        pdesys, pmap = transform_pde_system!(v, boundarymap, pmap, pdesys)
+        if has_interfaces(boundarymap)
+            @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
+        else
+            pdesys, pmap = transform_pde_system!(v, boundarymap, pmap, pdesys)
+        end
     end
 
     # Check if the boundaries warrant using ODAEProblem, as long as this is allowed in the interface

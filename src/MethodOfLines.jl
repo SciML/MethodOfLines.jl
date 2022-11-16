@@ -50,6 +50,9 @@ include("system_parsing/bcs/parse_boundaries.jl")
 include("system_parsing/bcs/periodic_map.jl")
 include("system_parsing/pde_system_transformation.jl")
 
+# Interface handling
+include("discretization/interface_boundary.jl")
+
 # Schemes
 include("discretization/schemes/centered_difference/centered_difference.jl")
 include("discretization/schemes/upwind_difference/upwind_difference.jl")

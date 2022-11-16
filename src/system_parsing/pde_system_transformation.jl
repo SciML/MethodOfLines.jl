@@ -224,6 +224,9 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
                 push!(newbcs, PeriodicBoundary(newop(args1...), iv, newop(args1...) ~ newop(args2...)))
                 continue
             end
+            interfaces = filter_interfaces(boundarymap[operation(dv)][iv])
+            @assert length(interfaces) == 0 "Interface BCs like $(interfaces[1].eq) are not yet supported in conjunction with system transformation, please transform manually if needed and set `should_transform=false` in the discretization. If you need this feature, please open an issue on GitHub."
+
             boundaries = boundarymap[dv][iv]
             length(bcs) == 0 && continue
 

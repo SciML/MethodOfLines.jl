@@ -55,7 +55,7 @@ function get_interface_vars(b, s, j)
 
     N = ndims(u, s)
     I1 = unitindex(N, j)
-    return I1, discu2, l2
+    return I1, discu2, l1, l2
 end
 
 function _wrapinterface(I, s, b::InterfaceBoundary{Val{false}, Val{true}}, j)
