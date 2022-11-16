@@ -78,9 +78,9 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     shift(::LowerBoundary) = zero(II)
     shift(::UpperBoundary) = unitindex(N, j)
 
-    depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[1][Differential(x_)^d], II-shift(boundary), s, isperiodic(boundary), (j,x_), u, ufunc) for d in derivweights.orders[x_]]
+    depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[1][Differential(x_)^d], II-shift(boundary), s, [], (j,x_), u, ufunc) for d in derivweights.orders[x_]]
 
-    depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II-shift(boundary), s, isperiodic(boundary), (j,x_), u, ufunc)]
+    depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II-shift(boundary), s, [], (j,x_), u, ufunc)]
 
     return vcat(depvarderivbcmaps, depvarbcmaps)
 end
@@ -103,7 +103,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     is = [is[1:j-1]..., idx(boundary, s), is[j:end]...]
     II = CartesianIndex(is...)
 
-    depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s,isperiodic(boundary), (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
+    depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, [], (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
     # ? Does this need to be done for all variables at the boundary?
     depvarbcmaps = [u_ => s.discvars[u][II]]
 
@@ -129,9 +129,9 @@ end
 Pads the boundaries with extrapolation equations, extrapolated with 6th order lagrangian polynomials.
 Reuses `central_difference` as this already dispatches the correct stencil, given a `DerivativeOperator` which contains the correct weights.
 """
-function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, periodicmap)
+function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap, periodicmap)
     args = remove(arguments(u), s.time)
-    extents = interiormap.stencil_extents[pde]
+    lowerextents, upperextents = interiormap.stencil_extents[pde]
     vlower = interiormap.lower[pde]
     vupper = interiormap.upper[pde]
     pmap = periodicmap.map[operation(u)]
@@ -140,19 +140,19 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, periodi
     eqmap = [[] for _ in CartesianIndices(s.discvars[u])]
     for (j, x) in enumerate(args)
         pmap[x] isa Val{true} && continue
-        ninterp = extents[j] - vlower[j]
+        ninterp = lowerextents[j] - vlower[j]
         I1 = unitindex(length(args), j)
         while ninterp >= vlower[j]
             for Il in (edge(interiormap, s, u, j, true) .+ (ninterp * I1,))
-                expr = central_difference(derivweights.boundary[x], Il, s, pmap[x], (j, x), u, ufunc)
+                expr = central_difference(derivweights.boundary[x], Il, s, filter_interfaces(bcmap[operation(u)][x]), (j, x), u, ufunc)
                 push!(eqmap[Il], expr)
             end
             ninterp = ninterp - 1
         end
-        ninterp = extents[j] - vupper[j]
+        ninterp = upperextents[j] - vupper[j]
         while ninterp >= vupper[j]
             for Iu in (edge(interiormap, s, u, j, false) .- (ninterp * I1,))
-                expr = central_difference(derivweights.boundary[x], Iu, s, pmap[x], (j, x), u, ufunc)
+                expr = central_difference(derivweights.boundary[x], Iu, s, filter_interfaces(bcmap[operation(u)][x]), (j, x), u, ufunc)
                 push!(eqmap[Iu], expr)
             end
             ninterp = ninterp - 1
