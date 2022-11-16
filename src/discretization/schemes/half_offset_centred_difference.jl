@@ -31,7 +31,7 @@ function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX},
     return (weights, Itap)
 end
 
-function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX}, II::CartesianIndex, s::DiscreteSpace, bs, u, jx, len=0) where {T,N,Wind,DX<:AbstractVector}
+function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX}, II::Base.AbstractCartesianIndex, s::DiscreteSpace, bs, u, jx, len=0) where {T,N,Wind,DX<:AbstractVector}
     j, x = jx
     @assert length(bs) == 0 "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     len = len == 0 ? length(s, x) : len

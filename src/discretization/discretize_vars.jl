@@ -101,7 +101,6 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
         end
         x => discx
     end
-    @show vars
     # Define the grid on which the dependent variables will be evaluated (see #378)
     # center_align is recommended for Dirichlet BCs
     # edge_align is recommended for Neumann BCs (spatial discretization is conservative)

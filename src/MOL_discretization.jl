@@ -143,7 +143,7 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
     try
         simpsys = structural_simplify(sys)
         if tspan === nothing
-            add_metadata!(simpsys.metadata, sys)
+            add_metadata!(get_metadata(sys), sys)
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
         else
             # Use ODAE if nessesary

@@ -1,4 +1,4 @@
-struct RefCartesianIndex{N, AType}
+struct RefCartesianIndex{N, AType} <:  Base.AbstractCartesianIndex{N}
     I::CartesianIndex{N}
     A::AType
     RefCartesianIndex(I::CartesianIndex{N}, A::AType) where {N, AType} = new{N, AType}(I, A)

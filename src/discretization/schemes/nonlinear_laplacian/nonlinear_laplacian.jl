@@ -41,9 +41,9 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
     #* Need to see how to handle this with interface boundaries
     haslower, hasupper = haslowerupper(bs)
     if (haslower & II[j] < div(length(s, x), 2))
-        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, I, s, bs, u, jx)
+        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II, s, bs, u, jx)
     elseif (hasupper & II[j] > div(length(s, x), 2))
-        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, I, s, bs, u, jx)
+        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II, s, bs, u, jx)
     else
         cliplen = length(s, x) - 1
         outerweights, outerstencil = get_half_offset_weights_and_stencil(D_outer, II - unitindex(N, j), s, bs, u, jx, cliplen)

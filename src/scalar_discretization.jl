@@ -9,7 +9,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
         generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
     end
     # Generate extrapolation eqs
-    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
+    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, bcmap, pmap)
 
     # Set invalid corner points to zero
     generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)

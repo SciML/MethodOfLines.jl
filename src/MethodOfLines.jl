@@ -3,7 +3,7 @@ using LinearAlgebra
 using SciMLBase
 using DiffEqBase
 using ModelingToolkit
-using ModelingToolkit: operation, istree, arguments, variable
+using ModelingToolkit: operation, istree, arguments, variable, get_metadata
 using SymbolicUtils, Symbolics
 using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename, similarterm
 using SymbolicUtils: operation, arguments
@@ -16,6 +16,8 @@ import DomainSets
 # To Extend
 import SciMLBase.wrap_sol
 import Base.display
+import Base.isequal
+import Base.getindex
 
 
 # Interface

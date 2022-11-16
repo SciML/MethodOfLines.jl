@@ -45,7 +45,7 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u
         Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):1:0]
     else
         weights = D.stencil_coefs[II[j]-D.boundary_point_count]
-        Itap = [wrapperiodic(II + i * I1, s, b, u, jx) for i in half_range(D.stencil_length)]
+        Itap = [II + i * I1 for i in half_range(D.stencil_length)]
     end
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
 

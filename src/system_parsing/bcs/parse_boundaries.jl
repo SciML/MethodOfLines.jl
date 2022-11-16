@@ -57,8 +57,10 @@ struct InterfaceBoundary{IsUpper_u,IsUpper_u2} <: AbstractBoundary
     eq
 end
 
-function isequal(i1::InterfaceBoundary, i2::InterfaceBoundary)
-    return isequal(i1.u, i2.u) && isequal(i1.u2, i2.u2) && isequal(i1.x, i2.x) && isequal(i1.x2, i2.x2)
+function Base.isequal(i1::InterfaceBoundary, i2::InterfaceBoundary)
+    front = (isequal(i1.u, i2.u) & isequal(i1.u2, i2.u2) & isequal(i1.x, i2.x) & isequal(i1.x2, i2.x2))
+    back = (isequal(i1.u, i2.u2) & isequal(i1.u2, i2.u) & isequal(i1.x, i2.x2) & isequal(i1.x2, i2.x))
+    return front | back
 end
 
 getvars(b::AbstractBoundary) = (b.u, b.x)
@@ -113,7 +115,7 @@ function haslowerupper(bs)
     return haslower, hasupper
 end
 
-has_interfaces(bmps) = any(b - > isa InterfaceBoundary, reduce(vcat, reduce(vcat, collect.(values.(collect(values(boundarymap)))))))
+has_interfaces(bmps) = any(b -> b isa InterfaceBoundary, reduce(vcat, reduce(vcat, collect.(values.(collect(values(bmps)))))))
 
 @inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
     # This x2i is correct

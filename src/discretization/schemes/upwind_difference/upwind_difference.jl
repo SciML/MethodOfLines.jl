@@ -72,8 +72,8 @@ function upwind_difference(expr, d::Int, II::CartesianIndex, s::DiscreteSpace, b
     # TODO: Allow derivatives in expr
     expr = substitute(expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
     IfElse.ifelse(expr > 0,
-        expr * upwind_difference(d, II, s, b, derivweights, (j, x), u, central_ufunc, true),
-        expr * upwind_difference(d, II, s, b, derivweights, (j, x), u, central_ufunc, false))
+        expr * upwind_difference(d, II, s, bs, derivweights, (j, x), u, central_ufunc, true),
+        expr * upwind_difference(d, II, s, bs, derivweights, (j, x), u, central_ufunc, false))
 end
 
 @inline function generate_winding_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
