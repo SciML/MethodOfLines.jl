@@ -40,9 +40,9 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
     # Get the outer weights and stencil. clip() essentially removes a point from either end of the grid, for this reason this function is only defined on the interior, not in bcs
     #* Need to see how to handle this with interface boundaries
     haslower, hasupper = haslowerupper(bs)
-    if (haslower & II[j] < div(length(s, x), 2))
+    if (haslower & (II[j] < div(length(s, x), 2)))
         outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II, s, bs, u, jx)
-    elseif (hasupper & II[j] > div(length(s, x), 2))
+    elseif (hasupper & (II[j] > div(length(s, x), 2)))
         outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II, s, bs, u, jx)
     else
         cliplen = length(s, x) - 1

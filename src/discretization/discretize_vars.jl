@@ -148,7 +148,6 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
 end
 
-import Base.getproperty
 
 function Base.getproperty(s::DiscreteSpace, p::Symbol)
     if p in [:ū, :x̄, :time, :args, :x2i, :i2x]

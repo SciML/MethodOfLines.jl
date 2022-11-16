@@ -15,6 +15,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
     # Extract Interior
     interior = interiormap.I[pde]
+
     # Generate the discrete form ODEs for the interior
     eqs = vec(map(interior) do II
         boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)

@@ -220,9 +220,9 @@ function parse_bcs(bcs, v::VariableMap, orders)
                 for term_ in setdiff(terms, [term]), r_ in reduce(vcat, reduce(vcat, collect.(values.(collect(values(upper_boundary_rules))))))
                     if subsmatch(term_, r_)
                         u__, x__, order__ = r_.second
-                        @assert ndims(u_, s) == ndims(u__, s) "Invalid Interface Boundary $bc: Dependent variables $(u_) and $(u__) have different numbers of dimensions."
-                        boundary = (InterfaceBoundary{Val(false),Val(true)}(u_, u__, x_, x__, u_ ~ u__),
-                            InterfaceBoundary{Val(true),Val(false)}(u_, u__, x_, x__, u_ ~ u__))
+                        @assert ndims(u_, v) == ndims(u__, v) "Invalid Interface Boundary $bc: Dependent variables $(u_) and $(u__) have different numbers of dimensions."
+                        boundary = (InterfaceBoundary{Val(false),Val(true)}(u_, u__, x_, x__, bc),
+                            InterfaceBoundary{Val(true),Val(false)}(u_, u__, x_, x__, bc))
                     end
                 end
 

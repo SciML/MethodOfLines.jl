@@ -18,7 +18,9 @@ import SciMLBase.wrap_sol
 import Base.display
 import Base.isequal
 import Base.getindex
-
+import Base.checkindex
+import Base.getproperty
+import Base.ndims
 
 # Interface
 include("interface/grid_types.jl")

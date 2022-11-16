@@ -4,7 +4,11 @@ struct RefCartesianIndex{N, AType} <:  Base.AbstractCartesianIndex{N}
     RefCartesianIndex(I::CartesianIndex{N}, A::AType) where {N, AType} = new{N, AType}(I, A)
 end
 
-getindex(_, IR::RefCartesianIndex) = A[IR.I]
+Base.getindex(_, IR::RefCartesianIndex) = A[IR.I]
+function Base.checkbounds(::Type{Bool}, A::AbstractArray, i::Union{RefCartesianIndex,AbstractArray{<:RefCartesianIndex}})
+    @inline
+    checkbounds_indices(Bool, axes(A), (getfield.(i, (:I,)),))
+end
 
 (b::InterfaceBoundary)(I, s, jx) = wrapinterface(I, s, b, jx)
 (b::InterfaceBoundary)(I::RefCartesianIndex, s, jx) = I
@@ -58,7 +62,7 @@ function get_interface_vars(b, s, j)
     return I1, discu2, l1, l2
 end
 
-function _wrapinterface(I, s, b::InterfaceBoundary{Val{false}, Val{true}}, j)
+function _wrapinterface(I, s, b::InterfaceBoundary{Val(false), Val(true)}, j)
     I1, discu2, l1, l2 = get_interface_vars(b, s, j)
     if I[j] <= 1
         I = I + (l2 - 1) * I1
@@ -67,7 +71,7 @@ function _wrapinterface(I, s, b::InterfaceBoundary{Val{false}, Val{true}}, j)
     return I
 end
 
-function _wrapinterface(I, s, b::InterfaceBoundary{Val{true},Val{false}}, j)
+function _wrapinterface(I, s, b::InterfaceBoundary{Val(true),Val(false)}, j)
     I1, discu2, l1, l2 = get_interface_vars(b, s, j)
     if I[j] > l1
         I = I + (I[j] - 2l1 + 1) * I1
