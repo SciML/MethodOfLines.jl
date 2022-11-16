@@ -21,7 +21,7 @@ struct LowerBoundary <: AbstractTruncatingBoundary
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         #depvars =  filter(u -> !any(map(x-> x isa Number, arguments(u))), depvars)
 
-        allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t), arguments(u)), depvars)))
+        allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
@@ -38,7 +38,7 @@ struct UpperBoundary <: AbstractTruncatingBoundary
         depvars_rhs = get_depvars(eq.rhs, v.depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
 
-        allx̄ = Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t), arguments(u)), depvars)))
+        allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
@@ -49,15 +49,13 @@ struct PeriodicBoundary <: AbstractBoundary
     eq
 end
 
-struct InterfaceBoundary{IsUpper_u, IsUpper_u2} <: AbstractBoundary
+struct InterfaceBoundary{IsUpper_u,IsUpper_u2} <: AbstractBoundary
     u
     u2
     x
     x2
     eq
 end
-
-(b::InterfaceBoundary)(I, s, jx) = wrapinterface(I, s, b, jx)
 
 getvars(b::AbstractBoundary) = (b.u, b.x)
 
@@ -82,7 +80,7 @@ end
     end
 end
 
-function isperiodic(b1::InterfaceBoundary{b1u, b1u2}, b2::InterfaceBoundary{b2u, b2u2}) where {b1u, b1u2, b2u, b2u2}
+function isperiodic(b1::InterfaceBoundary{b1u,b1u2}, b2::InterfaceBoundary{b2u,b2u2}) where {b1u,b1u2,b2u,b2u2}
     us_equal = isequal(operation(b1.u), operation(b2.u2)) && isequal(operation(b2.u), operation(b1.u2))
     xs_equal = issequal(b1.x, b2.x2) && isequal(b1.x2, b2.x)
     return us_equal && xs_equal
@@ -94,6 +92,21 @@ end
     else
         return Val(false)
     end
+end
+
+filter_interfaces(bs) = filter(b -> b isa InterfaceBoundary, bs)
+
+function haslowerupper(bs)
+    haslower = false
+    hasupper = false
+    for b in filter_interfaces(bs)
+        if isupper(b)
+            hasupper = true
+        else
+            haslower = true
+        end
+    end
+    return haslower, hasupper
 end
 
 @inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
@@ -115,7 +128,7 @@ idx(b::UpperBoundary, s) = length(s, b.x)
 isupper(::LowerBoundary) = false
 isupper(::UpperBoundary) = true
 isupper(::PeriodicBoundary) = false
-isupper(::InterfaceBoundary{Val{IsUpper_u}}) where IsUpper_u = IsUpper_u
+isupper(::InterfaceBoundary{Val{IsUpper_u}}) where {IsUpper_u} = IsUpper_u
 
 @inline function edge(interiormap, s, u, j, islower)
     I = interiormap.I[interiormap.pde[depvar(u, s)]]
@@ -126,10 +139,10 @@ isupper(::InterfaceBoundary{Val{IsUpper_u}}) where IsUpper_u = IsUpper_u
     if islower
         edge = sd(1)
         # cast the edge of the interior to the edge of the boundary
-        edge = edge .- [I1*(edge[1][j]-1)]
+        edge = edge .- [I1 * (edge[1][j] - 1)]
     else
-        edge = sd(size(interiormap.I[interiormap.pde[depvar(u,s)]], j))
-        edge = edge .+ [I1*(size(s.discvars[depvar(u, s)], j)-edge[1][j])]
+        edge = sd(size(interiormap.I[interiormap.pde[depvar(u, s)]], j))
+        edge = edge .+ [I1 * (size(s.discvars[depvar(u, s)], j) - edge[1][j])]
     end
     return edge
 end
@@ -137,18 +150,18 @@ end
 edge(s, b, interiormap) = edge(interiormap, s, b.u, x2i(s, b.u, b.x), !isupper(b))
 
 function _boundary_rules(v, orders, u, x, val)
-        args = v.args[operation(u)]
-        args = substitute.(args, (x=>val,))
-        varrule = operation(u)(args...) => [operation(u)(args...), x, 0]
+    args = v.args[operation(u)]
+    args = substitute.(args, (x => val,))
+    varrule = operation(u)(args...) => [operation(u)(args...), x, 0]
 
-        spacerules = [(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x, d] for d in reverse(orders[x])]
+    spacerules = [(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x, d] for d in reverse(orders[x])]
 
-        if v.time !== nothing && x !== v.time
-            timerules = [Differential(v.time)(operation(u)(args...)) => [operation(u)(args...), v.time, d] for d in reverse(orders[v.time])]
-            return vcat(spacerules, timerules, varrule)
-        else
-            return vcat(spacerules, varrule)
-        end
+    if v.time !== nothing && x !== v.time
+        timerules = [Differential(v.time)(operation(u)(args...)) => [operation(u)(args...), v.time, d] for d in reverse(orders[v.time])]
+        return vcat(spacerules, timerules, varrule)
+    else
+        return vcat(spacerules, varrule)
+    end
 end
 
 function generate_boundary_matching_rules(v, orders)
@@ -179,7 +192,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
 
     lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(v, orders)
 
-    boundarymap = Dict([operation(u)=>Dict([x => [] for x in all_ivs(v)]) for u in v.ū])
+    boundarymap = Dict([operation(u) => Dict([x => [] for x in all_ivs(v)]) for u in v.ū])
 
     # Generate initial conditions and bc equations
     for bc in bcs
@@ -200,8 +213,8 @@ function parse_bcs(bcs, v::VariableMap, orders)
                     if subsmatch(term_, r_)
                         u__, x__, order__ = r_.second
                         @assert ndims(u_, s) == ndims(u__, s) "Invalid Interface Boundary $bc: Dependent variables $(u_) and $(u__) have different numbers of dimensions."
-                        boundary = (InterfaceBoundary{Val(false), Val(true)}(u_, u__, x_, x__, u_ ~ u__),
-                                    InterfaceBoundary{Val(true), Val(false)}(u_, u__, x_, x__, u_ ~ u__))
+                        boundary = (InterfaceBoundary{Val(false),Val(true)}(u_, u__, x_, x__, u_ ~ u__),
+                            InterfaceBoundary{Val(true),Val(false)}(u_, u__, x_, x__, u_ ~ u__))
                     end
                 end
 

@@ -7,6 +7,15 @@ end
 getindex(_, IR::RefCartesianIndex) = A[IR.I]
 
 (b::InterfaceBoundary)(I, s, jx) = wrapinterface(I, s, b, jx)
+(b::InterfaceBoundary)(I::RefCartesianIndex, s, jx) = I
+(b::AbstractBoundary)(I, s, jx) = I
+
+function bwrap(I, bs, s, jx)
+    for b in bs
+        I = b(I, s, jx)
+    end
+    return I
+end
 
 @inline function _wrapperiodic(I, N, j, l)
     I1 = unitindex(N, j)

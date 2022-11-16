@@ -18,7 +18,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     # Generate the discrete form ODEs for the interior
     eqs = vec(map(interior) do II
         boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
-        rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
+        rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, bcmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
         try
             substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
         catch e

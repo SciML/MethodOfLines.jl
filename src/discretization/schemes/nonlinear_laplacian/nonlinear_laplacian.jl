@@ -26,27 +26,32 @@ where `finitediff(u, i)` is the finite difference at the interpolated point `i` 
 
 And so on.
 """
-function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace, b, depvars, x, u)
+function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace, bs, depvars, x, u)
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     # See scheme 1, namely the term without the 1/r dependence. See also #354 and #371 in DiffEqOperators, the previous home of this package.
     N = ndims(u, s)
     N == 0 && return Num(0)
     jx = j, x = (x2i(s, u, x), x)
-    @assert II[j] != 1 "The nonlinear laplacian is only defined on the interior of the grid, it is unsupported in boundary conditions."
-    @assert II[j] != length(s, x) "The nonlinear laplacian is only defined on the interior of the grid, it is unsupported in boundary conditions."
 
     D_inner = derivweights.halfoffsetmap[1][Differential(x)]
     D_outer = derivweights.halfoffsetmap[2][Differential(x)]
     inner_interpolater = derivweights.interpmap[x]
 
-    # Get the outer weights and stencil. clip() essentially removes a point from either end of the grid, for this reason this function is only defined on the interior, not in bcs#
-    cliplen = length(s, x) - 1
-
-    outerweights, outerstencil = get_half_offset_weights_and_stencil(D_outer, II - unitindex(N, j), s, b, u, jx, cliplen)
+    # Get the outer weights and stencil. clip() essentially removes a point from either end of the grid, for this reason this function is only defined on the interior, not in bcs
+    #* Need to see how to handle this with interface boundaries
+    haslower, hasupper = haslowerupper(bs)
+    if (haslower & II[j] < div(length(s, x), 2))
+        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, I, s, bs, u, jx)
+    elseif (hasupper & II[j] > div(length(s, x), 2))
+        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, I, s, bs, u, jx)
+    else
+        cliplen = length(s, x) - 1
+        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_outer, II - unitindex(N, j), s, bs, u, jx, cliplen)
+    end
 
     # Get the correct weights and stencils for this II
-    inner_deriv_weights_and_stencil = [get_half_offset_weights_and_stencil(D_inner, I, s, b, u, jx) for I in outerstencil]
-    interp_weights_and_stencil = [get_half_offset_weights_and_stencil(inner_interpolater, I, s, b, u, jx) for I in outerstencil]
+    inner_deriv_weights_and_stencil = [get_half_offset_weights_and_stencil(D_inner, I, s, bs, u, jx) for I in outerstencil]
+    interp_weights_and_stencil = [get_half_offset_weights_and_stencil(inner_interpolater, I, s, bs, u, jx) for I in outerstencil]
 
     # map variables to symbolically inerpolated/extrapolated expressions
     map_vars_to_interpolated(stencil, weights) = [v => dot(weights, s.discvars[v][stencil]) for v in depvars]
@@ -69,14 +74,14 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
     return dot(outerweights, inner_difference .* interpolated_expr)
 end
 
-@inline function generate_nonlinlap_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
-    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c..., cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
+@inline function generate_nonlinlap_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
+    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c..., cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][x]), depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
+    rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][x]), depvars, x, u) for x in params(u, s)]) for u in depvars]))
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u) / ~a)) => cartesian_nonlinear_laplacian(1 / ~a, Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
+    rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u) / ~a)) => cartesian_nonlinear_laplacian(1 / ~a, Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][x]), depvars, x, u) for x in params(u, s)]) for u in depvars]))
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(b..., c..., cartesian_nonlinear_laplacian(1 / ~a, Idx(II, s, u, indexmap), derivweights, s, pmap.map[operation(u)][x], depvars, x, u)) for x in params(u, s)]) for u in depvars]))
+    rules = vcat(rules, reduce(vcat, [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(b..., c..., cartesian_nonlinear_laplacian(1 / ~a, Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][x]), depvars, x, u)) for x in params(u, s)]) for u in depvars]))
 
     nonlinlap_rules = []
     for t in terms

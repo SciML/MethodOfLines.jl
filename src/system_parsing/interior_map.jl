@@ -74,7 +74,7 @@ function calculate_stencil_extents(s, u, discretization, orders, pmap)
     extents = zeros(Int, length(args))
     for (j,x) in enumerate(args)
         # Skip if periodic in x
-        pmap.map[operation(u)][x] isa Val{true} && continue
+        filter_interfaces(bcmap[operation(u)][x]) isa Val{true} && continue
         for dorder in orders[x]
             if isodd(dorder)
                 extents[j] = max(extents[j], extent(advection_scheme, dorder))
