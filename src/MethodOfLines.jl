@@ -19,6 +19,7 @@ import Base.display
 import Base.isequal
 import Base.getindex
 import Base.checkindex
+import Base.checkbounds
 import Base.getproperty
 import Base.ndims
 

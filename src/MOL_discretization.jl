@@ -31,6 +31,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
     # Generate a map of each variable to whether it is periodic in a given direction
+    #TODO: fully deprecate PeriodicMap
     pmap = PeriodicMap(boundarymap, v)
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform

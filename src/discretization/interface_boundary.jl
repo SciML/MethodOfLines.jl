@@ -1,14 +1,19 @@
-struct RefCartesianIndex{N, AType} <:  Base.AbstractCartesianIndex{N}
+struct RefCartesianIndex{N, AType}
     I::CartesianIndex{N}
     A::AType
-    RefCartesianIndex(I::CartesianIndex{N}, A::AType) where {N, AType} = new{N, AType}(I, A)
+    RefCartesianIndex(I::CartesianIndex{N}, A = nothing) where {N} = new{N, typeof(A)}(I, A)
 end
 
-Base.getindex(_, IR::RefCartesianIndex) = A[IR.I]
-function Base.checkbounds(::Type{Bool}, A::AbstractArray, i::Union{RefCartesianIndex,AbstractArray{<:RefCartesianIndex}})
-    @inline
-    checkbounds_indices(Bool, axes(A), (getfield.(i, (:I,)),))
+Base.getindex(A::Array, IR::RefCartesianIndex) = IR.A === nothing ? A[IR.I] : IR.A[IR.I]
+Base.getindex(I::RefCartesianIndex, i::Int) = I.I[i]
+
+
+function Base.getindex(A::Array, Is::Vector{<:RefCartesianIndex})
+    map(Is) do I
+        A[I]
+    end
 end
+
 
 (b::InterfaceBoundary)(I, s, jx) = wrapinterface(I, s, b, jx)
 (b::InterfaceBoundary)(I::RefCartesianIndex, s, jx) = I
@@ -40,9 +45,15 @@ function wrapinterface(I, s, ::PeriodicBoundary, u, jx)
     return _wrapperiodic(I, ndims(u, s), j, length(s, x))
 end
 
-function wrapinterface(I, s, ::Val{false}, u, jx)
+function wrapinterface(I, s, b, u, jx)
     return I
 end
+
+
+function wrapinterface(I::RefCartesianIndex, s, ::InterfaceBoundary, u, jx)
+    return I
+end
+
 
 function wrapinterface(I, s, b::InterfaceBoundary, jx)
     j, x = jx
@@ -67,17 +78,19 @@ function _wrapinterface(I, s, b::InterfaceBoundary{Val(false), Val(true)}, j)
     if I[j] <= 1
         I = I + (l2 - 1) * I1
         I = RefCartesianIndex(I, discu2)
+    else
+        return RefCartesianIndex(I)
     end
-    return I
 end
 
 function _wrapinterface(I, s, b::InterfaceBoundary{Val(true),Val(false)}, j)
     I1, discu2, l1, l2 = get_interface_vars(b, s, j)
     if I[j] > l1
         I = I + (I[j] - 2l1 + 1) * I1
-        I = RefCartesianIndex(I, discu2)
+        return RefCartesianIndex(I, discu2)
+    else
+        return RefCartesianIndex(I)
     end
-    return I
 end
 
 function _wrapinterface(I, s, b::InterfaceBoundary{B, B}, j) where B

@@ -170,7 +170,7 @@ nvars(::DiscreteSpace{N,M}) where {N,M} = M
 Fillter out the time variable and get the spatial variables of `u` in `s`.
 """
 params(u, s::DiscreteSpace) = remove(s.args[operation(u)], s.time)
-Base.ndims(u, s::DiscreteSpace) = length(params(u, s))
+Base.ndims(u, s::DiscreteSpace) = ndims(s.discvars[depvar(u, s)])
 
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])
 Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])
