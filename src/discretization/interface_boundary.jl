@@ -46,7 +46,7 @@ function wrapinterface(I::RefCartesianIndex{N,Nothing}, s::DiscreteSpace, b::Int
     return _wrapinterface(I.I, s, b, j)
 end
 
-function wrapinterface(I::RefCartesianIndex, s::DiscreteSpace, ::InterfaceBoundary, jx)
+@inline function wrapinterface(I::RefCartesianIndex, s::DiscreteSpace, ::InterfaceBoundary, jx)
     return I
 end
 

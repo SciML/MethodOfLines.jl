@@ -818,6 +818,6 @@ end
     solc1 = sol[c1(t, x1)]
     solc2 = sol[c2(t, x2)]
 
-    solc = hcat(solc1[end, :], solc2[end, 2:end])
+    solc = vcat(solc1[end, :], solc2[end, 2:end])
     @test solc ≈ zeros(length(solc)) atol = 0.001
 end

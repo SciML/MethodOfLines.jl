@@ -209,24 +209,38 @@ function parse_bcs(bcs, v::VariableMap, orders)
         terms = split_terms(bc)
         # * Assume that the BC is defined on the edge of the domain
         # Check whether the bc is on the lower boundary, or periodic, we don't care which depvar/var
+        local u_, u__, x_, x__
+        isinterface = false
         for term in terms, r in reduce(vcat, reduce(vcat, collect.(values.(collect(values(lower_boundary_rules))))))
             #Check if the rule changes the expression
+            interface_orders = []
             if subsmatch(term, r)
                 # Get the matched variables from the rule
                 u_, x_, order = r.second
                 # Mark the boundary
-                boundary = LowerBoundary(u_, t, x_, order, bc, v)
+                if boundary !== nothing
+                    boundary = LowerBoundary(u_, t, x_, order, bc, v)
+                end
                 # do it again for the upper end to check for periodic, but only check the current depvar and indvar
+                push!(interface_orders, order)
                 for term_ in setdiff(terms, [term]), r_ in reduce(vcat, reduce(vcat, collect.(values.(collect(values(upper_boundary_rules))))))
                     if subsmatch(term_, r_)
+                        isinterface = true
                         u__, x__, order__ = r_.second
                         @assert ndims(u_, v) == ndims(u__, v) "Invalid Interface Boundary $bc: Dependent variables $(u_) and $(u__) have different numbers of dimensions."
-                        boundary = (InterfaceBoundary{Val(false),Val(true)}(u_, u__, x_, x__, bc),
-                            InterfaceBoundary{Val(true),Val(false)}(u_, u__, x_, x__, bc))
+
+                        push!(interface_order, order__)
                     end
                 end
-
-                break
+                # Handle flux condition at interface
+            end
+        end
+        if isinterface
+            if all(==(0), interface_orders)
+                boundary = (InterfaceBoundary{Val(false), Val(true)}(u_, u__, x_, x__, bc),
+                            InterfaceBoundary{Val(true), Val(false)}(u_, u__, x_, x__, bc))
+            else
+                boundary = nothing
             end
         end
         # repeat for upper boundary
