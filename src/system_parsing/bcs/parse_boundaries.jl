@@ -235,6 +235,8 @@ function parse_bcs(bcs, v::VariableMap, orders)
                 # Handle flux condition at interface
             end
         end
+        # If this is a condition on flux at an interface, leave it to become an upper boundary
+        # Else if it is a simple interface, make interface boundaries
         if isinterface
             if all(==(0), interface_orders)
                 boundary = (InterfaceBoundary{Val(false), Val(true)}(u_, u__, x_, x__, bc),
