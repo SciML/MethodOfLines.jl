@@ -792,8 +792,8 @@ end
     eqs = [Dt(c1(t, x1)) ~ Dxx1(c1(t, x1)),
             Dt(c2(t, x2)) ~ Dxx2(c2(t, x2))]
 
-    bcs = [c1(0, x) ~ -x * (x - 1) * sin(x),
-           c2(0, x) ~ x * (x - 1) * sin(x),
+    bcs = [c1(0, x1) ~ -x1 * (x1 - 1) * sin(x1),
+           c2(0, x2) ~ x2 * (x2 - 1) * sin(x2),
            c1(t, 0) ~ 0,
            c1(t, 0.5) ~ c2(t, 0.5),
            c2(t, 1) ~ 0]
