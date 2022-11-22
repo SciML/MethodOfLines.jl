@@ -243,7 +243,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
         if isinterface
             if all(==(0), interface_orders)
                 boundary = (InterfaceBoundary{Val(false), Val(true)}(u_, u__, x_, x__, bc),
-                            InterfaceBoundary{Val(true), Val(false)}(u_, u__, x_, x__, bc))
+                            InterfaceBoundary{Val(true), Val(false)}(u__, u_, x__, x_, bc))
             else
                 boundary = nothing
             end
