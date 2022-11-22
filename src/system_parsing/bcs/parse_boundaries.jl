@@ -211,14 +211,17 @@ function parse_bcs(bcs, v::VariableMap, orders)
         # Check whether the bc is on the lower boundary, or periodic, we don't care which depvar/var
         local u_, u__, x_, x__
         isinterface = false
+        interface_orders = []
         for term in terms, r in reduce(vcat, reduce(vcat, collect.(values.(collect(values(lower_boundary_rules))))))
+            # Need to check the order, higher order should be discretized as a normal upper index
+            # As zeroth order goes on the lower index. Needs a zeroth order interface to make sense,
+            # but I assume that this will always be the case where there are higher order interfaces.
             #Check if the rule changes the expression
-            interface_orders = []
             if subsmatch(term, r)
                 # Get the matched variables from the rule
                 u_, x_, order = r.second
                 # Mark the boundary
-                if boundary !== nothing
+                if boundary === nothing
                     boundary = LowerBoundary(u_, t, x_, order, bc, v)
                 end
                 # do it again for the upper end to check for periodic, but only check the current depvar and indvar
@@ -229,7 +232,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
                         u__, x__, order__ = r_.second
                         @assert ndims(u_, v) == ndims(u__, v) "Invalid Interface Boundary $bc: Dependent variables $(u_) and $(u__) have different numbers of dimensions."
 
-                        push!(interface_order, order__)
+                        push!(interface_orders, order__)
                     end
                 end
                 # Handle flux condition at interface
