@@ -1,4 +1,4 @@
-struct RefCartesianIndex{N, AType}
+struct RefCartesianIndex{N, AType} <: Base.AbstractCartesianIndex{N}
     I::CartesianIndex{N}
     A::AType
     RefCartesianIndex(I::CartesianIndex{N}, A = nothing) where {N} = new{N, typeof(A)}(I, A)
@@ -14,6 +14,12 @@ function Base.getindex(A::Array, Is::Vector{<:RefCartesianIndex})
     end
 end
 
+Base.:+(I::RefCartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I.I + J.I, I.A)
+Base.:-(I::RefCartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I.I - J.I, I.A)
+Base.:+(I::RefCartesianIndex, J::CartesianIndex) = RefCartesianIndex(I.I + J, I.A)
+Base.:-(I::RefCartesianIndex, J::CartesianIndex) = RefCartesianIndex(I.I - J, I.A)
+Base.:+(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I + J.I, J.A)
+Base.:-(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I - J.I, J.A)
 
 (b::InterfaceBoundary)(I, s, jx) = wrapinterface(I, s, b, jx)
             (b::AbstractBoundary)(I, s, jx) = I

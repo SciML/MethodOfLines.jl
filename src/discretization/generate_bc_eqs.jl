@@ -71,7 +71,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     is = [II[indexmap[x]] for x in filter(!isequal(x_), args)]
 
-    is = [is[1:j-1]..., idx(boundary, s), is[j:end]...]
+    is = vcat(is[1:j-1], idx(boundary, s), is[j:end])
     II = CartesianIndex(is...)
 
     # Shift depending on the boundary
@@ -81,6 +81,25 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[1][Differential(x_)^d], II-shift(boundary), s, [], (j,x_), u, ufunc) for d in derivweights.orders[x_]]
 
     depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II-shift(boundary), s, [], (j,x_), u, ufunc)]
+
+    if boundary isa HigherOrderInterfaceBoundary
+        u__ = boundary.u2
+        x__ = boundary.x2
+        otheru = depvar(u__, s)
+
+        j = x2i(s, otheru, x__)
+        is = [II[i] for i in 1:length(II)]
+        is = [is[1:j-1]..., 1, is[j:end]...]
+        II = CartesianIndex(is...)
+
+        depvarderivbcmaps = [(Differential(x__)^d)(u__) => half_offset_centered_difference(derivweights.halfoffsetmap[1][Differential(x__)^d], II, s, [], (j, x__), otheru, ufunc) for d in derivweights.orders[x_]]
+
+        depvarbcmaps = [u__ => half_offset_centered_difference(derivweights.interpmap[x__], II, s, [], (j,x__), otheru, ufunc)]
+
+        depvarderivbcmaps = vcat(depvarderivbcmaps, otherderivmaps)
+        depvarbcmaps = vcat(depvarbcmaps, otherbcmaps)
+    end
+
 
     return vcat(depvarderivbcmaps, depvarbcmaps)
 end
@@ -100,12 +119,29 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     is = [II[indexmap[x]] for x in filter(!isequal(x_), args)]
 
-    is = [is[1:j-1]..., idx(boundary, s), is[j:end]...]
+    is = vcat(is[1:j-1], idx(boundary, s), is[j:end])
     II = CartesianIndex(is...)
 
     depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, [], (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
-    # ? Does this need to be done for all variables at the boundary?
     depvarbcmaps = [u_ => s.discvars[u][II]]
+    # Deal with the other relevant variables if boundary isa InterfaceBoundary
+    if boundary isa HigherOrderInterfaceBoundary
+        u__ = boundary.u2
+        x__ = boundary.x2
+        otheru = depvar(u__, s)
+
+        is = [II[i] for i in setdiff(1:length(II), [j])]
+        j = x2i(s, otheru, x__)
+
+        is = vcat(is[1:j-1], 1, is[j:end])
+        II = CartesianIndex(is...)
+
+        otherderivmaps = [(Differential(x__)^d)(u__) => central_difference(derivweights.map[Differential(x__)^d], II, s, [], (x2i(s, otheru, x__), x__), otheru, ufunc) for d in derivweights.orders[x__]]
+        otherbcmaps = [u__ => s.discvars[otheru][II]]
+
+        depvarderivbcmaps = vcat(depvarderivbcmaps, otherderivmaps)
+        depvarbcmaps = vcat(depvarbcmaps, otherbcmaps)
+    end
 
     return vcat(depvarderivbcmaps, depvarbcmaps)
 end

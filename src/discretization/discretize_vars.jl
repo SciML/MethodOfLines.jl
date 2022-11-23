@@ -185,6 +185,7 @@ of `II` that corresponds to only the spatial arguments of `u`.
 @inline function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     # We need to construct a new index as indices may be of different size
     length(params(u, s)) == 0 && return CartesianIndex()
+    !all(x -> haskey(indexmap, x), params(u, s)) && return II
     is = [II[indexmap[x]] for x in params(u, s)]
 
     II = CartesianIndex(is...)

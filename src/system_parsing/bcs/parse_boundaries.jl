@@ -49,12 +49,35 @@ struct PeriodicBoundary <: AbstractBoundary
     eq
 end
 
+# Note that it is assumed throughout MOL that the variables in an inteface BC have the same argument signature,
+# differing in only one variable which is that of the interface. This is not checked here, but will cause errors if it is not true.
+# Interfaces are assumed to be on the lower boundary of the domain.
+
 struct InterfaceBoundary{IsUpper_u,IsUpper_u2} <: AbstractBoundary
     u
     u2
     x
     x2
     eq
+end
+
+struct HigherOrderInterfaceBoundary <: AbstractTruncatingBoundary
+    u
+    u2
+    x
+    x2
+    depvars
+    indvars
+    eq
+    order
+    function HigherOrderInterfaceBoundary(u, u2, x, x2, t, order, eq, v)
+        depvars_lhs = get_depvars(eq.lhs, v.depvar_ops)
+        depvars_rhs = get_depvars(eq.rhs, v.depvar_ops)
+        depvars = collect(depvars_lhs ∪ depvars_rhs)
+
+        allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t), arguments(u)), depvars)))
+        return new(u, u2, x, x2, depvar.(depvars, [v]), first(allx̄), eq, order)
+    end
 end
 
 function Base.isequal(i1::InterfaceBoundary, i2::InterfaceBoundary)
@@ -117,6 +140,19 @@ end
 
 has_interfaces(bmps) = any(b -> b isa InterfaceBoundary, reduce(vcat, reduce(vcat, collect.(values.(collect(values(bmps)))))))
 
+
+idx(b::LowerBoundary, s) = 1
+idx(b::UpperBoundary, s) = length(s, b.x)
+idx(b::HigherOrderInterfaceBoundary, s) = length(s, b.x)
+
+# indexes for Iedge depending on boundary type
+isupper(::LowerBoundary) = false
+isupper(::UpperBoundary) = true
+isupper(::PeriodicBoundary) = false
+isupper(::InterfaceBoundary{IsUpper_u}) where {IsUpper_u} = IsUpper_u isa Val{true} ? true : false
+isupper(::HigherOrderInterfaceBoundary) = true
+
+
 @inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
     # This x2i is correct
     dim = x2i(s, depvar(b.u, s), b.x)
@@ -127,16 +163,6 @@ has_interfaces(bmps) = any(b -> b isa InterfaceBoundary, reduce(vcat, reduce(vca
     lower[dim] = lower[dim] + !isupper(b)
     upper[dim] = upper[dim] + isupper(b)
 end
-
-idx(b::LowerBoundary, s) = 1
-idx(b::UpperBoundary, s) = length(s, b.x)
-
-
-# indexes for Iedge depending on boundary type
-isupper(::LowerBoundary) = false
-isupper(::UpperBoundary) = true
-isupper(::PeriodicBoundary) = false
-isupper(::InterfaceBoundary{IsUpper_u}) where {IsUpper_u} = IsUpper_u isa Val{true} ? true : false
 
 @inline function edge(interiormap, s, u, j, islower)
     I = interiormap.I[interiormap.pde[depvar(u, s)]]
@@ -242,10 +268,10 @@ function parse_bcs(bcs, v::VariableMap, orders)
         # Else if it is a simple interface, make interface boundaries
         if isinterface
             if all(==(0), interface_orders)
-                boundary = (InterfaceBoundary{Val(false), Val(true)}(u_, u__, x_, x__, bc),
-                            InterfaceBoundary{Val(true), Val(false)}(u__, u_, x__, x_, bc))
+                boundary = (InterfaceBoundary{Val(false),Val(true)}(u_, u__, x_, x__, bc),
+                    InterfaceBoundary{Val(true),Val(false)}(u__, u_, x__, x_, bc))
             else
-                boundary = nothing
+                boundary = HigherOrderInterfaceBoundary(u__, u_, x__, x_, t, maximum(interface_orders), bc, v)
             end
         end
         # repeat for upper boundary

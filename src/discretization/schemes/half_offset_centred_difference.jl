@@ -6,10 +6,9 @@ TODO: consider refactoring this to harmonize with centered difference
 
 Each index corresponds to the weights and index for the derivative at index i+1/2
 """
-function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX}, II::CartesianIndex, s::DiscreteSpace, bs, u, jx, len=0) where {T,N,Wind,DX<:Number}
+function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX}, II::Base.AbstractCartesianIndex, s::DiscreteSpace, bs, u, jx, len=0) where {T,N,Wind,DX<:Number}
     j, x = jx
     len = len == 0 ? length(s, x) : len
-    @assert II[j] != length(s, x)
     haslower, hasupper = haslowerupper(bs)
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)

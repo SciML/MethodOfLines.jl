@@ -76,6 +76,9 @@ include("error_analysis.jl")
 include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 
+# Convenience functions
+include("interface/solution/solution_utils.jl")
+
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete
 export UpwindScheme, WENOScheme
 
