@@ -13,7 +13,6 @@ Latexify = "23fbe1c1-3f47-55db-b15f-69d7ec21a316"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
 OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
-SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
@@ -39,8 +38,9 @@ julia = "1.6"
 
 [extras]
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
+SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "NonlinearSolve", "StableRNGs"]
+test = ["Test", "NonlinearSolve", "SafeTestsets", "StableRNGs"]
