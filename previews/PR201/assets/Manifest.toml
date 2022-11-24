@@ -313,10 +313,10 @@ uuid = "244e2a9f-e319-4986-a169-4d1fe445cd52"
 version = "0.1.2"
 
 [[deps.DelayDiffEq]]
-deps = ["ArrayInterface", "DataStructures", "DiffEqBase", "LinearAlgebra", "Logging", "NonlinearSolve", "OrdinaryDiffEq", "Printf", "RecursiveArrayTools", "Reexport", "SciMLBase", "UnPack"]
-git-tree-sha1 = "4e1edae7af4bb6ea81e885a5a1c417f1218012db"
+deps = ["ArrayInterface", "DataStructures", "DiffEqBase", "LinearAlgebra", "Logging", "OrdinaryDiffEq", "Printf", "RecursiveArrayTools", "Reexport", "SciMLBase", "SimpleNonlinearSolve", "UnPack"]
+git-tree-sha1 = "78a192625aa84032bde6379f4cb8cef0f3e1ba1b"
 uuid = "bcd4f6db-9728-5f36-b5f7-82caef46ccdb"
-version = "5.39.1"
+version = "5.40.0"
 
 [[deps.DelimitedFiles]]
 deps = ["Mmap"]
@@ -952,7 +952,7 @@ uuid = "e9d8d322-4543-424a-9be4-0cc815abe26c"
 version = "1.3.5"
 
 [[deps.MethodOfLines]]
-deps = ["Combinatorics", "DiffEqBase", "DomainSets", "IfElse", "Interpolations", "Latexify", "LinearAlgebra", "ModelingToolkit", "OrdinaryDiffEq", "SafeTestsets", "SciMLBase", "StaticArrays", "SymbolicUtils", "Symbolics", "TermInterface"]
+deps = ["Combinatorics", "DiffEqBase", "DomainSets", "IfElse", "Interpolations", "Latexify", "LinearAlgebra", "ModelingToolkit", "OrdinaryDiffEq", "SciMLBase", "StaticArrays", "SymbolicUtils", "Symbolics", "TermInterface"]
 path = "/home/runner/work/MethodOfLines.jl/MethodOfLines.jl"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 version = "0.6.1"
@@ -1328,12 +1328,6 @@ deps = ["IfElse", "Static", "VectorizationBase"]
 git-tree-sha1 = "c8679919df2d3c71f74451321f1efea6433536cc"
 uuid = "476501e8-09a2-5ece-8869-fb82de89a1fa"
 version = "0.6.37"
-
-[[deps.SafeTestsets]]
-deps = ["Test"]
-git-tree-sha1 = "36ebc5622c82eb9324005cc75e7e2cc51181d181"
-uuid = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
-version = "0.0.1"
 
 [[deps.SciMLBase]]
 deps = ["ArrayInterfaceCore", "CommonSolve", "ConstructionBase", "Distributed", "DocStringExtensions", "EnumX", "FunctionWrappersWrappers", "IteratorInterfaceExtensions", "LinearAlgebra", "Logging", "Markdown", "Preferences", "RecipesBase", "RecursiveArrayTools", "RuntimeGeneratedFunctions", "StaticArraysCore", "Statistics", "Tables"]
