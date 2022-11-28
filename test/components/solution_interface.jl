@@ -1,4 +1,3 @@
-# 1d wave equation
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, NonlinearSolve, DomainSets
 using ModelingToolkit: Differential
@@ -50,7 +49,7 @@ using ModelingToolkit: Differential
     for i in 1:length(sol.t)
         for j in 1:9
             for k in 1:9
-                traditional_sol[i, j, k] = solu[j, k][i]
+                traditional_sol[i, j, k] = solu[i][j, k]
             end
         end
     end
@@ -58,7 +57,7 @@ using ModelingToolkit: Differential
 
     @test sol[u(t, x, y)] == traditional_sol
 
-    @test sol(pi / 2, pi / 2, pi / 2; dv = u(t, x, y)) isa Float64
+    @test sol(pi / 2, pi / 2, pi / 2; dv=u(t, x, y)) isa Float64
     @test sol(pi / 2, pi / 2, :) isa Vector{Vector{Float64}}
     @test sol(pi / 2, :, :)[1] isa Matrix{Float64}
 
@@ -102,7 +101,7 @@ end
 
     @test sol[u(x, y)] == solu
 
-    @test sol(pi / 4, pi / 4, dv = u(x, y)) isa Float64
+    @test sol(pi / 4, pi / 4, dv=u(x, y)) isa Float64
     @test sol(pi / 4, :)[1] isa Vector{Float64}
 
     @test (sol[x] == sol[y])
