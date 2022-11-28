@@ -233,7 +233,7 @@ end
     end
 
     for i = 1:N
-        bcs[i+N] = u[i](x_max) ~ rand(StableRNG(0), )
+        bcs[i+N] = u[i](x_max) ~ rand(StableRNG(0),)
     end
 
     # Space and time domains
@@ -465,14 +465,14 @@ end
     Dx2 = Differential(x2)
     Dxx2 = Dx2^2
 
-    D1(c) = 1 + c/10
-    D2(c) = 1/10 + c/10
+    D1(c) = 1 + c / 10
+    D2(c) = 1 / 10 + c / 10
 
     eqs = [Dt(c1(t, x1)) ~ Dx1(D1(c1(t, x1)) * Dx1(c1(t, x1))),
         Dt(c2(t, x2)) ~ Dx2(D2(c2(t, x2)) * Dx2(c2(t, x2)))]
 
-    bcs = [c1(0, x1) ~ 1 + cospi(2*x1),
-        c2(0, x2) ~ 1 + cospi(2*x2),
+    bcs = [c1(0, x1) ~ 1 + cospi(2 * x1),
+        c2(0, x2) ~ 1 + cospi(2 * x2),
         Dx1(c1(t, 0)) ~ 0,
         c1(t, 0.5) ~ c2(t, 0.5),
         -D1(c1(t, 0.5)) * Dx1(c1(t, 0.5)) ~ -D2(c2(t, 0.5)) * Dx2(c2(t, 0.5)),
@@ -502,4 +502,56 @@ end
     solc = hcat(solc1[:, :], solc2[:, 2:end])
 
     @test sol.retcode == :Success
+end
+
+@testset "Another boundaries appearing in equations case" begin
+
+    g = 9.81
+
+    @parameters x z t
+    @variables φ(..) φ̃(..) η(..)
+
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dz = Differential(z)
+    Dxx = Differential(x)^2
+    Dzz = Differential(z)^2
+
+    eqs = [Dxx(φ(t, x, z)) + Dzz(φ(t, x, z)) ~ 0,
+        Dt(φ̃(t, x)) ~ -g * η(t, x),
+        Dt(η(t, x)) ~ Dz(φ(t, x, 1.0))
+    ]
+
+    bcs = [
+        φ(0, x, z) ~ 0,
+        φ̃(0.0, x) ~ 0.0,
+        η(0.0, x) ~ cos(2 * π * x),
+        φ(t, x, 1.0) ~ φ̃(t, x),
+        Dx(φ(t, 0.0, z)) ~ 0.0,
+        Dx(φ(t, 1.0, z)) ~ 0.0,
+        Dz(φ(t, x, 0.0)) ~ 0.0,
+        Dx(φ̃(t, 0.0)) ~ 0.0,
+        Dx(φ̃(t, 1.0)) ~ 0.0,
+        Dx(η(t, 0.0)) ~ 0.0,
+        Dx(η(t, 1.0)) ~ 0.0,
+    ]
+
+    domains = [x ∈ Interval(0.0, 1.0),
+        z ∈ Interval(0.0, 1.0),
+        t ∈ Interval(0.0, 10.0)]
+
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, z],
+        [φ(t, x, z), φ̃(t, x), η(t, x)])
+
+
+    dx = 0.1
+    dz = 0.1
+    order = 2
+
+    discretization = MOLFiniteDifference([x => dx, z => dz], t,
+        approx_order=order,
+        grid_align=center_align)
+
+    println("Discretization:")
+    prob = discretize(pdesys, discretization)
 end
