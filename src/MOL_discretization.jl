@@ -70,7 +70,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     s = DiscreteSpace(v, discretization)
     # Get the interior and variable to solve for each equation
     #TODO: do the interiormap before and independent of the discretization i.e. `s`
-    interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
+    interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization)
     # Get the derivative orders appearing in each equation
     pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), v.x̄))
     bcorders = Dict(map(x -> x => d_orders(x, bcs), v.x̄))
