@@ -31,7 +31,7 @@ function transform_pde_system!(v, boundarymap, sys::PDESystem)
     end
 
     sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū), sys.ps, name=sys.name)
-    return sys, pmap
+    return sys
 end
 
 function cardinalize_eqs!(pdesys)
