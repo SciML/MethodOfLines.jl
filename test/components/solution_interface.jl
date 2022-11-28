@@ -38,7 +38,7 @@ using ModelingToolkit: Differential
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, FBDF(), saveat=0.1)
 
     grid = get_discrete(pdesys, discretization)
 

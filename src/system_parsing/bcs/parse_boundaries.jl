@@ -91,7 +91,7 @@ getvars(b::AbstractBoundary) = (b.u, b.x)
 @inline function isperiodic(bmps, u, x)
     if !isempty(bmps[operation(u)][x])
         # Being explicit hoping the compiler will optimize this away
-        if all(haslowerupper(filter_interfaces(bmps[operation(u)][x])))
+        if all(haslowerupper(filter_interfaces(bmps[operation(u)][x]), x))
             return Val(true)
         else
             return Val(false)
@@ -125,14 +125,16 @@ end
 
 filter_interfaces(bs) = filter(b -> b isa InterfaceBoundary, bs)
 
-function haslowerupper(bs)
+function haslowerupper(bs, x)
     haslower = false
     hasupper = false
     for b in filter_interfaces(bs)
-        if isupper(b)
-            hasupper = true
-        else
-            haslower = true
+        if isequal(b.x, x)
+            if isupper(b)
+                hasupper = true
+            else
+                haslower = true
+            end
         end
     end
     return haslower, hasupper

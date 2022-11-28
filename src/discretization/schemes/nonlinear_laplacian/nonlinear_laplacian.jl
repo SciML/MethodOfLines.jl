@@ -39,29 +39,33 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
 
     # Get the outer weights and stencil. clip() essentially removes a point from either end of the grid, for this reason this function is only defined on the interior, not in bcs
     #* Need to see how to handle this with interface boundaries
-    haslower, hasupper = haslowerupper(bs)
-    if (haslower & (II[j] < div(length(s, x), 2)))
-        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II, s, bs, u, jx)
-    elseif (hasupper & (II[j] > div(length(s, x), 2)))
-        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_inner, II, s, bs, u, jx)
-    else
-        cliplen = length(s, x) - 1
-        outerweights, outerstencil = get_half_offset_weights_and_stencil(D_outer, II - unitindex(N, j), s, bs, u, jx, cliplen)
-    end
+
+    cliplen = length(s, x) - 1
+    outerweights, outerstencil = get_half_offset_weights_and_stencil(D_outer, II - unitindex(N, j), s, bs, u, jx, cliplen)
+
+
+    interface_wrap(stencil) = bwrap.(stencil, (bs,), (s,), (jx,))
 
     # Get the correct weights and stencils for this II
     inner_deriv_weights_and_stencil = [get_half_offset_weights_and_stencil(D_inner, I, s, bs, u, jx) for I in outerstencil]
     interp_weights_and_stencil = [get_half_offset_weights_and_stencil(inner_interpolater, I, s, bs, u, jx) for I in outerstencil]
+    @show u
+    @show II
+    @show bs
+    @show haslowerupper(bs)
+    @show inner_deriv_weights_and_stencil
+    @show interp_weights_and_stencil
+    @show outerweights, outerstencil
 
     # map variables to symbolically inerpolated/extrapolated expressions
-    map_vars_to_interpolated(stencil, weights) = [v => dot(weights, s.discvars[v][stencil]) for v in depvars]
+    map_vars_to_interpolated(stencil, weights) = [v => dot(weights, s.discvars[v][interface_wrap(stencil)]) for v in depvars]
 
     # Map parameters to interpolated values. Using simplistic extrapolation/interpolation for now as grids are uniform
     #TODO: make this more efficient
-    map_params_to_interpolated(stencil, weights) = vcat([x => dot(weights, getindex.((s.grid[x],), getindex.(stencil, (j,))))], [s.x̄[k] => s.grid[s.x̄[k]][II[k]] for k in setdiff(1:N, [j])])
+    map_params_to_interpolated(stencil, weights) = vcat([x => dot(weights, getindex.((s.grid[x],), getindex.(interface_wrap(stencil), (j,))))], [s.x̄[k] => s.grid[s.x̄[k]][II[k]] for k in setdiff(1:N, [j])])
 
     # Take the inner finite difference
-    inner_difference = [dot(inner_weights, s.discvars[u][inner_stencil]) for (inner_weights, inner_stencil) in inner_deriv_weights_and_stencil]
+    inner_difference = [dot(inner_weights, s.discvars[u][interface_wrap(inner_stencil)]) for (inner_weights, inner_stencil) in inner_deriv_weights_and_stencil]
 
     # Symbolically interpolate the multiplying expression
 

@@ -1,7 +1,7 @@
 @inline function _upwind_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, ispositive, u, jx) where {T,N,Wind,DX<:Number}
     j, x = jx
     I1 = unitindex(ndims(u, s), j)
-    haslower, hasupper = haslowerupper(bs)
+    haslower, hasupper = haslowerupper(bs, x)
     if !ispositive
         if (II[j] > (length(s, x) - D.boundary_point_count)) & !hasupper
             weights = D.high_boundary_coefs[length(s, x)-II[j]+1]

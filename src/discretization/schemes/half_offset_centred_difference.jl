@@ -9,7 +9,7 @@ Each index corresponds to the weights and index for the derivative at index i+1/
 function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX}, II::Base.AbstractCartesianIndex, s::DiscreteSpace, bs, u, jx, len=0) where {T,N,Wind,DX<:Number}
     j, x = jx
     len = len == 0 ? length(s, x) : len
-    haslower, hasupper = haslowerupper(bs)
+    haslower, hasupper = haslowerupper(bs, x)
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
     # offset is important due to boundary proximity
@@ -24,7 +24,7 @@ function get_half_offset_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX},
         Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):0]
     else
         weights = D.stencil_coefs
-        Itap = [bwrap(II + i * I1, bs, s, jx) for i in (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
+        Itap = [II + i * I1 for i in (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
     end
 
     return (weights, Itap)

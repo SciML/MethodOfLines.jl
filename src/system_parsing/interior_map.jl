@@ -76,7 +76,7 @@ function calculate_stencil_extents(s, u, discretization, orders, bcmap)
 
     for (j,x) in enumerate(args)
         # Skip if periodic in x
-        haslower, hasupper = haslowerupper(filter_interfaces(bcmap[operation(u)][x]))
+        haslower, hasupper = haslowerupper(filter_interfaces(bcmap[operation(u)][x]), x)
         for dorder in filter(isodd, orders[x])
             if !haslower
                 lowerextents[j] = max(lowerextents[j], extent(advection_scheme, dorder))

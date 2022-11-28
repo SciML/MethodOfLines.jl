@@ -8,7 +8,7 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
     # offset is important due to boundary proximity
-    haslower, hasupper = haslowerupper(bs)
+    haslower, hasupper = haslowerupper(bs, x)
 
     if (II[j] <= D.boundary_point_count) & !haslower
         weights = D.low_boundary_coefs[II[j]]
