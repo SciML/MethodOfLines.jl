@@ -47,13 +47,41 @@ end
 function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
     return mapreduce(vcat, values(boundarymap)) do boundaries
         map(mapreduce(x -> boundaries[x], vcat, s.x̄)) do b
+            # No interface values in equations
             if b isa InterfaceBoundary
                 II -> []
-            else
+            # Only make a map if it is possible to substitute in the boundary value given the indexmap
+            elseif all(x -> haskey(indexmap, x), filter(x -> !(safe_unwrap(x) isa Number), b.indvars))
                 II -> boundary_value_maps(II, s, b, derivweights, indexmap)
+            else
+                II -> []
             end
         end
     end
+end
+
+function newindex(u_, II, s, indexmap)
+    u = depvar(u_, s)
+    args_ = remove(arguments(u_), s.time)
+    args = params(u, s)
+    @show indexmap
+    is = map(enumerate(args_)) do (j, x)
+        @show x, args[j]
+        if haskey(indexmap, x)
+            II[indexmap[x]]
+        elseif safe_unwrap(x) isa Number
+            if isequal(x, s.axies[args[j]][1])
+                1
+            elseif isequal(x, s.axies[args[j]][end])
+                length(s, args[j])
+            else
+                error("Boundary value $u_ is not defined at the boundary of the domain")
+            end
+        else
+            error("Invalid boundary value found $u_, or problem with index adaptation, please post an issue.")
+        end
+    end
+    return CartesianIndex(is...)
 end
 
 function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:EdgeAlignedGrid}
@@ -69,10 +97,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     j = findfirst(isequal(x_), args)
 
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
-    is = [II[indexmap[x]] for x in filter(!isequal(x_), args)]
-
-    is = vcat(is[1:j-1], idx(boundary, s), is[j:end])
-    II = CartesianIndex(is...)
+    II = newindex(u_, II, s, indexmap)
 
     # Shift depending on the boundary
     shift(::LowerBoundary) = zero(II)
@@ -115,12 +140,8 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     u = depvar(u_, s)
     args = params(u, s)
     j = findfirst(isequal(x_), args)
-
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
-    is = [II[indexmap[x]] for x in filter(!isequal(x_), args)]
-
-    is = vcat(is[1:j-1], idx(boundary, s), is[j:end])
-    II = CartesianIndex(is...)
+    II = newindex(u_, II, s, indexmap)
 
     depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, [], (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
     depvarbcmaps = [u_ => s.discvars[u][II]]
