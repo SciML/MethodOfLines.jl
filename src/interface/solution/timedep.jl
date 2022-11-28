@@ -1,5 +1,5 @@
 
-function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.ODESolution{T}, metadata::MOLMetadata) where {T}
+function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata) where {T}
     try
         odesys = sol.prob.f.sys
 
