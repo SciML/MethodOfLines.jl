@@ -6,7 +6,7 @@ abstract type AbstractBoundary end
 
 abstract type AbstractTruncatingBoundary <: AbstractBoundary end
 
-abstract type AbstractInterfaceBooundary <: AbstractTruncatingBoundary end
+abstract type AbstractInterfaceBoundary <: AbstractTruncatingBoundary end
 
 struct LowerBoundary <: AbstractTruncatingBoundary
     u

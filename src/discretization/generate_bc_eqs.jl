@@ -4,27 +4,6 @@
     push!(bceqs, generate_bc_eqs(s, boundaryvalfuncs, boundary, interiormap, indexmap))
 end
 
-function generate_bc_eqs!(bceqs, s::DiscreteSpace{N}, boundaryvalfuncs, interiormap, boundary::PeriodicBoundary) where N
-    # depvarbcmaps will dictate what to replace the variable terms with in the bcs
-    # replace u(t,0) with u₁, etc
-    u_, x_ = getvars(boundary)
-    j = x2i(s, depvar(u_, s), x_)
-    # * Assume that the periodic BC is of the simple form u(t,0) ~ u(t,1)
-    Ioffset = unitindex(N, j)*(length(s, x_) - 1)
-    local disc
-    for u in s.ū
-        if isequal(operation(u), operation(u_))
-            disc =  s.discvars[u]
-            break
-        end
-    end
-
-    push!(bceqs, vec(map(edge(s, boundary, interiormap)) do II
-        disc[II] ~ disc[II + Ioffset]
-    end))
-
-end
-
 function generate_bc_eqs!(bceqs, s::DiscreteSpace, boundaryvalfuncs, interiormap, boundary::InterfaceBoundary)
     isupper(boundary) && return
     u_ = boundary.u
