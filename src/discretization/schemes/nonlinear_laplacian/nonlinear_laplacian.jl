@@ -49,13 +49,6 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
     # Get the correct weights and stencils for this II
     inner_deriv_weights_and_stencil = [get_half_offset_weights_and_stencil(D_inner, I, s, bs, u, jx) for I in outerstencil]
     interp_weights_and_stencil = [get_half_offset_weights_and_stencil(inner_interpolater, I, s, bs, u, jx) for I in outerstencil]
-    @show u
-    @show II
-    @show bs
-    @show haslowerupper(bs)
-    @show inner_deriv_weights_and_stencil
-    @show interp_weights_and_stencil
-    @show outerweights, outerstencil
 
     # map variables to symbolically inerpolated/extrapolated expressions
     map_vars_to_interpolated(stencil, weights) = [v => dot(weights, s.discvars[v][interface_wrap(stencil)]) for v in depvars]
