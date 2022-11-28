@@ -4,7 +4,7 @@ Replace the PDESystem with an equivalent PDESystem which is compatible with Meth
 Modified copilot explanation:
 
 """
-function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
+function transform_pde_system!(v, boundarymap, sys::PDESystem)
     eqs = copy(sys.eqs)
     bcs = copy(sys.bcs)
     done = false
@@ -23,7 +23,7 @@ function transform_pde_system!(v, boundarymap, pmap, sys::PDESystem)
                 # Replace incompatible terms with auxiliary variables
             elseif badterm !== nothing
                 # mutates eqs, bcs and v, we remake a fresh v at the end
-                pmap = create_aux_variable!(eqs, bcs, boundarymap, pmap, v, badterm)
+                pmap = create_aux_variable!(eqs, bcs, boundarymap, v, badterm)
                 done = false
                 break
             end
@@ -164,7 +164,7 @@ Modified copilot explanation:
 3. Then we generate the replacement rules for the boundary conditions, and substitute them into the new equation to infer auxiliary bcs.
 4. Finally we add the new boundary conditions to the boundarymap and pmap. =#
 """
-function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
+function create_aux_variable!(eqs, bcs, boundarymap, v, term)
     S = Symbolics
     SU = SymbolicUtils
     t = v.time
@@ -214,16 +214,9 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
         return generate_bc_rules(filter(cond, bcivmap[x]), v)
     end
     # Substitute the boundary conditions in to the new equation to infer the new boundary conditions
-    # TODO: support robin/general boundary conditions somehow
     for dv in neweqops
         for iv in all_ivs(v)
             # if this is a periodic boundary, just add a new periodic condition
-            if pmap.map[dv][iv] isa Val{true}
-                args1 = substitute.(newargs, (iv => v.intervals[iv][1],))
-                args2 = substitute.(newargs, (iv => v.intervals[iv][2],))
-                push!(newbcs, PeriodicBoundary(newop(args1...), iv, newop(args1...) ~ newop(args2...)))
-                continue
-            end
             interfaces = filter_interfaces(boundarymap[operation(dv)][iv])
             @assert length(interfaces) == 0 "Interface BCs like $(interfaces[1].eq) are not yet supported in conjunction with system transformation, please transform manually if needed and set `should_transform=false` in the discretization. If you need this feature, please open an issue on GitHub."
 
@@ -238,7 +231,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, pmap, v, term)
     # add the new bc equations
     append!(bcs, map(bc -> bc.eq, newbcs))
     # Add the new boundary conditions and initial conditions to the boundarymap
-    update_boundarymap!(boundarymap, pmap.map, newbcs, newop, v)
+    update_boundarymap!(boundarymap, newbcs, newop, v)
     # update pmap
 end
 
@@ -254,34 +247,37 @@ function generate_bc_rules(bcs, v)
 end
 
 function generate_aux_bcs!(newbcs, newvar, term, bcs, v, rules)
-    t = v.time
     for bc in bcs
-        x = bc.x
-        val = isupper(bc) ? v.intervals[x][2] : v.intervals[x][1]
-        newop = operation(newvar)
-        args = arguments(newvar)
-        args = substitute.(args, (x => val,))
-        bcdv = newop(args...)
-        deriv = bc.order == 0 ? identity : (Differential(x)^bc.order)
-
-        bclhs = deriv(bcdv)
-        # ! catch faliures to expand and throw a better error message
-        bcrhs = expand_derivatives(substitute(deriv(term), rules))
-        eq = bclhs ~ bcrhs
-
-        newbc = if isupper(bc)
-            UpperBoundary(bcdv, t, x, bc.order, eq, v)
-        else
-            LowerBoundary(bcdv, t, x, bc.order, eq, v)
-        end
-        push!(newbcs, newbc)
+        generate_aux_bc!(newbcs, newvar, term, bc, v, rules)
     end
 end
 
-function update_boundarymap!(boundarymap, pmap::Dict{K,V}, bcs, newop, v) where {K,V}
+function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, v, rules)
+    t = v.time
+    x = bc.x
+    val = isupper(bc) ? v.intervals[x][2] : v.intervals[x][1]
+    newop = operation(newvar)
+    args = arguments(newvar)
+    args = substitute.(args, (x => val,))
+    bcdv = newop(args...)
+    deriv = bc.order == 0 ? identity : (Differential(x)^bc.order)
+
+    bclhs = deriv(bcdv)
+    # ! catch faliures to expand and throw a better error message
+    bcrhs = expand_derivatives(substitute(deriv(term), rules))
+    eq = bclhs ~ bcrhs
+
+    newbc = if isupper(bc)
+        UpperBoundary(bcdv, t, x, bc.order, eq, v)
+    else
+        LowerBoundary(bcdv, t, x, bc.order, eq, v)
+    end
+    push!(newbcs, newbc)
+end
+
+function update_boundarymap!(boundarymap, bcs, newop, v) where {K,V}
     merge!(boundarymap, Dict(newop => Dict(iv => [] for iv in all_ivs(v))))
     for bc in bcs
         push!(boundarymap[newop][bc.x], bc)
     end
-    pmap = PeriodicMap(boundarymap, v)
 end

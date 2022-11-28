@@ -6,7 +6,7 @@ abstract type AbstractBoundary end
 
 abstract type AbstractTruncatingBoundary <: AbstractBoundary end
 
-abstract type AbstractExtendingBoundary <: AbstractBoundary end
+abstract type AbstractInterfaceBooundary <: AbstractTruncatingBoundary end
 
 struct LowerBoundary <: AbstractTruncatingBoundary
     u
@@ -43,17 +43,11 @@ struct UpperBoundary <: AbstractTruncatingBoundary
     end
 end
 
-struct PeriodicBoundary <: AbstractBoundary
-    u
-    x
-    eq
-end
-
 # Note that it is assumed throughout MOL that the variables in an inteface BC have the same argument signature,
 # differing in only one variable which is that of the interface. This is not checked here, but will cause errors if it is not true.
 # Interfaces are assumed to be on the lower boundary of the domain.
 
-struct InterfaceBoundary{IsUpper_u,IsUpper_u2} <: AbstractBoundary
+struct InterfaceBoundary{IsUpper_u,IsUpper_u2} <: AbstractInterfaceBoundary
     u
     u2
     x
@@ -61,7 +55,7 @@ struct InterfaceBoundary{IsUpper_u,IsUpper_u2} <: AbstractBoundary
     eq
 end
 
-struct HigherOrderInterfaceBoundary <: AbstractTruncatingBoundary
+struct HigherOrderInterfaceBoundary <: AbstractInterfaceBoundary
     u
     u2
     x
@@ -87,27 +81,6 @@ function Base.isequal(i1::InterfaceBoundary, i2::InterfaceBoundary)
 end
 
 getvars(b::AbstractBoundary) = (b.u, b.x)
-
-@inline function isperiodic(bmps, u, x)
-    if !isempty(bmps[operation(u)][x])
-        # Being explicit hoping the compiler will optimize this away
-        if all(haslowerupper(filter_interfaces(bmps[operation(u)][x]), x))
-            return Val(true)
-        else
-            return Val(false)
-        end
-    else
-        return Val(false)
-    end
-end
-
-@inline function isperiodic(b)
-    if b isa PeriodicBoundary
-        return Val(true)
-    else
-        return Val(false)
-    end
-end
 
 function isperiodic(b1::InterfaceBoundary{b1u,b1u2}, b2::InterfaceBoundary{b2u,b2u2}) where {b1u,b1u2,b2u,b2u2}
     us_equal = isequal(operation(b1.u), operation(b2.u2)) && isequal(operation(b2.u), operation(b1.u2))
@@ -150,7 +123,6 @@ idx(b::HigherOrderInterfaceBoundary, s) = length(s, b.x)
 # indexes for Iedge depending on boundary type
 isupper(::LowerBoundary) = false
 isupper(::UpperBoundary) = true
-isupper(::PeriodicBoundary) = false
 isupper(::InterfaceBoundary{IsUpper_u}) where {IsUpper_u} = IsUpper_u isa Val{true} ? true : false
 isupper(::HigherOrderInterfaceBoundary) = true
 

@@ -50,7 +50,7 @@ function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivwei
             # No interface values in equations
             if b isa InterfaceBoundary
                 II -> []
-            # Only make a map if it is possible to substitute in the boundary value given the indexmap
+            # Only make a map if it is actually possible to substitute in the boundary value given the indexmap
             elseif all(x -> haskey(indexmap, x), filter(x -> !(safe_unwrap(x) isa Number), b.indvars))
                 II -> boundary_value_maps(II, s, b, derivweights, indexmap)
             else
@@ -186,17 +186,15 @@ end
 Pads the boundaries with extrapolation equations, extrapolated with 6th order lagrangian polynomials.
 Reuses `central_difference` as this already dispatches the correct stencil, given a `DerivativeOperator` which contains the correct weights.
 """
-function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap, periodicmap)
+function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
     args = remove(arguments(u), s.time)
     lowerextents, upperextents = interiormap.stencil_extents[pde]
     vlower = interiormap.lower[pde]
     vupper = interiormap.upper[pde]
-    pmap = periodicmap.map[operation(u)]
     ufunc(u, I, x) = s.discvars[u][I]
 
     eqmap = [[] for _ in CartesianIndices(s.discvars[u])]
     for (j, x) in enumerate(args)
-        pmap[x] isa Val{true} && continue
         ninterp = lowerextents[j] - vlower[j]
         I1 = unitindex(length(args), j)
         while ninterp >= vlower[j]

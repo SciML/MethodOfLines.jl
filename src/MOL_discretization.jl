@@ -30,15 +30,13 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
-    # Generate a map of each variable to whether it is periodic in a given direction
-    #TODO: fully deprecate PeriodicMap
-    pmap = PeriodicMap(boundarymap, v)
+
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
         if has_interfaces(boundarymap)
             @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
         else
-            pdesys, pmap = transform_pde_system!(v, boundarymap, pmap, pdesys)
+            pdesys = transform_pde_system!(v, boundarymap, pdesys)
         end
     end
 
@@ -122,7 +120,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             if disc_strategy isa ScalarizedDiscretization
                 # Generate the equations for the interior points
                 discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                    depvars, s, derivweights, indexmap, pmap)
+                    depvars, s, derivweights, indexmap)
             else
                 throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
             end

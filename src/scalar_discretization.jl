@@ -1,4 +1,4 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}) where {hasperiodic}
+function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap)
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
     # Generate replacement rule gen closures for the boundary values like u(t, 1)
     boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
@@ -9,7 +9,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
         generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
     end
     # Generate extrapolation eqs
-    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, bcmap, pmap)
+    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, bcmap)
 
     # Set invalid corner points to zero
     generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
