@@ -102,7 +102,6 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G,S}) where {G,
         end
         x => discx
     end
-
     # Define the grid on which the dependent variables will be evaluated (see #378)
     # center_align is recommended for Dirichlet BCs
     # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
@@ -153,7 +152,6 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G,S}) where {G,
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), symindices)
 end
 
-import Base.getproperty
 
 function Base.getproperty(s::DiscreteSpace, p::Symbol)
     if p in [:ū, :x̄, :time, :args, :x2i, :i2x]
@@ -176,7 +174,7 @@ nvars(::DiscreteSpace{N,M}) where {N,M} = M
 Fillter out the time variable and get the spatial variables of `u` in `s`.
 """
 params(u, s::DiscreteSpace) = remove(s.args[operation(u)], s.time)
-Base.ndims(u, s::DiscreteSpace) = length(params(u, s))
+Base.ndims(u, s::DiscreteSpace) = ndims(s.discvars[depvar(u, s)])
 
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])
 Base.length(s::DiscreteSpace, j::Int) = length(s.grid[s.x̄[j]])
@@ -191,6 +189,7 @@ of `II` that corresponds to only the spatial arguments of `u`.
 @inline function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     # We need to construct a new index as indices may be of different size
     length(params(u, s)) == 0 && return CartesianIndex()
+    !all(x -> haskey(indexmap, x), params(u, s)) && return II
     is = [II[indexmap[x]] for x in params(u, s)]
 
     II = CartesianIndex(is...)

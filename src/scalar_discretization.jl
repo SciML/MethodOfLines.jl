@@ -1,4 +1,4 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}, ::ScalarizedDiscretization, verbose) where {hasperiodic}
+function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, ::ScalarizedDiscretization, verbose)
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
     # Generate replacement rule gen closures for the boundary values like u(t, 1)
     boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
@@ -9,16 +9,17 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
         generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
     end
     # Generate extrapolation eqs
-    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
+    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, bcmap)
 
     # Set invalid corner points to zero
     generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
     # Extract Interior
     interior = interiormap.I[pde]
+
     # Generate the discrete form ODEs for the interior
     eqs = vec(map(interior) do II
         boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
-        rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
+        rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, bcmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
         try
             substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
         catch e

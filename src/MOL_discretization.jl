@@ -30,11 +30,14 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
-    # Generate a map of each variable to whether it is periodic in a given direction
-    pmap = PeriodicMap(boundarymap, v)
+
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
-        pdesys, pmap = transform_pde_system!(v, boundarymap, pmap, pdesys)
+        if has_interfaces(boundarymap)
+            @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
+        else
+            pdesys = transform_pde_system!(v, boundarymap, pdesys)
+        end
     end
 
     # Check if the boundaries warrant using ODAEProblem, as long as this is allowed in the interface
@@ -63,7 +66,10 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(v, discretization)
     # Get the interior and variable to solve for each equation
-    interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
+
+    #TODO: do the interiormap before and independent of the discretization i.e. `s`
+    interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization)
+
     # Get the derivative orders appearing in each equation
     pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), v.x̄))
     bcorders = Dict(map(x -> x => d_orders(x, bcs), v.x̄))
@@ -110,8 +116,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
             args = params(eqvar, s)
             indexmap = Dict([args[i] => i for i in 1:length(args)])
                 # Generate the equations for the interior points
+
             discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                                 depvars, s, derivweights, indexmap, pmap, disc_strategy,
+                                 depvars, s, derivweights, indexmap, disc_strategy,
                                  discretization.verbose_schemes)
         end
     end
@@ -145,15 +152,15 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
     try
         simpsys = structural_simplify(sys)
         if tspan === nothing
-            add_metadata!(simpsys.metadata, sys)
+            add_metadata!(get_metadata(sys), sys)
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
         else
             # Use ODAE if nessesary
             if getfield(sys, :metadata) isa MOLMetadata && getfield(sys, :metadata).use_ODAE
-                add_metadata!(simpsys.metadata, DAEProblem(simpsys; discretization.kwargs...))
+                add_metadata!(get_metadata(simpsys), DAEProblem(simpsys; discretization.kwargs...))
                 return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
             else
-                add_metadata!(simpsys.metadata, sys)
+                add_metadata!(get_metadata(simpsys), sys)
                 return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
             end
         end
@@ -164,6 +171,7 @@ end
 
 function get_discrete(pdesys, discretization)
     t = discretization.time
+    disc_strategy = discretization.disc_strategy
     cardinalize_eqs!(pdesys)
 
     ############################
@@ -179,11 +187,14 @@ function get_discrete(pdesys, discretization)
     bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
-    # Generate a map of each variable to whether it is periodic in a given direction
-    pmap = PeriodicMap(boundarymap, v)
+
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
-        pdesys, pmap = transform_pde_system!(v, boundarymap, pmap, pdesys)
+        if has_interfaces(boundarymap)
+            @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
+        else
+            pdesys = transform_pde_system!(v, boundarymap, pdesys)
+        end
     end
 
     s = DiscreteSpace(v, discretization)
@@ -210,9 +221,9 @@ function ModelingToolkit.ODEFunctionExpr(pdesys::PDESystem,discretization::Metho
     end
 end
 
-function generate_code(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference,filename="code.jl")
+function generate_code(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference,filename="generated_code_of_pdesys.jl")
     code = ODEFunctionExpr(pdesys, discretization)
-    rm(filename)
+    rm(filename; force = true)
     open(filename, "a") do io
         println(io, code)
     end

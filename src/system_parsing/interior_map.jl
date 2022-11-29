@@ -15,7 +15,7 @@ end
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization::MOLFiniteDifference{G, S}, pmap) where {N,M,G,S}
+function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) where {N,M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
@@ -42,6 +42,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization::M
         pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
 
         # Add ghost points to pad stencil extents
+
         stencil_extents = calculate_stencil_extents(s, u, discretization, pdeorders, pmap)
 
         # pad boundaries with interpolators
@@ -74,25 +75,27 @@ function generate_interior(lower, upper, u, s, ::MOLFiniteDifference{G, D}) wher
     return Dict([x => 1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)] for x in args])
 end
 
-function calculate_stencil_extents(s, u, discretization, orders, pmap)
+function calculate_stencil_extents(s, u, discretization, orders, bcmap)
     aorder = discretization.approx_order
     advection_scheme = discretization.advection_scheme
 
     args = remove(arguments(u), s.time)
-    extents = zeros(Int, length(args))
+    lowerextents = zeros(Int, length(args))
+    upperextents = zeros(Int, length(args))
+
     for (j,x) in enumerate(args)
         # Skip if periodic in x
-        pmap.map[operation(u)][x] isa Val{true} && continue
-        for dorder in orders[x]
-            if isodd(dorder)
-                extents[j] = max(extents[j], extent(advection_scheme, dorder))
-            else
-                #TODO: add scheme types for even order derivatives
-                extents[j] = max(extents[j], 0)
+        haslower, hasupper = haslowerupper(filter_interfaces(bcmap[operation(u)][x]), x)
+        for dorder in filter(isodd, orders[x])
+            if !haslower
+                lowerextents[j] = max(lowerextents[j], extent(advection_scheme, dorder))
+            end
+            if !hasupper
+                upperextents[j] = max(upperextents[j], extent(advection_scheme, dorder))
             end
         end
     end
-    return extents
+    return lowerextents, upperextents
 end
 
 function buildmatrix(pdes, s::DiscreteSpace{N,M}) where {N,M}

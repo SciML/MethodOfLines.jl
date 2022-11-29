@@ -269,49 +269,6 @@ remove(v::AbstractVector, a::Number) = filter(x -> !isequal(x, a), v)
 
 half_range(x) = -div(x, 2):div(x, 2)
 
-@inline function _wrapperiodic(I::CartesianIndex, N, j, l)
-    I1 = unitindex(N, j)
-    # -1 because of the relation u[1] ~ u[end]
-    if I[j] <= 1
-        return I + I1 * (l - 1)
-    elseif I[j] > l
-        return I - I1 * (l - 1)
-    else
-        return I
-    end
-end
-
-@inline function _wrapperiodic(i, l)
-    # -1 because of the relation u[1] ~ u[end]
-    if i <= 1
-        return i + (l - 1)
-    elseif i > l
-        return i = i - (l - 1)
-    else
-        return i
-    end
-end
-
-"""
-Allow stencils indexing over periodic boundaries. Index through this function.
-"""
-@inline function wrapperiodic(I::CartesianIndex, s, ::Val{true}, u, jx)
-    j, x = jx
-    return _wrapperiodic(I, ndims(u, s), j, length(s, x))
-end
-
-@inline function wrapperiodic(I::CartesianIndex, s, ::Val{false}, u, jx)
-    return I
-end
-
-@inline function wrapperiodic(i, l, ::Val{true})
-    return _wrapperiodic(i, l)
-end
-
-@inline function wrapperiodic(i, l, ::Val{false})
-    return i
-end
-
 d_orders(x, pdeeqs) = reverse(sort(collect(union((differential_order(pde.rhs, safe_unwrap(x)) for pde in pdeeqs)..., (differential_order(pde.lhs, safe_unwrap(x)) for pde in pdeeqs)...))))
 
 insert(args...) = insert!(args[1], args[2:end]...)
