@@ -66,5 +66,27 @@ function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, 
     # Spherical diffusion scheme
     spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, pmap, indexmap, split_additive_terms(pde))
 
-    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules))
+    # Euler Integrationn
+    skip_integrals = false
+    for u in depvars
+        for x in params(u, s)
+            j = x2i(s, u, x)
+            @info "II[j] = " II[j]
+            if II[j] == 1
+                skip_integals = true
+                break
+            end
+        end
+    end
+    if !(skip_integrals)
+        @info "SKIP_INTEGRALS = " skip_integrals
+
+        integration_rules = generate_integration_rules(II, s, depvars, pmap, indexmap, terms)
+    else
+        integration_rules = []
+    end
+
+
+
+    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules), vec(integration_rules))
 end

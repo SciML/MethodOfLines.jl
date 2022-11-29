@@ -22,7 +22,7 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, b, jx, u,
         Itap = [wrapperiodic(II + i * I1, s, b, u, jx) for i in half_range(D.stencil_length)]
     end
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
-
+    @info "CENTER"
     return dot(weights, ufunc(u, Itap, x))
 end
 
