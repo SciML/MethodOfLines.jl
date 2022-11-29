@@ -15,7 +15,7 @@ end
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, pmap) where {N,M}
+function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) where {N,M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
@@ -42,10 +42,10 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, p
         pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
 
         # Add ghost points to pad stencil extents
-        stencil_extents = calculate_stencil_extents(s, u, discretization, pdeorders, pmap)
-        push!(extents, pde => stencil_extents)
-        lower = [max(e, l) for (e, l) in zip(stencil_extents, lower)]
-        upper = [max(e, u) for (e, u) in zip(stencil_extents, upper)]
+        lowerextents, upperextents = calculate_stencil_extents(s, u, discretization, pdeorders, boundarymap)
+        push!(extents, pde => (lowerextents, upperextents))
+        lower = [max(e, l) for (e, l) in zip(lowerextents, lower)]
+        upper = [max(e, u) for (e, u) in zip(upperextents, upper)]
 
         # Don't update this x2i, it is correct.
         pde => generate_interior(lower, upper, u, s, discretization)
@@ -66,25 +66,27 @@ function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G, D}) 
     return [(1+lower[x2i(s, u, x)], length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]
 end
 
-function calculate_stencil_extents(s, u, discretization, orders, pmap)
+function calculate_stencil_extents(s, u, discretization, orders, bcmap)
     aorder = discretization.approx_order
     advection_scheme = discretization.advection_scheme
 
     args = remove(arguments(u), s.time)
-    extents = zeros(Int, length(args))
+    lowerextents = zeros(Int, length(args))
+    upperextents = zeros(Int, length(args))
+
     for (j,x) in enumerate(args)
         # Skip if periodic in x
-        pmap.map[operation(u)][x] isa Val{true} && continue
-        for dorder in orders[x]
-            if isodd(dorder)
-                extents[j] = max(extents[j], extent(advection_scheme, dorder))
-            else
-                #TODO: add scheme types for even order derivatives
-                extents[j] = max(extents[j], 0)
+        haslower, hasupper = haslowerupper(filter_interfaces(bcmap[operation(u)][x]), x)
+        for dorder in filter(isodd, orders[x])
+            if !haslower
+                lowerextents[j] = max(lowerextents[j], extent(advection_scheme, dorder))
+            end
+            if !hasupper
+                upperextents[j] = max(upperextents[j], extent(advection_scheme, dorder))
             end
         end
     end
-    return extents
+    return lowerextents, upperextents
 end
 
 function buildmatrix(pdes, s::DiscreteSpace{N,M}) where {N,M}

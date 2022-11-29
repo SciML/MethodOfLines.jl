@@ -3,7 +3,7 @@ using LinearAlgebra
 using SciMLBase
 using DiffEqBase
 using ModelingToolkit
-using ModelingToolkit: operation, istree, arguments, variable
+using ModelingToolkit: operation, istree, arguments, variable, get_metadata
 using SymbolicUtils, Symbolics
 using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename, similarterm
 using SymbolicUtils: operation, arguments
@@ -16,7 +16,12 @@ import DomainSets
 # To Extend
 import SciMLBase.wrap_sol
 import Base.display
-
+import Base.isequal
+import Base.getindex
+import Base.checkindex
+import Base.checkbounds
+import Base.getproperty
+import Base.ndims
 
 # Interface
 include("interface/grid_types.jl")
@@ -49,6 +54,9 @@ include("system_parsing/variable_map.jl")
 include("system_parsing/bcs/parse_boundaries.jl")
 include("system_parsing/bcs/periodic_map.jl")
 include("system_parsing/pde_system_transformation.jl")
+
+# Interface handling
+include("discretization/interface_boundary.jl")
 
 # Schemes
 include("discretization/schemes/centered_difference/centered_difference.jl")
