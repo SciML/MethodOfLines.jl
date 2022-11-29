@@ -42,12 +42,21 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) w
         pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
 
         # Add ghost points to pad stencil extents
-        lowerextents, upperextents = calculate_stencil_extents(s, u, discretization, pdeorders, boundarymap)
-        push!(extents, pde => (lowerextents, upperextents))
-        lower = [max(e, l) for (e, l) in zip(lowerextents, lower)]
-        upper = [max(e, u) for (e, u) in zip(upperextents, upper)]
 
-        # Don't update this x2i, it is correct.
+        stencil_extents = calculate_stencil_extents(s, u, discretization, pdeorders, pmap)
+
+        # pad boundaries with interpolators
+        if S <: ArrayDiscretization
+            for (j, x) in enumerate(params(u, s))
+                lowerinterp = [LowerInterpolatingBoundary(u, x) for i in 1:(stencil_extents[j] - lower[j])]
+                upperinterp = [UpperInterpolatingBoundary(u, x) for i in 1:(stencil_extents[j] - upper[j])]
+                push!(boundarymap[operation(u)][x], vcat(lowerinterp, upperinterp)...)
+            end
+        end
+        push!(extents, pde => stencil_extents)
+        lower = [max(e, l) for (e, l) in zip(stencil_extents, lower)]
+        upper = [max(e, u) for (e, u) in zip(stencil_extents, upper)]
+
         pde => generate_interior(lower, upper, u, s, discretization)
     end
 
@@ -56,14 +65,14 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) w
     return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(extents))
 end
 
-function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
+function generate_interior(lower, upper, u, s, ::MOLFiniteDifference{G, D}) where {G, D<:ScalarizedDiscretization}
     args = remove(arguments(u), s.time)
     return s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
 end
 
-function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G, D}) where {G, D<:ArrayDiscretization}
+function generate_interior(lower, upper, u, s, ::MOLFiniteDifference{G, D}) where {G, D<:ArrayDiscretization}
     args = remove(arguments(u), s.time)
-    return [(1+lower[x2i(s, u, x)], length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]
+    return Dict([x => 1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)] for x in args])
 end
 
 function calculate_stencil_extents(s, u, discretization, orders, bcmap)

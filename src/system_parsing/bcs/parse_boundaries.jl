@@ -8,7 +8,13 @@ abstract type AbstractTruncatingBoundary <: AbstractBoundary end
 
 abstract type AbstractInterfaceBoundary <: AbstractTruncatingBoundary end
 
-struct LowerBoundary <: AbstractTruncatingBoundary
+abstract type AbstractLowerBoundary <: AbstractTruncatingBoundary end
+
+abstract type AbstractUpperBoundary <: AbstractTruncatingBoundary end
+
+abstract type AbstractExtendingBoundary <: AbstractBoundary end
+
+struct LowerBoundary <: AbstractLowerBoundary
     u
     x
     depvars
@@ -20,13 +26,12 @@ struct LowerBoundary <: AbstractTruncatingBoundary
         depvars_rhs = get_depvars(eq.rhs, v.depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         #depvars =  filter(u -> !any(map(x-> x isa Number, arguments(u))), depvars)
-
         allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
 
-struct UpperBoundary <: AbstractTruncatingBoundary
+struct UpperBoundary <: AbstractUpperBoundary
     u
     x
     depvars
@@ -37,11 +42,25 @@ struct UpperBoundary <: AbstractTruncatingBoundary
         depvars_lhs = get_depvars(eq.lhs, v.depvar_ops)
         depvars_rhs = get_depvars(eq.rhs, v.depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
-
         allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
+
+const AbstractEquationBoundary = Union{LowerBoundary, UpperBoundary}
+
+struct LowerInterpolatingBoundary <: AbstractLowerBoundary
+    u
+    x
+end
+
+struct UpperInterpolatingBoundary <: AbstractUpperBoundary
+    u
+    x
+end
+
+const AbstractInterpolatingBoundary = Union{LowerInterpolatingBoundary, UpperInterpolatingBoundary}
+
 
 # Note that it is assumed throughout MOL that the variables in an inteface BC have the same argument signature,
 # differing in only one variable which is that of the interface. This is not checked here, but will cause errors if it is not true.
@@ -137,6 +156,15 @@ isupper(::HigherOrderInterfaceBoundary) = true
     lower[dim] = lower[dim] + !isupper(b)
     upper[dim] = upper[dim] + isupper(b)
 end
+
+ordering(::LowerBoundary) = 1
+ordering(::UpperBoundary) = 1
+ordering(::LowerInterpolatingBoundary) = 2
+ordering(::UpperInterpolatingBoundary) = 2
+
+offset(::AbstractLowerBoundary, i, len) = i
+offset(::AbstractUpperBoundary, i, len) = len - i + 1
+
 
 @inline function edge(interiormap, s, u, j, islower)
     I = interiormap.I[interiormap.pde[depvar(u, s)]]

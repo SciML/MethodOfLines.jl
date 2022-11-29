@@ -79,11 +79,12 @@ struct DiscreteSpace{N,M,G}
     dxs
     Iaxies
     Igrid
+    index_syms
 end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
 
-function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
+function DiscreteSpace(vars, discretization::MOLFiniteDifference{G,S}) where {G,S}
     x̄ = vars.x̄
     t = vars.time
     depvars = vars.ū
@@ -133,19 +134,22 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
         else
             sym = nameof(op)
         end
+        prepare = S <: ArrayDiscretization ? identity : collect
         if t === nothing
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
-            u => collect(first(@variables $sym[uaxes...]))
+            u => prepare(first(@variables $sym[uaxes...]))
         elseif isequal(SymbolicUtils.arguments(u), [t])
             u => fill(first(@variables($sym(t))), ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            u => collect(first(@variables $sym(t)[uaxes...]))
+            u => prepare(first(@variables $sym(t)[uaxes...]))
         end
     end
 
+    isyms = @. Symbol("i_" * string(unwrap(x̄)) * "::Int")
+    symindices = Dict(x̄ .=> map(sym -> Sym{Int, Nothing}(sym, nothing), isyms))
 
-    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
+    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), symindices)
 end
 
 
@@ -195,7 +199,7 @@ end
 """
 A function that returns what to replace independent variables with in boundary equations
 """
-@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I) where {N,M,G}
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I::CartesianIndex) where {N,M,G}
     u = depvar(u_, s)
     map(params(u, s)) do x
         if isequal(x, x_)
@@ -210,9 +214,9 @@ gridvals(s::DiscreteSpace{N}, u) where {N} = ndims(u, s) == 0 ? [] : map(y -> [x
 gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where {N} = ndims(u, s) == 0 ? [] : [x => s.grid[x][I[x2i(s, u, x)]] for x in params(u, s)]
 
 
-varmaps(s::DiscreteSpace, depvars, II, indexmap) = [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
+varmaps(s::DiscreteSpace, depvars, II::CartesianIndex, indexmap) = [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
 
-valmaps(s::DiscreteSpace, u, depvars, II, indexmap) = length(II) == 0 ? [] : vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
+valmaps(s::DiscreteSpace, u, depvars, II::CartesianIndex, indexmap) = length(II) == 0 ? [] : vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
 
 valmaps(s, u, depvars, indexmap) = valmaps.([s], [u], [depvars], s.Igrid[u], [indexmap])
 
@@ -244,3 +248,24 @@ end
 depvar(u, s::DiscreteSpace) = depvar(u, s.vars)
 
 x2i(s::DiscreteSpace, u, x) = x2i(s.vars, u, x)
+
+########################################################################################
+# Stencil interface
+########################################################################################
+
+varmaps(s, interior, depvars) = map(u -> u => s.discvars[u][get_interior(u, s, interior)...], depvars)
+
+gridvals(s, u, interior) = map(x -> x => s.grid[x][get_interior(u, s, interior)...], params(u, s))
+
+arrayvalmaps(s, u, depvars, interior) = vcat(varmaps(s, interior, depvars), gridvals(s, u, interior))
+
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, b::AbstractEquationBoundary, interior) where {N,M,G}
+    u_, x_ = getvars(b)
+    map(params(u_, s)) do x
+        if isequal(x, x_)
+            x => s.axies[x][idx(b, s)]
+        else
+            x => s.grid[x][interior[x]]
+        end
+    end
+end
