@@ -43,9 +43,7 @@ function newindex(u_, II, s, indexmap)
     u = depvar(u_, s)
     args_ = remove(arguments(u_), s.time)
     args = params(u, s)
-    @show indexmap
     is = map(enumerate(args_)) do (j, x)
-        @show x, args[j]
         if haskey(indexmap, x)
             II[indexmap[x]]
         elseif safe_unwrap(x) isa Number
