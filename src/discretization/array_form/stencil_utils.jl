@@ -35,17 +35,17 @@ function prepare_boundary_ops(boundaryops, interior, j)
     end
 end
 
-function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, offsets, j, is, interior, b) where {T,N,Wind,DX<:Number}
+function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, s, offsets, j, is, interior, bs) where {T,N,Wind,DX<:Number}
     weights = D.stencil_coefs
     taps = offsets .+ is[j]
-    InteriorDerivArrayOp(weights, taps, udisc, j, is, interior, b)
+    InteriorDerivArrayOp(weights, taps, udisc, s, j, is, interior, bs)
 end
 
-function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, offsets, j, is, interior, b) where {T,N,Wind,DX<:AbstractVector}
-    @assert b isa Val{false} "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
+function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, s, offsets, j, is, interior, bs) where {T,N,Wind,DX<:AbstractVector}
+    @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     weights = D.stencil_coefs[is[j]-D.boundary_point_count]
     taps = offsets .+ is[j]
-    InteriorDerivArrayOp(weights, taps, udisc, j, is, interior, b)
+    InteriorDerivArrayOp(weights, taps, udisc, s, j, is, interior, bs)
 end
 
 function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
@@ -65,18 +65,21 @@ function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
     return FillArrayOp(expr, output_idx, interior[symindices])
 end
 
-function InteriorDerivArrayOp(weights, taps, udisc, j, output_idx, interior, b)
+function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, bs)
     # * I Possibly needs updating
     Is = map(taps) do tap
-        map(1:ndims(udisc)) do i
+        is = map(1:ndims(udisc)) do i
             if i == j
-                wrapperiodic(tap, size(udisc, j), b)
+                tap
             else
                 output_idx[i]
             end
         end
+        CartesianIndex(wrap.(is)...)
     end
-    expr = dot(weights, map(I -> udisc[I...], Is))
+    # Wrap interfaces
+    Is = map(I -> bwrap(I, bs, s, j), Is)
+    expr = dot(weights, map(I -> udisc[I], Is))
     return FillArrayOp(expr, output_idx, interior)
 end
 

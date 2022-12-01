@@ -3,30 +3,29 @@
 ########################################################################################
 
 function _upwind_difference(D, interior, is, s,
-                            b, jx, u, udisc, ispositive)
+                            bs, jx, u, udisc, ispositive)
     args = params(u, s)
 
     j, x = jx
     lenx = length(s, x)
+    haslower, hasupper = haslowerupper(bs, x)
+
+    upperops = []
+    lowerops = []
     if ispositive
-        upperops = []
-        if b isa Val{false}
+        if !haslower
             lowerops = map(interior[j][1]:D.offside) do iboundary
                 lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
             end
-        else
-            upperops = []
         end
-        interiorop = interior_deriv(D, udisc, -D.stencil_length+1:0, j, is, interior, b)
+        interiorop = interior_deriv(D, udisc, s, -D.stencil_length+1:0, j, is, interior, b)
     else
-        if b isa Val{false}
+        if !hasupper
             upperops = map((lenx-D.boundary_point_count+1):interior[j][end]) do iboundary
                 upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
             end
-        else
-            lowerops = []
         end
-        interiorop = interior_deriv(D, udisc, 0:D.stencil_length-1, j, is, interior, b)
+        interiorop = interior_deriv(D, udisc, s, 0:D.stencil_length-1, j, is, interior, b)
     end
     boundaryoppairs = vcat(lowerops, upperops)
 

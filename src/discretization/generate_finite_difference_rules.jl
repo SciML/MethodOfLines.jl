@@ -75,34 +75,34 @@ end
 
 function generate_finite_difference_rules(interior, s::DiscreteSpace, depvars,
                                           pde::Equation,
-                                          derivweights::DifferentialDiscretizer, pmap,
+                                          derivweights::DifferentialDiscretizer, bmap,
                                           indexmap)
 
     terms = split_terms(pde, s.x̄)
 
     # Standard cartesian centered difference scheme
     central_deriv_rules_cartesian = generate_cartesian_rules(interior, s, depvars,
-                                                             derivweights, pmap, indexmap,
+                                                             derivweights, bmap, indexmap,
                                                              terms)
 
     # Advection rules
     if derivweights.advection_scheme isa UpwindScheme
-        advection_rules = generate_winding_rules(interior, s, depvars, derivweights, pmap,
+        advection_rules = generate_winding_rules(interior, s, depvars, derivweights, bmap,
                                                  indexmap, terms)
     elseif derivweights.advection_scheme isa WENOScheme
-        advection_rules = generate_WENO_rules(interior, s, depvars, derivweights, pmap,
+        advection_rules = generate_WENO_rules(interior, s, depvars, derivweights, bmap,
                                               indexmap, terms)
     else
         error("Unsupported advection scheme $(derivweights.advection_scheme) encountered.")
     end
 
     # Nonlinear laplacian scheme
-    nonlinlap_rules = generate_nonlinlap_rules(interior, s, depvars, derivweights, pmap,
+    nonlinlap_rules = generate_nonlinlap_rules(interior, s, depvars, derivweights, bmap,
                                                indexmap, terms)
 
     # Spherical diffusion scheme
     spherical_diffusion_rules = generate_spherical_diffusion_rules(interior, s, depvars,
-                                                                   derivweights, pmap,
+                                                                   derivweights, bmap,
                                                                    indexmap,
                                                                    split_additive_terms(pde))
 

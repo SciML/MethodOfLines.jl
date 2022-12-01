@@ -99,11 +99,10 @@ end
 
 function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::DiscreteSpace{N}, b, depvars, x, u) where {N}
     args = params(u, s)
-    ranges = map(x -> axes(s.grid[x])[1], args)
-    interior = map(x -> interior[x], args)
-    is = map(x -> s.index_syms[x], args)
+    interior = get_interior(u, s, interior)
+    is = get_is(u, s)
 
-    II = CartesianIndex(Tuple(wrap.(is)))
+    II = CartesianIndex(wrap.(is)...)
 
     deriv_expr = cartesian_nonlinear_laplacian(expr, II, derivweights, s, b, depvars, x, u)
 

@@ -1,4 +1,4 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}, ::ArrayDiscretization, verbose) where {hasperiodic}
+function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, ::ArrayDiscretization, verbose)
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
 
     # Find boundaries for this equation
@@ -10,7 +10,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     boundary_op_pairs = generate_bc_op_pairs(s, eqvarbcs, derivweights, interior)
     # Generate the discrete form ODEs for the interior
     pdeinterior = begin
-        rules = vcat(generate_finite_difference_rules(interior, s, depvars, pde, derivweights, pmap, indexmap), arrayvalmaps(s, eqvar, depvars, interior))
+        rules = vcat(generate_finite_difference_rules(interior, s, depvars, pde, derivweights, bcmap, indexmap), arrayvalmaps(s, eqvar, depvars, interior))
         if verbose
             println("Schemes Applied: The following rules were applied for the PDE $pde with the var $eqvar:")
         end

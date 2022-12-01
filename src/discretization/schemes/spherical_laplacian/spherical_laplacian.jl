@@ -63,14 +63,13 @@ end
 # Stencil interface
 ########################################################################################
 #TODO: Decouple this from old discretization interface
-function spherical_diffusion(innerexpr, interior, derivweights, s, b, depvars, r, u)
-    args = params(u, s)
-    interior = map(x -> interior[x], args)
-    is = map(x -> s.index_syms[x], args)
+function spherical_diffusion(innerexpr, interior, derivweights, s, bs, depvars, r, u)
+    interior = get_interior(u, s, interior)
+    is = get_is(u, s)
 
     II = CartesianIndex(Tuple(wrap.(is)))
 
-    deriv_expr = spherical_laplacian(innerexpr, II, derivweights, s, b, depvars, r, u)
+    deriv_expr = spherical_laplacian(innerexpr, II, derivweights, s, bs, depvars, r, u)
 
     return FillArrayOp(deriv_expr, is, interior)
 end

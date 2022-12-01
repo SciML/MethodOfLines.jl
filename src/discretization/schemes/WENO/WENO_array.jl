@@ -2,38 +2,22 @@
 # Stencil interface
 ########################################################################################
 
-function weno(interior, s::DiscreteSpace, wenoscheme::WENOScheme, b, jx, u, dx::Number)
+function weno(interior, s::DiscreteSpace, wenoscheme::WENOScheme, bs, jx, u, dx::Number)
     j, x = jx
     ε = wenoscheme.epsilon
 
-    args = params(u, s)
     interior = get_interior(u, s, interior)
     is = get_is(u, s)
 
-    II = map(1:ndims(udisc)) do i
-        if i == j
-            wrapperiodic.(taps, [s], [b], [u], [jx])
-        else
-            is[i]
-        end
-    end
-    II = CartesianIndex(II)
+    II = CartesianIndex(wrap.(is)...)
     I1 = unitindex(ndims(u, s), j)
 
     udisc = s.discvars[u]
 
-    Im2 = wrapperiodic(II - 2I1, s, b, u, jx)
-    Im1 = wrapperiodic(II - I1, s, b, u, jx)
-    Ip1 = wrapperiodic(II + I1, s, b, u, jx)
-    Ip2 = wrapperiodic(II + 2I1, s, b, u, jx)
-    is = map(I -> I[j], [Im2, Im1, Ip1, Ip2])
-    for i in is
-        if i < 1
-            return nothing
-        elseif i > length(s, x)
-            return nothing
-        end
-    end
+    Im2 = bwrap(II - 2I1, bs, s, j)
+    Im1 = bwrap(II - I1, bs, s, j)
+    Ip1 = bwrap(II + I1, bs, s, j)
+    Ip2 = bwrap(II + 2I1, bs, s, j)
 
     u_m2 = udisc[Im2]
     u_m1 = udisc[Im1]

@@ -2,29 +2,31 @@
 # Stencil interface
 ########################################################################################
 
-function central_difference(D::DerivativeOperator, interior, s, b, jx, u, udisc)
+function central_difference(D::DerivativeOperator, interior, s, bs, jx, u, udisc)
     args = params(u, s)
     interior = get_interior(u, s, interior)
     is = get_is(u, s)
 
     j, x = jx
     lenx = length(s, x)
+    haslower, hasupper = haslowerupper(bs, x)
 
-    if b isa Val{false}
+    lowerops = []
+    upperops = []
+
+    if !haslower
         lowerops = map(interior[j][1]:D.boundary_point_count) do iboundary
             lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
         end
-
+    end
+    if !hasupper
         upperops = map((lenx-D.boundary_point_count+1):interior[j][end]) do iboundary
             upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
         end
-    else
-        lowerops = []
-        upperops = []
     end
     boundaryoppairs = vcat(lowerops, upperops)
 
-    interiorop = interior_deriv(D, udisc, half_range(D.stencil_length), j, is, interior, b)
+    interiorop = interior_deriv(D, udisc, half_range(D.stencil_length), j, is, interior, bs)
 
     return Construct_ArrayMaker(interior, vcat(Tuple(interior) => interiorop, boundaryoppairs))
 end
