@@ -13,7 +13,8 @@ jobs:
       matrix:
         group:
           - Components
-          - Interface
+          - Sol_Interface
+          - MOL_Interface1
           - Diffusion
           - Diffusion_NU
           - Nonlinear_Diffusion

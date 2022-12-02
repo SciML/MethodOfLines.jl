@@ -7,6 +7,12 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
+    if GROUP == "All" || GROUP == "Burgers"
+        @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin
+            include("pde_systems/burgers_eq.jl")
+        end
+    end
+
     if GROUP == "All" || GROUP == "Convection_WENO"
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection, WENO Scheme." begin
             include("pde_systems/MOL_1D_Linear_Convection_WENO.jl")
@@ -60,11 +66,13 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
-
-    if GROUP == "All" || GROUP == "Interface"
+    if GROUP == "All" || GROUP == "Sol_Interface"
         @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
             include("components/solution_interface.jl")
         end
+    end
+
+    if GROUP == "All" || GROUP == "MOL_Interface1"
         @time @safetestset "MOLFiniteDifference Interface" begin
             include("pde_systems/MOLtest.jl")
         end
@@ -85,12 +93,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "Brusselator"
         @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
             include("pde_systems/brusselator_eq.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Burgers"
-        @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin
-            include("pde_systems/burgers_eq.jl")
         end
     end
 
