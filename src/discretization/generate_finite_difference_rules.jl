@@ -70,7 +70,6 @@ function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, 
     skip_integrals = false
     for u in depvars
         for j in 1:length(params(u, s))
-            @info "II[j] = " II[j]
             if II[j] == 1
                 skip_integrals = true
                 break
@@ -80,8 +79,6 @@ function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, 
     if skip_integrals
         integration_rules = []
     else
-        @info "SKIP_INTEGRALS = " skip_integrals
-
         integration_rules = generate_integration_rules(II, s, depvars, indexmap, terms)
     end
 
