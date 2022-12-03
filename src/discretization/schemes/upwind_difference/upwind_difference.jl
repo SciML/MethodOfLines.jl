@@ -76,20 +76,20 @@ function upwind_difference(expr, d::Int, II::CartesianIndex, s::DiscreteSpace, b
         expr * upwind_difference(d, II, s, bs, derivweights, (j, x), u, central_ufunc, false))
 end
 
-@inline function generate_winding_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
+@inline function generate_winding_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms; skip = [])
     wind_ufunc(v, I, x) = s.discvars[v][I]
     # for all independent variables and dependant variables
     rules = vcat(#Catch multiplication
         reduce(vcat, [reduce(vcat, [[@rule *(~~a, $(Differential(x)^d)(u), ~~b) => upwind_difference(*(~a..., ~b...), d, Idx(II, s, u, indexmap), s, filter_interfaces(bcmap[operation(u)][x]), depvars, derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap) for d in (
             let orders = derivweights.orders[x]
-                orders[isodd.(orders)]
+                setdiff(orders[isodd.(orders)], skip)
             end
         )] for x in params(u, s)]) for u in depvars]),
 
         #Catch division and multiplication, see issue #1
         reduce(vcat, [reduce(vcat, [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(*(~a..., ~b...) / ~c, d, Idx(II, s, u, indexmap), s, filter_interfaces(bcmap[operation(u)][x]), depvars, derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap) for d in (
             let orders = derivweights.orders[x]
-                orders[isodd.(orders)]
+                setdiff(orders[isodd.(orders)], skip)
             end
         )] for x in params(u, s)]) for u in depvars])
     )
@@ -108,7 +108,7 @@ end
     return vcat(wind_rules, vec(mapreduce(vcat, depvars) do u
         mapreduce(vcat, params(u, s)) do x
             j = x2i(s, u, x)
-            let orders = derivweights.orders[x]
+            let orders = setdiff(derivweights.orders[x], skip)
                 oddorders = orders[isodd.(orders)]
                 # for all odd orders
                 if length(oddorders) > 0
