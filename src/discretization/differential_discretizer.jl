@@ -36,7 +36,7 @@ function DifferentialDiscretizer(pdesys, s, discretization, orders)
         elseif s.grid[x] isa AbstractVector # The nonuniform grid case
             dx = s.grid[x]
 
-            nonlinlap_outer = push!(nonlinlap_outer, Differential(x) => CompleteHalfCenteredDifference(1, approx_order, [(discx[i+1] + discx[i]) / 2 for i in 1:length(discx)-1]))
+            nonlinlap_outer = push!(nonlinlap_outer, Differential(x) => CompleteHalfCenteredDifference(1, approx_order, [(dx[i+1] + dx[i]) / 2 for i in 1:length(dx)-1]))
         else
             error("s.grid contains nonvectors")
         end
