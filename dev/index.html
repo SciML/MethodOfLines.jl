@@ -7,13 +7,13 @@
 Pkg.add(&quot;MethodOfLines&quot;)</code></pre><p>The packages relevant to the core functionality of Optimization.jl will be imported accordingly and, in most cases, you do not have to worry about the manual installation of dependencies. However, you will need to add the specific optimizer packages.</p><h2 id="Contributing"><a class="docs-heading-anchor" href="#Contributing">Contributing</a><a id="Contributing-1"></a><a class="docs-heading-anchor-permalink" href="#Contributing" title="Permalink"></a></h2><ul><li>Please refer to the <a href="https://github.com/SciML/ColPrac/blob/master/README.md">SciML ColPrac: Contributor&#39;s Guide on Collaborative Practices for Community Packages</a> for guidance on PRs, issues, and other matters relating to contributing to SciML.</li><li>See the <a href="https://github.com/SciML/SciMLStyle">SciML Style Guide</a> for common coding practices and other style decisions.</li><li>There are a few community forums:<ul><li>The #diffeq-bridged and #sciml-bridged channels in the <a href="https://julialang.org/slack/">Julia Slack</a></li><li>The #diffeq-bridged and #sciml-bridged channels in the <a href="https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged">Julia Zulip</a></li><li>On the <a href="https://discourse.julialang.org">Julia Discourse forums</a></li><li>See also <a href="https://sciml.ai/community/">SciML Community page</a></li></ul></li></ul><h2 id="limitations"><a class="docs-heading-anchor" href="#limitations">Known Limitations</a><a id="limitations-1"></a><a class="docs-heading-anchor-permalink" href="#limitations" title="Permalink"></a></h2><p>At the moment the package is able to discretize almost any system, with some assumptions listed below</p><ul><li>That the grid is cartesian.</li><li>Boundary conditions in time are supplied as initial conditions, not at the end of the simulation interal. If your system requires a final condition, please use a change of variables to rectify this. This is unlikely to change due to upstream constraints.</li><li>Intergral equations are not supported.</li><li>That dependant variables always have the same argument signature, except in BCs.</li><li>That periodic boundary conditions are of the simple form <code>u(t, x_min) ~ u(t, x_max)</code>, or the same with lhs and rhs reversed. Note that this generalises to higher dimensions. Please note that if you want to use a periodic condition on a dimension with WENO schemes, please use a periodic condition on all variables in that dimension.</li><li>That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.</li><li>That odd order derivatives do not multiply or divide each other. A workaround is to wrap all but one derivative per term in an auxiliary variable, such as <code>dxu(x, t) ~ Differential(x)(u(x, t))</code>. The performance hit from auxiliary variables should be negligable due to a structural simplification step.</li><li>That the WENO scheme must be used when there are mixed derivatives.</li></ul><h2 id="Reproducibility"><a class="docs-heading-anchor" href="#Reproducibility">Reproducibility</a><a id="Reproducibility-1"></a><a class="docs-heading-anchor-permalink" href="#Reproducibility" title="Permalink"></a></h2><details><summary>The documentation of this SciML package was built using these direct dependencies,</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/MethodOfLines.jl/MethodOfLines.jl/docs/Project.toml`
   [0c46a032] DifferentialEquations v7.6.0
   [e30172f5] Documenter v0.27.23
-  [5b8099bc] DomainSets v0.5.14
+⌅ [5b8099bc] DomainSets v0.5.14
   [94925ecb] MethodOfLines v0.7.1 `~/work/MethodOfLines.jl/MethodOfLines.jl`
   [961ee093] ModelingToolkit v8.36.0
 ⌃ [8913a72c] NonlinearSolve v0.3.22
   [1dea7af3] OrdinaryDiffEq v6.35.0
-  [91a5bcdd] Plots v1.36.6
-Info Packages marked with ⌃ have new versions available and may be upgradable.</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.8.3
+  [91a5bcdd] Plots v1.37.0
+Info Packages marked with ⌃ and ⌅ have new versions available, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated`</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.8.3
 Commit 0434deb161e (2022-11-14 20:14 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
@@ -34,7 +34,7 @@ Platform Info:
   [015c0d05] ArrayInterfaceOffsetArrays v0.1.7
   [b0d46f97] ArrayInterfaceStaticArrays v0.1.5
   [dd5226c6] ArrayInterfaceStaticArraysCore v0.1.3
-  [4c555306] ArrayLayouts v0.8.15
+  [4c555306] ArrayLayouts v0.8.16
   [15f4f7f2] AutoHashEquals v0.2.0
   [13072b0f] AxisAlgorithms v1.0.1
   [aae01518] BandedMatrices v0.17.9
@@ -71,9 +71,9 @@ Platform Info:
   [864edb3b] DataStructures v0.18.13
   [e2d170a0] DataValueInterfaces v1.0.0
   [244e2a9f] DefineSingletons v0.1.2
-  [bcd4f6db] DelayDiffEq v5.40.3
+  [bcd4f6db] DelayDiffEq v5.40.4
   [b429d917] DensityInterface v0.4.0
-  [2b5f629d] DiffEqBase v6.109.0
+  [2b5f629d] DiffEqBase v6.110.0
   [459566f4] DiffEqCallbacks v2.24.3
   [77a26b50] DiffEqNoiseProcess v5.14.2
   [163ba53b] DiffResults v1.1.0
@@ -83,7 +83,7 @@ Platform Info:
   [31c24e10] Distributions v0.25.79
   [ffbed154] DocStringExtensions v0.9.2
   [e30172f5] Documenter v0.27.23
-  [5b8099bc] DomainSets v0.5.14
+⌅ [5b8099bc] DomainSets v0.5.14
   [fa6b7ba4] DualNumbers v0.6.8
   [7c1d4256] DynamicPolynomials v0.4.5
   [4e289a0a] EnumX v1.0.4
@@ -92,12 +92,12 @@ Platform Info:
   [c87230d0] FFMPEG v0.4.1
   [7034ab61] FastBroadcast v0.2.3
   [9aa1b823] FastClosures v0.3.2
-  [29a986be] FastLapackInterface v1.2.7
+  [29a986be] FastLapackInterface v1.2.8
   [1a297f60] FillArrays v0.13.5
   [6a86dc24] FiniteDiff v2.17.0
   [53c48c17] FixedPointNumbers v0.8.4
   [59287772] Formatting v0.4.2
-  [f6369f11] ForwardDiff v0.10.33
+  [f6369f11] ForwardDiff v0.10.32
   [069b7b12] FunctionWrappers v1.1.3
   [77dc65aa] FunctionWrappersWrappers v0.1.1
   [46192b85] GPUArraysCore v0.1.2
@@ -168,13 +168,13 @@ Platform Info:
   [69de0a69] Parsers v2.5.1
   [b98c9c47] Pipe v1.3.0
   [ccf2f8ad] PlotThemes v3.1.0
-  [995b91a9] PlotUtils v1.3.1
-  [91a5bcdd] Plots v1.36.6
+  [995b91a9] PlotUtils v1.3.2
+  [91a5bcdd] Plots v1.37.0
   [e409e4f3] PoissonRandom v0.4.3
   [f517fe37] Polyester v0.6.18
   [1d0040c9] PolyesterWeave v0.1.11
   [85a6dd25] PositiveFactorizations v0.2.4
-  [d236fae5] PreallocationTools v0.4.4
+  [d236fae5] PreallocationTools v0.4.5
   [21216c6a] Preferences v1.3.0
   [27ebfcd6] Primes v0.5.3
   [1fd47b50] QuadGK v2.6.0
@@ -201,23 +201,23 @@ Platform Info:
   [efcf1570] Setfield v1.1.1
   [992d4aef] Showoff v1.0.3
   [777ac1f9] SimpleBufferStream v1.1.0
-  [727e6d20] SimpleNonlinearSolve v0.1.2
+  [727e6d20] SimpleNonlinearSolve v0.1.3
   [699a6c99] SimpleTraits v0.9.4
   [66db9d55] SnoopPrecompile v1.0.1
   [a2af1166] SortingAlgorithms v1.1.0
-  [47a9eef4] SparseDiffTools v1.29.0
+  [47a9eef4] SparseDiffTools v1.30.0
   [276daf66] SpecialFunctions v2.1.7
   [171d559e] SplittablesBase v0.1.15
-  [aedffcd0] Static v0.8.2
+  [aedffcd0] Static v0.8.3
   [90137ffa] StaticArrays v1.5.11
   [1e83bf80] StaticArraysCore v1.4.0
   [82ae8749] StatsAPI v1.5.0
   [2913bbd2] StatsBase v0.33.21
-  [4c63d2b9] StatsFuns v1.1.0
-  [9672c7b4] SteadyStateDiffEq v1.9.1
+  [4c63d2b9] StatsFuns v1.1.1
+  [9672c7b4] SteadyStateDiffEq v1.10.1
   [789caeaf] StochasticDiffEq v6.57.3
 ⌅ [7792a7ef] StrideArraysCore v0.3.17
-  [c3572dad] Sundials v4.11.1
+  [c3572dad] Sundials v4.11.3
   [d1185830] SymbolicUtils v0.19.11
   [0c5d862f] Symbolics v4.13.0
   [3783bdb8] TableTraits v1.0.1
@@ -228,7 +228,7 @@ Platform Info:
   [ac1d9e8a] ThreadsX v0.1.11
   [a759f4b9] TimerOutputs v0.5.22
   [0796e94c] Tokenize v0.5.24
-  [3bb67fe8] TranscodingStreams v0.9.9
+  [3bb67fe8] TranscodingStreams v0.9.10
   [28d57a85] Transducers v0.4.75
   [a2a6695c] TreeViews v0.3.0
   [d5829a12] TriangularSolve v0.1.15
@@ -359,4 +359,4 @@ Platform Info:
   [3f19e933] p7zip_jll v17.4.0+0
 Info Packages marked with ⌃ and ⌅ have new versions available, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
 <a href="https://github.com/SciML/MethodOfLines.jl/tree/gh-pages/v0.7.1/assets/Manifest.toml">manifest</a> file and the
-<a href="https://github.com/SciML/MethodOfLines.jl/tree/gh-pages/v0.7.1/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/brusselator/">Tutorial »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Thursday 1 December 2022 15:38">Thursday 1 December 2022</span>. Using Julia version 1.8.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+<a href="https://github.com/SciML/MethodOfLines.jl/tree/gh-pages/v0.7.1/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/brusselator/">Tutorial »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Monday 5 December 2022 19:48">Monday 5 December 2022</span>. Using Julia version 1.8.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
