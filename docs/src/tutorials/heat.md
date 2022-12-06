@@ -53,7 +53,6 @@ for i in 1:length(discrete_t)
     scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
 end
 display(plt)
-savefig("plot.png")
 ```
 ### Neumann boundary conditions
 
@@ -109,7 +108,6 @@ for i in 1:length(discrete_t)
     scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
 end
 display(plt)
-savefig("plot.png")
 ```
 
 ### Robin boundary conditions
@@ -166,7 +164,6 @@ for i in 1:length(discrete_t)
     scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
 end
 display(plt)
-savefig("plot.png")
 ```
 
 
