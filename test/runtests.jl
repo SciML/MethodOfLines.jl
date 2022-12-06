@@ -74,7 +74,13 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 
     if GROUP == "All" || GROUP == "MOL_Interface1"
         @time @safetestset "MOLFiniteDifference Interface" begin
-            include("pde_systems/MOLtest.jl")
+            include("pde_systems/MOLtest1.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "MOL_Interface2"
+        @time @safetestset "MOLFiniteDifference Interface" begin
+            include("pde_systems/MOLtest2.jl")
         end
     end
 
