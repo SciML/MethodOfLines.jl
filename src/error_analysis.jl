@@ -12,8 +12,8 @@ function error_analysis(sys, e)
         for r in rs
             for eq in extraeqs
                 if subsmatch(eq.lhs, r) | subsmatch(eq.rhs, r)
-                    setdiff!(extrastates, [r.second])
-                    setdiff!(extraeqs, [eq])
+                    extrastates = vec(setdiff(extrastates, [r.second]))
+                    extraeqs = vec(setdiff(extraeqs, [eq]))
                     break
                 end
             end

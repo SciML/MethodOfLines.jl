@@ -53,9 +53,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pdeeqs = pdesys.eqs
     bcs = pdesys.bcs
 
-    # @show alldepvars
-    # @show allindvars
-
     ############################
     # Discretization of system
     ############################
@@ -137,21 +134,21 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     return generate_system(alleqs, bceqs, ics, s.discvars, defaults, ps, tspan, metadata)
 end
 
-function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
+function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference; kwargs...)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
         simpsys = structural_simplify(sys)
         if tspan === nothing
             add_metadata!(get_metadata(sys), sys)
-            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
+            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs..., kwargs...)
         else
             # Use ODAE if nessesary
             if getfield(sys, :metadata) isa MOLMetadata && getfield(sys, :metadata).use_ODAE
-                add_metadata!(get_metadata(simpsys), DAEProblem(simpsys; discretization.kwargs...))
-                return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
+                add_metadata!(get_metadata(simpsys), DAEProblem(simpsys; discretization.kwargs..., kwargs...))
+                return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
             else
                 add_metadata!(get_metadata(simpsys), sys)
-                return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
+                return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
             end
         end
     catch e
