@@ -34,6 +34,14 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
         if has_interfaces(boundarymap)
+            bs = filter_interfaces(flatten_vardict(boundarymap))
+            for b in bs
+                dx1 = discretization.dxs[Num(b.x)]
+                dx2 = discretization.dxs[Num(b.x2)]
+                if dx1 != dx2
+                    throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
+                end
+            end
             @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
         else
             pdesys = transform_pde_system!(v, boundarymap, pdesys)
