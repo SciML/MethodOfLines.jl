@@ -15,6 +15,7 @@ jobs:
           - Components
           - Sol_Interface
           - MOL_Interface1
+          - MOL_Interface2
           - Diffusion
           - Diffusion_NU
           - Nonlinear_Diffusion
