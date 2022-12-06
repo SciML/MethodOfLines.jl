@@ -33,7 +33,7 @@ Boundary conditions include, but are not limited to:
 - Neumann (can also include time derivative)
 - Robin (can also include time derivative)
 - Periodic
-- Any function, subject to the assumptions below
+- Any Julia function that returns a number
 
 At the moment the centered difference, upwind difference, nonlinear laplacian and spherical laplacian schemes are implemented. If you know of a scheme with better stability or accuracy in any specific case, please post an issue with a link to a paper.
 
@@ -75,10 +75,11 @@ At the moment the package is able to discretize almost any system, with some ass
 - Boundary conditions in time are supplied as initial conditions, not at the end of the simulation interal. If your system requires a final condition, please use a change of variables to rectify this. This is unlikely to change due to upstream constraints.
 - Intergral equations are not supported.
 - That dependant variables always have the same argument signature, except in BCs.
-- That periodic boundary conditions are of the simple form `u(t, x_min) ~ u(t, x_max)`, or the same with lhs and rhs reversed. Note that this generalises to higher dimensions. Please note that if you want to use a periodic condition on a dimension with WENO schemes, please use a periodic condition on all variables in that dimension.
+- That higher order interface bcs are accompanied by a simple interface of the form `u1(t, x_int) ~ u2(t, x_int)`
 - That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.
-- That odd order derivatives do not multiply or divide each other. A workaround is to wrap all but one derivative per term in an auxiliary variable, such as `dxu(x, t) ~ Differential(x)(u(x, t))`. The performance hit from auxiliary variables should be negligable due to a structural simplification step.
+- That odd order derivatives do not multiply or divide each other, unless the WENO Scheme is used.
 - That the WENO scheme must be used when there are mixed derivatives.
+- Note that the WENO Scheme is often unstable in more than 1 spatial dimension due to difficulties with boundary handling, this can be avoided if you supply 2 or more bcs per boundary in the dimension along which an advection term acts.
 
 
 ## Reproducibility
