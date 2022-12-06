@@ -1,6 +1,8 @@
 using MethodOfLines, ModelingToolkit, DomainSets, Test
 using Combinatorics: permutations
 
+const bigint = div(typemax(Int), 2)
+
 
 @testset "Test 00: recognize relevant variable for equations, time defined" begin
     @parameters x, t
@@ -36,9 +38,9 @@ using Combinatorics: permutations
 
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
-        @test m == [2 0 1; 0 3 1; 1 1 4] # Test the matrix is the identity matrix
+        @test m == [2+bigint 0 1; 0 2+bigint 1; 1 1 2+bigint] # Test the matrix is the identity matrix
     else
-        @test m == [1 2 0; 1 0 3; 4 1 1]
+        @test m == [1 2+bigint 0; 1 0 2+bigint; 2+bigint 1 1]
     end
 
 end
