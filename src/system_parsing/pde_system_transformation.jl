@@ -215,9 +215,10 @@ function create_aux_variable!(eqs, bcs, boundarymap, v, term)
     end
     # Substitute the boundary conditions in to the new equation to infer the new boundary conditions
     for dv in neweqops
+        @show dv
         for iv in all_ivs(v)
             # if this is a periodic boundary, just add a new periodic condition
-            interfaces = filter_interfaces(boundarymap[operation(dv)][iv])
+            interfaces = filter_interfaces(boundarymap[dv][iv])
             @assert length(interfaces) == 0 "Interface BCs like $(interfaces[1].eq) are not yet supported in conjunction with system transformation, please transform manually if needed and set `should_transform=false` in the discretization. If you need this feature, please open an issue on GitHub."
 
             boundaries = boundarymap[dv][iv]
