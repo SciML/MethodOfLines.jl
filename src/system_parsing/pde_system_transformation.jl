@@ -143,6 +143,16 @@ function descend_to_incompatible(term, v)
             else
                 throw(ArgumentError("Variable derived with respect to is not an independent variable in ivs, got $(op.x) in $(term)"))
             end
+        elseif op isa Integral
+            if any(isequal(op.domain.variables), v.x̄)
+                if op.domain.domain.left == v.intervals[op.domain.variables][1] && isequal(op.domain.domain.right, Num(op.domain.variables))
+                    return (nothing, nothing, false)
+                else
+                    throw(ArgumentError("Integration Domain only supported for integrals from start of iterval to the variable, got $(op.domain.domain) in $(term)"))
+                end
+            else
+                throw(ArgumentError("Integral must be with respect to the independent variable in its upper-bound, got $(op.domain.variables) in $(term)"))
+            end
         end
         for arg in SU.arguments(term)
             res = descend_to_incompatible(arg, v)

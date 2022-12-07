@@ -79,10 +79,7 @@ function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, 
     if skip_integrals
         integration_rules = []
     else
-        integration_rules = generate_integration_rules(II, s, depvars, indexmap, terms)
+        integration_rules = Vector{Any}(generate_integration_rules(II, s, depvars, indexmap, terms))
     end
-
-
-
-    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules), vec(integration_rules))
+    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules)
 end

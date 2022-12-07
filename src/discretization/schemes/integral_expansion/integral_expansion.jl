@@ -14,8 +14,8 @@ end
 
 @inline function generate_integration_rules(II::CartesianIndex, s::DiscreteSpace, depvars, indexmap, terms)
     ufunc(u, I, x) = s.discvars[u][I]
-    rules = reduce(vcat, [reduce(vcat, [Integral(Num(x) in DomainSets.ClosedInterval(0.0, Num(x)))(u) => euler_integral(Idx(II, s, u, indexmap), s, (x2i(s, u, x), x), u, ufunc)
-                                        for x in params(u, s)])
-                          for u in depvars])
-    return rules
+
+    return reduce(vcat, [[Integral(x in DomainSets.ClosedInterval(s.vars.intervals[x][1], Num(x)))(u) => euler_integral(Idx(II, s, u, indexmap), s, (x2i(s, u, x), x), u, ufunc)
+                          for x in params(u, s)]
+                         for u in depvars])
 end
