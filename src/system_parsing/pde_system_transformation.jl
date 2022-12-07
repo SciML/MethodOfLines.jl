@@ -1,5 +1,5 @@
 """
-Replace the PDESystem with an equivalent PDESystem which is compatible with MethodOfLines, mutates boundarymap, pmap and v
+Replace the PDESystem with an equivalent PDESystem which is compatible with MethodOfLines, mutates boundarymap and v
 
 Modified copilot explanation:
 
@@ -23,7 +23,7 @@ function transform_pde_system!(v, boundarymap, sys::PDESystem)
                 # Replace incompatible terms with auxiliary variables
             elseif badterm !== nothing
                 # mutates eqs, bcs and v, we remake a fresh v at the end
-                pmap = create_aux_variable!(eqs, bcs, boundarymap, v, badterm)
+                create_aux_variable!(eqs, bcs, boundarymap, v, badterm)
                 done = false
                 break
             end
@@ -227,7 +227,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, v, term)
     for dv in neweqops
         for iv in all_ivs(v)
             # if this is a periodic boundary, just add a new periodic condition
-            interfaces = filter_interfaces(boundarymap[operation(dv)][iv])
+            interfaces = filter_interfaces(boundarymap[dv][iv])
             @assert length(interfaces) == 0 "Interface BCs like $(interfaces[1].eq) are not yet supported in conjunction with system transformation, please transform manually if needed and set `should_transform=false` in the discretization. If you need this feature, please open an issue on GitHub."
 
             boundaries = boundarymap[dv][iv]
@@ -287,6 +287,13 @@ end
 
 function update_boundarymap!(boundarymap, bcs, newop, v) where {K,V}
     merge!(boundarymap, Dict(newop => Dict(iv => [] for iv in all_ivs(v))))
+    for bc1 in bcs
+        for bc2 in setdiff(bcs, [bc1])
+            if isequal(bc1.eq.lhs, bc2.eq.lhs) && isequal(bc1.eq.rhs, bc2.eq.rhs)
+                bcs = setdiff(bcs, [bc2])
+            end
+        end
+    end
     for bc in bcs
         push!(boundarymap[newop][bc.x], bc)
     end

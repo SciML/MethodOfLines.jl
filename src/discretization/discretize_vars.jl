@@ -148,7 +148,6 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
 end
 
-
 function Base.getproperty(s::DiscreteSpace, p::Symbol)
     if p in [:ū, :x̄, :time, :args, :x2i, :i2x]
         getfield(s.vars, p)
@@ -156,6 +155,8 @@ function Base.getproperty(s::DiscreteSpace, p::Symbol)
         getfield(s, p)
     end
 end
+
+get_grid_type(::DiscreteSpace{N,M,G}) where {N,M,G} = G
 
 prepare_dx(dx::Integer, xdomain, ::CenterAlignedGrid) = (xdomain[2] - xdomain[1])/(dx - 1)
 prepare_dx(dx::Integer, xdomain, ::EdgeAlignedGrid) = (xdomain[2] - xdomain[1])/dx

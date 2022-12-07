@@ -56,6 +56,8 @@ function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, 
         advection_rules = generate_winding_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
     elseif derivweights.advection_scheme isa WENOScheme
         advection_rules = generate_WENO_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
+        advection_rules = vcat(advection_rules,
+                               generate_winding_rules(II, s, depvars, derivweights, bmap, indexmap, terms; skip = [1]))
     else
         error("Unsupported advection scheme $(derivweights.advection_scheme) encountered.")
     end
