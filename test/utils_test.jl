@@ -142,7 +142,6 @@ end
     end
 
     @variables u(..)
-
     @to_kw u(t, x1, x2)
     @test isequal(u_kw(t=0), u(0, x1, x2))
 

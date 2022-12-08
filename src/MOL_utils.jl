@@ -326,8 +326,8 @@ function _to_kw(ex)
     end
     params = Expr(:parameters, kws...)
 
-    def_call_ex = Expr(:call, kw_fn_name, params)
-    block_call_ex = Expr(:call, u, xs...)
+    def_call_ex = Expr(:call, esc(kw_fn_name), params)
+    block_call_ex = Expr(:call, esc(u), xs...)
 
     body = Expr(:block, block_call_ex)
     Expr(:function, def_call_ex, body)
