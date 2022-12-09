@@ -216,6 +216,32 @@ function ModelingToolkit.ODEFunctionExpr(pdesys::PDESystem,discretization::Metho
     end
 end
 
+function SciMLBase.ODEFunction(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference; analytic=nothing, kwargs...)
+    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
+    try
+        if tspan === nothing
+            @assert true "Codegen for NonlinearSystems is not yet implemented."
+        else
+            simpsys = structural_simplify(sys)
+            if analytic !== nothing
+                analytic = analytic isa Dict ? analytic : Dict(analytic)
+                s = getfield(sys, :metadata).discrete_space
+                us = get_states(simpsys)
+                gridlocs = get_gridlocs.(us, (s,))
+                f_analytic = generate_function_from_gridloc(analytic, gridlocs, s)
+            end
+            return ODEFunction(simpsys; discretization.kwargs..., kwargs...)
+        end
+    catch e
+        println("The system of equations is:")
+        println(sys.eqs)
+        println()
+        println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
+        println()
+        rethrow(e)
+    end
+end
+
 function generate_code(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference,filename="generated_code_of_pdesys.jl")
     code = ODEFunctionExpr(pdesys, discretization)
     rm(filename; force = true)
