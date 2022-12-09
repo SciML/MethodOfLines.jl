@@ -12,6 +12,17 @@ function interface_errors(depvars, indvars, discretization)
     end
 end
 
+function check_boundarymap(boundarymap)
+    bs = filter_interfaces(flatten_vardict(boundarymap))
+    for b in bs
+        dx1 = discretization.dxs[Num(b.x)]
+        dx2 = discretization.dxs[Num(b.x2)]
+        if dx1 != dx2
+            throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
+        end
+    end
+end
+
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
     t = discretization.time
     disc_strategy = discretization.disc_strategy
@@ -31,17 +42,11 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
 
+    check_boundarymap(boundarymap)
+
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
         if has_interfaces(boundarymap)
-            bs = filter_interfaces(flatten_vardict(boundarymap))
-            for b in bs
-                dx1 = discretization.dxs[Num(b.x)]
-                dx2 = discretization.dxs[Num(b.x2)]
-                if dx1 != dx2
-                    throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
-                end
-            end
             @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
         else
             pdesys = transform_pde_system!(v, boundarymap, pdesys)
@@ -84,6 +89,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
+    # Seperate bcs and ics
     ics = t === nothing ? [] : mapreduce(u -> boundarymap[u][t], vcat, operation.(s.ū))
 
     bcmap = Dict(map(collect(keys(boundarymap))) do u
@@ -142,7 +148,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     return generate_system(alleqs, bceqs, ics, s.discvars, defaults, ps, tspan, metadata)
 end
 
-function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference; kwargs...)
+function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference; analytic = nothing, kwargs...)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
         simpsys = structural_simplify(sys)
@@ -156,7 +162,13 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
                 return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
             else
                 add_metadata!(get_metadata(simpsys), sys)
-                return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
+                prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
+                if analytic === nothing
+                    return prob
+                else
+                    f = ODEFunction(pdesys, discretization, analytic=analytic, discretization.kwargs..., kwargs...)
+                    return ODEProblem(f, prob.u0, prob.tspan; discretization.kwargs..., kwargs...)
+                end
             end
         end
     catch e
@@ -225,12 +237,12 @@ function SciMLBase.ODEFunction(pdesys::PDESystem, discretization::MethodOfLines.
             simpsys = structural_simplify(sys)
             if analytic !== nothing
                 analytic = analytic isa Dict ? analytic : Dict(analytic)
-                s = getfield(sys, :metadata).discrete_space
+                s = getfield(sys, :metadata).discretespace
                 us = get_states(simpsys)
-                gridlocs = get_gridlocs.(us, (s,))
-                f_analytic = generate_function_from_gridloc(analytic, gridlocs, s)
+                gridlocs = get_gridloc.(us, (s,))
+                f_analytic = generate_function_from_gridlocs(analytic, gridlocs, s)
             end
-            return ODEFunction(simpsys; discretization.kwargs..., kwargs...)
+            return ODEFunction(simpsys; analytic = f_analytic, discretization.kwargs..., kwargs...)
         end
     catch e
         println("The system of equations is:")
