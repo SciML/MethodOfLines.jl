@@ -12,7 +12,7 @@ function interface_errors(depvars, indvars, discretization)
     end
 end
 
-function check_boundarymap(boundarymap)
+function check_boundarymap(boundarymap, discretization)
     bs = filter_interfaces(flatten_vardict(boundarymap))
     for b in bs
         dx1 = discretization.dxs[Num(b.x)]
@@ -42,7 +42,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
 
-    check_boundarymap(boundarymap)
+    check_boundarymap(boundarymap, discretization)
 
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
