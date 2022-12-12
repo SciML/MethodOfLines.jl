@@ -27,3 +27,5 @@ disc = MOLFiniteDifference([x => 30], t, advection_scheme=WENOScheme())
 prob = discretize(pdesys, disc; analytic = [u(t, x) => analytic_u])
 
 sol = solve(prob, FBDF())
+
+@test prob.f.analytic !== nothing
