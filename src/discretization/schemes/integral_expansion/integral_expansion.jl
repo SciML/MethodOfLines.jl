@@ -25,7 +25,7 @@ function _euler_integral(II, s, jx, u, ufunc, dx::AbstractVector) #where {T,N,Wi
     return dot(weights, ufunc(u, Itap, x))
 end
 
-function euler_itegral(II, s, jx, u, ufunc)
+function euler_integral(II, s, jx, u, ufunc)
     dx = s.dxs[jx[2]]
     return _euler_integral(II, s, jx, u, ufunc, dx)
 end
