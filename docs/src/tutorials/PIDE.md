@@ -1,4 +1,4 @@
-#[Solving PIDEs (Integrals)](@ref integral)
+#[Solving PIDEs (Integrals)](@id integral)
 
 It is also possible to solve PIDEs with MethodOfLines.jl. At present only first order quadrature on a uniform grid for integrals from zero to an independent variable is implemented.
 
