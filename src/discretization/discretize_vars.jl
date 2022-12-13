@@ -88,6 +88,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     t = vars.time
     depvars = vars.ū
     nspace = length(x̄)
+
     # Discretize space
     axies = map(x̄) do x
         xdomain = vars.intervals[x]
@@ -221,7 +222,7 @@ map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} 
 
 # TODO: Allow other grids
 
-@inline function generate_grid(x̄, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:CenterAlignedGrid}
+@inline function generate_grid(x̄, axies, intervals, discretization::MOLFiniteDifference{G}) where {G<:CenterAlignedGrid}
     return axies
 end
 
@@ -229,7 +230,7 @@ end
     dict = Dict(axies)
     return map(x̄) do x
         xdomain = intervals[x]
-        dx = discretization.dxs[x]
+        dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
         if dict[x] isa StepRangeLen
             x => (xdomain[1]-dx/2):dx:(xdomain[2]+dx/2)
         else

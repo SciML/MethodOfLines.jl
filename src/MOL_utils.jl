@@ -311,3 +311,48 @@ function ex2term(term, v)
     name = Symbol("⟦" * string(term) * "⟧")
     return setname(similarterm(exdv, rename(operation(exdv), name), arguments(exdv)), name)
 end
+
+function _get_gridloc(s, ut, is...)
+    u = Sym{SymbolicUtils.FnType{Tuple, Real}}(nameof(operation(ut)))
+    u = operation(s.ū[findfirst(isequal(u), operation.(s.ū))])
+    args = remove(s.args[u], s.time)
+    gridloc = map(enumerate(args)) do (i, x)
+        s.grid[x][is[i]]
+    end
+    return (u, gridloc)
+end
+
+function get_gridloc(u, s)
+    if isequal(operation(u), getindex)
+        return _get_gridloc(s, arguments(u)...)
+    else
+        return (operation(u), [])
+    end
+end
+
+
+function generate_function_from_gridlocs(analyticmap, gridlocs, s)
+    is_t_first_map = Dict(map(s.ū) do u
+        operation(u) => (findfirst(x -> isequal(s.time, x), arguments(u)) == 1)
+    end)
+
+    opsmap = Dict(map(s.ū) do u
+        operation(u) => u
+    end)
+
+    fs_ = map(gridlocs) do (uop, x̄)
+        is_t_first = is_t_first_map[uop]
+        _f = analyticmap[opsmap[uop]]
+        if is_t_first
+            return t -> _f(t, x̄...)
+        else
+            return t -> _f(x̄..., t)
+        end
+    end
+
+    f = (u0, p, t) -> map(fs_) do f_
+        f_(t)
+    end
+
+    return f
+end
