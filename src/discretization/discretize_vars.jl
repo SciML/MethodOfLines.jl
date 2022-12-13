@@ -114,7 +114,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
             xdomain = vars.intervals[x]
             x => prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
         elseif discx isa AbstractVector # is an abstract vector but not StepRangeLen
-            x => [discx[i+1] - discx[i] for i in 1:length(discx)]
+            x => [discx[i+1] - discx[i] for i in 1:length(discx)-1]
         else
             throw(ArgumentError("Supplied d$x is not a Number or AbstractVector, got $(typeof(discretization.dxs[x])) for $x"))
         end
