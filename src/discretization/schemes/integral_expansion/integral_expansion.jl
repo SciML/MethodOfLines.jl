@@ -22,7 +22,7 @@ function _euler_integral(II, s, jx, u, ufunc, dx::AbstractVector) #where {T,N,Wi
     # dx for multiplication
 
     Itap = [(II - I1 * i) for i = (II[j]-1):-1:0] # Sum from current position till CartesianIndex 2
-    weights = [dx[i+1] * (i != (II[j] - 1)) for i = 0:(II[j]-1)]
+    weights = [dx[i+1] * (i != 1) for i = 0:(II[j]-1)]
 
     return dot(weights, ufunc(u, Itap, x))
 end
