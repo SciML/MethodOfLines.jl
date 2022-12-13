@@ -26,6 +26,7 @@ jobs:
           - Higher_Order
           - Stationary
           - DAE
+          - Integrals
           - Burgers
           - Brusselator
           - Mixed_Derivatives
