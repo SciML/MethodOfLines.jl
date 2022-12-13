@@ -2,7 +2,6 @@
 #TODO: Use the rectangle rule, trapezium rule and simpsons rule to approximate the integral.
 function _euler_integral(II, s, jx, u, ufunc, dx::Number) #where {T,N,Wind,DX<:Number}
     j, x = jx
-    ndims(u, s) != 1 && return Num(0)
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
     # dx for multiplication
@@ -16,7 +15,6 @@ end
 # Nonuniform dx
 function _euler_integral(II, s, jx, u, ufunc, dx::AbstractVector) #where {T,N,Wind,DX<:Number}
     j, x = jx
-    ndims(u, s) != 1 && return Num(0)
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
     # dx for multiplication
