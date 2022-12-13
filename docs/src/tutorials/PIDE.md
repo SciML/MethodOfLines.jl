@@ -9,7 +9,7 @@ Consider the following system:
  On the domain:
  ```math
  t \in (0, 2)
- x \in (0, 2)
+ x \in (0, 2\pi)
  ```
  With BCs and ICs:
  ```math
