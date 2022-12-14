@@ -288,7 +288,7 @@ function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, 
     push!(newbcs, newbc)
 end
 
-function update_boundarymap!(boundarymap, bcs, newop, v) where {K,V}
+function update_boundarymap!(boundarymap, bcs, newop, v)
     merge!(boundarymap, Dict(newop => Dict(iv => [] for iv in all_ivs(v))))
     for bc1 in bcs
         for bc2 in setdiff(bcs, [bc1])

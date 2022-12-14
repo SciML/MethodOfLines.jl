@@ -78,7 +78,7 @@ end
     @test cumuSumsol ≈ exact atol = 0.36
 end
 
-@test_broken begin #@testset "Test 01: Test integration over whole domain, (xmin .. xmax)" begin
+@testset "Test 01: Test integration over whole domain, (xmin .. xmax)" begin
     # test integrals
     @parameters t, x
     @variables integrand(..) cumuSum(..)
@@ -115,7 +115,7 @@ end
 
     exact = [asf(t_) for t_ in tdisc]
 
-    @test cumuSumsol ≈ exact atol = 0.36
+    @test cumuSumsol ≈ exact atol = 0.3
 end
 
 @test_broken begin #@testset "Test 02: Test integration with arbitrary limits, (a .. b)" begin
