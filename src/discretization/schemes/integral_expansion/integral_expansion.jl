@@ -38,7 +38,7 @@ end
 function whole_domain_integral(II, s, jx, u, ufunc)
     j, x = jx
     dx = s.dxs[x]
-    dist2max = length(s.discvars[u]) - II[j]
+    dist2max = length(s, x) - II[j]
     I1 = unitindex(ndims(u, s), j)
     Imax = II + dist2max * I1
     return _euler_integral(Imax, s, jx, u, ufunc, dx)
