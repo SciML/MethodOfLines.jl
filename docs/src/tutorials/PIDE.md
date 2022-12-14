@@ -51,3 +51,42 @@ solu = sol[u(t, x)]
 
 plot(sol[x], transpose(solu))
 ```
+
+To have an integral over the whole domain, be sure to wrap the integral in an auxiliary variable.
+Due to a limitation, the whole domain integral needs to have the same arguments as the integrand, but is constant in x. To use it in an equation one dimension lower, use a boundary value like integral(t, 0.0)
+
+```@example integrals2
+@parameters t, x
+@variables integrand(..) integral(..)
+Dt = Differential(t)
+Dx = Differential(x)
+xmin = 0.0
+xmax = 2.0 * pi
+
+Ix = Integral(x in DomainSets.ClosedInterval(xmin, xmax)) # integral over domain
+
+eqs = [integral(t, x) ~ Ix(integrand(t, x))
+    integrand(t, x) ~ t * cos(x)]
+
+bcs = [intergral(0, x) ~ 0.0,
+    integrand(0, x) ~ 0.0]
+
+domains = [t ∈ Interval(0.0, 1.0),
+    x ∈ Interval(xmin, xmax)]
+
+@named pde_system = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), integral(t, x)])
+
+asf(t) = 0.0
+
+disc = MOLFiniteDifference([x => 120], t)
+
+prob = discretize(pde_system, disc)
+
+sol = solve(prob, Tsit5())
+
+xdisc = sol[x]
+tdisc = sol[t]
+
+integralsol = sol[integral(t, x)]
+exact = [asf(t_) for t_ in tdisc, x_ in xdisc]
+```
