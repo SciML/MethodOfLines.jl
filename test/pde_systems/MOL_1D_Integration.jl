@@ -98,7 +98,7 @@ end
     domains = [t ∈ Interval(0.0, 1.0),
         x ∈ Interval(xmin, xmax)]
 
-    @named pde_system = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t)])
+    @named pde_system = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t, x)])
 
     asf(t) = 0.0
 
