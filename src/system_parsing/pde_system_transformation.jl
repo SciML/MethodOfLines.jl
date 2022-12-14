@@ -145,7 +145,9 @@ function descend_to_incompatible(term, v)
             end
         elseif op isa Integral
             if any(isequal(op.domain.variables), v.x̄)
-                if op.domain.domain.left == v.intervals[op.domain.variables][1] && isequal(op.domain.domain.right, Num(op.domain.variables))
+                euler = isequal(op.domain.domain.left, v.intervals[op.domain.variables][1]) && isequal(op.domain.domain.right, Num(op.domain.variables))
+                whole = isequal(op.domain.domain.left, v.intervals[op.domain.variables][1]) && isequal(op.domain.domain.right, v.intervals[op.domain.variables][2])
+                if any([euler, whole])
                     u = arguments(term)[1]
                     out = check_deriv_arg(u, v)
                     @assert out == (nothing, false) "Integral $term must be purely of a variable, got $u. Try wrapping the integral argument with an auxiliary variable."

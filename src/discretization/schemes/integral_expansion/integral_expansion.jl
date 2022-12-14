@@ -34,7 +34,7 @@ function euler_integral(II, s, jx, u, ufunc)
     return _euler_integral(II, s, jx, u, ufunc, dx)
 end
 
-# uniform case of an integral across the whole domain (xmin .. xmax)
+# An integral across the whole domain (xmin .. xmax)
 function whole_domain_integral(II, s, jx, u, ufunc)
     j, x = jx
     dx = s.dxs[x]

@@ -89,10 +89,10 @@ end
 
     Ix = Integral(x in DomainSets.ClosedInterval(xmin, xmax)) # integral over domain
 
-    eqs = [cumuSum(t) ~ Ix(integrand(t, x))
+    eqs = [cumuSum(t, x) ~ Ix(integrand(t, x))
         integrand(t, x) ~ t * cos(x)]
 
-    bcs = [cumuSum(0) ~ 0.0,
+    bcs = [cumuSum(0, x) ~ 0.0,
         integrand(0, x) ~ 0.0]
 
     domains = [t ∈ Interval(0.0, 1.0),
@@ -106,14 +106,15 @@ end
 
     prob = discretize(pde_system, disc)
 
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5())
 
     xdisc = sol[x]
     tdisc = sol[t]
 
-    cumuSumsol = sol[cumuSum(t)]
+    cumuSumsol = sol[cumuSum(t, x)]
 
-    exact = [asf(t_) for t_ in tdisc]
+
+    exact = [asf(t_) for t_ in tdisc, x_ in xdisc]
 
     @test cumuSumsol ≈ exact atol = 0.3
 end
