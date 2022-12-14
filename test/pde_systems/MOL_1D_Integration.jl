@@ -78,7 +78,7 @@ end
     @test cumuSumsol ≈ exact atol = 0.36
 end
 
-@test_broken begin #@testset "Test 01: Test integration over whole domain, (xmin .. xmax)" begin
+@testset "Test 01: Test integration over whole domain, (xmin .. xmax)" begin
     # test integrals
     @parameters t, x
     @variables integrand(..) cumuSum(..)
@@ -89,16 +89,16 @@ end
 
     Ix = Integral(x in DomainSets.ClosedInterval(xmin, xmax)) # integral over domain
 
-    eqs = [cumuSum(t) ~ Ix(integrand(t, x))
+    eqs = [cumuSum(t, x) ~ Ix(integrand(t, x))
         integrand(t, x) ~ t * cos(x)]
 
-    bcs = [cumuSum(0) ~ 0.0,
+    bcs = [cumuSum(0, x) ~ 0.0,
         integrand(0, x) ~ 0.0]
 
     domains = [t ∈ Interval(0.0, 1.0),
         x ∈ Interval(xmin, xmax)]
 
-    @named pde_system = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t)])
+    @named pde_system = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t, x)])
 
     asf(t) = 0.0
 
@@ -106,16 +106,17 @@ end
 
     prob = discretize(pde_system, disc)
 
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5())
 
     xdisc = sol[x]
     tdisc = sol[t]
 
-    cumuSumsol = sol[cumuSum(t)]
+    cumuSumsol = sol[cumuSum(t, x)]
 
-    exact = [asf(t_) for t_ in tdisc]
 
-    @test cumuSumsol ≈ exact atol = 0.36
+    exact = [asf(t_) for t_ in tdisc, x_ in xdisc]
+
+    @test cumuSumsol ≈ exact atol = 0.3
 end
 
 @test_broken begin #@testset "Test 02: Test integration with arbitrary limits, (a .. b)" begin
