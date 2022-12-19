@@ -15,28 +15,30 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
     # Extract Interior
     interior = interiormap.I[pde]
-
     # Generate the discrete form ODEs for the interior
-    eqs = vec(map(interior) do II
-        boundaryrules = if length(boundaryvalfuncs) > 0
-            mapreduce(f -> f(II), vcat, boundaryvalfuncs)
-        else
-            []
-        end
-        rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, bcmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
-        try
-            substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
-        catch e
-            println("A scheme has been incorrectly applied to the following equation: $pde.\n")
-            println("The following rules were constructed at index $II:")
-            display(rules)
-            rethrow(e)
-        end
-
-    end)
+    eqs = if length(interior) == 0
+        II = CartesianIndex()
+        discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
+    else
+        vec(map(interior) do II
+            discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
+        end)
+    end
     push!(alleqs, eqs)
 end
 
+function discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
+    boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs, init = [])
+    rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, bcmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
+    try
+        return substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
+    catch e
+        println("A scheme has been incorrectly applied to the following equation: $pde.\n")
+        println("The following rules were constructed at index $II:")
+        display(rules)
+        rethrow(e)
+    end
+end
 function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, metadata)
     t = metadata.discretespace.time
     name = metadata.pdesys.name

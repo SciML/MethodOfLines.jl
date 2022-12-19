@@ -133,7 +133,9 @@ function newindex(u_, II, s, indexmap)
 end
 
 @inline function safe_vcat(a, b)
-    if length(a) == 0
+    if length(a) == 0 && length(b) == 0
+        return []
+    elseif length(a) == 0
         return b
     elseif length(b) == 0
         return a

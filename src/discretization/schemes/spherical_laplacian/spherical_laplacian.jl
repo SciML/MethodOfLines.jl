@@ -17,7 +17,7 @@ function spherical_diffusion(innerexpr, II, derivweights, s, bs, depvars, r, u)
     # What to replace parameter x with given I
     _rsubs(x, I) = x => s.grid[x][I[s.x2i[x]]]
     # Full rules for substituting parameters in the inner expression
-    rsubs(I) = vcat([v => s.discvars[v][I] for v in depvars], [_rsubs(x, I) for x in s.x̄])
+    rsubs(I) = safe_vcat([v => s.discvars[v][I] for v in depvars], [_rsubs(x, I) for x in s.x̄])
     # Discretization func for u
     ufunc_u(v, I, x) = s.discvars[v][I]
 
@@ -35,14 +35,14 @@ function spherical_diffusion(innerexpr, II, derivweights, s, bs, depvars, r, u)
 end
 
 @inline function generate_spherical_diffusion_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
-    rules = reduce(vcat, [vec([@rule *(~~a, 1 / (r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][r]), depvars, r, u), ~b...)
-                               for r in params(u, s)]) for u in depvars])
+    rules = reduce(safe_vcat, [vec([@rule *(~~a, 1 / (r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][r]), depvars, r, u), ~b...)
+                               for r in params(u, s)]) for u in depvars], init = [])
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][r]), depvars, r, u))
-                                           for r in params(u, s)]) for u in depvars]))
+    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][r]), depvars, r, u))
+                                           for r in params(u, s)]) for u in depvars], init = []))
 
-    rules = vcat(rules, reduce(vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][r]), depvars, r, u)
-                                           for r in params(u, s)]) for u in depvars]))
+    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][r]), depvars, r, u)
+                                           for r in params(u, s)]) for u in depvars], init = []))
 
     spherical_diffusion_rules = []
     for t in terms
