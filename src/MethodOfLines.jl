@@ -30,6 +30,7 @@ include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
 
 include("discretization/discretize_vars.jl")
+include("MOL_symbolic_utils.jl")
 include("MOL_utils.jl")
 include("system_parsing/interior_map.jl")
 

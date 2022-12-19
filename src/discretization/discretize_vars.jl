@@ -184,7 +184,7 @@ Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 Here `indexmap` maps the arguments of `u` in `s` to the their ordering. Return a subindex
 of `II` that corresponds to only the spatial arguments of `u`.
 """
-@inline function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
+function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     # We need to construct a new index as indices may be of different size
     length(params(u, s)) == 0 && return CartesianIndex()
     !all(x -> haskey(indexmap, x), params(u, s)) && return II

@@ -63,7 +63,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II - shift(boundary), s, [], (j, x_), u, ufunc)]
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
-    integralvs = filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.devars)
+    integralvs = filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars)
     integralvs = filter(v -> length(arguments(v)) == length(args), integralvs)
     integralvs = filter(v -> all(x -> any(y -> isequal(x, y), args), arguments(v)), integralvs)
 
@@ -110,7 +110,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     depvarbcmaps = [u_ => s.discvars[u][II]]
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
-    integralvs = filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.devars)
+    integralvs = filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars)
     integralvs = filter(v -> length(arguments(v)) == length(args), integralvs)
     integralvs = filter(v -> all(x -> any(y -> isequal(x, y), args), arguments(v)), integralvs)
 
@@ -158,7 +158,9 @@ Pads the boundaries with extrapolation equations, extrapolated with 6th order la
 Reuses `central_difference` as this already dispatches the correct stencil, given a `DerivativeOperator` which contains the correct weights.
 """
 function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
-    args = remove(arguments(u), s.time)
+    args = params(u, s)
+    length(args) == 0 && return
+
     lowerextents, upperextents = interiormap.stencil_extents[pde]
     vlower = interiormap.lower[pde]
     vupper = interiormap.upper[pde]
@@ -202,6 +204,7 @@ end
 
 @inline function generate_corner_eqs!(bceqs, s, interiormap, N, u)
     interior = interiormap.I[interiormap.pde[u]]
+    ndims(u, s) == 0 && return
     sd(i, j) = selectdim(interior, j, i)
     domain = setdiff(s.Igrid[u], interior)
     II1 = unitindices(N)
