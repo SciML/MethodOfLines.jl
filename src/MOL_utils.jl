@@ -356,3 +356,26 @@ function generate_function_from_gridlocs(analyticmap, gridlocs, s)
 
     return f
 end
+
+
+function newindex(u_, II, s, indexmap)
+    u = depvar(u_, s)
+    args_ = remove(arguments(u_), s.time)
+    args = params(u, s)
+    is = map(enumerate(args_)) do (j, x)
+        if haskey(indexmap, x)
+            II[indexmap[x]]
+        elseif safe_unwrap(x) isa Number
+            if isequal(x, s.axies[args[j]][1])
+                1
+            elseif isequal(x, s.axies[args[j]][end])
+                length(s, args[j])
+            else
+                error("Boundary value $u_ is not defined at the boundary of the domain, or problem with index adaptation, please post an issue.")
+            end
+        else
+            error("Invalid boundary value found $u_, or problem with index adaptation, please post an issue.")
+        end
+    end
+    return CartesianIndex(is...)
+end
