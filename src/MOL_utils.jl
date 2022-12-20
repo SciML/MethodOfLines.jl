@@ -129,7 +129,8 @@ function newindex(u_, II, s, indexmap)
             error("Invalid boundary value found $u_, or problem with index adaptation, please post an issue.")
         end
     end
-    return CartesianIndex(is...)
+    II = CartesianIndex(is...)
+    return II
 end
 
 @inline function safe_vcat(a, b)

@@ -61,15 +61,19 @@ function wd_integral_Idx(II::CartesianIndex, s::DiscreteSpace, u, x, indexmap)
     # We need to construct a new index as indices may be of different size
     length(params(u, s)) == 0 && return CartesianIndex()
     # A hack using the boundary value re-indexing function to get an index that will work
-    newindex(substitute(u, [x => s.axies[x][end]]), II, s, indexmap)
+    u_ = substitute(u, [x => s.axies[x][end]])
+    II = newindex(u_, II, s, indexmap)
     return II
 end
 
 @inline function generate_whole_domain_integration_rules(II::CartesianIndex, s::DiscreteSpace, depvars, indexmap, terms)
     ufunc(u, I, x) = s.discvars[u][I]
 
-    wholedomainrules = reduce(safe_vcat, [[Integral(x in DomainSets.ClosedInterval(s.vars.intervals[x][1], s.vars.intervals[x][2]))(u) => whole_domain_integral(wd_integral_Idx(II, s, u, x, indexmap), s, (x2i(s, u, x), x), u, ufunc)
-                                      for x in params(u, s)]
-                                     for u in depvars], init = [])
+    wholedomainrules = reduce(safe_vcat,
+                              [[Integral(x in DomainSets.ClosedInterval(s.vars.intervals[x][1], s.vars.intervals[x][2]))(u) =>
+                                    whole_domain_integral(wd_integral_Idx(II, s, u, x, indexmap), s, (x2i(s, u, x), x), u, ufunc)
+                                for x in filter(x -> !haskey(indexmap, x), params(u, s))]
+                               for u in depvars],
+                              init = [])
     return wholedomainrules
 end
