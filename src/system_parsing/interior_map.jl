@@ -60,11 +60,7 @@ function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G,D}) w
     args = remove(arguments(u), s.time)
 
     ret = s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
-    if !(ret isa CartesianIndices)
-        return CartesianIndices((0,))
-    else
-        return ret
-    end
+    return ret
 end
 
 function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G, D}) where {G, D<:ArrayDiscretization}
