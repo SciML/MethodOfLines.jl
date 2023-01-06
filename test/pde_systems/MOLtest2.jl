@@ -212,11 +212,6 @@ end
 end
 
 @testset "Integrals in BCs" begin
-    using ModelingToolkit
-    using MethodOfLines
-    using DomainSets
-    using OrdinaryDiffEq
-
     β = 0.0005
     γ = 0.25
     amin = 0.0
