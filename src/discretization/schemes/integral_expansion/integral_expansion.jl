@@ -60,7 +60,6 @@ end
 function wd_integral_Idx(II::CartesianIndex, s::DiscreteSpace, u, x, indexmap)
     # We need to construct a new index as indices may be of different size
     length(params(u, s)) == 0 && return CartesianIndex()
-    @show u
     # A hack using the boundary value re-indexing function to get an index that will work
     u_ = substitute(u, [x => s.axies[x][end]])
     II = newindex(u_, II, s, indexmap)
