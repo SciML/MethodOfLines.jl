@@ -138,7 +138,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
             u => collect(first(@variables $sym[uaxes...]))
         elseif isequal(SymbolicUtils.arguments(u), [t])
-            u => fill(first(@variables($sym(t))), ()) #Create a 0-dimensional array
+            u => fill(u, ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
             u => collect(first(@variables $sym(t)[uaxes...]))
