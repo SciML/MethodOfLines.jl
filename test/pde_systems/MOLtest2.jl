@@ -247,3 +247,39 @@ end
     sol = solve(prob, FBDF())
 
 end
+
+@testset "Dt in BCs" begin
+    # Parameters, variables, and derivatives
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    # 1D PDE and boundary conditions
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ 20,
+        Dt(u(t, 0)) ~ 100, # Heat source
+        Dt(u(t, 1)) ~ 0] # Zero flux
+
+    # Space and time domains
+    domains = [t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0)]
+
+    # PDE system
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # Method of lines discretization
+    dx = 0.1
+    order = 2
+    discretization = MOLFiniteDifference([x => dx], t)
+
+    # Convert the PDE problem into an ODE problem
+    prob = discretize(pdesys, discretization)
+
+    # Solve ODE problem
+    sol = solve(prob, Rodas4(), saveat=0.2)
+
+    discrete_x = sol[x]
+    discrete_t = sol[t]
+    solu = sol[u(t, x)] # Temperature should increase with time
+end
