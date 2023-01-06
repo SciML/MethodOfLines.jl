@@ -210,3 +210,76 @@ end
     println("Discretization:")
     prob = discretize(pdesys, discretization)
 end
+
+@testset "Integrals in BCs" begin
+    β = 0.0005
+    γ = 0.25
+    amin = 0.0
+    amax = 40.0
+
+    @parameters t a
+    @variables S(..) I(..) R(..)
+    Dt = Differential(t)
+    Da = Differential(a)
+    Ia = Integral(a in DomainSets.ClosedInterval(amin, amax))
+
+
+    eqs = [Dt(S(t)) ~ -β * S(t) * Ia(I(a, t)),
+        Dt(I(a, t)) + Da(I(a, t)) ~ -γ * I(a, t),
+        Dt(R(t)) ~ γ * Ia(I(a, t))]
+
+    bcs = [
+        S(0) ~ 990.0,
+        I(0, t) ~ β * S(t) * Ia(I(a, t)),
+        I(a, 0) ~ 10.0 / 40.0,
+        R(0) ~ 0.0
+    ]
+
+    domains = [t ∈ (0.0, 40.0), a ∈ (0.0, 40.0)]
+
+    @named pde_system = PDESystem(eqs, bcs, domains, [a, t], [S(t), I(a, t), R(t)])
+
+    da = 40
+    discretization = MOLFiniteDifference([a => da], t)
+
+    prob = MethodOfLines.discretize(pde_system, discretization)
+
+    sol = solve(prob, FBDF())
+
+end
+
+@testset "Dt in BCs" begin
+    # Parameters, variables, and derivatives
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    # 1D PDE and boundary conditions
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ 20,
+        Dt(u(t, 0)) ~ 100, # Heat source
+        Dt(u(t, 1)) ~ 0] # Zero flux
+
+    # Space and time domains
+    domains = [t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0)]
+
+    # PDE system
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # Method of lines discretization
+    dx = 0.1
+    order = 2
+    discretization = MOLFiniteDifference([x => dx], t)
+
+    # Convert the PDE problem into an ODE problem
+    prob = discretize(pdesys, discretization)
+
+    # Solve ODE problem
+    sol = solve(prob, Rodas4(), saveat=0.2)
+
+    discrete_x = sol[x]
+    discrete_t = sol[t]
+    solu = sol[u(t, x)] # Temperature should increase with time
+end

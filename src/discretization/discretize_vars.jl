@@ -138,7 +138,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
             u => collect(first(@variables $sym[uaxes...]))
         elseif isequal(SymbolicUtils.arguments(u), [t])
-            u => fill(first(@variables($sym(t))), ()) #Create a 0-dimensional array
+            u => fill(u, ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
             u => collect(first(@variables $sym(t)[uaxes...]))
@@ -184,7 +184,7 @@ Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 Here `indexmap` maps the arguments of `u` in `s` to the their ordering. Return a subindex
 of `II` that corresponds to only the spatial arguments of `u`.
 """
-@inline function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
+function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     # We need to construct a new index as indices may be of different size
     length(params(u, s)) == 0 && return CartesianIndex()
     !all(x -> haskey(indexmap, x), params(u, s)) && return II

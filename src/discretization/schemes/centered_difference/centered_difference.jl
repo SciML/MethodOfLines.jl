@@ -56,9 +56,9 @@ This is a catch all ruleset, as such it does not use @rule. Any even ordered der
 """
 @inline function generate_cartesian_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
     central_ufunc(u, I, x) = s.discvars[u][I]
-    return reduce(vcat, [reduce(vcat, [[(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap), s, filter_interfaces(bcmap[operation(u)][x]), (x2i(s, u, x), x), u, central_ufunc) for d in (
+    return reduce(safe_vcat, [reduce(safe_vcat, [[(Differential(x)^d)(u) => central_difference(derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap), s, filter_interfaces(bcmap[operation(u)][x]), (x2i(s, u, x), x), u, central_ufunc) for d in (
         let orders = derivweights.orders[x]
             orders[iseven.(orders)]
         end
-    )] for x in params(u, s)]) for u in depvars])
+    )] for x in params(u, s)], init = []) for u in depvars], init = [])
 end

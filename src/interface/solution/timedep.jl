@@ -23,7 +23,7 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
                     if i !== nothing
                         sol[i, :]
                     else
-                        SciMLBase.observed(sol, discu[I], :)
+                        SciMLBase.observed(sol, safe_unwrap(discu[I]), :)
                     end
                 end
                 # Correct placement of time axis

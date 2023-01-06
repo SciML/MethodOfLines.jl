@@ -89,16 +89,16 @@ end
 
     Ix = Integral(x in DomainSets.ClosedInterval(xmin, xmax)) # integral over domain
 
-    eqs = [cumuSum(t, x) ~ Ix(integrand(t, x))
+    eqs = [cumuSum(t) ~ Ix(integrand(t, x))
         integrand(t, x) ~ t * cos(x)]
 
-    bcs = [cumuSum(0, x) ~ 0.0,
+    bcs = [cumuSum(0) ~ 0.0,
         integrand(0, x) ~ 0.0]
 
     domains = [t ∈ Interval(0.0, 1.0),
         x ∈ Interval(xmin, xmax)]
 
-    @named pde_system = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t, x)])
+    @named pde_system = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t)])
 
     asf(t) = 0.0
 
@@ -111,10 +111,10 @@ end
     xdisc = sol[x]
     tdisc = sol[t]
 
-    cumuSumsol = sol[cumuSum(t, x)]
+    cumuSumsol = sol[cumuSum(t)]
 
 
-    exact = [asf(t_) for t_ in tdisc, x_ in xdisc]
+    exact = [asf(t_) for t_ in tdisc]
 
     @test cumuSumsol ≈ exact atol = 0.3
 end
