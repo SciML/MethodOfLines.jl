@@ -62,12 +62,11 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
 
     depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II - shift(boundary), s, [], (j, x_), u, ufunc)]
 
-    # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
+   # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars)
-    integralvs = filter(v -> length(arguments(v)) == length(args), integralvs)
-    integralvs = filter(v -> all(x -> any(y -> isequal(x, y), args), arguments(v)), integralvs)
+    # @show integralvs
 
-    integralbcmaps = generate_whole_domain_integration_rules(IIold, s, integralvs, indexmap, nothing)
+    integralbcmaps = generate_whole_domain_integration_rules(IIold, s, integralvs, indexmap, nothing, x_)
 
     if boundary isa HigherOrderInterfaceBoundary
         u__ = boundary.u2
@@ -110,10 +109,9 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     depvarbcmaps = [u_ => s.discvars[u][II]]
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
-    integralvs = filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars)
-    # @show integralvs
-
-    integralbcmaps = generate_whole_domain_integration_rules(IIold, s, integralvs, indexmap, nothing)
+    integralvs = unwrap.(filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars))
+    @show indexmap
+    integralbcmaps = generate_whole_domain_integration_rules(IIold, s, integralvs, indexmap, nothing, x_)
 
     # Deal with the other relevant variables if boundary isa InterfaceBoundary
     if boundary isa HigherOrderInterfaceBoundary

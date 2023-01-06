@@ -210,3 +210,45 @@ end
     println("Discretization:")
     prob = discretize(pdesys, discretization)
 end
+
+@testset "Integrals in BCs" begin
+    using ModelingToolkit
+    using MethodOfLines
+    using DomainSets
+    using OrdinaryDiffEq
+
+    β = 0.0005
+    γ = 0.25
+    amin = 0.0
+    amax = 40.0
+
+    @parameters t a
+    @variables S(..) I(..) R(..)
+    Dt = Differential(t)
+    Da = Differential(a)
+    Ia = Integral(a in DomainSets.ClosedInterval(amin, amax))
+
+
+    eqs = [Dt(S(t)) ~ -β * S(t) * Ia(I(a, t)),
+        Dt(I(a, t)) + Da(I(a, t)) ~ -γ * I(a, t),
+        Dt(R(t)) ~ γ * Ia(I(a, t))]
+
+    bcs = [
+        S(0) ~ 990.0,
+        I(0, t) ~ β * S(t) * Ia(I(a, t)),
+        I(a, 0) ~ 10.0 / 40.0,
+        R(0) ~ 0.0
+    ]
+
+    domains = [t ∈ (0.0, 40.0), a ∈ (0.0, 40.0)]
+
+    @named pde_system = PDESystem(eqs, bcs, domains, [a, t], [S(t), I(a, t), R(t)])
+
+    da = 40
+    discretization = MOLFiniteDifference([a => da], t)
+
+    prob = MethodOfLines.discretize(pde_system, discretization)
+
+    sol = solve(prob, FBDF())
+
+end
