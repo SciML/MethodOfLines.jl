@@ -3,7 +3,7 @@ using LinearAlgebra
 using SciMLBase
 using DiffEqBase
 using ModelingToolkit
-using ModelingToolkit: operation, istree, arguments, variable, get_metadata
+using ModelingToolkit: operation, istree, arguments, variable, get_metadata, get_states
 using SymbolicUtils, Symbolics
 using Symbolics: wrap, unwrap, solve_for, expand_derivatives, diff2term, setname, rename,
     similarterm, symtype, ArrayOp, ArrayMaker, scalarize
@@ -33,6 +33,7 @@ include("discretization/derivative_operator.jl")
 
 # Utils
 include("discretization/array_form/stencil_utils.jl")
+include("MOL_symbolic_utils.jl")
 include("MOL_utils.jl")
 include("broadcast_substitute.jl")
 
@@ -64,6 +65,7 @@ include("discretization/schemes/half_offset_centred_difference.jl")
 include("discretization/schemes/nonlinear_laplacian/nonlinear_laplacian.jl")
 include("discretization/schemes/spherical_laplacian/spherical_laplacian.jl")
 include("discretization/schemes/WENO/WENO.jl")
+include("discretization/schemes/integral_expansion/integral_expansion.jl")
 
 # Array Schemes
 include("discretization/schemes/centered_difference/centered_difference_array.jl")

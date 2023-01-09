@@ -1,5 +1,5 @@
 """
-Replace the PDESystem with an equivalent PDESystem which is compatible with MethodOfLines, mutates boundarymap, pmap and v
+Replace the PDESystem with an equivalent PDESystem which is compatible with MethodOfLines, mutates boundarymap and v
 
 Modified copilot explanation:
 
@@ -23,7 +23,7 @@ function transform_pde_system!(v, boundarymap, sys::PDESystem)
                 # Replace incompatible terms with auxiliary variables
             elseif badterm !== nothing
                 # mutates eqs, bcs and v, we remake a fresh v at the end
-                pmap = create_aux_variable!(eqs, bcs, boundarymap, v, badterm)
+                create_aux_variable!(eqs, bcs, boundarymap, v, badterm)
                 done = false
                 break
             end
@@ -143,6 +143,21 @@ function descend_to_incompatible(term, v)
             else
                 throw(ArgumentError("Variable derived with respect to is not an independent variable in ivs, got $(op.x) in $(term)"))
             end
+        elseif op isa Integral
+            if any(isequal(op.domain.variables), v.x̄)
+                euler = isequal(op.domain.domain.left, v.intervals[op.domain.variables][1]) && isequal(op.domain.domain.right, Num(op.domain.variables))
+                whole = isequal(op.domain.domain.left, v.intervals[op.domain.variables][1]) && isequal(op.domain.domain.right, v.intervals[op.domain.variables][2])
+                if any([euler, whole])
+                    u = arguments(term)[1]
+                    out = check_deriv_arg(u, v)
+                    @assert out == (nothing, false) "Integral $term must be purely of a variable, got $u. Try wrapping the integral argument with an auxiliary variable."
+                    return (nothing, nothing, false)
+                else
+                    throw(ArgumentError("Integration Domain only supported for integrals from start of iterval to the variable, got $(op.domain.domain) in $(term)"))
+                end
+            else
+                throw(ArgumentError("Integral must be with respect to the independent variable in its upper-bound, got $(op.domain.variables) in $(term)"))
+            end
         end
         for arg in SU.arguments(term)
             res = descend_to_incompatible(arg, v)
@@ -217,7 +232,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, v, term)
     for dv in neweqops
         for iv in all_ivs(v)
             # if this is a periodic boundary, just add a new periodic condition
-            interfaces = filter_interfaces(boundarymap[operation(dv)][iv])
+            interfaces = filter_interfaces(boundarymap[dv][iv])
             @assert length(interfaces) == 0 "Interface BCs like $(interfaces[1].eq) are not yet supported in conjunction with system transformation, please transform manually if needed and set `should_transform=false` in the discretization. If you need this feature, please open an issue on GitHub."
 
             boundaries = boundarymap[dv][iv]
@@ -275,8 +290,15 @@ function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, 
     push!(newbcs, newbc)
 end
 
-function update_boundarymap!(boundarymap, bcs, newop, v) where {K,V}
+function update_boundarymap!(boundarymap, bcs, newop, v)
     merge!(boundarymap, Dict(newop => Dict(iv => [] for iv in all_ivs(v))))
+    for bc1 in bcs
+        for bc2 in setdiff(bcs, [bc1])
+            if isequal(bc1.eq.lhs, bc2.eq.lhs) && isequal(bc1.eq.rhs, bc2.eq.rhs)
+                bcs = setdiff(bcs, [bc2])
+            end
+        end
+    end
     for bc in bcs
         push!(boundarymap[newop][bc.x], bc)
     end

@@ -1,7 +1,7 @@
 name = "MethodOfLines"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 authors = ["Alex Jones, <alex.lemony@gmail.com>"]
-version = "0.7.0"
+version = "0.8.0"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
@@ -22,7 +22,7 @@ TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 [compat]
 Combinatorics = "1"
 DiffEqBase = "6"
-DomainSets = "0.5"
+DomainSets = "0.5, 0.6"
 IfElse = "0.1"
 Interpolations = "0.14"
 Latexify = "0.15"

@@ -2,7 +2,6 @@
 function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata) where {T}
     try
         odesys = sol.prob.f.sys
-
         pdesys = metadata.pdesys
         discretespace = metadata.discretespace
 
@@ -24,7 +23,7 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
                     if i !== nothing
                         sol[i, :]
                     else
-                        SciMLBase.observed(sol, discu[I], :)
+                        SciMLBase.observed(sol, safe_unwrap(discu[I]), :)
                     end
                 end
                 # Correct placement of time axis
