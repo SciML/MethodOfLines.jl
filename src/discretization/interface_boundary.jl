@@ -4,61 +4,40 @@ struct RefCartesianIndex{N, AType} <: Base.AbstractCartesianIndex{N}
     RefCartesianIndex(I::CartesianIndex{N}, A = nothing) where {N} = new{N, typeof(A)}(I, A)
 end
 
-Base.getindex(A::Array, IR::RefCartesianIndex) = IR.A === nothing ? A[IR.I] : IR.A[IR.I]
+Base.getindex(A::AbstractArray, IR::RefCartesianIndex) = IR.A === nothing ? A[IR.I] : IR.A[IR.I]
 Base.getindex(I::RefCartesianIndex, i::Int) = I.I[i]
 
 
-function Base.getindex(A::Array, Is::Vector{<:RefCartesianIndex})
+function Base.getindex(A::AbstractArray, Is::Vector{<:RefCartesianIndex})
     map(Is) do I
         A[I]
     end
 end
 
-Base.:+(I::RefCartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I.I + J.I, I.A)
-Base.:-(I::RefCartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I.I - J.I, I.A)
 Base.:+(I::RefCartesianIndex, J::CartesianIndex) = RefCartesianIndex(I.I + J, I.A)
 Base.:-(I::RefCartesianIndex, J::CartesianIndex) = RefCartesianIndex(I.I - J, I.A)
 Base.:+(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I + J.I, J.A)
 Base.:-(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I - J.I, J.A)
 
-(b::InterfaceBoundary)(I, s, jx) = wrapinterface(I, s, b, jx)
-            (b::AbstractBoundary)(I, s, jx) = I
+(b::InterfaceBoundary)(I, s, j) = wrapinterface(I, s, b, j)
+            (b::AbstractBoundary)(I, s, j) = I
 
-function bwrap(I, bs, s, jx)
+function bwrap(I, bs, s, j)
     for b in bs
-        I = b(I, s, jx)
+        I = b(I, s, j)
     end
     return I
 end
 
-@inline function _wrapperiodic(I, N, j, l)
-    I1 = unitindex(N, j)
-    # -1 because of the relation u[1] ~ u[end]
-    if I[j] <= 1
-        I = I + I1 * (l - 1)
-    elseif I[j] > l
-        I = I - I1 * (l - 1)
-    end
-    return I
-end
-
-"""
-Allow stencils indexing over periodic boundaries. Index through this function.
-"""
-
-
-function wrapinterface(I::RefCartesianIndex{N,Nothing}, s::DiscreteSpace, b::InterfaceBoundary, jx) where {N}
-    j, x = jx
+@inline function wrapinterface(I::RefCartesianIndex{N,Nothing}, s::DiscreteSpace, b::InterfaceBoundary, j) where {N}
     return _wrapinterface(I.I, s, b, j)
 end
 
-@inline function wrapinterface(I::RefCartesianIndex, s::DiscreteSpace, ::InterfaceBoundary, jx)
+@inline function wrapinterface(I::RefCartesianIndex, s::DiscreteSpace, ::InterfaceBoundary, j)
     return I
 end
 
-function wrapinterface(I, s, b::InterfaceBoundary, jx)
-    j, x = jx
-
+@inline function wrapinterface(I, s, b::InterfaceBoundary, j)
     return _wrapinterface(I, s, b, j)
 end
 

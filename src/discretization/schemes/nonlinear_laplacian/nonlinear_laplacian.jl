@@ -26,7 +26,7 @@ where `finitediff(u, i)` is the finite difference at the interpolated point `i` 
 
 And so on.
 """
-function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace, bs, depvars, x, u)
+function cartesian_nonlinear_laplacian(expr, II::CartesianIndex, derivweights, s::DiscreteSpace{N}, bs, depvars, x, u) where {N}
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     # See scheme 1, namely the term without the 1/r dependence. See also #354 and #371 in DiffEqOperators, the previous home of this package.
     N = ndims(u, s)
@@ -79,6 +79,44 @@ end
     rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u) / ~a)) => cartesian_nonlinear_laplacian(1 / ~a, Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][x]), depvars, x, u) for x in params(u, s)]) for u in depvars], init = []))
 
     rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(b..., c..., cartesian_nonlinear_laplacian(1 / ~a, Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][x]), depvars, x, u)) for x in params(u, s)]) for u in depvars], init = []))
+
+    nonlinlap_rules = []
+    for t in terms
+        for r in rules
+            if r(t) !== nothing
+                push!(nonlinlap_rules, t => r(t))
+            end
+        end
+    end
+    return nonlinlap_rules
+end
+
+########################################################################################
+# Stencil interface
+########################################################################################
+
+#TODO: Decouple this from old implementation
+
+function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::DiscreteSpace{N}, b, depvars, x, u) where {N}
+    args = params(u, s)
+    interior = get_interior(u, s, interior)
+    is = get_is(u, s)
+
+    II = CartesianIndex(wrap.(is)...)
+
+    deriv_expr = cartesian_nonlinear_laplacian(expr, II, derivweights, s, b, depvars, x, u)
+
+    return FillArrayOp(deriv_expr, is, interior)
+end
+
+@inline function generate_nonlinlap_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
+    rules = reduce(vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c..., cartesian_nonlinear_laplacian(*(a..., b...), interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars])
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u) / ~a)) => cartesian_nonlinear_laplacian(1 / ~a, interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars]))
+
+    rules = vcat(rules, reduce(vcat, [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(b..., c..., cartesian_nonlinear_laplacian(1 / ~a, interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u)) for x in params(u, s)]) for u in depvars]))
 
     nonlinlap_rules = []
     for t in terms
