@@ -9,13 +9,14 @@ Used to unpack the solution.
           MOLFiniteDifference object.
 - `pdesys`: a PDESystem object, used in the discretization.
 """
-struct MOLMetadata{hasTime, Ds,Disc,PDE, M, Strat} <: SciMLBase.AbstractDiscretizationMetadata{hasTime}
+struct MOLMetadata{hasTime, Ds, Disc, PDE, Cpx, M, Strat} <: SciMLBase.AbstractDiscretizationMetadata{hasTime}
     discretespace::Ds
     disc::Disc
     pdesys::PDE
+    complexmap::Cpx
     use_ODAE::Bool
     metadata::M
-    function MOLMetadata(discretespace, disc, pdesys, use_ODAE, metadata = nothing)
+    function MOLMetadata(discretespace, disc, pdesys, complexmap, use_ODAE, metadata = nothing)
         metaref = Ref{Any}()
         metaref[] = metadata
         if discretespace.time isa Nothing
@@ -24,10 +25,10 @@ struct MOLMetadata{hasTime, Ds,Disc,PDE, M, Strat} <: SciMLBase.AbstractDiscreti
             hasTime = Val(true)
         end
         return new{hasTime, typeof(discretespace),
-                   typeof(disc), typeof(pdesys),
+                   typeof(disc), typeof(pdesys), typeof(complexmap),
                    typeof(metaref), typeof(disc.disc_strategy)}(discretespace,
-                                                                                 disc, pdesys, use_ODAE,
-                                                                                 metaref)
+                                                                disc, pdesys, complexmap,
+                                                                use_ODAE, metaref)
     end
 end
 

@@ -23,7 +23,13 @@ function (sol::SciMLBase.PDESolution{T,N,S,D})(args...;
             sol.interp[dv](args[is]...)
         end
     end
-    return sol.interp[dv](args...)
+    if iscomplex(sol)
+        symargs = arguments(safe_unwrap(dv))
+        redv, imdv = sol.disc_data_complexmap[dv]
+        return sol.interp[Num(redv(symargs...))](args...) .+ im * sol.interp[Num(imdv(symargs...))](args...)
+    else
+        return sol.interp[dv](args...)
+    end
 end
 
 Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D},
@@ -41,7 +47,13 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
         A.ivdomain[iiv]
     elseif SciMLBase.issymbollike(sym) && dv !== nothing && isequal(sym, dv)
-        A.u[sym]
+        if iscomplex(A)
+            symargs = arguments(safe_unwrap(dv))
+            redv, imdv = sol.disc_data_complexmap[operation(safe_unwrap(dv))]
+            A.u[Num(redv(symargs...))] .+ im * A.u[Num(imdv(symargs...))]
+        else
+            A.u[sym]
+        end
     else
         error("Invalid indexing of solution. $sym not found in solution.")
     end
@@ -62,7 +74,13 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
         A.ivdomains[iiv][args...]
     elseif SciMLBase.issymbollike(sym) && dv !== nothing && isequal(sym, dv)
-        A.u[sym][args...]
+        if iscomplex(A)
+            symargs = arguments(safe_unwrap(dv))
+            redv, imdv = sol.disc_data_complexmap[operation(safe_unwrap(dv))]
+            A.u[Num(redv(symargs...))][args...] .+ im * A.u[Num(imdv(symargs...))][args...]
+        else
+            A.u[sym][args...]
+        end
     else
         error("Invalid indexing of solution")
     end
@@ -75,7 +93,12 @@ function Base.display(pdesol::SciMLBase.PDESolution{T,N,S,D}) where {T, N, S, D 
     println("    $(pdesol.retcode)")
     println("  Dependent variables:")
     for key in keys(pdesol.u)
-        println("    $(key): $(size(pdesol.u[key])) sized solution")
+        println("    $(key): $(size(pdesol.u[key]))")
+        if iscomplex(pdesol)
+            print(" sized complex solution")
+        else
+            print(" sized solution")
+        end
     end
     println("  Domain:")
     for (i, xdisc) in enumerate(pdesol.ivdomain)

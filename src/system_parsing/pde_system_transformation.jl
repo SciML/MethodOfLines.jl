@@ -303,3 +303,72 @@ function update_boundarymap!(boundarymap, bcs, newop, v)
         push!(boundarymap[newop][bc.x], bc)
     end
 end
+
+function handle_complex(pdesys)
+    eqs = pdesys.eqs
+    if any(eq -> (eq isa Vector) || hascomplex(eq), eqs)
+        dvmaps = map(pdesys.dvs) do dv
+            args = arguments(dv)
+            dv = operation(safe_unwrap(dv))
+            resym = Symbol("Re"*string(dv))
+            imsym = Symbol("Im"*string(dv))
+            redv = collect(first(@variables $resym(..)))
+            imdv = collect(first(@variables $imsym(..)))
+            redv = operation(unwrap(redv(args...)))
+            imdv = operation(unwrap(imdv(args...)))
+            (dv => redv, dv => imdv)
+        end
+        redvmaps = map(dvmaps) do dvmap
+            dvmap[1]
+        end
+        imdvmaps = map(dvmaps) do dvmap
+            dvmap[2]
+        end
+        dvmaps = Dict(map(dvmaps) do dvmap
+            dvmap[1].first => (dvmap[1].second, dvmap[2].second)
+        end)
+
+        eqs = mapreduce(vcat, eqs) do eq
+            eq = split_complex(eq)
+            if eq isa Vector
+                eq1 = eq[1]
+                eq2 = eq[2]
+                eq1 = substitute(eq1, redvmaps)
+                eq2 = substitute(eq2, imdvmaps)
+            else
+                eq1 = substitute(eq, redvmaps)
+                eq2 = substitute(eq, imdvmaps)
+            end
+            [eq1, eq2]
+        end
+
+        bcs = mapreduce(vcat, pdesys.bcs) do eq
+            eq = split_complex(eq)
+            if eq isa Vector
+                eq1 = eq[1]
+                eq2 = eq[2]
+                eq1 = substitute(eq1, redvmaps)
+                eq2 = substitute(eq2, imdvmaps)
+            else
+                eq1 = substitute(eq, redvmaps)
+                eq2 = substitute(eq, imdvmaps)
+            end
+            [eq1, eq2]
+        end
+
+        redvmaps = Dict(redvmaps)
+        imdvmaps = Dict(imdvmaps)
+
+        dvs = mapreduce(vcat, pdesys.dvs) do dv
+            dv = safe_unwrap(dv)
+            redv = redvmaps[operation(dv)](arguments(dv)...)
+            imdv = imdvmaps[operation(dv)](arguments(dv)...)
+            [redv, imdv]
+        end
+
+        pdesys = PDESystem(eqs, bcs, dvs, pdesys.ivs, pdesys.ps, name = pdesys.name)
+    else
+        dvmaps = nothing
+    end
+    return pdesys, dvmaps
+end

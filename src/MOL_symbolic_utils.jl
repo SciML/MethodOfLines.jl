@@ -244,3 +244,16 @@ function ex2term(term, v)
     name = Symbol("⟦" * string(term) * "⟧")
     return setname(similarterm(exdv, rename(operation(exdv), name), arguments(exdv)), name)
 end
+
+hascomplex(eq::Equation) = hascomplex(eq.lhs) || hascomplex(eq.rhs)
+hascomplex(term) = !isequal(term, real(term))
+
+split_complex(eq::Vector) = eq
+split_complex(eq::Equation) = split_complex(eq.lhs) .~ split_complex(eq.rhs)
+function split_complex(term)
+    if hascomplex(term)
+        return [real(term), imag(term)]
+    else
+        return [term, term]
+    end
+end

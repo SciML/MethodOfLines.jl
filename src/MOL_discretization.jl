@@ -26,6 +26,8 @@ end
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
     t = discretization.time
     disc_strategy = discretization.disc_strategy
+    pdesys, complexmap = handle_complex(pdesys)
+
     cardinalize_eqs!(pdesys)
 
     ############################
@@ -143,7 +145,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
     # Combine PDE equations and BC equations
-    metadata = MOLMetadata(s, discretization, pdesys, use_ODAE)
+    metadata = MOLMetadata(s, discretization, pdesys, complexmap, use_ODAE)
 
     return generate_system(alleqs, bceqs, ics, s.discvars, defaults, ps, tspan, metadata)
 end
