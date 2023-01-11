@@ -304,16 +304,30 @@ function update_boundarymap!(boundarymap, bcs, newop, v)
     end
 end
 
+function split_complex_eq(eq, redvmaps, imdvmaps)
+    eq = split_complex(eq)
+    if eq isa Vector
+        eq1 = eq[1]
+        eq2 = eq[2]
+        eq1 = substitute(eq1.lhs, redvmaps) ~ substitute(eq1.rhs, redvmaps)
+        eq2 = substitute(eq2.lhs, imdvmaps) ~ substitute(eq2.rhs, imdvmaps)
+    else
+        eq1 = substitute(eq.lhs, redvmaps) ~ substitute(eq.rhs, redvmaps)
+        eq2 = substitute(eq.lhs, imdvmaps) ~ substitute(eq.rhs, imdvmaps)
+    end
+    return [eq1, eq2]
+end
+
 function handle_complex(pdesys)
     eqs = pdesys.eqs
     if any(eq -> (eq isa Vector) || hascomplex(eq), eqs)
         dvmaps = map(pdesys.dvs) do dv
-            args = arguments(dv)
+            args = arguments(safe_unwrap(dv))
             dv = operation(safe_unwrap(dv))
             resym = Symbol("Re"*string(dv))
             imsym = Symbol("Im"*string(dv))
-            redv = collect(first(@variables $resym(..)))
-            imdv = collect(first(@variables $imsym(..)))
+            redv = first(@variables $resym(..))
+            imdv = first(@variables $imsym(..))
             redv = operation(unwrap(redv(args...)))
             imdv = operation(unwrap(imdv(args...)))
             (dv => redv, dv => imdv)
@@ -329,31 +343,11 @@ function handle_complex(pdesys)
         end)
 
         eqs = mapreduce(vcat, eqs) do eq
-            eq = split_complex(eq)
-            if eq isa Vector
-                eq1 = eq[1]
-                eq2 = eq[2]
-                eq1 = substitute(eq1, redvmaps)
-                eq2 = substitute(eq2, imdvmaps)
-            else
-                eq1 = substitute(eq, redvmaps)
-                eq2 = substitute(eq, imdvmaps)
-            end
-            [eq1, eq2]
+            split_complex_eq(eq, redvmaps, imdvmaps)
         end
 
         bcs = mapreduce(vcat, pdesys.bcs) do eq
-            eq = split_complex(eq)
-            if eq isa Vector
-                eq1 = eq[1]
-                eq2 = eq[2]
-                eq1 = substitute(eq1, redvmaps)
-                eq2 = substitute(eq2, imdvmaps)
-            else
-                eq1 = substitute(eq, redvmaps)
-                eq2 = substitute(eq, imdvmaps)
-            end
-            [eq1, eq2]
+            split_complex_eq(eq, redvmaps, imdvmaps)
         end
 
         redvmaps = Dict(redvmaps)
@@ -370,5 +364,6 @@ function handle_complex(pdesys)
     else
         dvmaps = nothing
     end
+    @show pdesys
     return pdesys, dvmaps
 end
