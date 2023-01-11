@@ -283,3 +283,81 @@ end
     discrete_t = sol[t]
     solu = sol[u(t, x)] # Temperature should increase with time
 end
+
+@testset "ODE connected to PDE at boundary" begin
+    @variables u(..) v(..) w(..)
+    @parameters t, r
+    Dt = Differential(t)
+    Dr = Differential(r)
+    Drr = Differential(r)^2
+
+    R = 1.0
+    k₁ = 0.1
+    k₂ = 0.1
+    α = 1.0
+
+    u0 = 0.3
+    v0 = 0.1
+    w0 = 0.2
+
+    eq = [Dt(u(r, t)) ~ α * Drr(u(r, t)),
+        Dt(v(t)) ~ -k₁ * u(R, t) * v(t) + k₂ * w(t),
+        Dt(w(t)) ~ k₁ * u(R, t) * v(t) - k₂ * w(t)
+    ]
+
+    bcs = [Dr(u(0, t)) ~ 0.0,
+        Dr(u(R, t)) ~ (-k₁ * u(R, t) * v(t) + k₂ * w(t)) / α,
+        u(r, 0) ~ u0,
+        v(0) ~ v0,
+        w(0) ~ w0
+    ]
+
+    domains = [t ∈ Interval(0.0, 10.0),
+        r ∈ Interval(0.0, R)]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [r, t], [u(r, t), v(t), w(t)])
+
+    dr = 0.1
+
+    disc = MOLFiniteDifference([r => dr], t)
+
+    prob = discretize(pdesys, disc)
+
+    sol = solve(prob, Rodas4P())
+
+    discrete_r = sol[r]
+    discrete_t = sol[t]
+    solu = sol[u(r, t)]
+    solv = sol[v(t)]
+    solw = sol[w(t)]
+end
+
+@testset "ODE connected to PDE" begin
+
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Dx^2
+
+    # 1D PDE and boundary conditions
+    eqs = [Dt(u(t, x)) ~ Dxx(u(t, x)) + v(t), # This is the only line that is significantly changed from the test.
+        Dt(v(t)) ~ -v(t)]
+
+    bcs = [u(0, x) ~ sin(x),
+        v(0) ~ 1,
+        u(t, 0) ~ 0,
+        Dx(u(t, 1)) ~ exp(-t) * cos(1)]
+    domains = [t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t)])
+    discretization = MOLFiniteDifference([x => 0.01], t)
+    prob = discretize(pdesys, discretization)
+
+    sol = solve(prob, Tsit5())
+
+    discrete_x = sol[x]
+    discrete_t = sol[t]
+    solu = sol[u(t, x)]
+    solv = sol[v(t)]
+end
