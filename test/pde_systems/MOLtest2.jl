@@ -331,3 +331,26 @@ end
     solv = sol[v(t)]
     solw = sol[w(t)]
 end
+
+@testset "ODE connected to PDE" begin
+
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Dx^2
+
+    # 1D PDE and boundary conditions
+    eqs = [Dt(u(t, x)) ~ Dxx(u(t, x)) + v(t), # This is the only line that is significantly changed from the test.
+        Dt(v(t)) ~ -v(t)]
+
+    bcs = [u(0, x) ~ sin(x),
+        v(0) ~ 1,
+        u(t, 0) ~ 0,
+        Dx(u(t, 1)) ~ exp(-t) * cos(1)]
+    domains = [t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t)])
+    discretization = MOLFiniteDifference([x => 0.01], t)
+    prob = discretize(pdesys, discretization)
+end
