@@ -29,6 +29,7 @@ end
 
 function discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
     boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs, init = [])
+    @show boundaryrules
     rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, bcmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
     try
         return substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)

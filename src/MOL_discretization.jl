@@ -108,33 +108,17 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         depvars = filter(u -> !any(map(x -> x isa Number, arguments(u))), depvars)
 
-        # Read the independent variables
-        # ignore if the only argument is [t]
-        indvars = Set(filter(xs -> !isequal(xs, [t]), map(arguments, depvars)))
-        # get all parameters in the equation
-        allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
-        # Handle the case where there are no independent variables apart from time
-        if isempty(allx̄)
-            rules = varmaps(s, depvars, CartesianIndex(), Dict([]))
-            push!(alleqs, substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules))
+        eqvar = interiormap.var[pde]
+
+        # * Assumes that all variables in the equation have same dimensionality except edgevals
+        args = params(eqvar, s)
+        indexmap = Dict([args[i] => i for i in 1:length(args)])
+        if disc_strategy isa ScalarizedDiscretization
+            # Generate the equations for the interior points
+            discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
+                depvars, s, derivweights, indexmap)
         else
-            # make sure there is only one set of independent variables per equation
-            @assert length(allx̄) == 1
-            pdex̄ = first(allx̄)
-            @assert length(indvars) == 1
-
-            eqvar = interiormap.var[pde]
-
-            # * Assumes that all variables in the equation have same dimensionality except edgevals
-            args = params(eqvar, s)
-            indexmap = Dict([args[i] => i for i in 1:length(args)])
-            if disc_strategy isa ScalarizedDiscretization
-                # Generate the equations for the interior points
-                discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                    depvars, s, derivweights, indexmap)
-            else
-                throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
-            end
+            throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
         end
     end
 
