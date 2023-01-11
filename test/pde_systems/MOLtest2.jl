@@ -353,4 +353,11 @@ end
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t)])
     discretization = MOLFiniteDifference([x => 0.01], t)
     prob = discretize(pdesys, discretization)
+
+    sol = solve(prob, Tsit5())
+
+    discrete_x = sol[x]
+    discrete_t = sol[t]
+    solu = sol[u(t, x)]
+    solv = sol[v(t)]
 end
