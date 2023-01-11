@@ -39,7 +39,7 @@ function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivwei
     end
 end
 
-function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:EdgeAlignedGrid}
+function boundary_value_maps(II::CartesianIndex, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:EdgeAlignedGrid}
     u_, x_ = getvars(boundary)
 
     ufunc(v, I, x) = s.discvars[v][I]
@@ -90,7 +90,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     return vcat(depvarderivbcmaps, depvarbcmaps, integralbcmaps)
 end
 
-function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:CenterAlignedGrid}
+function boundary_value_maps(II::CartesianIndex, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:CenterAlignedGrid}
     u_, x_ = getvars(boundary)
     ufunc(v, I, x) = s.discvars[v][I]
 
@@ -136,13 +136,13 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
 end
 
 
-function generate_bc_eqs(s::DiscreteSpace{N,M,G}, boundaryvalfuncs, boundary::AbstractTruncatingBoundary, interiormap, indexmap) where {N, M, G}
+function generate_bc_eqs(s::DiscreteSpace{N,M,G}, boundaryvalfuncs, boundary::AbstractEquationBoundary, interiormap, indexmap) where {N, M, G}
     bc = boundary.eq
     return vec(map(edge(s, boundary, interiormap)) do II
         boundaryvalrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
-        vmaps = varmaps(s, boundary.depvars, II, indexmap)
-        varrules = axiesvals(s, depvar(boundary.u, s), boundary.x, II)
-        rules = vcat(boundaryvalrules, vmaps, varrules)
+        varrules = varmaps(s, boundary.depvars, II, indexmap)
+        valrules = axiesvals(s, depvar(boundary.u, s), boundary.x, II)
+        rules = vcat(boundaryvalrules, varrules, valrules)
 
         substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
     end)
