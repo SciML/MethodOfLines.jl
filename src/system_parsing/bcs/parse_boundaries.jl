@@ -14,6 +14,12 @@ abstract type AbstractUpperBoundary <: AbstractTruncatingBoundary end
 
 abstract type AbstractExtendingBoundary <: AbstractBoundary end
 
+struct LowerBoundaryTrait end
+
+struct UpperBoundaryTrait end
+
+trait(b::AbstractBoundary) = isupper(b) ? UpperBoundaryTrait() : LowerBoundaryTrait()
+
 struct LowerBoundary <: AbstractLowerBoundary
     u
     x
@@ -47,7 +53,7 @@ struct UpperBoundary <: AbstractUpperBoundary
     end
 end
 
-const AbstractEquationBoundary = Union{LowerBoundary, UpperBoundary}
+const AbstractEquationBoundary = Union{LowerBoundary, UpperBoundary, HigherOrderInterfaceBoundary}
 
 struct LowerInterpolatingBoundary <: AbstractLowerBoundary
     u
@@ -219,12 +225,6 @@ Creates a map of boundaries for each variable to be used later when discretizing
 """
 function parse_bcs(bcs, v::VariableMap, orders)
     t = v.time
-    depvar_ops = v.depvar_ops
-
-    # Create some rules to match which bundary/variable a bc concerns
-    # * Assume that the term of the condition is applied additively and has no multiplier/divisor/power etc.
-    u0 = []
-    bceqs = []
     ## BC matching rules, returns the variable and parameter the bc concerns
 
     lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(v, orders)
