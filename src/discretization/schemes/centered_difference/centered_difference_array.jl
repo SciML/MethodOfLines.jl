@@ -26,7 +26,7 @@ function central_difference(D::DerivativeOperator, interior, s, bs, jx, u, udisc
     end
     boundaryoppairs = vcat(lowerops, upperops)
 
-    interiorop = interior_deriv(D, udisc, half_range(D.stencil_length), j, is, interior, bs)
+    interiorop = interior_deriv(D, udisc, s, half_range(D.stencil_length), j, is, interior, bs)
 
     return Construct_ArrayMaker(interior, vcat(Tuple(interior) => interiorop, boundaryoppairs))
 end
