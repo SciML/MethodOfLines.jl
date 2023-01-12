@@ -50,9 +50,25 @@ function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, deriv
 
     depvarbcmaps = [v_ => bc_deriv(derivweights.interpmap[x_], boundary, s.discvars[u], j, get_is(v_, s), get_interior(v_, s, interior), get_ranges(v_, s)) for v_ in boundary_vs]
 
+    # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
+    integralvs = unwrap.(filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars))
+
+    integralbcmaps = generate_whole_domain_integration_rules(interior, s, integralvs, indexmap, nothing, x_)
+
+    if boundary isa HigherOrderInterfaceBoundary
+        u__ = boundary.u2
+        x__ = boundary.x2
+
+        otherderivmaps = vec([(Differential(x__)^d)(u__) => bc_deriv(derivweights.halfoffsetmap[1][Differential(x__)^d], boundary, s.discvars[depvar(u__, s)], x2i(s, u__, x__), get_is(u__, s), get_interior(u__, s, interior), get_ranges(u__, s)) for d in derivweights.orders[x_]])
+
+        otherbcmaps = [u__ => bc_deriv(derivweights.interpmap[x__], boundary, s.discvars[depvar(u__, s)], x2i(s, u__, x__), get_is(u__, s), get_interior(u__, s, interior), get_ranges(u__, s)) for u__ in boundary_vs]
+        depvarderivbcmaps = vcat(depvarderivbcmaps, otherderivmaps)
+        depvarbcmaps = vcat(depvarbcmaps, otherbcmaps)
+    end
+
     varrules = varmaps(s, interior, non_boundary_vs)
 
-    return vcat(depvarderivbcmaps, depvarbcmaps, varrules)
+    return vcat(depvarderivbcmaps, depvarbcmaps, integralbcmaps, varrules)
 end
 
 function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, derivweights) where {N,M,G<:CenterAlignedGrid}
@@ -63,22 +79,36 @@ function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, deriv
 
     u = depvar(u_, s)
     args = params(u, s)
-    j = findfirst(isequal(x_), args)
 
-    xrule = [x_ => arguments(u_)[j]]
-    boundary_vs = map(s.ū) do v
-        substitute(v, xrule)
+    boundary_vs = filter(v -> any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars)
+    non_boundary_vs = filter(v -> any(x -> !(safe_unwrap(x) isa Number), arguments(v)), boundary.depvars)
+
+    depvarderivbcmaps = vec([(Differential(x_)^d)(v_) => bc_deriv(derivweights.map[Differential(x_)^d], boundary, s.discvars[depvar(v_, s)], x2i(s, v_, x_), get_is(v_, s), get_interior(v_, s, interior), get_ranges(v_, s)) for v_ in boundary_vs, d in derivweights.orders[x_]])
+
+    depvarbcmaps = [v_ => bc_var(boundary, s.discvars[depvar(v_, s)], x2i(s, v_, x_), get_is(v_, s), get_interior(v_, s, interior), get_ranges(v_, s)) for v_ in boundary_vs]
+
+    # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
+    integralvs = unwrap.(filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars))
+
+    integralbcmaps = generate_whole_domain_integration_rules(interior, s, integralvs, indexmap, nothing, x_)
+
+    if boundary isa HigherOrderInterfaceBoundary
+        u__ = boundary.u2
+        x__ = boundary.x2
+        otheru = depvar(u__, s)
+
+        j = x2i(s, otheru, x__)
+
+        otherderivmaps = vec([(Differential(x__)^d)(u__) => bc_deriv(derivweights.map[Differential(x__)^d], boundary, s.discvars[depvar(u__, s)], j, get_is(u__, s), get_interior(u__, s, interior), get_ranges(u__, s)) for d in derivweights.orders[x_]])
+
+        otherbcmaps = [u__ => bc_var(boundary, s.discvars[depvar(u__, s)], j, get_is(u__, s), get_interior(u__, s, interior), get_ranges(u__, s)) for u__ in boundary_vs]
+        depvarderivbcmaps = vcat(depvarderivbcmaps, otherderivmaps)
+        depvarbcmaps = vcat(depvarbcmaps, otherbcmaps)
     end
-    boundary_vs = filter(v -> any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary_vs)
-    non_boundary_vs = filter(v -> any(x -> !(safe_unwrap(x) isa Number), arguments(v)), boundary_vs)
-
-    depvarderivbcmaps = vec([(Differential(x_)^d)(v_) => bc_deriv(derivweights.map[Differential(x_)^d], boundary, s.discvars[depvar(v_, s)], j, get_is(v_, s), get_interior(v_, s, interior), get_ranges(v_, s)) for v_ in boundary_vs, d in derivweights.orders[x_]])
-
-    depvarbcmaps = [v_ => bc_var(boundary, s.discvars[depvar(v_, s)], j, get_is(v_, s), get_interior(v_, s, interior), get_ranges(v_, s)) for v_ in boundary_vs]
 
     varrules = varmaps(s, interior, non_boundary_vs)
 
-    return vcat(depvarderivbcmaps, depvarbcmaps, varrules)
+    return vcat(depvarderivbcmaps, depvarbcmaps, integralbcmaps, varrules)
 end
 
 function generate_bc_op_pair(s, b::AbstractEquationBoundary, interior, iboundary, derivweights)
