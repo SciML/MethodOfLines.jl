@@ -27,9 +27,9 @@ function _upwind_difference(D, interior, is, s,
         end
         interiorop = interior_deriv(D, udisc, s, 0:D.stencil_length-1, j, is, interior, b)
     end
-    boundaryoppairs = vcat(lowerops, upperops)
+    boundaryoppairs = safe_vcat(lowerops, upperops)
 
-    Construct_ArrayMaker(interior, vcat(Tuple(interior) => interiorop, boundaryoppairs))
+    Construct_ArrayMaker(interior, safe_vcat(Tuple(interior) => interiorop, boundaryoppairs))
 end
 
 """
@@ -68,9 +68,9 @@ end
                                         derivweights::DifferentialDiscretizer, pmap,
                                         indexmap, terms)
     # for all independent variables and dependant variables
-    rules = vcat(#Catch multiplication
-        reduce(vcat,
-               [reduce(vcat,
+    rules = safe_vcat(#Catch multiplication
+        reduce(safe_vcat,
+               [reduce(safe_vcat,
                        [[@rule *(~~a, $(Differential(x)^d)(u), ~~b) =>
                                  upwind_difference(*(~a..., ~b...), d, interior, s,
                                                    pmap.map[operation(u)][x], depvars,
@@ -79,12 +79,12 @@ end
                           for d in (let orders = derivweights.orders[x]
                                        orders[isodd.(orders)]
                                    end)]
-                         for x in params(u, s)])
-                for u in depvars]),
+                         for x in params(u, s)], init = [])
+                for u in depvars], init = []),
 
         #Catch division and multiplication, see issue #1
-        reduce(vcat,
-               [reduce(vcat,
+        reduce(safe_vcat,
+               [reduce(safe_vcat,
                        [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) =>
                                  upwind_difference(*(~a..., ~b...) / ~c, d, interior, s,
                                                    pmap.map[operation(u)][x], depvars,
@@ -93,8 +93,8 @@ end
                           for d in (let orders = derivweights.orders[x]
                                        orders[isodd.(orders)]
                                    end)]
-                         for x in params(u, s)])
-                for u in depvars])
+                         for x in params(u, s)], init = [])
+                for u in depvars], init = [])
     )
 
     wind_rules = []
@@ -108,8 +108,8 @@ end
         end
     end
 
-    return vcat(wind_rules, vec(mapreduce(vcat, depvars) do u
-        mapreduce(vcat, params(u, s)) do x
+    return safe_vcat(wind_rules, vec(mapreduce(safe_vcat, depvars) do u
+        mapreduce(safe_vcat, params(u, s), init = 0) do x
             j = x2i(s, u, x)
             is = get_is(u, s)
             uinterior = get_interior(u, s, interior)

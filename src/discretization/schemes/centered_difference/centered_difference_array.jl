@@ -24,16 +24,16 @@ function central_difference(D::DerivativeOperator, interior, s, bs, jx, u, udisc
             upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
         end
     end
-    boundaryoppairs = vcat(lowerops, upperops)
+    boundaryoppairs = safe_vcat(lowerops, upperops)
 
     interiorop = interior_deriv(D, udisc, s, half_range(D.stencil_length), j, is, interior, bs)
 
-    return Construct_ArrayMaker(interior, vcat(Tuple(interior) => interiorop, boundaryoppairs))
+    return Construct_ArrayMaker(interior, safe_vcat(Tuple(interior) => interiorop, boundaryoppairs))
 end
 
 @inline function generate_cartesian_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
-    return reduce(vcat,
-                  [reduce(vcat,
+    return reduce(safe_vcat,
+                  [reduce(safe_vcat,
                           [[(Differential(x)^d)(u) =>
                               central_difference(derivweights.map[Differential(x)^d],
                                                  interior, s, pmap.map[operation(u)][x],
@@ -41,6 +41,6 @@ end
                              for d in (let orders = derivweights.orders[x]
                                            orders[iseven.(orders)]
                                        end)]
-                           for x in params(u, s)])
-                    for u in depvars])
+                           for x in params(u, s)], init = [])
+                    for u in depvars], init = [])
 end
