@@ -78,9 +78,9 @@ function boundary_value_maps(II::CartesianIndex, s::DiscreteSpace{N,M,G}, bounda
         is = [is[1:j-1]..., 1, is[j:end]...]
         II = CartesianIndex(is...)
 
-        depvarderivbcmaps = [(Differential(x__)^d)(u__) => half_offset_centered_difference(derivweights.halfoffsetmap[1][Differential(x__)^d], II, s, [], (j, x__), otheru, ufunc) for d in derivweights.orders[x_]]
+        otherderivmaps = [(Differential(x__)^d)(u__) => half_offset_centered_difference(derivweights.halfoffsetmap[1][Differential(x__)^d], II, s, [], (j, x__), otheru, ufunc) for d in derivweights.orders[x_]]
 
-        depvarbcmaps = [u__ => half_offset_centered_difference(derivweights.interpmap[x__], II, s, [], (j, x__), otheru, ufunc)]
+        otherbcmaps = [u__ => half_offset_centered_difference(derivweights.interpmap[x__], II, s, [], (j, x__), otheru, ufunc)]
 
         depvarderivbcmaps = vcat(depvarderivbcmaps, otherderivmaps)
         depvarbcmaps = vcat(depvarbcmaps, otherbcmaps)
