@@ -8,9 +8,15 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
 
     # Generate the boundary conditions for the correct variable
     boundary_op_pairs = generate_bc_op_pairs(s, eqvarbcs, derivweights, interior)
+    boundary_rules = mapreduce(b -> boundary_value_rules(interior, s, b, derivweights),
+                               safe_vcat, flatten_vardict(bcmap), init = [])
+
     # Generate the discrete form ODEs for the interior
     pdeinterior = begin
-        rules = vcat(generate_finite_difference_rules(interior, s, depvars, pde, derivweights, bcmap, indexmap), arrayvalmaps(s, eqvar, depvars, interior))
+        rules = vcat(generate_finite_difference_rules(interior, s, depvars, pde,
+                                                      derivweights, bcmap, indexmap),
+                     boundary_rules,
+                     arrayvalmaps(s, eqvar, depvars, interior))
         if verbose
             println("Schemes Applied: The following rules were applied for the PDE $pde with the var $eqvar:")
         end
