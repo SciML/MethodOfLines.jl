@@ -67,7 +67,7 @@ function _wd_integral(interior, s, jx, u, udisc, dx::AbstractVector) #where {T,N
     taps = -1:0 .+ is[j]
     weights = fill(dx[is[j]-1] / 2, 2)
 
-    return IntegralArrayOp(weights, taps, lenx, udisc, j, is, interior)
+    return IntegralArrayOp(weights, taps, lenx, udisc, j, is, interior, true)
 end
 
 @inline function generate_euler_integration_rules(interior, s::DiscreteSpace, depvars, indexmap, terms)
