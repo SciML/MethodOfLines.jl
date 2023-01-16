@@ -7,9 +7,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
-    if GROUP == "All" || GROUP == "Convection_WENO"
-        @time @safetestset "MOLFiniteDifference Interface: Linear Convection, WENO Scheme." begin
-            include("pde_systems/MOL_1D_Linear_Convection_WENO.jl")
+    if GROUP == "All" || GROUP == "Integrals"
+        @time @safetestset "MOLFiniteDifference Interface: Integrals" begin
+            include("pde_systems/MOL_1D_Integration.jl")
         end
     end
 
@@ -45,6 +45,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         @time @safetestset "Fornberg" begin
             include("components/MOLfornberg_weights.jl")
         end
+        @time @safetestset "ODEFunction" begin
+            include("components/ODEFunction_test.jl")
+        end
         #@time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
     end
 
@@ -60,13 +63,21 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
-
-    if GROUP == "All" || GROUP == "Interface"
+    if GROUP == "All" || GROUP == "Sol_Interface"
         @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
             include("components/solution_interface.jl")
         end
+    end
+
+    if GROUP == "All" || GROUP == "MOL_Interface1"
         @time @safetestset "MOLFiniteDifference Interface" begin
-            include("pde_systems/MOLtest.jl")
+            include("pde_systems/MOLtest1.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "MOL_Interface2"
+        @time @safetestset "MOLFiniteDifference Interface" begin
+            include("pde_systems/MOLtest2.jl")
         end
     end
 
@@ -85,6 +96,12 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "Brusselator"
         @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
             include("pde_systems/brusselator_eq.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "Convection_WENO"
+        @time @safetestset "MOLFiniteDifference Interface: Linear Convection, WENO Scheme." begin
+            include("pde_systems/MOL_1D_Linear_Convection_WENO.jl")
         end
     end
 

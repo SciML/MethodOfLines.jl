@@ -12,6 +12,17 @@ function interface_errors(depvars, indvars, discretization)
     end
 end
 
+function check_boundarymap(boundarymap, discretization)
+    bs = filter_interfaces(flatten_vardict(boundarymap))
+    for b in bs
+        dx1 = discretization.dxs[Num(b.x)]
+        dx2 = discretization.dxs[Num(b.x2)]
+        if dx1 != dx2
+            throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
+        end
+    end
+end
+
 function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
     t = discretization.time
     disc_strategy = discretization.disc_strategy
@@ -30,6 +41,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
+
+    check_boundarymap(boundarymap, discretization)
 
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
@@ -52,9 +65,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
 
     pdeeqs = pdesys.eqs
     bcs = pdesys.bcs
-
-    # @show alldepvars
-    # @show allindvars
 
     ############################
     # Discretization of system
@@ -79,6 +89,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
+    # Seperate bcs and ics
     ics = t === nothing ? [] : mapreduce(u -> boundarymap[u][t], vcat, operation.(s.ū))
 
     bcmap = Dict(map(collect(keys(boundarymap))) do u
@@ -97,33 +108,17 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         depvars = filter(u -> !any(map(x -> x isa Number, arguments(u))), depvars)
 
-        # Read the independent variables
-        # ignore if the only argument is [t]
-        indvars = Set(filter(xs -> !isequal(xs, [t]), map(arguments, depvars)))
-        # get all parameters in the equation
-        allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
-        # Handle the case where there are no independent variables apart from time
-        if isempty(allx̄)
-            rules = varmaps(s, depvars, CartesianIndex(), Dict([]))
-            push!(alleqs, substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules))
+        eqvar = interiormap.var[pde]
+
+        # * Assumes that all variables in the equation have same dimensionality except edgevals
+        args = params(eqvar, s)
+        indexmap = Dict([args[i] => i for i in 1:length(args)])
+        if disc_strategy isa ScalarizedDiscretization
+            # Generate the equations for the interior points
+            discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
+                depvars, s, derivweights, indexmap)
         else
-            # make sure there is only one set of independent variables per equation
-            @assert length(allx̄) == 1
-            pdex̄ = first(allx̄)
-            @assert length(indvars) == 1
-
-            eqvar = interiormap.var[pde]
-
-            # * Assumes that all variables in the equation have same dimensionality except edgevals
-            args = params(eqvar, s)
-            indexmap = Dict([args[i] => i for i in 1:length(args)])
-            if disc_strategy isa ScalarizedDiscretization
-                # Generate the equations for the interior points
-                discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                    depvars, s, derivweights, indexmap)
-            else
-                throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
-            end
+            throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
         end
     end
 
@@ -137,21 +132,27 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     return generate_system(alleqs, bceqs, ics, s.discvars, defaults, ps, tspan, metadata)
 end
 
-function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
+function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference; analytic = nothing, kwargs...)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
         simpsys = structural_simplify(sys)
         if tspan === nothing
             add_metadata!(get_metadata(sys), sys)
-            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
+            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs..., kwargs...)
         else
             # Use ODAE if nessesary
             if getfield(sys, :metadata) isa MOLMetadata && getfield(sys, :metadata).use_ODAE
-                add_metadata!(get_metadata(simpsys), DAEProblem(simpsys; discretization.kwargs...))
-                return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
+                add_metadata!(get_metadata(simpsys), DAEProblem(simpsys; discretization.kwargs..., kwargs...))
+                return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
             else
                 add_metadata!(get_metadata(simpsys), sys)
-                return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
+                prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
+                if analytic === nothing
+                    return prob
+                else
+                    f = ODEFunction(pdesys, discretization, analytic=analytic, discretization.kwargs..., kwargs...)
+                    return ODEProblem(f, prob.u0, prob.tspan; discretization.kwargs..., kwargs...)
+                end
             end
         end
     catch e
@@ -200,6 +201,32 @@ function ModelingToolkit.ODEFunctionExpr(pdesys::PDESystem,discretization::Metho
         else
             simpsys = structural_simplify(sys)
             return ODEFunctionExpr(simpsys)
+        end
+    catch e
+        println("The system of equations is:")
+        println(sys.eqs)
+        println()
+        println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
+        println()
+        rethrow(e)
+    end
+end
+
+function SciMLBase.ODEFunction(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference; analytic=nothing, kwargs...)
+    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
+    try
+        if tspan === nothing
+            @assert true "Codegen for NonlinearSystems is not yet implemented."
+        else
+            simpsys = structural_simplify(sys)
+            if analytic !== nothing
+                analytic = analytic isa Dict ? analytic : Dict(analytic)
+                s = getfield(sys, :metadata).discretespace
+                us = get_states(simpsys)
+                gridlocs = get_gridloc.(us, (s,))
+                f_analytic = generate_function_from_gridlocs(analytic, gridlocs, s)
+            end
+            return ODEFunction(simpsys; analytic = f_analytic, discretization.kwargs..., kwargs...)
         end
     catch e
         println("The system of equations is:")

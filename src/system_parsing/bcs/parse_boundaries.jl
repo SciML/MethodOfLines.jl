@@ -126,6 +126,7 @@ isupper(::UpperBoundary) = true
 isupper(::InterfaceBoundary{IsUpper_u}) where {IsUpper_u} = IsUpper_u isa Val{true} ? true : false
 isupper(::HigherOrderInterfaceBoundary) = true
 
+flatten_vardict(bmps) = reduce(vcat, reduce(vcat, collect.(values.(collect(values(bmps))))))
 
 @inline function clip_interior!!(lower, upper, s, b::AbstractBoundary)
     # This x2i is correct
@@ -165,7 +166,7 @@ function _boundary_rules(v, orders, u, x, val)
     spacerules = [(Differential(x)^d)(operation(u)(args...)) => [operation(u)(args...), x, d] for d in reverse(orders[x])]
 
     if v.time !== nothing && x !== v.time
-        timerules = [Differential(v.time)(operation(u)(args...)) => [operation(u)(args...), v.time, d] for d in reverse(orders[v.time])]
+        timerules = [Differential(v.time)(operation(u)(args...)) => [operation(u)(args...), x, d] for d in reverse(orders[v.time])]
         return vcat(spacerules, timerules, varrule)
     else
         return vcat(spacerules, varrule)
@@ -212,7 +213,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
         local u_, u__, x_, x__
         isinterface = false
         interface_orders = []
-        for term in terms, r in reduce(vcat, reduce(vcat, collect.(values.(collect(values(lower_boundary_rules))))))
+        for term in terms, r in flatten_vardict(lower_boundary_rules)
             # Need to check the order, higher order should be discretized as a normal upper index
             # As zeroth order goes on the lower index. Needs a zeroth order interface to make sense,
             # but I assume that this will always be the case where there are higher order interfaces.
@@ -226,7 +227,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
                 end
                 # do it again for the upper end to check for periodic, but only check the current depvar and indvar
                 push!(interface_orders, order)
-                for term_ in setdiff(terms, [term]), r_ in reduce(vcat, reduce(vcat, collect.(values.(collect(values(upper_boundary_rules))))))
+                for term_ in setdiff(terms, [term]), r_ in flatten_vardict(upper_boundary_rules)
                     if subsmatch(term_, r_)
                         isinterface = true
                         u__, x__, order__ = r_.second
@@ -250,7 +251,7 @@ function parse_bcs(bcs, v::VariableMap, orders)
         end
         # repeat for upper boundary
         if boundary === nothing
-            for term in terms, r in reduce(vcat, reduce(vcat, collect.(values.(collect(values(upper_boundary_rules))))))
+            for term in terms, r in flatten_vardict(upper_boundary_rules)
                 if subsmatch(term, r)
                     u_, x_, order = r.second
                     boundary = UpperBoundary(u_, t, x_, order, bc, v)

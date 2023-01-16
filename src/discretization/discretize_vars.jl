@@ -88,6 +88,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     t = vars.time
     depvars = vars.ū
     nspace = length(x̄)
+
     # Discretize space
     axies = map(x̄) do x
         xdomain = vars.intervals[x]
@@ -113,7 +114,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
             xdomain = vars.intervals[x]
             x => prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
         elseif discx isa AbstractVector # is an abstract vector but not StepRangeLen
-            x => [discx[i+1] - discx[i] for i in 1:length(x)]
+            x => [discx[i+1] - discx[i] for i in 1:length(discx)-1]
         else
             throw(ArgumentError("Supplied d$x is not a Number or AbstractVector, got $(typeof(discretization.dxs[x])) for $x"))
         end
@@ -137,7 +138,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
             u => collect(first(@variables $sym[uaxes...]))
         elseif isequal(SymbolicUtils.arguments(u), [t])
-            u => fill(first(@variables($sym(t))), ()) #Create a 0-dimensional array
+            u => fill(u, ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
             u => collect(first(@variables $sym(t)[uaxes...]))
@@ -148,7 +149,6 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
 end
 
-
 function Base.getproperty(s::DiscreteSpace, p::Symbol)
     if p in [:ū, :x̄, :time, :args, :x2i, :i2x]
         getfield(s.vars, p)
@@ -156,6 +156,8 @@ function Base.getproperty(s::DiscreteSpace, p::Symbol)
         getfield(s, p)
     end
 end
+
+get_grid_type(::DiscreteSpace{N,M,G}) where {N,M,G} = G
 
 prepare_dx(dx::Integer, xdomain, ::CenterAlignedGrid) = (xdomain[2] - xdomain[1])/(dx - 1)
 prepare_dx(dx::Integer, xdomain, ::EdgeAlignedGrid) = (xdomain[2] - xdomain[1])/dx
@@ -182,7 +184,7 @@ Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 Here `indexmap` maps the arguments of `u` in `s` to the their ordering. Return a subindex
 of `II` that corresponds to only the spatial arguments of `u`.
 """
-@inline function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
+function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     # We need to construct a new index as indices may be of different size
     length(params(u, s)) == 0 && return CartesianIndex()
     !all(x -> haskey(indexmap, x), params(u, s)) && return II
@@ -220,7 +222,7 @@ map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} 
 
 # TODO: Allow other grids
 
-@inline function generate_grid(x̄, axies, domain, discretization::MOLFiniteDifference{G}) where {G<:CenterAlignedGrid}
+@inline function generate_grid(x̄, axies, intervals, discretization::MOLFiniteDifference{G}) where {G<:CenterAlignedGrid}
     return axies
 end
 
@@ -228,7 +230,7 @@ end
     dict = Dict(axies)
     return map(x̄) do x
         xdomain = intervals[x]
-        dx = discretization.dxs[x]
+        dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
         if dict[x] isa StepRangeLen
             x => (xdomain[1]-dx/2):dx:(xdomain[2]+dx/2)
         else

@@ -58,7 +58,9 @@ end
 
 function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
     args = remove(arguments(u), s.time)
-    return s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
+
+    ret = s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
+    return ret
 end
 
 function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G, D}) where {G, D<:ArrayDiscretization}
@@ -204,15 +206,14 @@ function getvars(pde, s)
         l = get_ranking!(varmap, pde.lhs, s.time, s)
         r = get_ranking!(varmap, pde.rhs, s.time, s)
         for u in s.ū
-            if varmap[u] > 0
-                varmap[u] += div(typemax(Int) + 1, 2) #Massively weight derivatives in time
+            if varmap[u] > 1
+                varmap[u] += div(typemax(Int), 2) #Massively weight derivatives in time
             end
         end
     end
     for x in s.x̄
         l = get_ranking!(varmap, pde.lhs, x, s)
         r = get_ranking!(varmap, pde.rhs, x, s)
-        split([l, r])
     end
     return varmap
 end
