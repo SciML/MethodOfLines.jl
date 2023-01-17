@@ -29,25 +29,6 @@ function whole_domain_integral(II, s, jx, u, udisc)
     return IntegralArrayOp(dx, udisc, j, is, interior, true)
 end
 
-function _wd_integral(interior, s, jx, u, udisc, dx::Number) #where {T,N,Wind,DX<:Number}
-    j, x = jx
-
-    interior = get_interior(u, s, interior)
-    is = get_is(u, s)
-    lenx = length(s, x)
-
-    taps(i) = (-1:0) .+ i
-    weights(i) = [dx / 2, dx / 2]
-
-    return IntegralArrayOp(weights, taps, lenx, udisc, j, is, interior)
-end
-
-function _wd_integral(interior, s, jx, u, udisc, dx::AbstractVector) #where {T,N,Wind,DX<:Number}
-    j, x = jx
-
-
-end
-
 @inline function generate_euler_integration_rules(interior, s::DiscreteSpace, depvars, indexmap, terms)
     eulerrules = reduce(safe_vcat, [[Integral(x in DomainSets.ClosedInterval(s.vars.intervals[x][1], Num(x)))(u) =>
                                          euler_integral(interior, s, (x2i(s, u, x), x), u, s.discvars[u])
