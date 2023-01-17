@@ -40,17 +40,17 @@ function prepare_boundary_ops(boundaryops, interior, j)
     end
 end
 
-function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, s, offsets, j, is, interior, bs) where {T,N,Wind,DX<:Number}
+function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, s, offsets, j, is, interior, bs, isx = false) where {T,N,Wind,DX<:Number}
     weights = D.stencil_coefs
     taps = offsets .+ is[j]
-    InteriorDerivArrayOp(weights, taps, udisc, s, j, is, interior, bs)
+    InteriorDerivArrayOp(weights, taps, udisc, s, j, is, interior, bs, isx)
 end
 
-function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, s, offsets, j, is, interior, bs) where {T,N,Wind,DX<:AbstractVector}
+function interior_deriv(D::DerivativeOperator{T,N,Wind,DX}, udisc, s, offsets, j, is, interior, bs, isx = false) where {T,N,Wind,DX<:AbstractVector}
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     weights = D.stencil_coefs[is[j]-D.boundary_point_count]
     taps = offsets .+ is[j]
-    InteriorDerivArrayOp(weights, taps, udisc, s, j, is, interior, bs)
+    InteriorDerivArrayOp(weights, taps, udisc, s, j, is, interior, bs, isx)
 end
 
 function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
@@ -76,7 +76,7 @@ function IntegralArrayOp(weights, taps, k, udisc, j, is, interior, iswd = false)
     if k == 1
         expr = Num(0)
     else
-        Is = map(taps) do tap
+        Is = map(taps(k)) do tap
             map(1:ndims(udisc)) do i
                 if i == j
                     tap
@@ -85,7 +85,7 @@ function IntegralArrayOp(weights, taps, k, udisc, j, is, interior, iswd = false)
                 end
             end
         end
-        expr = dot(weights, map(I -> udisc[I...], Is))
+        expr = dot(weights(k), map(I -> udisc[I...], Is))
     end
     # Don't reduce dimension of interior if its a whole domain integral
     symindices = setdiff(1:ndims(udisc), [j])
@@ -96,7 +96,7 @@ function IntegralArrayOp(weights, taps, k, udisc, j, is, interior, iswd = false)
     return FillArrayOp(expr, output_idx, interior[symindices]) .+ IntegralArrayOp(weights, taps, k-1, udisc, j, is, interior)
 end
 
-function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, bs)
+function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, bs, isx = false)
     # * I Possibly needs updating
     Is = map(taps) do tap
         _is = map(1:ndims(udisc)) do i
@@ -109,7 +109,8 @@ function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, 
         CartesianIndex(wrap.(_is)...)
     end
     # Wrap interfaces
-    Is = map(I -> bwrap(I, bs, s, j), Is)
+    Is = map(I -> bwrap(I, bs, s, j, isx), Is)
+
     expr = dot(weights, map(I -> udisc[I], Is))
     return FillArrayOp(expr, output_idx, interior)
 end
