@@ -66,7 +66,7 @@ end
 
 @inline function generate_winding_rules(interior, s::DiscreteSpace, depvars,
                                         derivweights::DifferentialDiscretizer, pmap,
-                                        indexmap, terms)
+                                        indexmap, terms, skip = [])
     # for all independent variables and dependant variables
     rules = safe_vcat(#Catch multiplication
         reduce(safe_vcat,
@@ -77,7 +77,7 @@ end
                                                    derivweights, (x2i(s, u, x), x), u,
                                                    s.discvars[u], indexmap)
                           for d in (let orders = derivweights.orders[x]
-                                       orders[isodd.(orders)]
+                                       setdiff(orders[isodd.(orders)], skip)
                                    end)]
                          for x in params(u, s)], init = [])
                 for u in depvars], init = []),
@@ -91,7 +91,8 @@ end
                                                    derivweights, (x2i(s, u, x), x), u,
                                                    s.discvars[u], indexmap)
                           for d in (let orders = derivweights.orders[x]
-                                       orders[isodd.(orders)]
+                                        setdiff(orders[isodd.(orders)], skip)
+
                                    end)]
                          for x in params(u, s)], init = [])
                 for u in depvars], init = [])
@@ -114,7 +115,8 @@ end
             is = get_is(u, s)
             uinterior = get_interior(u, s, interior)
             let orders = derivweights.orders[x]
-                oddorders = orders[isodd.(orders)]
+                oddorders = setdiff(orders[isodd.(orders)], skip)
+
                 # for all odd orders
                 if length(oddorders) > 0
                     map(oddorders) do d
