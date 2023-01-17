@@ -1,9 +1,6 @@
 function euler_integral(interior, s, jx, u, udisc)
     j, x = jx
     dx = s.dxs[x]
-    if dx isa Number
-        dx = fill(dx, (size(udisc, j),))
-    end
 
     interior = get_interior(u, s, interior)
     is = get_is(u, s)
@@ -19,9 +16,6 @@ end
 function whole_domain_integral(II, s, jx, u, udisc)
     j, x = jx
     dx = s.dxs[x]
-    if dx isa Number
-        dx = fill(dx, (size(udisc, j),))
-    end
 
     interior = get_interior(u, s, interior)
     is = get_is(u, s)
@@ -44,5 +38,6 @@ end
                                 for x in filter(x -> (!haskey(indexmap, x) | isequal(x, bvar)), params(u, s))]
                                for u in depvars],
                               init = [])
+
     return wholedomainrules
 end

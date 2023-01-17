@@ -13,7 +13,7 @@ function upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
 end
 
 function integral_op_pair(dx, udisc, j, is, interior, i)
-    prepare_boundary_op((IntegralArrayOp(dx, i, udisc, j, is, interior),
+    prepare_boundary_op((IntegralArrayOp(dx, udisc, i, j, is, interior),
             i), interior, j)
 end
 
@@ -73,24 +73,29 @@ end
 
 reduce_interior(interior, j) = first(interior[j]) == 1 ? [interior[1:j-1]..., 2:last(interior[j]), interior[j+1:end]...] : interior
 
-function trapezium_sum(ranges, udisc, is, j)
+function trapezium_sum(ranges, dx, udisc, is, j)
     N = ndims(udisc)
-    I1 = UnitIndex(N, j)
-    I = CartesianIndex(wrap.(is)...)
+    I1 = unitindex(N, j)
+    I = CartesianIndex(is...)
+    i = is[j]
     Im1 = I - I1
+    im1 = is[j] - 1
 
-    interior = reduce_interior(interior, j)
-    expr = (dx[Im1[j]]*udisc[Im1] + dx[I[j]]*udisc[I]) / 2
+    interior = reduce_interior(ranges, j)
+    if dx isa Number
+        expr = (dx*(udisc[Im1] + udisc[I]) / 2)
+    else
+        expr = (dx[im1]*udisc[Im1] + dx[i]*udisc[I]) / 2
+    end
 
     return FillArrayMaker(expr, is, ranges, interior)
 end
 
-
-function IntegralArrayOp(k, udisc, j, is, interior, iswd = false)
+function IntegralArrayOp(dx, udisc, k, j, is, interior, iswd = false)
     if iswd
         interior = [interior[1:j-1]..., 1:size(udisc, j), interior[j:end]...]
     end
-    trapop = trapezium_sum(interior, udisc, is, j)
+    trapop = trapezium_sum(interior, dx, udisc, is, j)
     op = sum(trapop[1:(k-first(interior[j])+1)], dims = j)
 
     return op
@@ -106,7 +111,7 @@ function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, 
                 output_idx[i]
             end
         end
-        CartesianIndex(wrap.(_is)...)
+        CartesianIndex(_is...)
     end
     # Wrap interfaces
     Is = map(I -> bwrap(I, bs, s, j, isx), Is)
@@ -117,7 +122,6 @@ end
 
 function FillArrayOp(expr, output_idx, interior)
     ranges = Dict(output_idx .=> interior) # hope this doesn't check bounds eagerly
-    @show ranges
     return ArrayOp(Array{symtype(expr),length(output_idx)},
                    output_idx, expr, +, nothing, ranges)
 end

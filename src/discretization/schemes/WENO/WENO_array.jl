@@ -9,7 +9,7 @@ function weno(interior, s::DiscreteSpace, wenoscheme::WENOScheme, bs, jx, u, dx:
     interior = get_interior(u, s, interior)
     is = get_is(u, s)
 
-    II = CartesianIndex(wrap.(is)...)
+    II = CartesianIndex(is...)
     I1 = unitindex(ndims(u, s), j)
 
     udisc = s.discvars[u]
