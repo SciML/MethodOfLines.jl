@@ -2,12 +2,8 @@
 # Stencil interface
 ########################################################################################
 
-#TODO: Decouple this from old implementation
-
-function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::DiscreteSpace{N}, bs, depvars, x, u) where {N}
-    args = params(u, s)
+function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::DiscreteSpace, bs, depvars, x, u)
     interior = get_interior(u, s, interior)
-    is = get_is(u, s)
 
     N = ndims(u, s)
     N == 0 && return Num(0)
@@ -25,9 +21,9 @@ function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::Discrete
     cliplen = lenx - 1
 
     innerderiv = half_offset_centered_difference(D_inner, interior, s, bs, jx, u, udisc, len)
-
-    interpvars = [v => half_offset_centered_difference(inner_interpolater, interior, s, bs, jx, v, s.discvars[v], len)]
-    interpparams = map(xpair -> xpair.first => half_offset_centered_difference(inner_interpolater, interior, s, bs, jx, x, xpair.second, len), gridvals(s, u, interior))
+    #TODO: Proper multi dimensional interpolation - splines?
+    interpvars = [v => half_offset_centered_difference(inner_interpolater, interior, s, bs, (x2i(s, v, x), x), v, s.discvars[v], len) for v in depvars]
+    interpparams = map(xpair -> xpair.first => half_offset_centered_difference(inner_interpolater, interior, s, bs, (1, x), xpair.second, len), gridvals(s, u, interior))
 
     interpolated_expr = broadcast_substitute(expr, vcat(interpvars, interpparams))
 
@@ -38,14 +34,14 @@ function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::Discrete
     return outerderiv
 end
 
-@inline function generate_nonlinlap_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
-    rules = reduce(safe_vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c..., cartesian_nonlinear_laplacian(*(a..., b...), interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars], init = [])
+@inline function generate_nonlinlap_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
+    rules = reduce(safe_vcat, [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(~c..., cartesian_nonlinear_laplacian(*(a..., b...), interior, derivweights, s, bcmap[operation(u)][x], depvars, x, u), ~d...) for x in params(u, s)]) for u in depvars], init = [])
 
-    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars], init = []))
+    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(*(a..., b...), interior, derivweights, s, bcmap[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars], init = []))
 
-    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u) / ~a)) => cartesian_nonlinear_laplacian(1 / ~a, interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars], init = []))
+    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule ($(Differential(x))($(Differential(x))(u) / ~a)) => cartesian_nonlinear_laplacian(1 / ~a, interior, derivweights, s, bcmap[operation(u)][x], depvars, x, u) for x in params(u, s)]) for u in depvars], init = []))
 
-    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(b..., c..., cartesian_nonlinear_laplacian(1 / ~a, interior, derivweights, s, pmap.map[operation(u)][x], depvars, x, u)) for x in params(u, s)]) for u in depvars], init = []))
+    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(b..., c..., cartesian_nonlinear_laplacian(1 / ~a, interior, derivweights, s, bcmap[operation(u)][x], depvars, x, u)) for x in params(u, s)]) for u in depvars], init = []))
 
     nonlinlap_rules = []
     for t in terms

@@ -26,7 +26,7 @@ where `finitediff(u, i)` is the finite difference at the interpolated point `i` 
 
 And so on.
 """
-function cartesian_nonlinear_laplacian(expr, II::CartesianIndex, derivweights, s::DiscreteSpace{N}, bs, depvars, x, u) where {N}
+function cartesian_nonlinear_laplacian(expr, II::CartesianIndex, derivweights, s::DiscreteSpace, bs, depvars, x, u)
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     # See scheme 1, namely the term without the 1/r dependence. See also #354 and #371 in DiffEqOperators, the previous home of this package.
     N = ndims(u, s)
