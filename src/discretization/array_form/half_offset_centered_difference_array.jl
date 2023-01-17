@@ -2,7 +2,7 @@
 # Stencil interface
 ########################################################################################
 
-function half_offset_centered_difference(D::DerivativeOperator, interior, s, bs, jx, u, udisc, len)|
+function half_offset_centered_difference(D::DerivativeOperator, interior, s, bs, jx, u, udisc, len, isx = false)
     interior = get_interior(u, s, interior)
     is = get_is(u, s)
 
@@ -25,10 +25,15 @@ function half_offset_centered_difference(D::DerivativeOperator, interior, s, bs,
             upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
         end
     end
-
-    interiorop = interior_deriv(D, udisc, s,
-        (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2)),
-        j, is, interior, bs)
+    if !isx
+        interiorop = interior_deriv(D, udisc, s,
+                                    (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2)),
+                                    j, is, interior, bs)
+    else
+        interiorop = interior_deriv(D, OrderedIndexArray(udisc, j, ndims(u, s)), s,
+                                    (1-div(D.stencil_length, 2)):(div(D.stencil_length, 2)),
+                                    j, is, interior, bs, isx)
+    end
     boundaryoppairs = vcat(lowerops, upperops)
 
     return Construct_ArrayMaker(interior, vcat(Tuple(interior) => interiorop, boundaryoppairs))

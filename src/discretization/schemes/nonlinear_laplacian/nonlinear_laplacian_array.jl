@@ -22,8 +22,13 @@ function cartesian_nonlinear_laplacian(expr, interior, derivweights, s::Discrete
 
     innerderiv = half_offset_centered_difference(D_inner, interior, s, bs, jx, u, udisc, len)
     #TODO: Proper multi dimensional interpolation - splines?
-    interpvars = [v => half_offset_centered_difference(inner_interpolater, interior, s, bs, (x2i(s, v, x), x), v, s.discvars[v], len) for v in depvars]
-    interpparams = map(xpair -> xpair.first => half_offset_centered_difference(inner_interpolater, interior, s, bs, (1, x), xpair.second, len), gridvals(s, u, interior))
+    interpvars = [v => half_offset_centered_difference(inner_interpolater, interior, s, bs,
+                                                       (x2i(s, v, x), x), v, s.discvars[v], len)
+                  for v in depvars]
+    interpparams = map(xpair -> xpair.first => half_offset_centered_difference(inner_interpolater,
+                                                                               interior, s, bs, jx,
+                                                                               xpair.second, len, true),
+                       gridvals(s, u, interior))
 
     interpolated_expr = broadcast_substitute(expr, vcat(interpvars, interpparams))
 
