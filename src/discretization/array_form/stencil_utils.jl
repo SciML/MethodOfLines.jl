@@ -12,8 +12,8 @@ function upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
             iboundary), interior, j)
 end
 
-function integral_op_pair(weights, taps, udisc, j, is, interior, i)
-    prepare_boundary_ops((IntegralArrayOp(weights, taps, i, udisc, j, is, interior),
+function integral_op_pair(dx, udisc, j, is, interior, i)
+    prepare_boundary_op((IntegralArrayOp(dx, i, udisc, j, is, interior),
             i), interior, j)
 end
 
@@ -71,29 +71,29 @@ function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
     return FillArrayOp(expr, output_idx, interior[symindices])
 end
 
-function IntegralArrayOp(weights, taps, k, udisc, j, is, interior, iswd = false)
-    # * I Possibly needs updating
-    if k == 1
-        expr = Num(0)
-    else
-        Is = map(taps(k)) do tap
-            map(1:ndims(udisc)) do i
-                if i == j
-                    tap
-                else
-                    is[i]
-                end
-            end
-        end
-        expr = dot(weights(k), map(I -> udisc[I...], Is))
-    end
-    # Don't reduce dimension of interior if its a whole domain integral
-    symindices = setdiff(1:ndims(udisc), [j])
-    output_idx = Tuple(is[symindices])
+reduce_interior(interior, j) = first(interior[j]) == 1 ? [interior[1:j-1]..., 2:last(interior[j]), interior[j+1:end]...] : interior
+
+function trapezium_sum(ranges, udisc, is, j)
+    N = ndims(udisc)
+    I1 = UnitIndex(N, j)
+    I = CartesianIndex(wrap.(is)...)
+    Im1 = I - I1
+
+    interior = reduce_interior(interior, j)
+    expr = (dx[Im1[j]]*udisc[Im1] + dx[I[j]]*udisc[I]) / 2
+
+    return FillArrayMaker(expr, is, ranges, interior)
+end
+
+
+function IntegralArrayOp(k, udisc, j, is, interior, iswd = false)
     if iswd
-        symindices = 1:ndims(udisc)
+        interior = [interior[1:j-1]..., 1:size(udisc, j), interior[j:end]...]
     end
-    return FillArrayOp(expr, output_idx, interior[symindices]) .+ IntegralArrayOp(weights, taps, k-1, udisc, j, is, interior)
+    trapop = trapezium_sum(interior, udisc, is, j)
+    op = sum(trapop[1:(k-first(interior[j])+1)], dims = j)
+
+    return op
 end
 
 function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, bs, isx = false)
@@ -117,6 +117,7 @@ end
 
 function FillArrayOp(expr, output_idx, interior)
     ranges = Dict(output_idx .=> interior) # hope this doesn't check bounds eagerly
+    @show ranges
     return ArrayOp(Array{symtype(expr),length(output_idx)},
                    output_idx, expr, +, nothing, ranges)
 end
@@ -128,7 +129,7 @@ Construct_ArrayMaker(ranges,
 
 FillArrayMaker(expr, is,
                ranges, interior) = NullBG_ArrayMaker(ranges,
-                                                     [FillArrayOp(expr, is, interior)])
+                                                     [Tuple(interior) => FillArrayOp(expr, is, interior)])
 
 ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)),
                                                  [Tuple(ranges) => udisc])

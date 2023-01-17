@@ -1,49 +1,32 @@
-# use the trapezoid rule
-function _euler_integral(interior, s, jx, u, udisc, dx::Number) #where {T,N,Wind,DX<:Number}
-    j, x = jx
-
-    interior = get_interior(u, s, interior)
-    is = get_is(u, s)
-
-    taps(i) = -1:0 .+ i
-    weights(i) = [dx / 2, dx / 2]
-
-    oppairs = map(first(interior):last(interior)) do i
-        integral_op_pair(weights, taps, udisc, j, is, interior, i)
-    end
-
-    return Construct_ArrayMaker(interior, oppairs)
-end
-
-# Nonuniform dx
-function _euler_integral(interior, s, jx, u, udisc, dx::AbstractVector) #where {T,N,Wind,DX<:Number}
-    j, x = jx
-
-    interior = get_interior(u, s, interior)
-    is = get_is(u, s)
-
-
-    taps(i) = -1:0 .+ i
-    weights(i) = [dx[i-1] / 2, dx[i] / 2]
-
-    oppairs = map(first(interior):last(interior)) do i
-        integral_op_pair(weights, taps, udisc, j, is, interior, i)
-    end
-
-    return Construct_ArrayMaker(interior, oppairs)
-end
-
 function euler_integral(interior, s, jx, u, udisc)
     j, x = jx
     dx = s.dxs[x]
-    return _euler_integral(interior, s, jx, u, udisc, dx)
+    if dx isa Number
+        dx = fill(dx, (size(udisc, j),))
+    end
+
+    interior = get_interior(u, s, interior)
+    is = get_is(u, s)
+
+    oppairs = map(interior[j]) do i
+        integral_op_pair(dx, udisc, j, is, interior, i)
+    end
+
+    return Construct_ArrayMaker(interior, oppairs)
 end
 
 # An integral across the whole domain (xmin .. xmax)
 function whole_domain_integral(II, s, jx, u, udisc)
     j, x = jx
     dx = s.dxs[x]
-    return _wd_integral(interior, s, jx, u, udisc, dx)
+    if dx isa Number
+        dx = fill(dx, (size(udisc, j),))
+    end
+
+    interior = get_interior(u, s, interior)
+    is = get_is(u, s)
+
+    return IntegralArrayOp(dx, udisc, j, is, interior, true)
 end
 
 function _wd_integral(interior, s, jx, u, udisc, dx::Number) #where {T,N,Wind,DX<:Number}
@@ -53,7 +36,7 @@ function _wd_integral(interior, s, jx, u, udisc, dx::Number) #where {T,N,Wind,DX
     is = get_is(u, s)
     lenx = length(s, x)
 
-    taps(i) = -1:0 .+ i
+    taps(i) = (-1:0) .+ i
     weights(i) = [dx / 2, dx / 2]
 
     return IntegralArrayOp(weights, taps, lenx, udisc, j, is, interior)
@@ -62,14 +45,7 @@ end
 function _wd_integral(interior, s, jx, u, udisc, dx::AbstractVector) #where {T,N,Wind,DX<:Number}
     j, x = jx
 
-    interior = get_interior(u, s, interior)
-    is = get_is(u, s)
-    lenx = length(s, x)
 
-    taps(i) = -1:0 .+ i
-    weights(i) = [dx[i-1]/2, dx[i]/2]
-
-    return IntegralArrayOp(weights, taps, lenx, udisc, j, is, interior, true)
 end
 
 @inline function generate_euler_integration_rules(interior, s::DiscreteSpace, depvars, indexmap, terms)
