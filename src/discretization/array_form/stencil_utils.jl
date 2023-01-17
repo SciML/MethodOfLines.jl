@@ -134,6 +134,15 @@ ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}(Tuple(map(r -> r[end] - r[1] + 
 
 #####
 
-get_interior(u, s, interior) = map(x -> interior[x], params(u, s))
+function get_interior(u, s, interior)
+    map(params(u, s)) do x
+        if haskey(interior, x)
+            interior[x]
+        else
+            (1, length(s, x))
+        end
+    end
+end
+
 get_ranges(u, s) = map(x -> first(axes(s.grid[x])), params(u, s))
 get_is(u, s) = map(x -> s.index_syms[x], params(u, s))

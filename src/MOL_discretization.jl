@@ -67,9 +67,9 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pdeeqs = pdesys.eqs
     bcs = pdesys.bcs
 
-    ############################
+    ##########################################################################
     # Discretization of system - Function boundary here for pseudospectral
-    ############################
+    ##########################################################################
     alleqs = []
     bceqs = []
 
@@ -115,7 +115,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         if disc_strategy isa ScalarizedDiscretization
             # Generate the equations for the interior points
             discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                depvars, s, derivweights, indexmap)
+                                 depvars, s, derivweights, indexmap, disc_strategy,
+                                 discretization.verbose_schemes)
         else
             eqvar = interiormap.var[pde]
 

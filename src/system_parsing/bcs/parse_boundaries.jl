@@ -53,7 +53,6 @@ struct UpperBoundary <: AbstractUpperBoundary
     end
 end
 
-const AbstractEquationBoundary = Union{LowerBoundary, UpperBoundary, HigherOrderInterfaceBoundary}
 
 struct LowerInterpolatingBoundary <: AbstractLowerBoundary
     u
@@ -65,7 +64,6 @@ struct UpperInterpolatingBoundary <: AbstractUpperBoundary
     x
 end
 
-const AbstractInterpolatingBoundary = Union{LowerInterpolatingBoundary, UpperInterpolatingBoundary}
 
 
 # Note that it is assumed throughout MOL that the variables in an inteface BC have the same argument signature,
@@ -98,6 +96,8 @@ struct HigherOrderInterfaceBoundary <: AbstractInterfaceBoundary
         return new(u, u2, x, x2, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
+const AbstractEquationBoundary = Union{LowerBoundary, UpperBoundary, HigherOrderInterfaceBoundary}
+const AbstractInterpolatingBoundary = Union{LowerInterpolatingBoundary, UpperInterpolatingBoundary}
 
 function Base.isequal(i1::InterfaceBoundary, i2::InterfaceBoundary)
     front = (isequal(i1.u, i2.u) & isequal(i1.u2, i2.u2) & isequal(i1.x, i2.x) & isequal(i1.x2, i2.x2))

@@ -15,7 +15,7 @@ end
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) where {N,M}
+function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization::MOLFiniteDifference{G, S}) where {N, M, G, S}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
@@ -31,7 +31,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) w
         n = ndims(u, s)
         lower = zeros(Int, n)
         upper = zeros(Int, n)
-        # Determine thec number of points to remove from each end of the domain for each dimension
+        # Determine the number of points to remove from each end of the domain for each dimension
         for b in boundaries
             #@show b
             clip_interior!!(lower, upper, s, b)
@@ -43,19 +43,19 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) w
 
         # Add ghost points to pad stencil extents
 
-        stencil_extents = calculate_stencil_extents(s, u, discretization, pdeorders, pmap)
+        stencil_extents = (lower_extents, upper_extents) = calculate_stencil_extents(s, u, discretization, pdeorders, boundarymap)
 
         # pad boundaries with interpolators
         if S <: ArrayDiscretization
             for (j, x) in enumerate(params(u, s))
-                lowerinterp = [LowerInterpolatingBoundary(u, x) for i in 1:(stencil_extents[j] - lower[j])]
-                upperinterp = [UpperInterpolatingBoundary(u, x) for i in 1:(stencil_extents[j] - upper[j])]
+                lowerinterp = [LowerInterpolatingBoundary(u, x) for i in 1:(lower_extents[j] - lower[j])]
+                upperinterp = [UpperInterpolatingBoundary(u, x) for i in 1:(upper_extents[j] - upper[j])]
                 push!(boundarymap[operation(u)][x], vcat(lowerinterp, upperinterp)...)
             end
         end
         push!(extents, pde => stencil_extents)
-        lower = [max(e, l) for (e, l) in zip(stencil_extents, lower)]
-        upper = [max(e, u) for (e, u) in zip(stencil_extents, upper)]
+        lower = [max(e, l) for (e, l) in zip(lower_extents, lower)]
+        upper = [max(e, u) for (e, u) in zip(upper_extents, upper)]
 
         pde => generate_interior(lower, upper, u, s, discretization)
     end

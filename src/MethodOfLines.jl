@@ -71,6 +71,8 @@ include("discretization/schemes/integral_expansion/integral_expansion.jl")
 include("discretization/schemes/centered_difference/centered_difference_array.jl")
 include("discretization/schemes/upwind_difference/upwind_difference_array.jl")
 include("discretization/array_form/half_offset_centered_difference_array.jl")
+include("discretization/schemes/nonlinear_laplacian/nonlinear_laplacian_array.jl")
+include("discretization/schemes/spherical_laplacian/spherical_laplacian_array.jl")
 include("discretization/schemes/integral_expansion/integral_expansion_array.jl")
 #TODO: Properly seperate laplacian schemes
 include("discretization/schemes/WENO/WENO_array.jl")
