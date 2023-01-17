@@ -41,7 +41,7 @@ function upwind_difference(d::Int, interior, is, s::DiscreteSpace, b, derivweigh
                            jx, u, udisc, ispositive)
     j, x = jx
     # return if this is an ODE
-    ndims(u, s) == 0 && return Num(0)
+    ndims(u, s) == 0 && return Fill(Num(0), ())
     D = if !ispositive
         derivweights.windmap[1][Differential(x)^d]
     else
@@ -110,7 +110,7 @@ end
     end
 
     return safe_vcat(wind_rules, vec(mapreduce(safe_vcat, depvars) do u
-        mapreduce(safe_vcat, params(u, s), init = 0) do x
+        mapreduce(safe_vcat, params(u, s), init = []) do x
             j = x2i(s, u, x)
             is = get_is(u, s)
             uinterior = get_interior(u, s, interior)
