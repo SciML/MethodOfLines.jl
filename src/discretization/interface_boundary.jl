@@ -20,7 +20,7 @@ Base.:+(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I + J.I, J.
 Base.:-(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I - J.I, J.A)
 
 (b::InterfaceBoundary)(I, s, j, isx) = wrapinterface(I, s, b, j, isx)
-(b::AbstractBoundary)(I, s, j) = I
+(b::AbstractBoundary)(I, s, j, isx) = I
 
 # This is a bit of a hacky monad to make single dimensional grids look like arrays of the right dimension for the interface boundary conditions with the nonlinear laplacian
 struct OrderedIndexArray{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}

@@ -261,11 +261,29 @@ gridvals(s, u, interior) = map(x -> x => s.grid[x][get_interior(u, s, interior).
 
 arrayvalmaps(s, u, depvars, interior) = vcat(varmaps(s, interior, depvars), gridvals(s, u, interior))
 
-@inline function axiesvals(s::DiscreteSpace{N,M,G}, b::AbstractEquationBoundary, interior) where {N,M,G}
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, b::AbstractEquationBoundary, interior) where {N,M,G<:CenterAlignedGrid}
     u_, x_ = getvars(b)
     map(params(u_, s)) do x
         if isequal(x, x_)
             x => s.axies[x][idx(b, s)]
+        else
+            x => s.grid[x][interior[x]]
+        end
+    end
+end
+
+@inline function axiesvals(s::DiscreteSpace{N,M,G}, b::AbstractEquationBoundary, interior) where {N,M,G<:EdgeAlignedGrid}
+    u_, x_ = getvars(b)
+    map(params(u_, s)) do x
+        if isequal(x, x_)
+            i = idx(b, s)
+            if i == 1
+                x => (s.axies[x][1] + s.axies[x][2]) / 2
+            elseif i == length(s.axies[x])
+                x => (s.axies[x][end-1] + s.axies[x][end]) / 2
+            else
+                throw(error("Boundaries on interior not implemented for edge aligned grid"))
+            end
         else
             x => s.grid[x][interior[x]]
         end

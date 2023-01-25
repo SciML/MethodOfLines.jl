@@ -69,6 +69,7 @@ end
 
 function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, derivweights) where {N,M,G<:CenterAlignedGrid}
     u_, x_ = getvars(boundary)
+
     x = x_
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
@@ -86,7 +87,7 @@ function boundary_value_rules(interior, s::DiscreteSpace{N,M,G}, boundary, deriv
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = unwrap.(filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars))
 
-    integralbcmaps = generate_whole_domain_integration_rules(interior, s, integralvs, indexmap, nothing, x_)
+    integralbcmaps = generate_whole_domain_integration_rules(interior, s, integralvs, Dict(), nothing, x_)
 
     if boundary isa HigherOrderInterfaceBoundary
         u__ = boundary.u2

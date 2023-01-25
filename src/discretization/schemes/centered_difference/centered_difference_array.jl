@@ -31,12 +31,12 @@ function central_difference(D::DerivativeOperator, interior, s, bs, jx, u, udisc
     return Construct_ArrayMaker(interior, safe_vcat(Tuple(interior) => interiorop, boundaryoppairs))
 end
 
-@inline function generate_cartesian_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
+@inline function generate_cartesian_rules(interior, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
     return reduce(safe_vcat,
                   [reduce(safe_vcat,
                           [[(Differential(x)^d)(u) =>
                               central_difference(derivweights.map[Differential(x)^d],
-                                                 interior, s, pmap.map[operation(u)][x],
+                                                 interior, s, bcmap[operation(u)][x],
                                                  (x2i(s, u, x), x), u, s.discvars[u])
                              for d in (let orders = derivweights.orders[x]
                                            orders[iseven.(orders)]

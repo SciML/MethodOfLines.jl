@@ -24,8 +24,8 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
             broadcast_substitute(pde.lhs, rules, verbose)
         catch e
             println("A scheme has been incorrectly applied to the following equation: $pde.\n")
-            println("The following rules were constructed:")
-            display(rules)
+            #println("The following rules were constructed:")
+            #display(rules)
             rethrow(e)
         end
     end
@@ -33,7 +33,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     ranges = get_ranges(eqvar, s)
     bg = s.discvars[eqvar]
     #TODO: Allow T
-    eqarray = 0 .~ ArrayMaker{Real}(Tuple(last.(ranges)), vcat(Tuple(ranges) => bg,
+    eqarray = ArrayMaker{Real}(Tuple(last.(ranges)), vcat(Tuple(ranges) => bg,
                                               Tuple(interior) => pdeinterior,
                                               boundary_op_pairs))
     push!(alleqs, eqarray)
