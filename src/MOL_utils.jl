@@ -21,18 +21,7 @@ Get a unit `CartesianIndex` in dimension `j` of length `N`.
 """
 unitindex(N, j) = CartesianIndex(ntuple(i -> i == j, N))
 
-function _split_terms(term)
-    S = Symbolics
-    SU = SymbolicUtils
-    # TODO: Update this to be exclusive of derivatives and depvars rather than inclusive of +-/*
-    if S.istree(term) && ((operation(term) == +) | (operation(term) == -) | (operation(term) == *) | (operation(term) == /))
-        return mapreduce(_split_terms, vcat, SU.arguments(term))
-    else
-        return [term]
-    end
-end
-
-@inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindices(M)[j] : II
+@inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindex(M, j) : II
 
 remove(args, t) = filter(x -> t === nothing || !isequal(safe_unwrap(x), safe_unwrap(t)), args)
 remove(v::AbstractVector, a::Number) = filter(x -> !isequal(x, a), v)
@@ -62,8 +51,6 @@ function generate_coordinates(i::Int, stencil_x, dummy_x,
     end
     return stencil_x
 end
-
-safe_unwrap(x) = x isa Num ? x.val : x
 
 function _get_gridloc(s, ut, is...)
     u = Sym{SymbolicUtils.FnType{Tuple, Real}}(nameof(operation(ut)))

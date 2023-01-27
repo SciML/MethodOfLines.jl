@@ -60,7 +60,7 @@ in the direction of `x`
 function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, bs, derivweights, jx, u, ufunc, ispositive)
     j, x = jx
     # return if this is an ODE
-    ndims(u, s) == 0 && return Num(0)
+    ndims(u, s) == 0 && return 0
     D = !ispositive ? derivweights.windmap[1][Differential(x)^d] : derivweights.windmap[2][Differential(x)^d]
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative

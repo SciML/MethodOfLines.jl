@@ -125,6 +125,17 @@ function split_terms(eq::Equation)
     return vcat(lhs, rhs)
 end
 
+function _split_terms(term)
+    S = Symbolics
+    SU = SymbolicUtils
+    # TODO: Update this to be exclusive of derivatives and depvars rather than inclusive of +-/*
+    if S.istree(term) && ((operation(term) == +) | (operation(term) == -) | (operation(term) == *) | (operation(term) == /))
+        return mapreduce(_split_terms, vcat, SU.arguments(term))
+    else
+        return [term]
+    end
+end
+
 # Additional handling to get around limitations in rules
 # Splits out derivatives from containing math expressions for ingestion by the rules
 function _split_terms(term, x̄)

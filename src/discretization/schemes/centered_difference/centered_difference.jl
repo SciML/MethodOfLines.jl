@@ -4,7 +4,7 @@ ufunc is a function that returns the correct discretization indexed at Itap, it 
 """
 function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u, ufunc) where {T,N,Wind,DX<:Number}
     j, x = jx
-    ndims(u, s) == 0 && return Num(0)
+    ndims(u, s) == 0 && return 0
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
     # offset is important due to boundary proximity
@@ -29,7 +29,7 @@ end
 function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u, ufunc) where {T,N,Wind,DX<:AbstractVector}
     j, x = jx
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
-    ndims(u, s) == 0 && return Num(0)
+    ndims(u, s) == 0 && return 0
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
     # offset is important due to boundary proximity
