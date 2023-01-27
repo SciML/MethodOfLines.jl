@@ -21,7 +21,7 @@ Get a unit `CartesianIndex` in dimension `j` of length `N`.
 """
 unitindex(N, j) = CartesianIndex(ntuple(i -> i == j, N))
 
-@inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindex(M, j) : II
+@inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindices(M)[j] : II
 
 remove(args, t) = filter(x -> t === nothing || !isequal(safe_unwrap(x), safe_unwrap(t)), args)
 remove(v::AbstractVector, a::Number) = filter(x -> !isequal(x, a), v)

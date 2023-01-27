@@ -255,3 +255,15 @@ function ex2term(term, v)
     name = Symbol("⟦" * string(term) * "⟧")
     return setname(similarterm(exdv, rename(operation(exdv), name), arguments(exdv)), name)
 end
+
+safe_unwrap(x) = x isa Num ? unwrap(x) : x
+
+function recursive_unwrap(ex)
+    if !istree(ex)
+        return safe_unwrap(ex)
+    end
+
+    op = operation(ex)
+    args = arguments(ex)
+    return safe_unwrap(op(recursive_unwrap.(args)))
+end
