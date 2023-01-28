@@ -4,7 +4,7 @@ What follows is a set of allowable boundary conditions, please note that this is
 
 ## Definitions
 ```julia
-using ModelingToolkit, MethodOfLines, Domainsets
+using ModelingToolkit, MethodOfLines, DomainSets
 
 @parameters x y t
 @variables u(..) v(..)
