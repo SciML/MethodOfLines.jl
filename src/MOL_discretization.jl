@@ -125,8 +125,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Combine PDE equations and BC equations
     metadata = MOLMetadata(s, discretization, pdesys, use_ODAE)
 
-    alleqs, bceqs = (recursive_unwrap.(alleqs), recursive_unwrap.(bceqs))
-
     return generate_system(alleqs, bceqs, ics, s.discvars, defaults, ps, tspan, metadata)
 end
 
