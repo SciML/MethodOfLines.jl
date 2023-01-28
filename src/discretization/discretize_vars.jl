@@ -144,6 +144,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
             u => collect(first(@variables $sym(t)[uaxes...]))
         end
     end
+    @show typeof(depvarsdisc)
 
 
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
