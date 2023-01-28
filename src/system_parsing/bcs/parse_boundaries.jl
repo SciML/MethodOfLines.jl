@@ -194,7 +194,6 @@ function parse_bcs(bcs, v::VariableMap, orders)
     depvar_ops = v.depvar_ops
 
     # Create some rules to match which bundary/variable a bc concerns
-    # * Assume that the term of the condition is applied additively and has no multiplier/divisor/power etc.
     u0 = []
     bceqs = []
     ## BC matching rules, returns the variable and parameter the bc concerns

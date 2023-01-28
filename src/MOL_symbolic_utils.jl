@@ -125,6 +125,17 @@ function split_terms(eq::Equation)
     return vcat(lhs, rhs)
 end
 
+function _split_terms(term)
+    S = Symbolics
+    SU = SymbolicUtils
+    # TODO: Update this to be exclusive of derivatives and depvars rather than inclusive of +-/*
+    if S.istree(term) && ((operation(term) == +) | (operation(term) == -) | (operation(term) == *) | (operation(term) == /))
+        return mapreduce(_split_terms, vcat, SU.arguments(term))
+    else
+        return [term]
+    end
+end
+
 # Additional handling to get around limitations in rules
 # Splits out derivatives from containing math expressions for ingestion by the rules
 function _split_terms(term, x̄)
@@ -243,4 +254,16 @@ function ex2term(term, v)
     exdv = last(sort(symdvs, by=u -> length(arguments(u))))
     name = Symbol("⟦" * string(term) * "⟧")
     return setname(similarterm(exdv, rename(operation(exdv), name), arguments(exdv)), name)
+end
+
+safe_unwrap(x) = x isa Num ? unwrap(x) : x
+
+function recursive_unwrap(ex)
+    if !istree(ex)
+        return safe_unwrap(ex)
+    end
+
+    op = operation(ex)
+    args = arguments(ex)
+    return safe_unwrap(op(recursive_unwrap.(args)))
 end

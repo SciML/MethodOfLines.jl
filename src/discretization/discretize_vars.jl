@@ -145,7 +145,6 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
         end
     end
 
-
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
 end
 
