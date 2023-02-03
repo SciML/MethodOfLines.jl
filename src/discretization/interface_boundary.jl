@@ -64,44 +64,36 @@ function get_interface_vars(b, s, j)
     return I1, discu2, l1, l2
 end
 
-function _wrapinterface(I, s, b::InterfaceBoundary{Val{false}(),Val{true}()}, j, isx)
-    if I[j] <= 1
-        u = b.u
-        u2 = b.u2
-        N = ndims(u, s)
-        discu2 = if isx
-            OrderedIndexArray(s.grid[b.x2], j, N)
-        else
-            s.discvars[depvar(u2, s)]
-        end
-        l2 = length(s, b.x2)
-        I1 = unitindex(N, j)
-        # update index
-        I = I + (l2 - 1) * I1
-        I = RefCartesianIndex(I, discu2)
+
+function __wrapinterface(I, s, isupper, l1, j, isx)
+    u = b.u
+    u2 = b.u2
+    N = ndims(u, s)
+    discu2 = if isx
+        OrderedIndexArray(s.grid[b.x2], j, N)
     else
-        return RefCartesianIndex(I)
+        s.discvars[depvar(u2, s)]
     end
+    l2 = length(s, b.x2)
+    I1 = unitindex(N, j)
+    # update index
+    I = if isupper
+        I + (1 - l1) * I1
+    else
+        I + (l2 - 1) * I1
+    end
+    return RefCartesianIndex(I, discu2)
+end
+
+function _wrapinterface(I, s, b::InterfaceBoundary{Val{false}(),Val{true}()}, j, isx)
+    IfElse.ifelse(I[j] <= 1, __wrapinterface(I, s, false, 0, j, isx), RefCartesianIndex(I))
 end
 
 function _wrapinterface(I, s, b::InterfaceBoundary{Val{true}(),Val{false}()}, j, isx)
     l1 = length(s, b.x)
-    if I[j] > l1
-        u = b.u
-        u2 = b.u2
-        N = ndims(u, s)
-        discu2 = if isx
-            OrderedIndexArray(s.grid[b.x2], j, N)
-        else
-            s.discvars[depvar(u2, s)]
-        end
-        I1 = unitindex(N, j)
-        # update index
-        I = I + (1 - l1) * I1
-        return RefCartesianIndex(I, discu2)
-    else
-        return RefCartesianIndex(I)
-    end
+    return Ifelse.ifelse(I[j] > l1,
+                         __wrapinterface(I, s, true, l1, j, isx),
+                         RefCartesianIndex(I))
 end
 
 function _wrapinterface(I, s, b::InterfaceBoundary{B,B}, j) where {B}

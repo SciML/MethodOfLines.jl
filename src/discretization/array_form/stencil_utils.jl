@@ -117,10 +117,12 @@ function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, 
     Is = map(I -> bwrap(I, bs, s, j, isx), Is)
 
     expr = dot(weights, map(I -> udisc[I], Is))
+
     return FillArrayOp(expr, output_idx, interior)
 end
 
 function FillArrayOp(expr, output_idx, interior)
+    expr = recursive_unwrap(expr)
     ranges = Dict(output_idx .=> interior) # hope this doesn't check bounds eagerly
     return ArrayOp(Array{symtype(expr),length(output_idx)},
                    output_idx, expr, +, nothing, ranges)

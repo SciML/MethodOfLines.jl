@@ -23,7 +23,7 @@ function spherical_diffusion(innerexpr, interior, derivweights, s, bs, depvars, 
 
     # Catch the r ≈ 0 case
     ks = findall(_r -> _r ≈ 0, s.grid[r])
-    if length(k) > 0
+    if length(ks) > 0
         r0deriv = 3exprarr .* central_difference(D_2, interior, s, bs, (j, r), u, s.discvars[u])
         r0pairs = map(ks) do k
             op = selectdim(r0deriv, j, k)
