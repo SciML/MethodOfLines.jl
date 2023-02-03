@@ -131,3 +131,21 @@ end
     I = CartesianIndex(-1, 2)
     @test MethodOfLines._wrapperiodic(I, 2, 1, 4) == CartesianIndex(2, 2)
 end
+
+@testset "@to_kw" begin 
+    @variables t
+    N = 2
+    x = Symbolics.variables(:x, 1:N)
+
+    for (i, xi) in enumerate(x)
+        @eval $(Symbol(:x, i)) = $xi
+    end
+
+    @variables u(..)
+    @to_kw u(t, x1, x2)
+    @test isequal(u_kw(t=0), u(0, x1, x2))
+
+    @variables foo(..)
+    @to_kw foo(t, x1, x2)
+    @test isequal(foo_kw(t=0), foo(0, x1, x2))
+end

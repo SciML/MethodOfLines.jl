@@ -131,3 +131,28 @@ end
         return vcat(a, b)
     end
 end
+
+function _to_kw(ex)
+    @assert ex.head == :call
+    args = ex.args
+    @assert all(x isa Symbol for x in args)
+    u = args[1]
+    xs = args[2:end]
+    kw_fn_name = Symbol(ex.args[1], "_kw")
+    kws = []
+    for arg in xs
+        kw = Expr(:kw, arg, esc(arg))
+        push!(kws, kw)
+    end
+    params = Expr(:parameters, kws...)
+
+    def_call_ex = Expr(:call, esc(kw_fn_name), params)
+    block_call_ex = Expr(:call, esc(u), xs...)
+
+    body = Expr(:block, block_call_ex)
+    Expr(:function, def_call_ex, body)
+end
+
+macro to_kw(ex)
+    _to_kw(ex)
+end
