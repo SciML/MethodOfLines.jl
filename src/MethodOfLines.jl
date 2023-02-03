@@ -32,9 +32,9 @@ include("interface/MOLFiniteDifference.jl")
 include("discretization/derivative_operator.jl")
 
 # Utils
-include("discretization/array_form/stencil_utils.jl")
 include("MOL_symbolic_utils.jl")
 include("MOL_utils.jl")
+include("discretization/array_form/stencil_utils.jl")
 include("broadcast_substitute.jl")
 
 # System Parsing

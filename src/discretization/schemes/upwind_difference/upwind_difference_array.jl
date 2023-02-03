@@ -29,7 +29,7 @@ function _upwind_difference(D, interior, is, s,
     end
     boundaryoppairs = safe_vcat(lowerops, upperops)
 
-    Construct_ArrayMaker(interior, safe_vcat(Tuple(interior) => interiorop, boundaryoppairs))
+    Construct_ArrayMaker(interior, safe_vcat([Tuple(interior) => interiorop], boundaryoppairs))
 end
 
 """
