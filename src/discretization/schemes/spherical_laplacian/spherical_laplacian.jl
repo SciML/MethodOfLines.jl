@@ -8,7 +8,7 @@ Based on https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretiz
 
 See scheme 1 in appendix A. The r = 0 case is treated in a later appendix
 """
-function spherical_diffusion(innerexpr, II, derivweights, s, bs, depvars, r, u)
+function spherical_diffusion(innerexpr, II::CartesianIndex, derivweights, s, bs, depvars, r, u)
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     D_1 = derivweights.map[Differential(r)]
     D_2 = derivweights.map[Differential(r)^2]
@@ -26,7 +26,7 @@ function spherical_diffusion(innerexpr, II, derivweights, s, bs, depvars, r, u)
     # Catch the r ≈ 0 case
     if Symbolics.unwrap(substitute(r, _rsubs(r, II))) ≈ 0
         D_2_u = central_difference(D_2, II, s, bs, (s.x2i[r], r), u, ufunc_u)
-        return 3exprhere*D_2_u # See appendix B of the paper
+        return 3exprhere * D_2_u # See appendix B of the paper
     end
     D_1_u = central_difference(D_1, II, s, bs, (s.x2i[r], r), u, ufunc_u)
     # See scheme 1 in appendix A of the paper
@@ -48,9 +48,9 @@ end
     for t in terms
         for r in rules
             try
-            if r(t) !== nothing
-                push!(spherical_diffusion_rules, t => r(t))
-            end
+                if r(t) !== nothing
+                    push!(spherical_diffusion_rules, t => r(t))
+                end
             catch e
                 rethrow(e)
             end

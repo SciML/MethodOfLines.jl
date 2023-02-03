@@ -4,11 +4,11 @@ function interface_errors(depvars, indvars, discretization)
     for x in indvars
         @assert haskey(discretization.dxs, Num(x)) || haskey(discretization.dxs, x) "Variable $x has no step size"
     end
-    if !(typeof(discretization.advection_scheme) ∈ [UpwindScheme, WENOScheme])
-        throw(ArgumentError("Only `UpwindScheme()` and `WENOScheme()` are supported advection schemes."))
+    if !(typeof(discretization.advection_scheme) ∈ ALLOWED_ADVECTION_SCHEMES)
+        throw(ArgumentError("Only $(ALLOWED_ADVECTION_SCHEMES...) are supported advection schemes."))
     end
-    if !(typeof(discretization.disc_strategy) ∈ [ScalarizedDiscretization])
-        throw(ArgumentError("Only `ScalarizedDiscretization()` are supported discretization strategies."))
+    if !(typeof(discretization.disc_strategy) ∈ ALLOWED_DISCRETIZATION_STRATEGIES)
+        throw(ArgumentError("Only $(ALLOWED_DISCRETIZATION_STRATEGIES...) are supported discretization strategies."))
     end
 end
 
@@ -54,7 +54,8 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     end
 
     # Check if the boundaries warrant using ODAEProblem, as long as this is allowed in the interface
-    use_ODAE = discretization.use_ODAE
+    use_ODAE = t === nothing ? false : discretization.use_ODAE
+
     if use_ODAE
         bcivmap = reduce((d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap)))
         allbcs = mapreduce(x -> bcivmap[x], vcat, v.x̄)
@@ -66,17 +67,19 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pdeeqs = pdesys.eqs
     bcs = pdesys.bcs
 
-    ############################
-    # Discretization of system
-    ############################
+    ##########################################################################
+    # Discretization of system - Function boundary here for pseudospectral
+    ##########################################################################
     alleqs = []
     bceqs = []
 
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(v, discretization)
     # Get the interior and variable to solve for each equation
+
     #TODO: do the interiormap before and independent of the discretization i.e. `s`
     interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization)
+
     # Get the derivative orders appearing in each equation
     pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), v.x̄))
     bcorders = Dict(map(x -> x => d_orders(x, bcs), v.x̄))
@@ -112,13 +115,37 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         if disc_strategy isa ScalarizedDiscretization
             # Generate the equations for the interior points
             discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                depvars, s, derivweights, indexmap)
+                                 depvars, s, derivweights, indexmap, disc_strategy,
+                                 discretization.verbose_schemes)
         else
-            throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
+            eqvar = interiormap.var[pde]
+
+            # * Assumes that all variables in the equation have same dimensionality except edgevals
+            args = params(eqvar, s)
+            indexmap = Dict([args[i] => i for i in 1:length(args)])
+                # Generate the equations for the interior points
+
+            discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
+                                 depvars, s, derivweights, indexmap, disc_strategy,
+                                 discretization.verbose_schemes)
         end
     end
 
     u0 = generate_ic_defaults(ics, s, disc_strategy)
+    display(alleqs)
+    #! Temporarily scalarize for compatibility until MTK supports Array equations
+    if disc_strategy isa ArrayDiscretization
+        try
+            alleqs = mapreduce(eq -> symtype(eq) <: AbstractArray ? 0 .~ vec(scalarize(eq)) : eq, vcat, alleqs)
+        catch e
+            #dump stacktrace to file
+            open("stacktrace.jl", "w") do f
+                showerror(f, e, catch_backtrace())
+                println(f, "\n###############################################\n")
+            end
+        end
+        u0 = mapreduce(def -> symtype(def) <: AbstractArray ? vec(scalarize(def)) : def, vcat, u0)
+    end
 
     defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)

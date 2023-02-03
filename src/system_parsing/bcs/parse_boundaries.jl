@@ -8,7 +8,19 @@ abstract type AbstractTruncatingBoundary <: AbstractBoundary end
 
 abstract type AbstractInterfaceBoundary <: AbstractTruncatingBoundary end
 
-struct LowerBoundary <: AbstractTruncatingBoundary
+abstract type AbstractLowerBoundary <: AbstractTruncatingBoundary end
+
+abstract type AbstractUpperBoundary <: AbstractTruncatingBoundary end
+
+abstract type AbstractExtendingBoundary <: AbstractBoundary end
+
+struct LowerBoundaryTrait end
+
+struct UpperBoundaryTrait end
+
+trait(b::AbstractBoundary) = isupper(b) ? UpperBoundaryTrait() : LowerBoundaryTrait()
+
+struct LowerBoundary <: AbstractLowerBoundary
     u
     x
     depvars
@@ -20,13 +32,12 @@ struct LowerBoundary <: AbstractTruncatingBoundary
         depvars_rhs = get_depvars(eq.rhs, v.depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         #depvars =  filter(u -> !any(map(x-> x isa Number, arguments(u))), depvars)
-
         allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
 
-struct UpperBoundary <: AbstractTruncatingBoundary
+struct UpperBoundary <: AbstractUpperBoundary
     u
     x
     depvars
@@ -37,11 +48,23 @@ struct UpperBoundary <: AbstractTruncatingBoundary
         depvars_lhs = get_depvars(eq.lhs, v.depvar_ops)
         depvars_rhs = get_depvars(eq.rhs, v.depvar_ops)
         depvars = collect(depvars_lhs ∪ depvars_rhs)
-
         allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t), arguments(u)), depvars)))
         return new(u, x, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
+
+
+struct LowerInterpolatingBoundary <: AbstractLowerBoundary
+    u
+    x
+end
+
+struct UpperInterpolatingBoundary <: AbstractUpperBoundary
+    u
+    x
+end
+
+
 
 # Note that it is assumed throughout MOL that the variables in an inteface BC have the same argument signature,
 # differing in only one variable which is that of the interface. This is not checked here, but will cause errors if it is not true.
@@ -73,6 +96,8 @@ struct HigherOrderInterfaceBoundary <: AbstractInterfaceBoundary
         return new(u, u2, x, x2, depvar.(depvars, [v]), first(allx̄), eq, order)
     end
 end
+const AbstractEquationBoundary = Union{LowerBoundary, UpperBoundary, HigherOrderInterfaceBoundary}
+const AbstractInterpolatingBoundary = Union{LowerInterpolatingBoundary, UpperInterpolatingBoundary}
 
 function Base.isequal(i1::InterfaceBoundary, i2::InterfaceBoundary)
     front = (isequal(i1.u, i2.u) & isequal(i1.u2, i2.u2) & isequal(i1.x, i2.x) & isequal(i1.x2, i2.x2))
@@ -139,6 +164,15 @@ flatten_vardict(bmps) = reduce(vcat, reduce(vcat, collect.(values.(collect(value
     upper[dim] = upper[dim] + isupper(b)
 end
 
+ordering(::LowerBoundary) = 1
+ordering(::UpperBoundary) = 1
+ordering(::LowerInterpolatingBoundary) = 2
+ordering(::UpperInterpolatingBoundary) = 2
+
+offset(::AbstractLowerBoundary, i, len) = i
+offset(::AbstractUpperBoundary, i, len) = len - i + 1
+
+
 @inline function edge(interiormap, s, u, j, islower)
     I = interiormap.I[interiormap.pde[depvar(u, s)]]
     # check needed on v1.6
@@ -191,11 +225,7 @@ Creates a map of boundaries for each variable to be used later when discretizing
 """
 function parse_bcs(bcs, v::VariableMap, orders)
     t = v.time
-    depvar_ops = v.depvar_ops
 
-    # Create some rules to match which bundary/variable a bc concerns
-    u0 = []
-    bceqs = []
     ## BC matching rules, returns the variable and parameter the bc concerns
 
     lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(v, orders)
