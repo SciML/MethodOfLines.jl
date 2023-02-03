@@ -74,7 +74,7 @@ function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, bs, 
     hp = wp1 * hp1 + wp2 * hp2 + wp3 * hp3
     hm = wm1 * hm1 + wm2 * hm2 + wm3 * hm3
 
-    return (hp - hm) / dx
+    return recursive_unwrap((hp - hm) / dx)
 end
 
 function weno(II::CartesianIndex, s::DiscreteSpace, b, jx, u, dx::AbstractVector)

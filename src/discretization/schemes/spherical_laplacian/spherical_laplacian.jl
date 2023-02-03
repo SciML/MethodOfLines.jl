@@ -31,7 +31,7 @@ function spherical_diffusion(innerexpr, II::CartesianIndex, derivweights, s, bs,
     D_1_u = central_difference(D_1, II, s, bs, (s.x2i[r], r), u, ufunc_u)
     # See scheme 1 in appendix A of the paper
 
-    return exprhere*(D_1_u/Num(substitute(r, _rsubs(r, II))) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, bs, depvars, r, u))
+    return exprhere*(D_1_u/substitute(r, _rsubs(r, II)) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, bs, depvars, r, u))
 end
 
 @inline function generate_spherical_diffusion_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)

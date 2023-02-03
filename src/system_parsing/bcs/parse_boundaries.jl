@@ -225,6 +225,7 @@ Creates a map of boundaries for each variable to be used later when discretizing
 """
 function parse_bcs(bcs, v::VariableMap, orders)
     t = v.time
+
     ## BC matching rules, returns the variable and parameter the bc concerns
 
     lower_boundary_rules, upper_boundary_rules = generate_boundary_matching_rules(v, orders)
