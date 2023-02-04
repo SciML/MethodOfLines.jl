@@ -30,7 +30,7 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     # See scheme 1, namely the term without the 1/r dependence. See also #354 and #371 in DiffEqOperators, the previous home of this package.
     N = ndims(u, s)
-    N == 0 && return Num(0)
+    N == 0 && return 0
     jx = j, x = (x2i(s, u, x), x)
 
     D_inner = derivweights.halfoffsetmap[1][Differential(x)]
@@ -64,7 +64,7 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
 
 
     interpolated_expr = map(interp_weights_and_stencil) do (weights, stencil)
-        Num(substitute(substitute(expr, map_vars_to_interpolated(stencil, weights)), map_params_to_interpolated(stencil, weights)))
+        substitute(substitute(expr, map_vars_to_interpolated(stencil, weights)), map_params_to_interpolated(stencil, weights))
     end
 
     # multiply the inner finite difference by the interpolated expression, and finally take the outer finite difference

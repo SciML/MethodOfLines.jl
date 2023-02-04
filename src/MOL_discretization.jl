@@ -71,10 +71,6 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     ############################
     alleqs = []
     bceqs = []
-    # * We wamt to do this in 2 passes
-    # * First parse the system and BCs, replacing with DiscreteVariables and DiscreteDerivatives
-    # * periodic parameters get type info on whether they are periodic or not, and if they join up to any other parameters
-    # * Then we can do the actual discretization by recursively indexing in to the DiscreteVariables
 
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(v, discretization)
