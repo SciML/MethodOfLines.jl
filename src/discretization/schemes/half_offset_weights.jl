@@ -1,9 +1,10 @@
+using Unitful
 """
 A helper function to compute the coefficients of a derivative operator including the boundary coefficients in the half offset centered scheme. See table 2 in https://web.njit.edu/~jiang/math712/fornberg.pdf
 """
 function CompleteHalfCenteredDifference(derivative_order::Int,
                                         approximation_order::Int,
-                                        dx::T) where {T <: Real}
+                                        dx::T) where T
     @assert approximation_order>1 "approximation_order must be greater than 1."
     centered_stencil_length = approximation_order + 2 * Int(floor(derivative_order / 2)) +
                               (approximation_order % 2)
@@ -21,9 +22,15 @@ function CompleteHalfCenteredDifference(derivative_order::Int,
     #deriv_spots             = (-div(stencil_length,2)+1) : -1  # unused
     L_boundary_deriv_spots = xoffset[1:div(centered_stencil_length, 2)]
 
+    half = nothing
+    if T <: Unitful.Quantity
+        half = dx / dx.val / 2.0
+    else
+        half = convert(T, 0.5)
+    end
     stencil_coefs = convert(SVector{centered_stencil_length, T},
                             (1 / dx^derivative_order) *
-                            calculate_weights(derivative_order, convert(T, 0.5), dummy_x))
+                            calculate_weights(derivative_order, half, dummy_x))
     # For each boundary point, for each tappoint in the half offset central difference stencil, we need to calculate the coefficients for the stencil.
 
     _low_boundary_coefs = [convert(SVector{boundary_stencil_length, T},
@@ -55,7 +62,7 @@ end
 
 function CompleteHalfCenteredDifference(derivative_order::Int,
                                         approximation_order::Int,
-                                        x::T) where {T <: AbstractVector{<:Real}}
+                                        x::T) where {T <: AbstractVector}
     @assert approximation_order>1 "approximation_order must be greater than 1."
     centered_stencil_length = approximation_order + 2 * Int(floor(derivative_order / 2)) +
                               (approximation_order % 2)

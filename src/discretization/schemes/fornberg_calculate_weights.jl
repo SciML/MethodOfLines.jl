@@ -17,7 +17,7 @@ Inputs:
                                                  derivative values respectively.                                             
 =#
 
-function calculate_weights(order::Int, x0::T, x::AbstractVector; dfdx::Bool = false) where T<:Real
+function calculate_weights(order::Int, x0::T, x::AbstractVector; dfdx::Bool = false) where T
     N = length(x)
     @assert order < N "Not enough points for the requested order."
     M = order

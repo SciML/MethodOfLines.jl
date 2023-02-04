@@ -66,6 +66,7 @@ include("discretization/schemes/half_offset_centred_difference.jl")
 include("discretization/schemes/nonlinear_laplacian/nonlinear_laplacian.jl")
 include("discretization/schemes/spherical_laplacian/spherical_laplacian.jl")
 include("discretization/schemes/WENO/WENO.jl")
+include("discretization/schemes/PPM/PPM.jl")
 include("discretization/schemes/integral_expansion/integral_expansion.jl")
 
 # System Discretization
@@ -79,6 +80,6 @@ include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete
-export UpwindScheme, WENOScheme
+export UpwindScheme, WENOScheme, PPMScheme
 
 end

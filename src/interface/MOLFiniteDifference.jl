@@ -49,5 +49,5 @@ function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_sche
 
     dxs = dxs isa Dict ? dxs : Dict(dxs)
 
-    return MOLFiniteDifference{typeof(grid_align), typeof(discretization_strategy)}(dxs, time, approx_order, advection_scheme, grid_align, should_transform, use_ODAE, discretization_strategy, kwargs)
+    return MOLFiniteDifference{typeof(grid_align), typeof(discretization_strategy)}(dxs, time, approx_order, advection_scheme, grid_align, should_transform, use_ODAE, discretization_strategy, Dict(kwargs))
 end
