@@ -43,9 +43,9 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
 
                     # Correct placement of time axis
                     if isequal(arguments(u)[1], discretespace.time)
-                        out[ti, Is] = solu
+                        out[ti, Is] .= solu
                     elseif isequal(arguments(u)[end], discretespace.time)
-                        out[Is, ti] = solu
+                        out[Is, ti] .= solu
                     else
                         @assert false "The time variable must be the first or last argument of the dependent variable $u."
                     end
