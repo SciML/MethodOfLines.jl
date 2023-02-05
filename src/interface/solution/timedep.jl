@@ -31,24 +31,21 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
                 # this function may access data interpolators which may be
                 # optimized to sequentially step through time.
                 for ti ∈ eachindex(sol.t)
-                    solu = map(CartesianIndices(discu)) do I
-                        i = sym_to_index(discu[I], solved_states)
-                        # Handle Observed
-                        if i !== nothing
-                            sol[i, ti]
-                        else
-                            SciMLBase.observed(sol, safe_unwrap(discu[I]), ti)
-                        end
+                    Is = CartesianIndices(discu)
+                    is = sym_to_index.(discu[Is], (solved_states,))
+                    
+                    # Handle Observed
+                    if is[1] !== nothing
+                        solu = sol[is, ti]
+                    else
+                        solu = SciMLBase.observed.((sol,), safe_unwrap.(discu[Is]), (ti,))
                     end
+
                     # Correct placement of time axis
                     if isequal(arguments(u)[1], discretespace.time)
-                        for I in CartesianIndices(discu)
-                            out[ti, I] = solu[I]
-                        end
+                        out[ti, Is] = solu
                     elseif isequal(arguments(u)[end], discretespace.time)
-                        for I in CartesianIndices(discu)
-                            out[I, ti] = solu[I]
-                        end
+                        out[Is, ti] = solu
                     else
                         @assert false "The time variable must be the first or last argument of the dependent variable $u."
                     end
