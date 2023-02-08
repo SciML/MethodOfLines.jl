@@ -1,4 +1,3 @@
-using Unitful
 """
 A helper function to compute the coefficients of a derivative operator including the boundary coefficients in the half offset centered scheme. See table 2 in https://web.njit.edu/~jiang/math712/fornberg.pdf
 """
@@ -22,12 +21,7 @@ function CompleteHalfCenteredDifference(derivative_order::Int,
     #deriv_spots             = (-div(stencil_length,2)+1) : -1  # unused
     L_boundary_deriv_spots = xoffset[1:div(centered_stencil_length, 2)]
 
-    half = nothing
-    if T <: Unitful.Quantity
-        half = dx / dx.val / 2.0
-    else
-        half = convert(T, 0.5)
-    end
+    half = convert(T, 0.5)
     stencil_coefs = convert(SVector{centered_stencil_length, T},
                             (1 / dx^derivative_order) *
                             calculate_weights(derivative_order, half, dummy_x))

@@ -26,8 +26,8 @@ function extent(::WENOScheme, dorder)
     return 2
 end
 
-struct PPMScheme <: AbstractScheme
-    dt
+struct PPMScheme <: AbstractScheme 
+    Cx
 end
 
 function extent(::PPMScheme, dorder)
