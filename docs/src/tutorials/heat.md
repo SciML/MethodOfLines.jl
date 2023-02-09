@@ -1,6 +1,6 @@
 # [Solving the Heat Equation](@id heat)
 
-In this tutorial we will use the symbolic interface to solve the heat equation.
+In this tutorial, we will use the symbolic interface to solve the heat equation.
 
 ### Dirichlet boundary conditions
 

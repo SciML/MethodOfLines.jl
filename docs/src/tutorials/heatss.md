@@ -1,6 +1,6 @@
-# Steady State Heat Equation - No Time Dependance - NonlinearProblem
+# Steady State Heat Equation - No Time Dependence - NonlinearProblem
 
-Sometimes it is desirable to solve an equation that has no time evolution, such as the steady state heat equation:
+Occasionally, it is desirable to solve an equation that has no time evolution, such as the steady state heat equation:
 ```@example heatss
 using ModelingToolkit, MethodOfLines, DomainSets, NonlinearSolve
 

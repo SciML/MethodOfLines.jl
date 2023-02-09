@@ -42,7 +42,7 @@ on a timespan of ``t \in [0,11.5]``.
 
 ## Solving with MethodOfLines
 
-With `ModelingToolkit.jl`, we first symbolicaly define the system, see also the docs for [`PDESystem`](https://docs.sciml.ai/ModelingToolkit/stable/systems/PDESystem/):
+With `ModelingToolkit.jl`, we first symbolically define the system, see also the docs for [`PDESystem`](https://docs.sciml.ai/ModelingToolkit/stable/systems/PDESystem/):
 
 ```julia
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
@@ -118,7 +118,7 @@ println("Solve:")
 ```
 
 ## Extracting results
-To retrieve your solution, for example for `u`, use `sol[u(x, y, t)]`. To get the independent variable axes, use for example `sol[t]`. For more information on the solution interface, [see this page](@ref sol)
+To retrieve your solution, for example for `u`, use `sol[u(x, y, t)]`. To get the independent variable axes, use `sol[t]`. For more information on the solution interface, [see this page](@ref sol)
 ```julia
 discrete_x = sol[x]
 discrete_y = sol[y]

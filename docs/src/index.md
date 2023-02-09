@@ -6,11 +6,11 @@ of symbolicaly-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
 
-It is a SciML "Discretizer" package, a class of packages which export the methods:
+It is a SciML “Discretizer” package, a class of packages which export the methods:
 - `discretize(sys::PDESystem, disc::D) where {D <: AbstractDiscretization}`, which returns an `AbstractSciMLProblem` to be solved with the ecosystem's solvers.
 - `symbolic_discretize(sys::PDESystem, disc::D) where {D <: AbstractDiscretization}`, which returns an `AbstractSystem` from `ModelingToolkit.jl`.
 
-A Discretizer also optionally provides automatic solution wrapping, for easing the retrieval of shaped portions of the solution, and multi dimensional interpolations. This feature is provided by `MethodOfLines.jl`, see the [solution interface](@ref sol) page for more information.
+A Discretizer also optionally provides automatic solution wrapping, for easing the retrieval of shaped portions of the solution, and multidimensional interpolations. This feature is provided by `MethodOfLines.jl`, see the [solution interface](@ref sol) page for more information.
 
 The `AbstractDiscretization` that `MethodOfLines.jl` provides is the [`MOLFiniteDifference`](@ref molfd), see its documentation for full information about interface options.
 
@@ -25,8 +25,8 @@ Allowable terms in the system include, but are not limited to
 - Diffusion
 - Reaction
 - Nonlinear Diffusion
-- Spherical laplacian
-- Any Julia function of the symbolic parameters/dependant variables and other parameters in the environment that's defined on the whole domain. Note that more complicated functions may require registration with `@register`, see the [ModelingToolkit.jl docs](https://docs.sciml.ai/ModelingToolkit/stable/basics/Validation/#User-Defined-Registered-Functions-and-Types).
+- Spherical Laplacian
+- Any Julia function of the symbolic parameters/dependent variables and other parameters in the environment that's defined on the whole domain. Note that more complicated functions may require registration with `@register`, see the [ModelingToolkit.jl docs](https://docs.sciml.ai/ModelingToolkit/stable/basics/Validation/#User-Defined-Registered-Functions-and-Types).
 
 Boundary conditions include, but are not limited to:
 - Dirichlet
@@ -35,7 +35,7 @@ Boundary conditions include, but are not limited to:
 - Periodic
 - Any Julia function that returns a number
 
-At the moment the centered difference, upwind difference, nonlinear laplacian and spherical laplacian schemes are implemented. If you know of a scheme with better stability or accuracy in any specific case, please post an issue with a link to a paper.
+Currently, the centered difference, upwind difference, nonlinear Laplacian and spherical Laplacian schemes are implemented. If you know of a scheme with better stability or accuracy in any specific case, please post an issue with a link to a paper.
 
 Due to an implementation detail, the maximum derivative order that can be discretized by MOL is `div(typemax(Int), 2)`, in 64 bit `4611686018427387903`. We hope that this is enough for your purposes!
 
@@ -45,7 +45,7 @@ Assuming that you already have Julia correctly installed, it suffices to import
 Optimization.jl in the standard way:
 
 ```julia
-import Pkg
+using Pkg
 Pkg.add("MethodOfLines")
 ```
 The packages relevant to the core functionality of Optimization.jl will be imported
@@ -69,11 +69,11 @@ packages.
 
 ## [Known Limitations] (@id limitations)
 
-At the moment the package is able to discretize almost any system, with some assumptions listed below
+Currently, the package can discretize almost any system, with some assumptions listed below
 
-- That the grid is cartesian.
-- Boundary conditions in time are supplied as initial conditions, not at the end of the simulation interal. If your system requires a final condition, please use a change of variables to rectify this. This is unlikely to change due to upstream constraints.
-- Intergral equations are not supported.
+- That the grid is Cartesian.
+- Boundary conditions in time are supplied as initial conditions, not at the end of the simulation interval. If your system requires a final condition, please use a change of variables to rectify this. This is unlikely to change due to upstream constraints.
+- Integral equations are not supported.
 - That dependant variables always have the same argument signature, except in BCs.
 - That higher order interface bcs are accompanied by a simple interface of the form `u1(t, x_int) ~ u2(t, x_int)`
 - That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.
