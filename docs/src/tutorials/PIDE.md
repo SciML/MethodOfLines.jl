@@ -1,22 +1,22 @@
-#[Solving PIDEs (Integrals)](@id integral)
+# [Solving PIDEs (Integrals)](@id integral)
 
 It is also possible to solve PIDEs with MethodOfLines.jl. 
 
 Consider the following system:
 ```math
  \frac{\partial}{\partial t}u(t, x)+2u(t, x)+5\frac{\partial}{\partial x}[\int_0^xu(t, x)dx]=1
- ```
- On the domain:
- ```math
+```
+On the domain:
+```math
  t \in (0, 2)
  x \in (0, 2\pi)
- ```
- With BCs and ICs:
- ```math
+```
+With BCs and ICs:
+```math
  u(0, x)=cos(x)
  \frac{\partial}{\partial x}u(t, 0)=0
  \frac{\partial}{\partial x}u(t, 2)=0
- ```
+```
 We can discretize such a system like this:
 ```@example pide
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Plots

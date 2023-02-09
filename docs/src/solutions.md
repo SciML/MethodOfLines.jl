@@ -19,7 +19,7 @@ solu = sol[u(t, x, y)]
 solv = sol[v(t, x, y)]
 ```
 Note that the result in this case will be a 3D Array, dimensions matching the order that they appear
-in the arguent signature of the variable. The time variable must appear either first or last in the 
+in the argument signature of the variable. The time variable must appear either first or last in the 
 arguments, or an error will be thrown.
 
 ## Grid Retrieval
