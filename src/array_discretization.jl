@@ -35,7 +35,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     #TODO: Allow T
     @show interior
     eqarray = ArrayMaker{Real}(Tuple(last.(ranges)), vcat(Tuple(ranges) => bg,
-                                              Tuple(map(int -> int .- first(int) .+ 1, interior)) => pdeinterior,
+                                              Tuple(interior) => pdeinterior,
                                               boundary_op_pairs))
     push!(alleqs, eqarray)
 end
