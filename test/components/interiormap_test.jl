@@ -37,12 +37,8 @@ const bigint = div(typemax(Int), 2)
     s = MethodOfLines.DiscreteSpace(v, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
-    if VERSION >= v"1.7"
-        @test m == [2+bigint 0 1; 0 2+bigint 1; 1 1 2+bigint] # Test the matrix is the identity matrix
-    else
-        @test m == [1 2+bigint 0; 1 0 2+bigint; 2+bigint 1 1]
-    end
 
+    @test m == [1 2+bigint 0; 1 0 2+bigint; 2+bigint 1 1]
 end
 
 @testset "Test 00a: recognize relevant variable for equations, time undefined, multiple choices" begin
@@ -77,11 +73,8 @@ end
 
     s = MethodOfLines.DiscreteSpace(v, disc)
     m = MethodOfLines.buildmatrix(pde, s)
-    if VERSION >= v"1.7"
-        @test m == [2 0 2; 0 3 3; 4 4 4] # Test the matrix is the identity matrix
-    else
-        @test m == [2 2 0; 3 0 3; 4 4 4]
-    end
+
+    @test m == [2 2 0; 3 0 3; 4 4 4]
 end
 #
 @testset "Test 00b: recognize relevant variable for equations, time undefined, mixed derivatives, multiple choices" begin
@@ -116,12 +109,8 @@ end
     s = MethodOfLines.DiscreteSpace(v, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
-    if VERSION >= v"1.7"
-        @test m == [2 0 1; 0 3 3; 5 5 4] # Test the matrix is the identity matrix
-    else
-        @test m == [1 2 0; 3 0 3; 4 5 5]
-    end
 
+    @test m == [1 2 0; 3 0 3; 4 5 5]
 end
 
 @testset "Test 00c: recognize relevant variable for equations, time undefined, ranking important" begin
@@ -156,12 +145,8 @@ end
 
     s = MethodOfLines.DiscreteSpace(v, disc)
     m = MethodOfLines.buildmatrix(pde, s)
-    if VERSION >= v"1.7"
-        @test m == [2 2 0; 1 0 1; 0 1 2]
-    else
-        @test m == [0 2 2; 1 1 0; 2 0 1]
-    end
 
+    @test m == [0 2 2; 1 1 0; 2 0 1]
 end
 
 @testset "Test 01a: Build variable mapping - one right choice simple" begin
