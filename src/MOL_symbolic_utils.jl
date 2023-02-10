@@ -90,17 +90,13 @@ subs_alleqs!(eqs, rules) = map!(eq -> substitute(eq.lhs, rules) ~ substitute(eq.
 find all the dependent variables given by depvar_ops in an expression
 """
 function get_depvars(eq, depvar_ops)
-    S = Symbolics
-    SU = SymbolicUtils
     depvars = Set()
-    if eq isa Num
-        eq = eq.val
-    end
-    if S.istree(eq)
-        if eq isa Term && any(u -> isequal(operation(eq), u), depvar_ops)
+    eq = safe_unwrap(eq)
+    if istree(eq)
+        if any(u -> isequal(operation(eq), u), depvar_ops)
             push!(depvars, eq)
         else
-            for o in map(x -> get_depvars(x, depvar_ops), SU.arguments(eq))
+            for o in map(x -> get_depvars(x, depvar_ops), arguments(eq))
                 union!(depvars, o)
             end
         end
