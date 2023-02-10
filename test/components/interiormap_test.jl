@@ -117,7 +117,7 @@ end
 
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
-        @test m == [2 0 1; 0 3 3; 5 5 4] # Test the matrix is the identity matrix
+        @test m == [1 2 0; 3 0 3; 4 5 5]
     else
         @test m == [0 2 1; 3 0 3; 5 5 4]
     end
