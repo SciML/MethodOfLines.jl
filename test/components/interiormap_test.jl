@@ -40,7 +40,7 @@ const bigint = div(typemax(Int), 2)
     if VERSION >= v"1.7"
         @test m == [1 2+bigint 0; 1 0 2+bigint; 2+bigint 1 1]
     else
-        @test m == [0 2+bigint 1; 2+bigint 0 1; 2+bigint 1 1] # Test the matrix is the identity matrix
+        @test m == [0 2+bigint 1; 2+bigint 0 1; 1 1 2+bigint] # Test the matrix is the identity matrix
     end
 
 end
