@@ -1,10 +1,18 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap)
+function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, show_symbolic)
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
     # Generate replacement rule gen closures for the boundary values like u(t, 1)
     boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
     # Find boundaries for this equation
     eqvarbcs = mapreduce(x -> bcmap[operation(eqvar)][x], vcat, s.x̄)
     # Generate the boundary conditions for the correct variable
+
+    if show_symbolic
+        isyms = @. Symbol("i_" * string(unwrap(s.vars.x̄)) * "::Int")
+        symindices = map(sym -> Sym{Int, Nothing}(sym, nothing), isyms)
+        idx = CartesianIndex(symindices...) |> eval
+        println(idx, typeof(idx))
+        println(discretize_equation_at_point(idx, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs))
+    end
     for boundary in eqvarbcs
         generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
     end
@@ -14,6 +22,11 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     # Set invalid corner points to zero
     generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
     # Extract Interior
+    generate_interior_eqs!(alleqs, interiormap, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
+end
+
+# this should live in discretization/generate_interior_eqs.jl for consistency
+function generate_interior_eqs!(alleqs, interiormap, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
     interior = interiormap.I[pde]
     # Generate the discrete form ODEs for the interior
     eqs = if length(interior) == 0

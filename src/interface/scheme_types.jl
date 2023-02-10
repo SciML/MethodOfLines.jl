@@ -26,4 +26,13 @@ function extent(::WENOScheme, dorder)
     return 2
 end
 
+struct PPMScheme <: AbstractScheme 
+    Cx
+end
+
+function extent(::PPMScheme, dorder)
+    @assert dorder == 1 "PPM requires first-order derivatives." # I think
+    return 2
+end
+
 # Note: This type and its subtypes will become important later with the stencil interfaces as we will need to dispatch on derivative order and approximation order
