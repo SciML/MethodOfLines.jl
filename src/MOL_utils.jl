@@ -131,3 +131,11 @@ end
         return vcat(a, b)
     end
 end
+
+function chebyspace(N, dom)
+    dom = dom.domain
+    a, b = infimum(dom), supremum(dom)
+    x = [(a + b) / 2 + (b - a) / 2 * cos.(π * (2k - 1) / (2N)) for k in 1:N]
+
+    return dom.variables => x
+end
