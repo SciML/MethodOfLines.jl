@@ -108,6 +108,43 @@ end
     @test solu[end, :] ≈ zeros(n) atol = 0.001
 end
 
+@testset "Test 01a: Dt(u(t,x)) ~ D*Dxx(u(t,x)), chebyspace order 4" begin
+    # Parameters, variables, and derivatives
+    @parameters t x D
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    # 1D PDE and boundary conditions
+    eq = Dt(u(t, x)) ~ D * Dxx(u(t, x))
+    bcs = [u(0, x) ~ -x * (x - 1) * sin(x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0]
+
+    # Space and time domains
+    domains = [t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0)]
+
+    # PDE system
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [D => 10.0])
+
+    # Method of lines discretization
+
+    order = 4
+    discretization = MOLFiniteDifference([chebyspace(100, domains[2])], t)
+
+    # Convert the PDE problem into an ODE problem
+    prob = discretize(pdesys, discretization)
+
+    # Solve ODE problem
+    sol = solve(prob, Tsit5(), saveat=0.1)
+
+    # Test
+    solu = sol[u(t, x)]
+    n = size(solu, 2)
+    @test solu[end, :] ≈ zeros(n) atol = 0.001
+end
+
 @testset "Test 02: Dt(u(t,x)) ~ Dx(D(t,x))*Dx(u(t,x))+D(t,x)*Dxx(u(t,x))" begin
     # Parameters, variables, and derivatives
     @parameters t x
@@ -152,7 +189,7 @@ end
 
     # Test
     n = size(solu)[2]
-    @test solu[end,:] ≈ zeros(n) atol = 0.01
+    @test solu[end, :] ≈ zeros(n) atol = 0.01
 end
 
 @testset "Test 03: Dt(u(t,x)) ~ Dxx(u(t,x)), homogeneous Neumann BCs, order 8" begin
