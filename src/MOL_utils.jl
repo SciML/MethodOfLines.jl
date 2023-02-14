@@ -133,8 +133,8 @@ end
 end
 
 function chebyspace(N, dom)
-    dom = dom.domain
-    a, b = DomainSets.infimum(dom), DomainSets.supremum(dom)
+    interval = dom.domain
+    a, b = DomainSets.infimum(interval), DomainSets.supremum(interval)
     x = [(a + b) / 2 + (b - a) / 2 * cos.(π * (2k - 1) / (2N)) for k in 1:N]
 
     return dom.variables => x
