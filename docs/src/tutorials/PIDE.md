@@ -70,7 +70,7 @@ Ix = Integral(x in DomainSets.ClosedInterval(xmin, xmax)) # integral over domain
 eqs = [integral(t, x) ~ Ix(integrand(t, x))
     integrand(t, x) ~ t * cos(x)]
 
-bcs = [intergral(0, x) ~ 0.0,
+bcs = [integral(0, x) ~ 0.0,
     integrand(0, x) ~ 0.0]
 
 domains = [t ∈ Interval(0.0, 1.0),
