@@ -1,6 +1,6 @@
 # [Boundary Conditions] (@ref bcs)
 
-What follows is a set of allowable boundary conditions, please note that this is not exhaustive - try your condition and see if it works, the handling is quite general. If it doesn't please post an issue and we'll try to support it. At the moment boundary conditions have to be supplied at the edge of the domain, but there are plans to support conditions embedded in the domain.
+What follows is a set of allowable boundary conditions, please note that this is not exhaustive - try your condition and see if it works, the handling is quite general. If it doesn't, please post an issue and we'll try to support it. Currently, boundary conditions have to be supplied at the edge of the domain, but there are plans to support conditions embedded in the domain.
 
 ## Definitions
 ```julia
@@ -23,7 +23,7 @@ x_max = y_max = 1.0
 ```julia
 v(t, 0, y) ~ 1.0
 ```
-### Time dependant
+### Time dependent
 ```julia
 u(t, 0., y) ~ x_min*y+ 0.5t
 ```
@@ -31,7 +31,7 @@ u(t, 0., y) ~ x_min*y+ 0.5t
 ```julia
 v(t, x, y_max) ~ sin(x)
 ```
-### User defined function
+### User-defined function
 ```julia
 alpha = 9
 
@@ -69,7 +69,7 @@ u(t,x,y_min) ~ f(t,x,y_min) + alpha/g(x,y_min)
 ```julia
 v(t, x_min, y) ~ 2. * Dx(v(t, x_min, y))
 ```
-### Time dependant
+### Time dependent
 ```julia
 u(t, x_min, y) ~ x_min*Dy(v(t,x_min,y)) + 0.5t
 ```
@@ -81,7 +81,7 @@ v(t, x, 1.0) ~ sin(x) + Dyy(v(t, x, y_max))
 ```julia
 Dt(u(t, x_min, y)) ~ 0.2
 ```
-### User defined function
+### User-defined function
 ```julia
 function f(u, v)
     (u + Dyy(v) - Dy(u))/(1 + v)

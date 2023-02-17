@@ -108,6 +108,45 @@ end
     @test solu[end, :] ≈ zeros(n) atol = 0.001
 end
 
+@testset "Test 01a: Dt(u(t,x)) ~ Dxx(u(t,x)), chebyspace order 4" begin
+    u_exact = (t, x) -> exp.(-t) * cos.(x)
+
+    # Parameters, variables, and derivatives
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    # 1D PDE and boundary conditions
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ cos(x),
+        Dx(u(t, 0)) ~ 0,
+        Dx(u(t, Float64(pi))) ~ 0]
+
+    # Space and time domains
+    domains = [t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(pi))]
+
+    # PDE system
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # Method of lines discretization
+
+    discretization = MOLFiniteDifference([chebyspace(100, domains[2])], t, approx_order = 4)
+
+    # Convert the PDE problem into an ODE problem
+    prob = discretize(pdesys, discretization)
+
+    # Solve ODE problem
+    sol = solve(prob, Tsit5(), saveat=0.1)
+
+    # Test
+    solu = sol[u(t, x)]
+
+    @test all(isapprox.(solu[:, :],  [u_exact(disct, discx) for disct in sol[t], discx in sol[x]], atol=0.01))
+end
+
 @testset "Test 02: Dt(u(t,x)) ~ Dx(D(t,x))*Dx(u(t,x))+D(t,x)*Dxx(u(t,x))" begin
     # Parameters, variables, and derivatives
     @parameters t x
@@ -152,10 +191,10 @@ end
 
     # Test
     n = size(solu)[2]
-    @test solu[end,:] ≈ zeros(n) atol = 0.01
+    @test solu[end, :] ≈ zeros(n) atol = 0.01
 end
 
-@testset "Test 03: Dt(u(t,x)) ~ Dxx(u(t,x)), homogeneous Neumann BCs, order 8" begin
+@testset "Test 03: Dt(u(t,x)) ~ Dxx(u(t,x)), homogeneous Neumann BCs, order 6" begin
     # Method of Manufactured Solutions
     u_exact = (x, t) -> exp.(-t) * cos.(x)
 

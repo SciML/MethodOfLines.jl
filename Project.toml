@@ -1,7 +1,7 @@
 name = "MethodOfLines"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 authors = ["Alex Jones, <alex.lemony@gmail.com>"]
-version = "0.8.2"
+version = "0.8.4"
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
@@ -26,13 +26,13 @@ DomainSets = "0.5, 0.6"
 IfElse = "0.1"
 Interpolations = "0.14"
 Latexify = "0.15"
-ModelingToolkit = "8.22"
+ModelingToolkit = "8"
 OrdinaryDiffEq = "6"
 SafeTestsets = "0.0.1"
-SciMLBase = "1.57"
+SciMLBase = "1"
 StaticArrays = "1"
-SymbolicUtils = "0.19, 1"
-Symbolics = "4, 5"
+SymbolicUtils = "1"
+Symbolics = "5"
 TermInterface = "0.2, 0.3"
 julia = "1.6"
 

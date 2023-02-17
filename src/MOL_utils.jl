@@ -131,3 +131,12 @@ end
         return vcat(a, b)
     end
 end
+
+function chebyspace(N, dom)
+    interval = dom.domain
+    a, b = DomainSets.infimum(interval), DomainSets.supremum(interval)
+    x = reverse([(a + b) / 2 + (b - a) / 2 * cos(π * (2k - 1) / (2N)) for k in 1:N])
+    x[1] = a
+    x[end] = b
+    return dom.variables => x
+end

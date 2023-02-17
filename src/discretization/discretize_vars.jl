@@ -1,33 +1,33 @@
 """
     DiscreteSpace(domain, depvars, indepvars, discretization::MOLFiniteDifference)
 
-A type that stores informations about the discretized space. It takes each independent variable
-defined on the space to be discretized and create a corresponding range. It then takes each dependant
+A type that stores information about the discretized space. It takes each independent variable
+defined on the space to be discretized and create a corresponding range. It then takes each dependent
 variable and create an array of symbolic variables to represent it in its discretized form.
 
 ## Arguments
 
 - `domain`: The domain of the space.
-- `vars`: A `VariableMap` object that contains the dependant and independent variables and
+- `vars`: A `VariableMap` object that contains the dependent and independent variables and
     other important values.
 - `discretization`: The discretization algorithm.
 
 ## Properties
 
-- `ū`: The vector of dependant variables.
-- `args`: The dictionary of the operations of dependant variables and the corresponding arguments,
+- `ū`: The vector of dependent variables.
+- `args`: The dictionary of the operations of dependent variables and the corresponding arguments,
     which include the time variable if given.
-- `discvars`: The dictionary of dependant variables and the discrete symbolic representation of them.
+- `discvars`: The dictionary of dependent variables and the discrete symbolic representation of them.
     Note that this includes the boundaries. See the example below.
 - `time`: The time variable. `nothing` for steady state problems.
 - `x̄`: The vector of symbolic spatial variables.
 - `axies`: The dictionary of symbolic spatial variables and their numerical discretizations.
 - `grid`: Same as `axies` if `CenterAlignedGrid` is used. For `EdgeAlignedGrid`, interpolation will need
-    to be defined `±dx/2` above and below the edges of the simulation domain where dx is the step size in the direction of that edge.
-- `dxs`: The discretization symbolic spatial variables and their step sizes.
-- `Iaxies`: The dictionary of the dependant variables and their `CartesianIndices` of the discretization.
+    to be defined `±dx/2` above and below the edges of the simulation domain, where dx is the step size in the direction of that edge.
+- `dxs`: The discretization of symbolic spatial variables and their step sizes.
+- `Iaxies`: The dictionary of the dependent variables and their `CartesianIndices` of the discretization.
 - `Igrid`: Same as `axies` if `CenterAlignedGrid` is used. For `EdgeAlignedGrid`, one more index will be needed for extrapolation.
-- `x2i`: The dictionary of symbolic spatial variables their ordering.
+- `x2i`: The dictionary of symbolic spatial variables and their ordering.
 
 ## Examples
 
@@ -130,7 +130,7 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G,S}) where {G,
 
     depvarsdisc = map(depvars) do u
         op = SymbolicUtils.operation(u)
-        if op isa SymbolicUtils.Term{SymbolicUtils.FnType{Tuple,Real},Nothing}
+        if op isa  SymbolicUtils.BasicSymbolic{SymbolicUtils.FnType{Tuple, Real}}
             sym = Symbol(string(op))
         else
             sym = nameof(op)
@@ -173,7 +173,7 @@ nvars(::DiscreteSpace{N,M}) where {N,M} = M
 """
     params(u, s::DiscreteSpace)
 
-Fillter out the time variable and get the spatial variables of `u` in `s`.
+Filter out the time variable and get the spatial variables of `u` in `s`.
 """
 params(u, s::DiscreteSpace) = remove(s.args[operation(u)], s.time)
 Base.ndims(u, s::DiscreteSpace) = ndims(s.discvars[depvar(u, s)])
@@ -185,7 +185,7 @@ Base.size(s::DiscreteSpace) = Tuple(length(s.grid[z]) for z in s.x̄)
 """
     Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
 
-Here `indexmap` maps the arguments of `u` in `s` to the their ordering. Return a subindex
+Here `indexmap` maps the arguments of `u` in `s` to their ordering. Return a subindex
 of `II` that corresponds to only the spatial arguments of `u`.
 """
 function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)

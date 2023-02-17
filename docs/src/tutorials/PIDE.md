@@ -1,22 +1,22 @@
-#[Solving PIDEs (Integrals)](@id integral)
+# [Solving PIDEs (Integrals)](@id integral)
 
 It is also possible to solve PIDEs with MethodOfLines.jl. 
 
 Consider the following system:
 ```math
  \frac{\partial}{\partial t}u(t, x)+2u(t, x)+5\frac{\partial}{\partial x}[\int_0^xu(t, x)dx]=1
- ```
- On the domain:
- ```math
+```
+On the domain:
+```math
  t \in (0, 2)
  x \in (0, 2\pi)
- ```
- With BCs and ICs:
- ```math
+```
+With BCs and ICs:
+```math
  u(0, x)=cos(x)
  \frac{\partial}{\partial x}u(t, 0)=0
  \frac{\partial}{\partial x}u(t, 2)=0
- ```
+```
 We can discretize such a system like this:
 ```@example pide
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Plots
@@ -56,6 +56,8 @@ To have an integral over the whole domain, be sure to wrap the integral in an au
 Due to a limitation, the whole domain integral needs to have the same arguments as the integrand, but is constant in x. To use it in an equation one dimension lower, use a boundary value like integral(t, 0.0)
 
 ```@example integrals2
+using MethodOfLines, ModelingToolkit, DomainSets
+
 @parameters t, x
 @variables integrand(..) integral(..)
 Dt = Differential(t)
@@ -68,7 +70,7 @@ Ix = Integral(x in DomainSets.ClosedInterval(xmin, xmax)) # integral over domain
 eqs = [integral(t, x) ~ Ix(integrand(t, x))
     integrand(t, x) ~ t * cos(x)]
 
-bcs = [intergral(0, x) ~ 0.0,
+bcs = [integral(0, x) ~ 0.0,
     integrand(0, x) ~ 0.0]
 
 domains = [t ∈ Interval(0.0, 1.0),
