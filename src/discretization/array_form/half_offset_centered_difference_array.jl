@@ -4,6 +4,7 @@
 
 function half_offset_centered_difference(D::DerivativeOperator, interior, s, bs, jx, u, udisc, len, isx = false)
     interior = get_interior(u, s, interior)
+    ranges = get_ranges(u, s)
     is = get_is(u, s)
 
     j, x = jx
@@ -36,5 +37,5 @@ function half_offset_centered_difference(D::DerivativeOperator, interior, s, bs,
     end
     boundaryoppairs = vcat(lowerops, upperops)
 
-    return Construct_ArrayMaker(interior, vcat(Tuple(interior) => interiorop, boundaryoppairs))
+    return NullBG_ArrayMaker(ranges, vcat(Tuple(interior) => interiorop, boundaryoppairs))[interior...]
 end

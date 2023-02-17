@@ -2,7 +2,7 @@
 # Stencil interface
 ########################################################################################
 
-function _upwind_difference(D, interior, is, s,
+function _upwind_difference(D, ranges, interior, is, s,
                             bs, jx, u, udisc, ispositive)
     args = params(u, s)
 
@@ -29,7 +29,7 @@ function _upwind_difference(D, interior, is, s,
     end
     boundaryoppairs = safe_vcat(lowerops, upperops)
 
-    Construct_ArrayMaker(interior, safe_vcat([Tuple(interior) => interiorop], boundaryoppairs))
+    NullBG_ArrayMaker(ranges, safe_vcat([Tuple(interior) => interiorop], boundaryoppairs))[interior...]
 end
 
 """
@@ -37,7 +37,7 @@ end
 Generate a finite difference expression in `u` using the upwind difference at point `II::CartesianIndex`
 in the direction of `x`
 """
-function upwind_difference(d::Int, interior, is, s::DiscreteSpace, b, derivweights,
+function upwind_difference(d::Int, ranges, interior, is, s::DiscreteSpace, b, derivweights,
                            jx, u, udisc, ispositive)
     j, x = jx
     # return if this is an ODE
@@ -49,7 +49,7 @@ function upwind_difference(d::Int, interior, is, s::DiscreteSpace, b, derivweigh
     end
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative
-    return _upwind_difference(D, interior, is, s, b, jx, u, udisc, ispositive)
+    return _upwind_difference(D, ranges, interior, is, s, b, jx, u, udisc, ispositive)
 end
 
 function upwind_difference(expr, d::Int, interior, s::DiscreteSpace, b,
@@ -58,10 +58,11 @@ function upwind_difference(expr, d::Int, interior, s::DiscreteSpace, b,
 
     valrules = arrayvalmaps(s, u, depvars, interior)
     exprarr = broadcast_substitute(expr, valrules)
+    ranges = get_ranges(u, s)
 
     IfElse.ifelse.(exprarr .> 0,
-        exprarr .* upwind_difference(d, get_interior(u, s, interior), get_is(u, s), s, b, derivweights, (j, x), u, udisc, true),
-        exprarr .* upwind_difference(d, get_interior(u, s, interior), get_is(u, s), s, b, derivweights, (j, x), u, udisc, false))
+        exprarr .* upwind_difference(d, ranges, get_interior(u, s, interior), get_is(u, s), s, b, derivweights, (j, x), u, udisc, true),
+        exprarr .* upwind_difference(d, ranges, get_interior(u, s, interior), get_is(u, s), s, b, derivweights, (j, x), u, udisc, false))
 end
 
 @inline function generate_winding_rules(interior, s::DiscreteSpace, depvars,
@@ -114,6 +115,7 @@ end
             j = x2i(s, u, x)
             is = get_is(u, s)
             uinterior = get_interior(u, s, interior)
+            uranges = get_ranges(u, s)
             let orders = derivweights.orders[x]
                 oddorders = setdiff(orders[isodd.(orders)], skip)
 
@@ -121,7 +123,7 @@ end
                 if length(oddorders) > 0
                     map(oddorders) do d
                         (Differential(x)^d)(u) =>
-                          upwind_difference(d, uinterior, is, s, pmap.map[operation(u)][x],
+                          upwind_difference(d, uranges, uinterior, is, s, pmap.map[operation(u)][x],
                                             derivweights, (j, x), u, s.discvars[u], true)
                     end
                 else

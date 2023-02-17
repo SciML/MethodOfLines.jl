@@ -101,6 +101,15 @@ function IntegralArrayOp(dx, udisc, k, j, is, interior, iswd = false)
     return op
 end
 
+function IntegralArrayMaker(dx, udisc, k, j, is, ranges, interior, iswd = false)
+    if iswd
+        ranges = [ranges[1:j-1]..., 1:size(udisc, j), ranges[j:end]...]
+    end
+
+    op = IntegralArrayOp(dx, udisc, k, j, is, interior, iswd)
+    return FillArrayMaker(op, is, ranges, interior)
+end
+
 function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, bs, isx = false)
     # * I Possibly needs updating
     Is = map(taps) do tap

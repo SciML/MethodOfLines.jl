@@ -5,6 +5,7 @@
 #TODO: Decouple this from old discretization interface
 function spherical_diffusion(innerexpr, interior, derivweights, s, bs, depvars, r, u)
     interior = get_interior(u, s, interior)
+    ranges = get_ranges(u, s)
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     D_1 = derivweights.map[Differential(r)]
     D_2 = derivweights.map[Differential(r)^2]
@@ -29,7 +30,7 @@ function spherical_diffusion(innerexpr, interior, derivweights, s, bs, depvars, 
             op = selectdim(r0deriv, j, k)
             prepare_boundary_op((op, k), interior, j)
         end
-        return Construct_ArrayMaker(interior, vcat(Tuple(interior) => out, r0pairs))
+        return NullBG_ArrayMaker(ranges, vcat(Tuple(interior) => out, r0pairs))[interior...]
     else
         return out
     end
