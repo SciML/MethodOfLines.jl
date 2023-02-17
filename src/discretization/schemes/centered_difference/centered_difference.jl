@@ -2,7 +2,7 @@
 Performs a centered difference in `x` centered at index `II` of `u`
 ufunc is a function that returns the correct discretization indexed at Itap, it is designed this way to allow for central differences of arbitrary expressions which may be needed in some schemes
 """
-function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u, ufunc) where {T,N,Wind,DX<:Number}
+function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II::CartesianIndex, s, bs, jx, u, ufunc) where {T,N,Wind,DX<:Number}
     j, x = jx
     ndims(u, s) == 0 && return 0
     # unit index in direction of the derivative
@@ -26,7 +26,8 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u
     return recursive_unwrap(dot(weights, ufunc(u, Itap, x)))
 end
 
-function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u, ufunc) where {T,N,Wind,DX<:AbstractVector}
+
+function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II::CartesianIndex, s, bs, jx, u, ufunc) where {T,N,Wind,DX<:AbstractVector}
     j, x = jx
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     ndims(u, s) == 0 && return 0

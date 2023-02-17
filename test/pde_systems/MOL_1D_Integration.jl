@@ -24,7 +24,7 @@ using MethodOfLines, ModelingToolkit, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 
     asf(t, x) = t * sin(x)
 
-    disc = MOLFiniteDifference([x => 120], t)
+    disc = MOLFiniteDifference([x => 8], t)
 
     prob = discretize(pde_system, disc)
 
