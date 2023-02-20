@@ -6,7 +6,7 @@ function euler_integral(interior, s, jx, u, udisc)
     is = get_is(u, s)
 
     oppairs = map(interior[j]) do i
-        integral_op_pair(dx, udisc, j, is, interior, i)
+        integral_op_pair(dx, udisc, j, is, ranges, interior, i)
     end
 
     return NullBG_ArrayMaker(ranges, oppairs)[interior...]
@@ -18,6 +18,7 @@ function whole_domain_integral(interior, s, jx, u, udisc)
     dx = s.dxs[x]
 
     interior = get_interior(u, s, interior)
+    ranges = get_ranges(u, s)
     is = get_is(u, s)
 
     lenx = length(s, x)

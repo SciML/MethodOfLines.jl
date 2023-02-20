@@ -261,5 +261,6 @@ function recursive_unwrap(ex)
 
     op = operation(ex)
     args = arguments(ex)
-    return safe_unwrap(op(recursive_unwrap.(args)))
+    @show op, args
+    return safe_unwrap(op(map(recursive_unwrap, args)...))
 end

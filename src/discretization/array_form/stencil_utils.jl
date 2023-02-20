@@ -12,8 +12,8 @@ function upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
             iboundary), interior, j)
 end
 
-function integral_op_pair(dx, udisc, j, is, interior, i)
-    prepare_boundary_op((IntegralArrayOp(dx, udisc, i, j, is, interior),
+function integral_op_pair(dx, udisc, j, is, ranges, interior, i)
+    prepare_boundary_op((IntegralArrayOp(dx, udisc, i, j, is, ranges, interior),
             i), interior, j)
 end
 
@@ -68,45 +68,44 @@ function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
 
     symindices = setdiff(1:ndims(udisc), [j])
     output_idx = Tuple(is[symindices])
-    return FillArrayOp(expr, output_idx, interior[symindices])
+    return FillArrayOp(recursive_unwrap(expr), output_idx, interior[symindices])
 end
 
 reduce_interior(interior, j) = first(interior[j]) == 1 ? [interior[1:j-1]..., 2:last(interior[j]), interior[j+1:end]...] : interior
 
-function trapezium_sum(ranges, dx, udisc, is, j)
+function trapezium_sum(ranges, interior, dx, udisc, is, j)
     N = ndims(udisc)
     I1 = unitindex(N, j)
     I = CartesianIndex(is...)
     i = is[j]
     Im1 = I - I1
     im1 = is[j] - 1
-
-    interior = reduce_interior(ranges, j)
+    rinterior = reduce_interior(interior, j)
     if dx isa Number
         expr = (dx*(udisc[Im1] + udisc[I]) / 2)
     else
         expr = (dx[im1]*udisc[Im1] + dx[i]*udisc[I]) / 2
     end
 
-    return FillArrayMaker(expr, is, ranges, interior)
+    return FillArrayMaker(expr, is, ranges, rinterior)[interior...]
 end
 
-function IntegralArrayOp(dx, udisc, k, j, is, interior, iswd = false)
+function IntegralArrayOp(dx, udisc, k, j, is, ranges, interior, iswd = false)
     if iswd
-        interior = [interior[1:j-1]..., 1:size(udisc, j), interior[j:end]...]
+        interior = [interior[1:j-1]..., 1:size(udisc, j), interior[j+1:end]...]
     end
-    trapop = trapezium_sum(interior, dx, udisc, is, j)
+    trapop = trapezium_sum(ranges, interior, dx, udisc, is, j)
     op = sum(trapop[1:(k-first(interior[j])+1)], dims = j)
 
     return op
 end
 
-function IntegralArrayMaker(dx, udisc, k, j, is, ranges, interior, iswd = false)
+function IntegralArrayMaker(dx, udisc, k, j, is, ranges, interior, iswd = false, )
     if iswd
-        ranges = [ranges[1:j-1]..., 1:size(udisc, j), ranges[j:end]...]
+        ranges = [ranges[1:j-1]..., 1:size(udisc, j), ranges[j+1:end]...]
     end
 
-    op = IntegralArrayOp(dx, udisc, k, j, is, interior, iswd)
+    op = IntegralArrayOp(dx, udisc, k, j, is, ranges, interior, iswd)
     return FillArrayMaker(op, is, ranges, interior)
 end
 
@@ -127,11 +126,10 @@ function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, 
 
     expr = dot(weights, map(I -> udisc[I], Is))
 
-    return FillArrayOp(expr, output_idx, interior)
+    return FillArrayOp(recursive_unwrap(expr), output_idx, interior)
 end
 
 function FillArrayOp(expr, output_idx, interior)
-    expr = recursive_unwrap(expr)
     ranges = Dict(output_idx .=> interior) # hope this doesn't check bounds eagerly
     return ArrayOp(Array{symtype(expr),length(output_idx)},
                    output_idx, expr, +, nothing, ranges)
@@ -156,10 +154,12 @@ function get_interior(u, s, interior)
         if haskey(interior, x)
             interior[x]
         else
-            (1, length(s, x))
+            1:length(s, x)
         end
     end
 end
 
-get_ranges(u, s) = map(x -> first(axes(s.grid[x])), params(u, s))
+function get_ranges(u, s)
+    map(x -> first(axes(s.grid[x])), params(u, s))
+end
 get_is(u, s) = map(x -> s.index_syms[x], params(u, s))

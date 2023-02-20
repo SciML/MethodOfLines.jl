@@ -152,7 +152,7 @@ function generate_bc_op_pair(s, b::InterfaceBoundary, interior, iboundary, deriv
     end
     I = CartesianIndex(idxs)
     ranges = map(depvar(u_, s)) do x
-        if x == x_
+        if isequal(x, x_)
             1
         else
             interior[x]
@@ -177,19 +177,27 @@ function generate_bc_op_pair(s, b::AbstractInterpolatingBoundary, interior, ibou
         lenx = length(s, x_)
         boffset = offset(b, iboundary, lenx)
 
+        ranges = map(params(u, s)) do x
+            if isequal(x, x_)
+                boffset
+            else
+                interior[x]
+            end
+        end
+
         weights = D.high_boundary_coefs[iboundary]
-        taps = setdiff((lenx-D.boundary_stencil_length+1):lenx, [boffset])
+        taps = setdiff((lenx-D.boundary_stencil_length):lenx, [boffset])
     else
+        ranges = map(params(u, s)) do x
+            if isequal(x, x_)
+                iboundary
+            else
+                interior[x]
+            end
+        end
+
         weights = D.low_boundary_coefs[iboundary]
         taps = setdiff(1:D.boundary_stencil_length, [iboundary])
-    end
-
-    ranges = map(u) do x
-        if x == x_
-            1
-        else
-            interior[x]
-        end
     end
 
     Tuple(ranges) => BoundaryDerivArrayOp(weights, taps, udisc, j, get_is(u_, s),

@@ -137,14 +137,15 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     if disc_strategy isa ArrayDiscretization
         try
             alleqs = mapreduce(eq -> symtype(eq) <: AbstractArray ? 0 .~ vec(scalarize(eq)) : eq, vcat, alleqs)
+            u0 = mapreduce(def -> symtype(def) <: AbstractArray ? vec(scalarize(def)) : def, vcat, u0)
         catch e
             #dump stacktrace to file
             open("stacktrace.jl", "w") do f
                 showerror(f, e, catch_backtrace())
-                println(f, "\n###############################################\n")
+                println(f, "\n\n###############################################\n\n")
             end
+            error("Scalarization failed")
         end
-        u0 = mapreduce(def -> symtype(def) <: AbstractArray ? vec(scalarize(def)) : def, vcat, u0)
     end
 
     defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))

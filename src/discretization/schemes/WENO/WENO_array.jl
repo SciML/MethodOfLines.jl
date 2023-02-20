@@ -68,7 +68,7 @@ function weno(interior, s::DiscreteSpace, wenoscheme::WENOScheme, bs, jx, u, dx:
     hm = wm1 * hm1 + wm2 * hm2 + wm3 * hm3
 
     expr = (hp - hm) / dx
-    return FillArrayMaker(expr, is, ranges, interior)[interior...]
+    return FillArrayMaker(recursive_unwrap(expr), is, ranges, interior)[interior...]
 end
 
 function weno(interior, s::DiscreteSpace, b, jx, u, dx::AbstractVector)

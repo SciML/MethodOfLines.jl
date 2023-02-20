@@ -1,5 +1,5 @@
 # use the trapezoid rule
-function _euler_integral(II, s, jx, u, ufunc, dx::Number) #where {T,N,Wind,DX<:Number}
+function _euler_integral(II::CartesianIndex, s, jx, u, ufunc, dx::Number) #where {T,N,Wind,DX<:Number}
     j, x = jx
     if II[j] == 1
         return Num(0)
@@ -14,7 +14,7 @@ function _euler_integral(II, s, jx, u, ufunc, dx::Number) #where {T,N,Wind,DX<:N
 end
 
 # Nonuniform dx
-function _euler_integral(II, s, jx, u, ufunc, dx::AbstractVector) #where {T,N,Wind,DX<:Number}
+function _euler_integral(II::CartesianIndex, s, jx, u, ufunc, dx::AbstractVector) #where {T,N,Wind,DX<:Number}
     j, x = jx
     if II[j] == 1
         return Num(0)
@@ -28,14 +28,14 @@ function _euler_integral(II, s, jx, u, ufunc, dx::AbstractVector) #where {T,N,Wi
     return dot(weights, ufunc(u, Itap, x)) + _euler_integral(II - I1, s, jx, u, ufunc, dx)
 end
 
-function euler_integral(II, s, jx, u, ufunc)
+function euler_integral(II::CartesianIndex, s, jx, u, ufunc)
     j, x = jx
     dx = s.dxs[x]
     return _euler_integral(II, s, jx, u, ufunc, dx)
 end
 
 # An integral across the whole domain (xmin .. xmax)
-function whole_domain_integral(II, s, jx, u, ufunc)
+function whole_domain_integral(II::CartesianIndex, s, jx, u, ufunc)
     j, x = jx
     dx = s.dxs[x]
     if II[j] == length(s, x)

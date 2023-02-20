@@ -9,7 +9,7 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     # Generate the boundary conditions for the correct variable
     boundary_op_pairs = generate_bc_op_pairs(s, eqvarbcs, derivweights, interior)
     boundary_rules = mapreduce(b -> boundary_value_rules(interior, s, b, derivweights),
-                               safe_vcat, flatten_vardict(bcmap), init = [])
+                               safe_vcat, no_interp(flatten_vardict(bcmap)), init = [])
 
     # Generate the discrete form ODEs for the interior
     pdeinterior = begin
@@ -33,7 +33,6 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     ranges = get_ranges(eqvar, s)
     bg = s.discvars[eqvar]
     #TODO: Allow T
-    @show interior
     eqarray = ArrayMaker{Real}(Tuple(last.(ranges)), vcat(Tuple(ranges) => bg,
                                               Tuple(interior) => pdeinterior,
                                               boundary_op_pairs))

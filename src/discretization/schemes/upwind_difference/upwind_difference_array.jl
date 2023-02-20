@@ -18,14 +18,14 @@ function _upwind_difference(D, ranges, interior, is, s,
                 lower_boundary_deriv(D, udisc, iboundary, j, is, interior)
             end
         end
-        interiorop = interior_deriv(D, udisc, s, -D.stencil_length+1:0, j, is, interior, b)
+        interiorop = interior_deriv(D, udisc, s, -D.stencil_length+1:0, j, is, interior, bs)
     else
         if !hasupper
             upperops = map((lenx-D.boundary_point_count+1):interior[j][end]) do iboundary
                 upper_boundary_deriv(D, udisc, iboundary, j, is, interior, lenx)
             end
         end
-        interiorop = interior_deriv(D, udisc, s, 0:D.stencil_length-1, j, is, interior, b)
+        interiorop = interior_deriv(D, udisc, s, 0:D.stencil_length-1, j, is, interior, bs)
     end
     boundaryoppairs = safe_vcat(lowerops, upperops)
 
@@ -66,7 +66,7 @@ function upwind_difference(expr, d::Int, interior, s::DiscreteSpace, b,
 end
 
 @inline function generate_winding_rules(interior, s::DiscreteSpace, depvars,
-                                        derivweights::DifferentialDiscretizer, pmap,
+                                        derivweights::DifferentialDiscretizer, bcmap,
                                         indexmap, terms, skip = [])
     # for all independent variables and dependant variables
     rules = safe_vcat(#Catch multiplication
@@ -74,7 +74,7 @@ end
                [reduce(safe_vcat,
                        [[@rule *(~~a, $(Differential(x)^d)(u), ~~b) =>
                                  upwind_difference(*(~a..., ~b...), d, interior, s,
-                                                   pmap.map[operation(u)][x], depvars,
+                                                   bcmap[operation(u)][x], depvars,
                                                    derivweights, (x2i(s, u, x), x), u,
                                                    s.discvars[u], indexmap)
                           for d in (let orders = derivweights.orders[x]
@@ -88,7 +88,7 @@ end
                [reduce(safe_vcat,
                        [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) =>
                                  upwind_difference(*(~a..., ~b...) / ~c, d, interior, s,
-                                                   pmap.map[operation(u)][x], depvars,
+                                                   bcmap[operation(u)][x], depvars,
                                                    derivweights, (x2i(s, u, x), x), u,
                                                    s.discvars[u], indexmap)
                           for d in (let orders = derivweights.orders[x]
@@ -123,7 +123,7 @@ end
                 if length(oddorders) > 0
                     map(oddorders) do d
                         (Differential(x)^d)(u) =>
-                          upwind_difference(d, uranges, uinterior, is, s, pmap.map[operation(u)][x],
+                          upwind_difference(d, uranges, uinterior, is, s, bcmap[operation(u)][x],
                                             derivweights, (j, x), u, s.discvars[u], true)
                     end
                 else

@@ -99,6 +99,8 @@ end
 const AbstractEquationBoundary = Union{LowerBoundary, UpperBoundary, HigherOrderInterfaceBoundary}
 const AbstractInterpolatingBoundary = Union{LowerInterpolatingBoundary, UpperInterpolatingBoundary}
 
+no_interp(bs) = filter(b -> !(b isa AbstractInterpolatingBoundary), bs)
+
 function Base.isequal(i1::InterfaceBoundary, i2::InterfaceBoundary)
     front = (isequal(i1.u, i2.u) & isequal(i1.u2, i2.u2) & isequal(i1.x, i2.x) & isequal(i1.x2, i2.x2))
     back = (isequal(i1.u, i2.u2) & isequal(i1.u2, i2.u) & isequal(i1.x, i2.x2) & isequal(i1.x2, i2.x))
@@ -146,8 +148,8 @@ idx(b::UpperBoundary, s) = length(s, b.x)
 idx(b::HigherOrderInterfaceBoundary, s) = length(s, b.x)
 
 # indexes for Iedge depending on boundary type
-isupper(::LowerBoundary) = false
-isupper(::UpperBoundary) = true
+isupper(::AbstractLowerBoundary) = false
+isupper(::AbstractUpperBoundary) = true
 isupper(::InterfaceBoundary{IsUpper_u}) where {IsUpper_u} = IsUpper_u isa Val{true} ? true : false
 isupper(::HigherOrderInterfaceBoundary) = true
 
