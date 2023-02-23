@@ -140,3 +140,9 @@ function chebyspace(N, dom)
     x[end] = b
     return dom.variables => x
 end
+
+function sym_dot(a, b)
+    mapreduce((+), zip(collect(a), collect(b))) do (a_, b_)
+        a_ * b_
+    end
+end

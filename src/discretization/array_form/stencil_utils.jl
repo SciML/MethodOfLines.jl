@@ -64,7 +64,7 @@ function BoundaryDerivArrayOp(weights, taps, udisc, j, is, interior)
             end
         end
     end
-    expr = dot(weights, map(I -> udisc[I...], Is))
+    expr = sym_dot(weights, map(I -> udisc[I...], Is))
 
     symindices = setdiff(1:ndims(udisc), [j])
     output_idx = Tuple(is[symindices])
@@ -124,9 +124,15 @@ function InteriorDerivArrayOp(weights, taps, udisc, s, j, output_idx, interior, 
     # Wrap interfaces
     Is = map(I -> bwrap(I, bs, s, j, isx), Is)
 
-    expr = dot(weights, map(I -> udisc[I], Is))
+    Is = map(Is) do I
+        map(1:ndims(udisc)) do i
+            I[i]
+        end
+    end
 
-    return FillArrayOp(recursive_unwrap(expr), output_idx, interior)
+    expr = sym_dot(weights, map(I -> udisc[I...], Is))
+
+    return FillArrayOp(expr, output_idx, interior)
 end
 
 function FillArrayOp(expr, output_idx, interior)
@@ -139,8 +145,11 @@ NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}(Tuple(map(r -> r[end] - r[1] +
                                                   vcat(Tuple(ranges) => 0, ops))
 Construct_ArrayMaker(ranges,
                      ops) = ArrayMaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)), ops)
+Construct_ArrayMaker{T}(ranges,
+                        ops) = ArrayMaker{T}(Tuple(map(r -> r[end] - r[1] + 1, ranges)), ops)
 
-FillArrayMaker(expr, is,
+
+                     FillArrayMaker(expr, is,
                ranges, interior) = NullBG_ArrayMaker(ranges,
                                                      [Tuple(interior) => FillArrayOp(expr, is, interior)])
 
