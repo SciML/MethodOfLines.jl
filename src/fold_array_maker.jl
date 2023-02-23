@@ -1,8 +1,16 @@
 
 isarr(x) = symtype(x) isa AbstractArray
 
-#! missing primitives for broadcasting over broadcasted objects
+#TODO missing primitives for broadcasting over broadcasted objects
 
+#* Assuming no nested ArrayMakers
+#* assuming no mapreduce objects
+
+#! Unfinished
+
+"""
+Should fold any broadcasts to inner ArrayOps, and fold inner ArrayOps
+"""
 function fold(term)
     if !istree(term)
         return term
