@@ -96,6 +96,15 @@ function broadcast_reduce(f, a::Vector{<:Pair}, b::Vector{<:Pair})
     return pairs
 end
 
+"""
+This is assuming its an arrayop of the form that is made with the following constructor:
+
+    FillArrayOp(expr, output_idx, ranges)
+    ArrayOp(Array{symtype(expr),length(output_idx)},
+            output_idx, expr, +, nothing, ranges)
+
+Will need to handle other forms of ArrayOp like broadcasts and maps.
+"""
 function broadcast_reduce(f, a::ArrayOp, b::ArrayOp)
     args1 = arguments(a)
     args2 = arguments(b)
