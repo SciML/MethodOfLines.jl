@@ -126,9 +126,9 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization
-    dx = 0.1
+    N = 11
     order = 2
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => N], t)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -777,40 +777,47 @@ end
     end
 end
 
-# @testset "Test error 01: Test Higher Centered Order" begin
-#     # Method of Manufactured Solutions
-#     u_exact = (x,t) -> exp.(-t) * cos.(x)
+@testset "Test 14: linear diffusion, two variables connected at an interface, dirichlet bcs" begin
+    @parameters t x1 x2
+    @variables c1(..)
+    @variables c2(..)
+    Dt = Differential(t)
 
-#     # Parameters, variables, and derivatives
-#     @parameters t x
-#     @variables u(..)
-#     Dt = Differential(t)
-#     Dxx = Differential(x)^2
+    Dx1 = Differential(x1)
+    Dxx1 = Dx1^2
 
-#     # 1D PDE and boundary conditions
-#     eq  = Dt(u(t,x)) ~ Dxx(u(t,x))
-#     bcs = [u(0,x) ~ cos(x),
-#            u(t,0) ~ exp(-t),
-#            u(t,Float64(π)) ~ -exp(-t)]
+    Dx2 = Differential(x2)
+    Dxx2 = Dx2^2
 
-#     # Space and time domains
-#     domains = [t ∈ Interval(0.0,1.0),
-#                x ∈ Interval(0.0,Float64(π))]
+    eqs = [Dt(c1(t, x1)) ~ Dxx1(c1(t, x1)),
+            Dt(c2(t, x2)) ~ Dxx2(c2(t, x2))]
 
-#     # PDE system
-#     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
+    bcs = [c1(0, x1) ~ -x1 * (x1 - 1) * sin(x1),
+           c2(0, x2) ~ x2 * (x2 - 1) * sin(x2),
+           c1(t, 0) ~ 0,
+           c1(t, 0.5) ~ c2(t, 0.5),
+           c2(t, 1) ~ 0]
 
-#     # Method of lines discretization
-#     dx = range(0.0,Float64(π),length=30)
-#     dx_ = dx[2]-dx[1]
+    domains = [t ∈ Interval(0.0, 1.0),
+               x1 ∈ Interval(0.0, 0.5),
+               x2 ∈ Interval(0.5, 1.0)]
 
-#     # Explicitly specify and invalid order of centered difference
-#     for order in 1:6
-#         discretization = MOLFiniteDifference([x=>dx_],t;approx_order=order)
-#         if order % 2 != 0
-#             @test discretize(pdesys,discretization)
-#         else
-#             discretize(pdesys,discretization)
-#         end
-#     end
-# end
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
+
+    l = 10
+
+    discretization = MOLFiniteDifference([x1 => l, x2 => l], t)
+
+    prob = discretize(pdesys, discretization)
+
+    sol = solve(prob, Tsit5(), saveat=0.1)
+
+    x1_sol = sol[x1]
+    x2_sol = sol[x2]
+    t_sol = sol[t]
+    solc1 = sol[c1(t, x1)]
+    solc2 = sol[c2(t, x2)]
+
+    solc = vcat(solc1[end, :], solc2[end, 2:end])
+    @test solc ≈ zeros(length(solc)) atol = 0.001
+end

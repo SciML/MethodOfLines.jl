@@ -5,7 +5,7 @@ Used as a keyword argument `advection_scheme` to `MOLFiniteDifference`.
 ```julia
 UpwindScheme(approx_order = 1)
 ```
-Changes the direction of the stencil based on the sign of the coefficient of the odd order derivative to be discretized. Scheme order can be increased by changing the `approx_order` keyword argument. For more information, see [Wikipedia](https://en.wikipedia.org/wiki/Upwind_scheme)
+Changes the direction of the stencil based on the sign of the coefficient of the odd order derivative to be discretized. Scheme order can be increased by changing the `approx_order` keyword argument. For more information, see [Wikipedia](https://en.wikipedia.org/wiki/Upwind_scheme).
 
 ## WENO Scheme of Jiang and Shu
 ```julia
@@ -19,6 +19,6 @@ Problems which require this scheme may also benefit from a [Strong-Stability-Pre
 
 Problems with first order derivatives which multiply one another will need to use this scheme over the upwind scheme.
 
-Supports only first order derivatives, other odd order derivatives are unsupported with this scheme. At present does not support Nonuniform grids, though this is a planned feature.
+Supports only first order derivatives, other odd order derivatives are unsupported with this scheme. At present, does not support Nonuniform grids, though this is a planned feature.
 
 Specified on pages 8-9 of [this document](https://repository.library.brown.edu/studio/item/bdr:297524/PDF/)

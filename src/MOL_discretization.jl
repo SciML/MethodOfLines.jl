@@ -4,11 +4,22 @@ function interface_errors(depvars, indvars, discretization)
     for x in indvars
         @assert haskey(discretization.dxs, Num(x)) || haskey(discretization.dxs, x) "Variable $x has no step size"
     end
-    if !(typeof(discretization.advection_scheme) ∈ [UpwindScheme, WENOScheme])
-        throw(ArgumentError("Only `UpwindScheme()` and `WENOScheme()` are supported advection schemes."))
+    if !(typeof(discretization.advection_scheme) ∈ ALLOWED_ADVECTION_SCHEMES)
+        throw(ArgumentError("Only $(ALLOWED_ADVECTION_SCHEMES...) are supported advection schemes."))
     end
-    if !(typeof(discretization.disc_strategy) ∈ [ScalarizedDiscretization])
-        throw(ArgumentError("Only `ScalarizedDiscretization()` are supported discretization strategies."))
+    if !(typeof(discretization.disc_strategy) ∈ ALLOWED_DISCRETIZATION_STRATEGIES)
+        throw(ArgumentError("Only $(ALLOWED_DISCRETIZATION_STRATEGIES...) are supported discretization strategies."))
+    end
+end
+
+function check_boundarymap(boundarymap, discretization)
+    bs = filter_interfaces(flatten_vardict(boundarymap))
+    for b in bs
+        dx1 = discretization.dxs[Num(b.x)]
+        dx2 = discretization.dxs[Num(b.x2)]
+        if dx1 != dx2
+            throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
+        end
     end
 end
 
@@ -30,15 +41,21 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
-    # Generate a map of each variable to whether it is periodic in a given direction
-    pmap = PeriodicMap(boundarymap, v)
+
+    check_boundarymap(boundarymap, discretization)
+
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
-        pdesys, pmap = transform_pde_system!(v, boundarymap, pmap, pdesys)
+        if has_interfaces(boundarymap)
+            @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
+        else
+            pdesys = transform_pde_system!(v, boundarymap, pdesys)
+        end
     end
 
     # Check if the boundaries warrant using ODAEProblem, as long as this is allowed in the interface
-    use_ODAE = discretization.use_ODAE
+    use_ODAE = t === nothing ? false : discretization.use_ODAE
+
     if use_ODAE
         bcivmap = reduce((d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap)))
         allbcs = mapreduce(x -> bcivmap[x], vcat, v.x̄)
@@ -50,24 +67,19 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     pdeeqs = pdesys.eqs
     bcs = pdesys.bcs
 
-    # @show alldepvars
-    # @show allindvars
-
-    ############################
-    # Discretization of system
-    ############################
+    ##########################################################################
+    # Discretization of system - Function boundary here for pseudospectral
+    ##########################################################################
     alleqs = []
     bceqs = []
-    # * We wamt to do this in 2 passes
-    # * First parse the system and BCs, replacing with DiscreteVariables and DiscreteDerivatives
-    # * periodic parameters get type info on whether they are periodic or not, and if they join up to any other parameters
-    # * Then we can do the actual discretization by recursively indexing in to the DiscreteVariables
 
     # Create discretized space and variables, this is called `s` throughout
     s = DiscreteSpace(v, discretization)
     # Get the interior and variable to solve for each equation
+
     #TODO: do the interiormap before and independent of the discretization i.e. `s`
-    interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization, pmap)
+    interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization)
+
     # Get the derivative orders appearing in each equation
     pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), v.x̄))
     bcorders = Dict(map(x -> x => d_orders(x, bcs), v.x̄))
@@ -76,6 +88,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     # Generate finite difference weights
     derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
 
+    # Seperate bcs and ics
     ics = t === nothing ? [] : mapreduce(u -> boundarymap[u][t], vcat, operation.(s.ū))
 
     bcmap = Dict(map(collect(keys(boundarymap))) do u
@@ -94,37 +107,46 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         depvars = collect(depvars_lhs ∪ depvars_rhs)
         depvars = filter(u -> !any(map(x -> x isa Number, arguments(u))), depvars)
 
-        # Read the independent variables
-        # ignore if the only argument is [t]
-        indvars = Set(filter(xs -> !isequal(xs, [t]), map(arguments, depvars)))
-        # get all parameters in the equation
-        allx̄ = Set(filter(!isempty, map(u -> filter(x -> t === nothing || !isequal(x, t.val), arguments(u)), depvars)))
-        # Handle the case where there are no independent variables apart from time
-        if isempty(allx̄)
-            rules = varmaps(s, depvars, CartesianIndex(), Dict([]))
-            push!(alleqs, substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules))
-        else
-            # make sure there is only one set of independent variables per equation
-            @assert length(allx̄) == 1
-            pdex̄ = first(allx̄)
-            @assert length(indvars) == 1
+        eqvar = interiormap.var[pde]
 
+        # * Assumes that all variables in the equation have same dimensionality except edgevals
+        args = params(eqvar, s)
+        indexmap = Dict([args[i] => i for i in 1:length(args)])
+        if disc_strategy isa ScalarizedDiscretization
+            # Generate the equations for the interior points
+            discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
+                                 depvars, s, derivweights, indexmap, disc_strategy,
+                                 discretization.verbose_schemes)
+        else
             eqvar = interiormap.var[pde]
 
             # * Assumes that all variables in the equation have same dimensionality except edgevals
             args = params(eqvar, s)
             indexmap = Dict([args[i] => i for i in 1:length(args)])
-            if disc_strategy isa ScalarizedDiscretization
                 # Generate the equations for the interior points
-                discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                    depvars, s, derivweights, indexmap, pmap)
-            else
-                throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
-            end
+
+            discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
+                                 depvars, s, derivweights, indexmap, disc_strategy,
+                                 discretization.verbose_schemes)
         end
     end
 
     u0 = generate_ic_defaults(ics, s, disc_strategy)
+    display(alleqs)
+    #! Temporarily scalarize for compatibility until MTK supports Array equations
+    if disc_strategy isa ArrayDiscretization
+        try
+            alleqs = mapreduce(eq -> symtype(eq) <: AbstractArray ? 0 .~ vec(scalarize(eq)) : eq, vcat, alleqs)
+            u0 = mapreduce(def -> symtype(def) <: AbstractArray ? vec(scalarize(def)) : def, vcat, u0)
+        catch e
+            #dump stacktrace to file
+            open("stacktrace.jl", "w") do f
+                showerror(f, e, catch_backtrace())
+                println(f, "\n\n###############################################\n\n")
+            end
+            error("Scalarization failed")
+        end
+    end
 
     defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))
     ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
@@ -134,21 +156,27 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     return generate_system(alleqs, bceqs, ics, s.discvars, defaults, ps, tspan, metadata)
 end
 
-function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference)
+function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference; analytic = nothing, kwargs...)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
         simpsys = structural_simplify(sys)
         if tspan === nothing
-            add_metadata!(simpsys.metadata, sys)
-            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs...)
+            add_metadata!(get_metadata(sys), sys)
+            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs..., kwargs...)
         else
             # Use ODAE if nessesary
             if getfield(sys, :metadata) isa MOLMetadata && getfield(sys, :metadata).use_ODAE
-                add_metadata!(simpsys.metadata, DAEProblem(simpsys; discretization.kwargs...))
-                return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
+                add_metadata!(get_metadata(simpsys), DAEProblem(simpsys; discretization.kwargs..., kwargs...))
+                return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
             else
-                add_metadata!(simpsys.metadata, sys)
-                return prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...)
+                add_metadata!(get_metadata(simpsys), sys)
+                prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
+                if analytic === nothing
+                    return prob
+                else
+                    f = ODEFunction(pdesys, discretization, analytic=analytic, discretization.kwargs..., kwargs...)
+                    return ODEProblem(f, prob.u0, prob.tspan; discretization.kwargs..., kwargs...)
+                end
             end
         end
     catch e
@@ -158,6 +186,7 @@ end
 
 function get_discrete(pdesys, discretization)
     t = discretization.time
+    disc_strategy = discretization.disc_strategy
     cardinalize_eqs!(pdesys)
 
     ############################
@@ -173,11 +202,14 @@ function get_discrete(pdesys, discretization)
     bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
-    # Generate a map of each variable to whether it is periodic in a given direction
-    pmap = PeriodicMap(boundarymap, v)
+
     # Transform system so that it is compatible with the discretization
     if discretization.should_transform
-        pdesys, pmap = transform_pde_system!(v, boundarymap, pmap, pdesys)
+        if has_interfaces(boundarymap)
+            @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
+        else
+            pdesys = transform_pde_system!(v, boundarymap, pdesys)
+        end
     end
 
     s = DiscreteSpace(v, discretization)
@@ -204,9 +236,35 @@ function ModelingToolkit.ODEFunctionExpr(pdesys::PDESystem,discretization::Metho
     end
 end
 
-function generate_code(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference,filename="code.jl")
+function SciMLBase.ODEFunction(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference; analytic=nothing, kwargs...)
+    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
+    try
+        if tspan === nothing
+            @assert true "Codegen for NonlinearSystems is not yet implemented."
+        else
+            simpsys = structural_simplify(sys)
+            if analytic !== nothing
+                analytic = analytic isa Dict ? analytic : Dict(analytic)
+                s = getfield(sys, :metadata).discretespace
+                us = get_states(simpsys)
+                gridlocs = get_gridloc.(us, (s,))
+                f_analytic = generate_function_from_gridlocs(analytic, gridlocs, s)
+            end
+            return ODEFunction(simpsys; analytic = f_analytic, discretization.kwargs..., kwargs...)
+        end
+    catch e
+        println("The system of equations is:")
+        println(sys.eqs)
+        println()
+        println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
+        println()
+        rethrow(e)
+    end
+end
+
+function generate_code(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference,filename="generated_code_of_pdesys.jl")
     code = ODEFunctionExpr(pdesys, discretization)
-    rm(filename)
+    rm(filename; force = true)
     open(filename, "a") do io
         println(io, code)
     end

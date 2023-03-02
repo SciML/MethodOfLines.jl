@@ -1,7 +1,7 @@
 
 # [Generated Code for the Brusselator Equation] (@id brusscode)
 
-Here's the generated julia code for the [Brusselator](@ref brusselator), with `dx = dy = 1/4`
+Here's the generated Julia code for the [Brusselator](@ref brusselator), with `dx = dy = 1/4`.
 
 ```julia
 begin

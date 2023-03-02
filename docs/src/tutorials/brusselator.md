@@ -1,5 +1,5 @@
 
-# [Tutorial] (@id brusselator)
+# [Getting Started] (@id brusselator)
 ## Using the Brusselator PDE as an example
 
 The Brusselator PDE is defined as follows:
@@ -42,7 +42,7 @@ on a timespan of ``t \in [0,11.5]``.
 
 ## Solving with MethodOfLines
 
-With `ModelingToolkit.jl`, we first symbolicaly define the system, see also the docs for [`PDESystem`](https://docs.sciml.ai/ModelingToolkit/stable/systems/PDESystem/):
+With `ModelingToolkit.jl`, we first symbolically define the system, see also the docs for [`PDESystem`](https://docs.sciml.ai/ModelingToolkit/stable/systems/PDESystem/):
 
 ```julia
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
@@ -96,12 +96,10 @@ Then, we create the discretization, leaving the time dimension undiscretized by 
 ```julia
 N = 32
 
-dx = (x_max-x_min)/N
-dy = (y_max-y_min)/N
+order = 2 # This may be increased to improve accuracy of some schemes
 
-order = 2
-
-discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=order, grid_align=center_align)
+# Integers for x and y are interpreted as number of points. Use a Float to directtly specify stepsizes dx and dy.
+discretization = MOLFiniteDifference([x=>N, y=>N], t, approx_order=order)
 ```
 Next, we discretize the system, converting the `PDESystem` in to an `ODEProblem` or `NonlinearProblem`.
 
@@ -112,7 +110,7 @@ println("Discretization:")
 ```
 
 ## Solving the problem
-Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](http://docs.sciml.ai/NonlinearSolve/stable/solvers/NonlinearSystemSolvers/) and [SteadyStateDiffEq.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl). `Tsit5()` is a good first choice of solver for many problems.
+Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](http://docs.sciml.ai/NonlinearSolve/stable/solvers/NonlinearSystemSolvers/) and [SteadyStateDiffEq.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl). `Tsit5()` is a good first choice of solver for many problems. Some problems, particularly advection dominated ones, are better solved with [implicit DAE solvers](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/).
 
 ```julia
 println("Solve:")
@@ -120,7 +118,7 @@ println("Solve:")
 ```
 
 ## Extracting results
-To retrieve your solution, for example for `u`, use `sol[u(x, y, t)]`. To get the independent variable axes, use for example `sol[t]`. For more information on the solution interface, [see this page](@ref sol)
+To retrieve your solution, for example for `u`, use `sol[u(x, y, t)]`. To get the independent variable axes, use `sol[t]`. For more information on the solution interface, [see this page](@ref sol)
 ```julia
 discrete_x = sol[x]
 discrete_y = sol[y]

@@ -75,7 +75,7 @@ discretization = MOLFiniteDifference([x => dx], t)
 prob = discretize(pdesys, discretization);
 ```
 
-### Solving time dependent SIS epidemic model
+### Solving time-dependent SIS epidemic model
 
 ```@example sispde
 # Solving SIS reaction diffusion model

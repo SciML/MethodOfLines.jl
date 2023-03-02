@@ -7,6 +7,7 @@ pages = [
         "tutorials/heatss.md",
         "tutorials/sispde.md",
         "tutorials/icbc_sampled.md",
+        "tutorials/PIDE.md",
     ],
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
     "Solution Interface - PDESolutions" => "solutions.md",

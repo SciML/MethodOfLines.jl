@@ -419,6 +419,55 @@ end
     @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
 
+@testset "Test 05 - Alan's Example: Dt(u(t, x)) + α * Dx(u(t, x)) ~ β * Dxx(u(t, x)) + γ * Dxxx(u(t, x)) - δ * Dxxxx(u(t, x))" begin
+    @parameters t, x
+    @variables u(..)
+
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dxxx = Differential(x)^3
+    Dxxxx = Differential(x)^4
+
+    α = 1.1
+    β = 2.1
+    γ = 1.1
+    δ = 3.1
+
+    eq = Dt(u(t, x)) + α * Dx(u(t, x)) ~ β * Dxx(u(t, x)) + γ * Dxxx(u(t, x)) - δ * Dxxxx(u(t, x))
+    domain = [x ∈ Interval(0.0, 2π),
+        t ∈ Interval(0.0, 3.0)]
+
+    ic_bc = [u(0.0, x) ~ cos(x)^2,
+        u(t, 0.0) ~ u(t, 2π)]
+
+    @named sys = PDESystem(eq, ic_bc, domain, [t, x], [u(t, x)])
+
+    # Method of lines discretization
+    dx = 2π / 30
+    order = 2
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+
+    # Convert the PDE problem into an ODE problem
+    prob = discretize(sys, discretization)
+
+    # Solve ODE problem
+    sol = solve(prob, Rodas4P(), saveat=0.01)
+
+    asf(t, x) = 0.5 * (exp(-t * 4(β + 4δ)) * cos(t * (-8γ - 2α) + 2x) + 1)
+
+    solu = sol[u(t, x)]
+
+    x_grid = sol[x]
+    t_grid = sol[t]
+
+    exact = [asf(t, x) for t in t_grid, x in x_grid]
+    for i in eachindex(t_grid)
+        norm_exact = exact[i, :] ./ maximum(exact[i, :])
+        norm_usol = solu[i, :] ./ maximum(solu[i, :])
+        @test norm_exact ≈ norm_usol atol = 0.1
+    end
+end
 # @testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
 #     # Parameters, variables, and derivatives
 #     @parameters t x
