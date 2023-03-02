@@ -52,14 +52,14 @@ end
     ufunc(u, I, x) = s.discvars[u][I]
 
     eulerrules = reduce(safe_vcat, [[Integral(x in DomainSets.ClosedInterval(s.vars.intervals[x][1], Num(x)))(u) => euler_integral(Idx(II, s, u, indexmap), s, (x2i(s, u, x), x), u, ufunc)
-                                for x in params(u, s)]
+                                for x in ivs(u, s)]
                                for u in depvars], init = [])
     return eulerrules
 end
 
 function wd_integral_Idx(II::CartesianIndex, s::DiscreteSpace, u, x, indexmap)
     # We need to construct a new index as indices may be of different size
-    length(params(u, s)) == 0 && return CartesianIndex()
+    length(ivs(u, s)) == 0 && return CartesianIndex()
     # A hack using the boundary value re-indexing function to get an index that will work
     u_ = substitute(u, [x => s.axies[x][end]])
     II = newindex(u_, II, s, indexmap)
@@ -71,7 +71,7 @@ end
     wholedomainrules = reduce(safe_vcat,
                               [[Integral(x in DomainSets.ClosedInterval(s.vars.intervals[x][1], s.vars.intervals[x][2]))(u) =>
                                     whole_domain_integral(wd_integral_Idx(II, s, u, x, indexmap), s, (x2i(s, u, x), x), u, ufunc)
-                                for x in filter(x -> (!haskey(indexmap, x) | isequal(x, bvar)), params(u, s))]
+                                for x in filter(x -> (!haskey(indexmap, x) | isequal(x, bvar)), ivs(u, s))]
                                for u in depvars],
                               init = [])
     return wholedomainrules

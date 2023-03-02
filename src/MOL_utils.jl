@@ -100,7 +100,7 @@ end
 function newindex(u_, II, s, indexmap)
     u = depvar(u_, s)
     args_ = remove(arguments(u_), s.time)
-    args = params(u, s)
+    args = ivs(u, s)
     is = map(enumerate(args_)) do (j, x)
         if haskey(indexmap, x)
             II[indexmap[x]]

@@ -107,7 +107,7 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
         eqvar = interiormap.var[pde]
 
         # * Assumes that all variables in the equation have same dimensionality except edgevals
-        args = params(eqvar, s)
+        args = ivs(eqvar, s)
         indexmap = Dict([args[i] => i for i in 1:length(args)])
         if disc_strategy isa ScalarizedDiscretization
             # Generate the equations for the interior points

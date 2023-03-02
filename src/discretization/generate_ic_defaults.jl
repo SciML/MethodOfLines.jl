@@ -6,7 +6,7 @@ function generate_ic_defaults(tconds, s, ::ScalarizedDiscretization)
                 throw(ArgumentError("Upper boundary condition $(ic.eq) on time variable is not supported, please use a change of variables `t => -τ` to make this an initial condition."))
             end
 
-            args = params(depvar(ic.u, s), s)
+            args = ivs(depvar(ic.u, s), s)
             indexmap = Dict([args[i]=>i for i in 1:length(args)])
             D = ic.order == 0 ? identity : (Differential(t)^ic.order)
             defaultvars = D.(s.discvars[depvar(ic.u, s)])

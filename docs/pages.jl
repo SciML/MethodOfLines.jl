@@ -3,7 +3,7 @@ pages = [
     "Tutorials" => [
         "tutorials/brusselator.md",
         "tutorials/heat.md",
-        "tutorials/params.md",
+        "tutorials/ivs.md",
         "tutorials/heatss.md",
         "tutorials/sispde.md",
         "tutorials/icbc_sampled.md",

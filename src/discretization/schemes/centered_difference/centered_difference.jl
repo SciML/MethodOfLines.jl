@@ -60,5 +60,5 @@ This is a catch all ruleset, as such it does not use @rule. Any even ordered der
         let orders = derivweights.orders[x]
             orders[iseven.(orders)]
         end
-    )] for x in params(u, s)], init = []) for u in depvars], init = [])
+    )] for x in ivs(u, s)], init = []) for u in depvars], init = [])
 end
