@@ -22,7 +22,7 @@ A user definable scheme that takes a set of functions as input. The functions de
 
 The boundary functions define the derivative at their index in the function vector, numbering from the boundary. For example, if `boundary_points = 3`, the first function in the vector will define the derivative at the boundary, the second at the boundary plus one step, and the third at the boundary plus two steps.
 
-The functions making up the taking the following inputs:
+The functions making up the scheme take the following inputs:
 
 Functions must be of the form `f(u, p, t, deriv_iv, d_iv)`.
 
