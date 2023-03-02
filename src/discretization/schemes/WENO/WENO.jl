@@ -1,3 +1,8 @@
+"""
+Implements the WENO scheme of Jiang and Shu.
+Specified in https://repository.library.brown.edu/studio/item/bdr:297524/PDF/ (Page 8-9)
+Implementation *heavily* inspired by https://github.com/ranocha/HyperbolicDiffEq.jl/blob/84c2d882e0c8956457c7d662bf7f18e3c27cfa3d/src/finite_volumes/weno_jiang_shu.jl by H. Ranocha.
+"""
 function weno_f(u, p, t, x, dx)
     ε = p[1]
 
