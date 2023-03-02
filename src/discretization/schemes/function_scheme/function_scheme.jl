@@ -1,19 +1,5 @@
-function function_scheme(F::FunctionScheme{is_nonuniform}, II, s, bs, jx, u, ufunc) where {is_nonuniform <: Val{false}}
-
-
-    # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
-    u_disc = ufunc(u, Itap, x)
-    ps = params(s)
-    dx = s.dxs[x]
-    t = s.time
-
-    return f(u_disc, ps, t, x, dx)
-end
-
-
-function get_f_and_taps(F::FunctionScheme{is_nonuniform}, II, s, bs, jx, u, ufunc) where {is_nonuniform <: Val{false}}
+function get_f_and_taps(F::FunctionalScheme, II, s, bs, jx, u)
     j, x = jx
-    ndims(u, s) == 0 && return 0
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
     # offset is important due to boundary proximity
@@ -22,7 +8,7 @@ function get_f_and_taps(F::FunctionScheme{is_nonuniform}, II, s, bs, jx, u, ufun
     lower_point_count = length(f.lower)
     upper_point_count = length(f.upper)
 
-    if (II[j] <= D.lower_point_count) & !haslower
+    if (II[j] <= lower_point_count) & !haslower
         f = F.lower[II[j]]
         offset = 1 - II[j]
         Itap = [II + (i + offset) * I1 for i in 0:(F.boundary_points-1)]
@@ -36,3 +22,41 @@ function get_f_and_taps(F::FunctionScheme{is_nonuniform}, II, s, bs, jx, u, ufun
     end
 
     return f, Itap
+end
+
+function function_scheme(F::FunctionalScheme{is_nonuniform}, II, s, bs, jx, u, ufunc) where {is_nonuniform<:Val{false}}
+    j, x = jx
+    ndims(u, s) == 0 && return 0
+
+    f, Itap = get_f_and_taps(F, II, s, bs, jx, u)
+    if isnothing(f)
+        error("Scheme $(F.name) applied to $u in direction of $x at point $II is not defined.")
+    end
+    # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
+    u_disc = ufunc(u, Itap, x)
+    ps = params(s)
+    dx = s.dxs[x]
+    if F.is_nonuniform
+        if dx isa AbstractVector
+            dx = map(I -> dx[I[j]], Itap)#
+        end
+    elseif dx isa AbstractVector
+        error("Scheme $(F.name) not implemented for nonuniform dxs.")
+    end
+
+    t = s.time
+
+    return f(u_disc, ps, t, x, dx)
+end
+
+@inline function generate_advection_rules(F::FunctionalScheme, II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
+    central_ufunc(u, I, x) = s.discvars[u][I]
+    return reduce(safe_vcat, [[(Differential(x))(u) =>
+                                        function_scheme(F,
+                                                        Idx(II, s, u, indexmap), s,
+                                                        filter_interfaces(bcmap[operation(u)][x]),
+                                                        (x2i(s, u, x), x), u,
+                                                        central_ufunc)
+                                for x in ivs(u, s)]
+                               for u in depvars], init=[])
+end

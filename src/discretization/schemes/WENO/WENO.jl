@@ -1,37 +1,11 @@
+function weno_f(u, p, t, x, dx)
+    ε = p[1]
 
-"""
-Implements the WENO scheme of Jiang and Shu.
-
-Specified in https://repository.library.brown.edu/studio/item/bdr:297524/PDF/ (Page 8-9)
-
-Implementation *heavily* inspired by https://github.com/ranocha/HyperbolicDiffEq.jl/blob/84c2d882e0c8956457c7d662bf7f18e3c27cfa3d/src/finite_volumes/weno_jiang_shu.jl by H. Ranocha.
-"""
-function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, bs, jx, u, dx::Number)
-    j, x = jx
-    ε = wenoscheme.epsilon
-
-    I1 = unitindex(ndims(u, s), j)
-
-    udisc = s.discvars[u]
-
-    Im2 = bwrap(II - 2I1, bs, s, jx)
-    Im1 = bwrap(II - I1, bs, s, jx)
-    Ip1 = bwrap(II + I1, bs, s, jx)
-    Ip2 = bwrap(II + 2I1, bs, s, jx)
-    is = map(I -> I[j], [Im2, Im1, Ip1, Ip2])
-    for i in is
-        if i < 1
-            return nothing
-        elseif i > length(s, x)
-            return nothing
-        end
-    end
-
-    u_m2 = udisc[Im2]
-    u_m1 = udisc[Im1]
-    u_0 = udisc[II]
-    u_p1 = udisc[Ip1]
-    u_p2 = udisc[Ip2]
+    u_m2 = u[1]
+    u_m1 = u[2]
+    u_0 = u[3]
+    u_p1 = u[4]
+    u_p2 = u[5]
 
     γm1 = 1 / 10
     γm2 = 3 / 5
@@ -74,16 +48,15 @@ function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, bs, 
     hp = wp1 * hp1 + wp2 * hp2 + wp3 * hp3
     hm = wm1 * hm1 + wm2 * hm2 + wm3 * hm3
 
-    return recursive_unwrap((hp - hm) / dx)
-end
-
-function weno(II::CartesianIndex, s::DiscreteSpace, b, jx, u, dx::AbstractVector)
-    @assert false "WENO scheme not implemented for nonuniform grids."
+    return (hp - hm) / dx
 end
 
 """
-This is a catch all ruleset, as such it does not use @rule.
+`WENOScheme` of Jiang and Shu
+## Keyword Arguments
+- `epsilon`: A quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. More sensetive problems will benefit from a smaller value. It is defined as a functional scheme.
 """
-@inline function generate_WENO_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
-    return reduce(safe_vcat, [[(Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, derivweights.advection_scheme, filter_interfaces(bcmap[operation(u)][x]), (x2i(s, u, x), x), u, s.dxs[x]) for x in ivs(u, s)] for u in depvars], init = [])
+function WENOScheme(epsilon = 1e-6)
+    boundry_f = [nothing, nothing]
+    return FunctionScheme{5, 0}(weno_f, boundary_f, boundary_f, false, [epsilon], name = "WENO")
 end
