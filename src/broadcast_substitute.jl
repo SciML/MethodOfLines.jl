@@ -1,6 +1,4 @@
-broadcast_substitute(expr, pairs) = _sub(expr, pairs, false)
-broadcast_substitute(expr, pairs, verbose) = _sub(expr, pairs, verbose)
-
+broadcast_substitute(expr, pairs, verbose = false) = _sub(expr, pairs, verbose)
 
 function _sub(expr, pairs, verbose)
     ipair = findfirst(p -> isequal(p.first, expr), pairs)
@@ -22,5 +20,17 @@ function _sub(expr, pairs, verbose)
         end
     else
         return expr
+    end
+end
+
+function broadcast_substitute(pairs::Array{<:Pair}, verbose = false)
+    map(pairs) do pair
+        op = last(pair)
+        @assert op isa ArrayOp
+        args = arguments(op)
+        is = args[1]
+        expr = args[2]
+        ranges = is .=> fist(pair)
+        broadcast_substitute(expr, ranges, verbose)
     end
 end
