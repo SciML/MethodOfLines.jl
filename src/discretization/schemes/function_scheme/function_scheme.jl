@@ -35,18 +35,18 @@ function function_scheme(F::FunctionalScheme{is_nonuniform}, II, s, bs, jx, u, u
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
     u_disc = ufunc(u, Itap, x)
     ps = params(s)
+    t = s.time
+    discx = map(I -> s.grid[x][I[j]], Itap)
     dx = s.dxs[x]
     if F.is_nonuniform
         if dx isa AbstractVector
-            dx = map(I -> dx[I[j]], Itap)#
+            dx = map(I -> dx[I[j]], Itap[1:end-1])#
         end
     elseif dx isa AbstractVector
         error("Scheme $(F.name) not implemented for nonuniform dxs.")
     end
 
-    t = s.time
-
-    return f(u_disc, ps, t, x, dx)
+    return f(u_disc, ps, t, discx, dx)
 end
 
 @inline function generate_advection_rules(F::FunctionalScheme, II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
