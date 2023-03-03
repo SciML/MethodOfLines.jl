@@ -24,7 +24,7 @@ function get_f_and_taps(F::FunctionalScheme, II, s, bs, jx, u)
     return f, Itap
 end
 
-function function_scheme(F::FunctionalScheme{is_nonuniform}, II, s, bs, jx, u, ufunc) where {is_nonuniform<:Val{false}}
+function function_scheme(F::FunctionalScheme, II, s, bs, jx, u, ufunc)
     j, x = jx
     ndims(u, s) == 0 && return 0
 

@@ -74,7 +74,7 @@ struct FunctionalScheme{F, V1, V2, V3} <: AbstractScheme
 end
 
 function FunctionalScheme{ips, bps}(interior, lower, upper, is_nonuniform = false, ps = []; name = "FunctionalScheme") where {ips, bps}
-
+    @assert ips % 2 == 1 "interior_points must be odd."
     FunctionalScheme{typeof(interior), typeof(lower),
                      typeof(upper), typeof(ps)}(interior, lower, upper,
                                                 ips, bps, is_nonuniform, ps)
