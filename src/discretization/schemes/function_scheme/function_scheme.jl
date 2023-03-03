@@ -5,8 +5,8 @@ function get_f_and_taps(F::FunctionalScheme, II, s, bs, jx, u)
     # offset is important due to boundary proximity
     haslower, hasupper = haslowerupper(bs, x)
 
-    lower_point_count = length(f.lower)
-    upper_point_count = length(f.upper)
+    lower_point_count = length(F.lower)
+    upper_point_count = length(F.upper)
 
     if (II[j] <= lower_point_count) & !haslower
         f = F.lower[II[j]]
@@ -34,7 +34,7 @@ function function_scheme(F::FunctionalScheme, II, s, bs, jx, u, ufunc)
     end
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
     u_disc = ufunc(u, Itap, x)
-    ps = params(s)
+    ps = vcat(F.ps, params(s))
     t = s.time
     discx = map(I -> s.grid[x][I[j]], Itap)
     dx = s.dxs[x]

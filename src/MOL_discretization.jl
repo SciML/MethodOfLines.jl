@@ -4,8 +4,8 @@ function interface_errors(depvars, indvars, discretization)
     for x in indvars
         @assert haskey(discretization.dxs, Num(x)) || haskey(discretization.dxs, x) "Variable $x has no step size"
     end
-    if !(typeof(discretization.advection_scheme) ∈ [UpwindScheme, WENOScheme])
-        throw(ArgumentError("Only `UpwindScheme()` and `WENOScheme()` are supported advection schemes."))
+    if !any(s -> discretization.advection_scheme isa s,  [UpwindScheme, FunctionalScheme])
+        throw(ArgumentError("Only `UpwindScheme()` and `FunctionalScheme()` are supported advection schemes. Got $(typeof(discretization.advection_scheme))."))
     end
     if !(typeof(discretization.disc_strategy) ∈ [ScalarizedDiscretization])
         throw(ArgumentError("Only `ScalarizedDiscretization()` are supported discretization strategies."))

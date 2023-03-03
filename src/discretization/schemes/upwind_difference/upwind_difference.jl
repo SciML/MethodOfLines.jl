@@ -65,7 +65,7 @@ function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, bs, der
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative
     weights, Itap = _upwind_difference(D, II, s, bs, ispositive, u, jx)
-    return recursive_unwrap(dot(weights, ufunc(u, Itap, x)))
+    return sym_dot(weights, ufunc(u, Itap, x))
 end
 
 function upwind_difference(expr, d::Int, II::CartesianIndex, s::DiscreteSpace, bs, depvars, derivweights, (j, x), u, central_ufunc, indexmap)

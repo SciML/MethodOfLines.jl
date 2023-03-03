@@ -10,7 +10,7 @@ function _euler_integral(II, s, jx, u, ufunc, dx::Number) #where {T,N,Wind,DX<:N
     Itap = [II - I1, II]
     weights = [dx / 2, dx / 2]
 
-    return dot(weights, ufunc(u, Itap, x)) + _euler_integral(II - I1, s, jx, u, ufunc, dx)
+    return sym_dot(weights, ufunc(u, Itap, x)) + _euler_integral(II - I1, s, jx, u, ufunc, dx)
 end
 
 # Nonuniform dx
@@ -25,7 +25,7 @@ function _euler_integral(II, s, jx, u, ufunc, dx::AbstractVector) #where {T,N,Wi
     Itap = [II - I1, II]
     weights = fill(dx[II[j]-1] / 2, 2)
 
-    return dot(weights, ufunc(u, Itap, x)) + _euler_integral(II - I1, s, jx, u, ufunc, dx)
+    return sym_dot(weights, ufunc(u, Itap, x)) + _euler_integral(II - I1, s, jx, u, ufunc, dx)
 end
 
 function euler_integral(II, s, jx, u, ufunc)
