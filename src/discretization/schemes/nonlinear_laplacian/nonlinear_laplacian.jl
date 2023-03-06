@@ -68,7 +68,7 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
     end
 
     # multiply the inner finite difference by the interpolated expression, and finally take the outer finite difference
-    return dot(outerweights, inner_difference .* interpolated_expr)
+    return sym_dot(outerweights, inner_difference .* interpolated_expr)
 end
 
 @inline function generate_nonlinlap_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
