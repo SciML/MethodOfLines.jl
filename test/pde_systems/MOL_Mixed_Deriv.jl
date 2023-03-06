@@ -67,5 +67,5 @@ end
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
     sol = solve(prob, FBDF(), saveat = 0.1);
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Successend
 end
