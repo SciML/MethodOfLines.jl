@@ -64,6 +64,7 @@ end
 
 function get_gridloc(u, s)
     if isequal(operation(u), getindex)
+        # Remember arguments of getindex have u(t) first
         return _get_gridloc(s, arguments(u)...)
     else
         return (operation(u), [])
