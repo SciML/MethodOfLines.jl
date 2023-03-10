@@ -167,7 +167,12 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
     for (j, x) in enumerate(args)
         ninterp = lowerextents[j] - vlower[j]
         I1 = unitindex(length(args), j)
+        bs = bcmap[operation(u)][x]
+        haslower, hasupper = haslowerupper(bs, x)
         while ninterp >= vlower[j]
+            if haslower
+                break
+            end
             for Il in (edge(interiormap, s, u, j, true) .+ (ninterp * I1,))
                 expr = central_difference(derivweights.boundary[x], Il, s, filter_interfaces(bcmap[operation(u)][x]), (j, x), u, ufunc)
                 push!(eqmap[Il], expr)
@@ -176,6 +181,9 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
         end
         ninterp = upperextents[j] - vupper[j]
         while ninterp >= vupper[j]
+            if hasupper
+                break
+            end
             for Iu in (edge(interiormap, s, u, j, false) .- (ninterp * I1,))
                 expr = central_difference(derivweights.boundary[x], Iu, s, filter_interfaces(bcmap[operation(u)][x]), (j, x), u, ufunc)
                 push!(eqmap[Iu], expr)
