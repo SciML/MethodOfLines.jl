@@ -14,8 +14,8 @@ analytic_u(p, t, x) = x / (t + p[1])
 eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
 
 bcs = [u(0, x) ~ x,
-    u(t, x_min) ~ analytic_u(_, t, x_min),
-    u(t, x_max) ~ analytic_u(_, t, x_max)]
+    u(t, x_min) ~ analytic_u([1], t, x_min),
+    u(t, x_max) ~ analytic_u([1], t, x_max)]
 
 domains = [t ∈ Interval(t_min, t_max),
     x ∈ Interval(x_min, x_max)]
