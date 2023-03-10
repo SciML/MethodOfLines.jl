@@ -84,14 +84,14 @@ function generate_function_from_gridlocs(analyticmap, gridlocs, s)
         is_t_first = is_t_first_map[uop]
         _f = analyticmap[opsmap[uop]]
         if is_t_first
-            return t -> _f(t, x̄...)
+            return (p, t) -> _f(p, t, x̄...)
         else
-            return t -> _f(x̄..., t)
+            return (p, t) -> _f(p, x̄..., t)
         end
     end
 
     f = (u0, p, t) -> map(fs_) do f_
-        f_(t)
+        f_(p, t)
     end
 
     return f
