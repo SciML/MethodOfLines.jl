@@ -36,11 +36,12 @@ function function_scheme(F::FunctionalScheme, II, s, bs, jx, u, ufunc)
     u_disc = ufunc(u, Itap, x)
     ps = vcat(F.ps, params(s))
     t = s.time
-    discx = map(I -> s.grid[x][I[j]], Itap)
+    itap = map(I -> I[j], Itap)
+    discx = @view s.grid[x][itap]
     dx = s.dxs[x]
     if F.is_nonuniform
         if dx isa AbstractVector
-            dx = map(I -> dx[I[j]], Itap[1:end-1])#
+            dx = @views dx[itap[1:end-1]]
         end
     elseif dx isa AbstractVector
         error("Scheme $(F.name) not implemented for nonuniform dxs.")
