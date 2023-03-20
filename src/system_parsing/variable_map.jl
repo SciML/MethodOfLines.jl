@@ -11,6 +11,9 @@ struct VariableMap
 end
 
 function VariableMap(eqs, depvars, domain, time, ps = [])
+    if ps isa SciMLBase.NullParameters
+        ps = []
+    end
     time = safe_unwrap(time)
     ps = map(ps) do p
         safe_unwrap(p.first)
@@ -34,8 +37,8 @@ function VariableMap(eqs, depvars, domain, time, ps = [])
     return VariableMap(ū, x̄, ps, time, Dict(intervals), Dict(args), depvar_ops, Dict(x̄2dim), Dict(dim2x̄))
 end
 
-VariableMap(pdesys::PDESystem, disc::MOLFiniteDifference) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.domain, disc.time)
-VariableMap(pdesys::PDESystem, t) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.domain, t)
+VariableMap(pdesys::PDESystem, disc::MOLFiniteDifference) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.domain, disc.time, pdesys.ps)
+VariableMap(pdesys::PDESystem, t) = VariableMap(pdesys.eqs, pdesys.dvs, pdesys.domain, t, pdesys.ps)
 
 function update_varmap!(v, newdv)
     push!(v.ū, newdv)

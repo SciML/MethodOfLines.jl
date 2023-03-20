@@ -71,7 +71,6 @@ function get_gridloc(u, s)
     end
 end
 
-
 function generate_function_from_gridlocs(analyticmap, gridlocs, s)
     is_t_first_map = Dict(map(s.ū) do u
         operation(u) => (findfirst(x -> isequal(s.time, x), arguments(u)) == 1)

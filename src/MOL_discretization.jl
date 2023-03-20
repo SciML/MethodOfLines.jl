@@ -147,7 +147,8 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
                     return prob
                 else
                     f = ODEFunction(pdesys, discretization, analytic=analytic, discretization.kwargs..., kwargs...)
-                    return ODEProblem(f, prob.u0, prob.tspan; discretization.kwargs..., kwargs...)
+
+                    return ODEProblem(f, prob.u0, prob.tspan, prob.p; discretization.kwargs..., kwargs...)
                 end
             end
         end
