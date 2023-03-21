@@ -50,7 +50,7 @@ function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, meta
     # if haskey(metadata.disc.kwargs, :checks)
     #     checks = metadata.disc.kwargs[:checks]
     # else
-    #     checks = true
+         checks = true
     # end
     try
         if t === nothing
