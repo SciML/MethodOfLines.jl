@@ -47,11 +47,11 @@ function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, meta
     alleqs = vcat(alleqs, unique(bceqs))
     alldepvarsdisc = vec(reduce(vcat, vec(unique(reduce(vcat, vec.(values(discvars)))))))
     # Finalize
-    if haskey(metadata.disc.kwargs, :checks)
-        checks = metadata.disc.kwargs[:checks]
-    else
-        checks = true
-    end
+    # if haskey(metadata.disc.kwargs, :checks)
+    #     checks = metadata.disc.kwargs[:checks]
+    # else
+    #     checks = true
+    # end
     try
         if t === nothing
             # At the time of writing, NonlinearProblems require that the system of equations be in this form:
