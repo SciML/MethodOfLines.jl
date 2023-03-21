@@ -1,5 +1,5 @@
 @inline function generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary::AbstractTruncatingBoundary)
-    args = params(depvar(boundary.u, s), s)
+    args = ivs(depvar(boundary.u, s), s)
     indexmap = Dict([args[i]=>i for i in 1:length(args)])
     push!(bceqs, generate_bc_eqs(s, boundaryvalfuncs, boundary, interiormap, indexmap))
 end
@@ -48,7 +48,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     # replace u(t,0) with u₁, etc
 
     u = depvar(u_, s)
-    args = params(u, s)
+    args = ivs(u, s)
     j = findfirst(isequal(x_), args)
     IIold = II
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
@@ -99,7 +99,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
 
     # * Assume that the BC is in terms of an explicit expression, not containing references to variables other than u_ at the boundary
     u = depvar(u_, s)
-    args = params(u, s)
+    args = ivs(u, s)
     j = findfirst(isequal(x_), args)
     IIold = II
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
@@ -155,7 +155,7 @@ Pads the boundaries with extrapolation equations, extrapolated with 6th order la
 Reuses `central_difference` as this already dispatches the correct stencil, given a `DerivativeOperator` which contains the correct weights.
 """
 function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
-    args = params(u, s)
+    args = ivs(u, s)
     length(args) == 0 && return
 
     lowerextents, upperextents = interiormap.stencil_extents[pde]
@@ -167,7 +167,12 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
     for (j, x) in enumerate(args)
         ninterp = lowerextents[j] - vlower[j]
         I1 = unitindex(length(args), j)
+        bs = bcmap[operation(u)][x]
+        haslower, hasupper = haslowerupper(bs, x)
         while ninterp >= vlower[j]
+            if haslower
+                break
+            end
             for Il in (edge(interiormap, s, u, j, true) .+ (ninterp * I1,))
                 expr = central_difference(derivweights.boundary[x], Il, s, filter_interfaces(bcmap[operation(u)][x]), (j, x), u, ufunc)
                 push!(eqmap[Il], expr)
@@ -176,6 +181,9 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
         end
         ninterp = upperextents[j] - vupper[j]
         while ninterp >= vupper[j]
+            if hasupper
+                break
+            end
             for Iu in (edge(interiormap, s, u, j, false) .- (ninterp * I1,))
                 expr = central_difference(derivweights.boundary[x], Iu, s, filter_interfaces(bcmap[operation(u)][x]), (j, x), u, ufunc)
                 push!(eqmap[Iu], expr)
@@ -201,7 +209,7 @@ end
 
 @inline function generate_corner_eqs!(bceqs, s, interiormap, N, u)
     interior = interiormap.I[interiormap.pde[u]]
-    ndims(u, s) == 0 && return
+    N == 0 || ndims(u, s) == 0 && return
     sd(i, j) = selectdim(interior, j, i)
     domain = setdiff(s.Igrid[u], interior)
     II1 = unitindices(N)

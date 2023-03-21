@@ -52,7 +52,7 @@ using StableRNGs
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
 
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Success
 
     # Test against exact solution
     x_disc = sol[x]
@@ -173,7 +173,7 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
 
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Success
 
     # Test against exact solution
     x_disc = sol[x]
@@ -236,7 +236,7 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
 
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Success
 
     # Test against exact solution
     x_disc = sol[x]
@@ -353,7 +353,7 @@ end
     # Solution of the ODE system
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Success
 
     # Test against exact solution
     x_disc = sol[x]
@@ -414,7 +414,7 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
 
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Success
 
     # Test against exact solution
     x_disc = sol[x]
@@ -476,7 +476,7 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
 
-    @test_broken sol.retcode == :Success
+    @test_broken sol.retcode == SciMLBase.ReturnCode.Success
     fail
     # Test against exact solution
     x_disc = sol[x]
@@ -538,7 +538,7 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
 
-    @test_broken sol.retcode == :Success
+    @test_broken sol.retcode == SciMLBase.ReturnCode.Success
     fail
     # Test against exact solution
     x_disc = sol[x]

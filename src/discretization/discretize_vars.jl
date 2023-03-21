@@ -136,12 +136,12 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
         end
         if t === nothing
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
-            u => collect(first(@variables $sym[uaxes...]))
+            u => unwrap.(collect(first(@variables $sym[uaxes...])))
         elseif isequal(SymbolicUtils.arguments(u), [t])
-            u => fill(u, ()) #Create a 0-dimensional array
+            u => fill(safe_unwrap(u), ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            u => collect(first(@variables $sym(t)[uaxes...]))
+            u => unwrap.(collect(first(@variables $sym(t)[uaxes...])))
         end
     end
 
@@ -149,12 +149,14 @@ function DiscreteSpace(vars, discretization::MOLFiniteDifference{G}) where {G}
 end
 
 function Base.getproperty(s::DiscreteSpace, p::Symbol)
-    if p in [:ū, :x̄, :time, :args, :x2i, :i2x]
+    if p in [:ū, :x̄, :ps, :time, :args, :x2i, :i2x]
         getfield(s.vars, p)
     else
         getfield(s, p)
     end
 end
+
+params(s::DiscreteSpace) = s.ps
 
 get_grid_type(::DiscreteSpace{N,M,G}) where {N,M,G} = G
 
@@ -162,15 +164,15 @@ prepare_dx(dx::Integer, xdomain, ::CenterAlignedGrid) = (xdomain[2] - xdomain[1]
 prepare_dx(dx::Integer, xdomain, ::EdgeAlignedGrid) = (xdomain[2] - xdomain[1])/dx
 prepare_dx(dx, xdomain, ::AbstractGrid) = dx
 
-nparams(::DiscreteSpace{N,M}) where {N,M} = N
+nivs(::DiscreteSpace{N,M}) where {N,M} = N
 nvars(::DiscreteSpace{N,M}) where {N,M} = M
 
 """
-    params(u, s::DiscreteSpace)
+    ivs(u, s::DiscreteSpace)
 
 Filter out the time variable and get the spatial variables of `u` in `s`.
 """
-params(u, s::DiscreteSpace) = remove(s.args[operation(u)], s.time)
+ivs(u, s::DiscreteSpace) = remove(s.args[operation(u)], s.time)
 Base.ndims(u, s::DiscreteSpace) = ndims(s.discvars[depvar(u, s)])
 
 Base.length(s::DiscreteSpace, x) = length(s.grid[x])
@@ -185,9 +187,9 @@ of `II` that corresponds to only the spatial arguments of `u`.
 """
 function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     # We need to construct a new index as indices may be of different size
-    length(params(u, s)) == 0 && return CartesianIndex()
-    !all(x -> haskey(indexmap, x), params(u, s)) && return II
-    is = [II[indexmap[x]] for x in params(u, s)]
+    length(ivs(u, s)) == 0 && return CartesianIndex()
+    !all(x -> haskey(indexmap, x), ivs(u, s)) && return II
+    is = [II[indexmap[x]] for x in ivs(u, s)]
 
     II = CartesianIndex(is...)
     return II
@@ -198,7 +200,7 @@ A function that returns what to replace independent variables with in boundary e
 """
 @inline function axiesvals(s::DiscreteSpace{N,M,G}, u_, x_, I) where {N,M,G}
     u = depvar(u_, s)
-    map(params(u, s)) do x
+    map(ivs(u, s)) do x
         if isequal(x, x_)
             x => (I[x2i(s, u, x)] == 1 ? first(s.axies[x]) : last(s.axies[x]))
         else
@@ -207,8 +209,8 @@ A function that returns what to replace independent variables with in boundary e
     end
 end
 
-gridvals(s::DiscreteSpace{N}, u) where {N} = ndims(u, s) == 0 ? [] : map(y -> [x => s.grid[x][y.I[x2i(s, u, x)]] for x in params(u, s)], s.Igrid[u])
-gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where {N} = ndims(u, s) == 0 ? [] : [x => s.grid[x][I[x2i(s, u, x)]] for x in params(u, s)]
+gridvals(s::DiscreteSpace{N}, u) where {N} = ndims(u, s) == 0 ? [] : map(y -> [x => s.grid[x][y.I[x2i(s, u, x)]] for x in ivs(u, s)], s.Igrid[u])
+gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where {N} = ndims(u, s) == 0 ? [] : [x => s.grid[x][I[x2i(s, u, x)]] for x in ivs(u, s)]
 
 
 varmaps(s::DiscreteSpace, depvars, II, indexmap) = [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]

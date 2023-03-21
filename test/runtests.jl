@@ -7,13 +7,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
-
-    if GROUP == "All" || GROUP == "Diffusion_NU"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
-            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
-        end
-    end
-
     if GROUP == "All" || GROUP == "Components"
         @time @safetestset "MOLFiniteDifference Utils" begin
             include("utils_test.jl")
@@ -32,6 +25,19 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
         #@time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
     end
+
+    if GROUP == "All" || GROUP == "Convection_WENO"
+        @time @safetestset "MOLFiniteDifference Interface: Linear Convection, WENO Scheme." begin
+            include("pde_systems/MOL_1D_Linear_Convection_WENO.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "Diffusion_NU"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
+            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
+        end
+    end
+
 
     if GROUP == "All" || GROUP == "Integrals"
         @time @safetestset "MOLFiniteDifference Interface: Integrals" begin
@@ -100,12 +106,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
-    if GROUP == "All" || GROUP == "Convection_WENO"
-        @time @safetestset "MOLFiniteDifference Interface: Linear Convection, WENO Scheme." begin
-            include("pde_systems/MOL_1D_Linear_Convection_WENO.jl")
-        end
-    end
-
     if GROUP == "All" || GROUP == "Burgers"
         @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin
             include("pde_systems/burgers_eq.jl")
@@ -124,9 +124,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
-    # if GROUP == "All" || GROUP == "Mixed_Derivatives"
-    #     @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
-    #         include("pde_systems/MOL_Mixed_Deriv.jl")
-    #     end
-    # end
+    if GROUP == "All" || GROUP == "Mixed_Derivatives"
+        @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
+            include("pde_systems/MOL_Mixed_Deriv.jl")
+        end
+    end
 end

@@ -23,7 +23,7 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u
         Itap = [bwrap(II + i * I1, bs, s, jx) for i in half_range(D.stencil_length)]
     end
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
-    return recursive_unwrap(dot(weights, ufunc(u, Itap, x)))
+    return sym_dot(weights, ufunc(u, Itap, x))
 end
 
 function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u, ufunc) where {T,N,Wind,DX<:AbstractVector}
@@ -48,7 +48,7 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u
     end
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
 
-    return recursive_unwrap(dot(weights, ufunc(u, Itap, x)))
+    return sym_dot(weights, ufunc(u, Itap, x))
 end
 
 """
@@ -60,5 +60,5 @@ This is a catch all ruleset, as such it does not use @rule. Any even ordered der
         let orders = derivweights.orders[x]
             orders[iseven.(orders)]
         end
-    )] for x in params(u, s)], init = []) for u in depvars], init = [])
+    )] for x in ivs(u, s)], init = []) for u in depvars], init = [])
 end

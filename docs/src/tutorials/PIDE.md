@@ -56,7 +56,7 @@ To have an integral over the whole domain, be sure to wrap the integral in an au
 Due to a limitation, the whole domain integral needs to have the same arguments as the integrand, but is constant in x. To use it in an equation one dimension lower, use a boundary value like integral(t, 0.0)
 
 ```@example integrals2
-using MethodOfLines, ModelingToolkit, DomainSets
+using MethodOfLines, ModelingToolkit, DomainSets, OrdinaryDiffEq, Plots
 
 @parameters t, x
 @variables integrand(..) integral(..)
@@ -90,5 +90,6 @@ xdisc = sol[x]
 tdisc = sol[t]
 
 integralsol = sol[integral(t, x)]
-exact = [asf(t_) for t_ in tdisc, x_ in xdisc]
+
+heatmap(integralsol)
 ```

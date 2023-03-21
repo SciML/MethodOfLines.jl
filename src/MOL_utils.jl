@@ -64,12 +64,12 @@ end
 
 function get_gridloc(u, s)
     if isequal(operation(u), getindex)
+        # Remember arguments of getindex have u(t) first
         return _get_gridloc(s, arguments(u)...)
     else
         return (operation(u), [])
     end
 end
-
 
 function generate_function_from_gridlocs(analyticmap, gridlocs, s)
     is_t_first_map = Dict(map(s.ū) do u
@@ -84,14 +84,14 @@ function generate_function_from_gridlocs(analyticmap, gridlocs, s)
         is_t_first = is_t_first_map[uop]
         _f = analyticmap[opsmap[uop]]
         if is_t_first
-            return t -> _f(t, x̄...)
+            return (p, t) -> _f(p, t, x̄...)
         else
-            return t -> _f(x̄..., t)
+            return (p, t) -> _f(p, x̄..., t)
         end
     end
 
     f = (u0, p, t) -> map(fs_) do f_
-        f_(t)
+        f_(p, t)
     end
 
     return f
@@ -100,7 +100,7 @@ end
 function newindex(u_, II, s, indexmap)
     u = depvar(u_, s)
     args_ = remove(arguments(u_), s.time)
-    args = params(u, s)
+    args = ivs(u, s)
     is = map(enumerate(args_)) do (j, x)
         if haskey(indexmap, x)
             II[indexmap[x]]
@@ -135,8 +135,14 @@ end
 function chebyspace(N, dom)
     interval = dom.domain
     a, b = DomainSets.infimum(interval), DomainSets.supremum(interval)
-    x = reverse([(a + b) / 2 + (b - a) / 2 * cos(π * (2k - 1) / (2N)) for k in 1:N])
+    x = reverse([(a + b) / 2 + (b - a) / 2 * cospi((2k - 1) / (2N)) for k in 1:N])
     x[1] = a
     x[end] = b
     return dom.variables => x
+end
+
+@inline function sym_dot(a, b)
+    mapreduce((+), zip(a, b)) do (a_, b_)
+        a_ * b_
+    end
 end

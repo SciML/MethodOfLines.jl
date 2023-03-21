@@ -10,7 +10,7 @@ using ModelingToolkit: Differential
     Dxx = Differential(x)^2
     Dtx = Differential(t)*Differential(x)
 
-    asf(t, x) = sinpi(2*(t + (1+sqrt(5))*x/2)) + cospi(2*(t + (1-sqrt(5))*x/2))
+    assf(t, x) = sinpi(2*(t + (1+sqrt(5))*x/2)) + cospi(2*(t + (1-sqrt(5))*x/2))
     aDtf(t, x) = 2pi*cospi(2*(t + (1+sqrt(5))*x/2)) - 2pi*sinpi(2*(t + (1-sqrt(5))*x/2))
     # Where asf(t, x) ~ 0, NonlinearSolved
     xmin = -0.1118033987645
@@ -18,7 +18,7 @@ using ModelingToolkit: Differential
 
     eq  = [Dtt(u(t, x)) + Dtx(u(t, x)) - Dxx(u(t, x)) ~ Dxx(x)]
 
-    bcs = [u(1e-9, x) ~ asf(1e-9, x),
+    bcs = [u(1e-9, x) ~ assf(1e-9, x),
            Dt(u(1e-9, x)) ~ aDtf(1e-9, x),
            u(t, xmin) ~ 0,
            u(t, xmax) ~ 0]
@@ -39,7 +39,7 @@ using ModelingToolkit: Differential
     tdisc = sol[t]
     usol = sol[u(t,x)]
 
-    asol = [asf(t, x) for t in tdisc, x in xdisc]
+    asol = [assf(t, x) for t in tdisc, x in xdisc]
     @test_broken usol ≈ asol atol = 1e-3
 end
 
@@ -67,5 +67,5 @@ end
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
     sol = solve(prob, FBDF(), saveat = 0.1);
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCode.Success
 end

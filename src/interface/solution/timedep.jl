@@ -50,10 +50,10 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
         return SciMLBase.PDETimeSeriesSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
             typeof(sol),typeof(sol.errors),typeof(sol.t),typeof(ivgrid),
             typeof(ivs),typeof(pdesys.dvs),typeof(sol.prob),typeof(sol.alg),
-            typeof(interp)}(umap, sol, sol.errors, sol.t, ivgrid, ivs,
+            typeof(interp), typeof(sol.stats)}(umap, sol, sol.errors, sol.t, ivgrid, ivs,
             pdesys.dvs, metadata, sol.prob, sol.alg,
             interp, sol.dense, sol.tslocation,
-            sol.retcode)
+            sol.retcode, sol.stats)
     catch e
         rethrow(e)
         return sol, e

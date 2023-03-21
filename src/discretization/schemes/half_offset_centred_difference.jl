@@ -61,5 +61,5 @@ function half_offset_centered_difference(D, II, s, bs, jx, u, ufunc)
     ndims(u, s) == 0 && return Num(0)
     j, x = jx
     weights, Itap = get_half_offset_weights_and_stencil(D, II, s, bs, u, jx)
-    return recursive_unwrap(dot(weights, ufunc(u, Itap, x)))
+    return sym_dot(weights, ufunc(u, Itap, x))
 end

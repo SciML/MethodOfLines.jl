@@ -1,6 +1,6 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils, LinearAlgebra
 
-@parameters x, t 
+@parameters x, t
 @variables u(..)
 
 Dx(d) = Differential(x)^d
@@ -10,7 +10,7 @@ Dt = Differential(t)
 t_min= 0.
 t_max = 2.0
 x_min = 0.
-x_max = 20.0 
+x_max = 20.0
 
 dx = 1.0
 
@@ -28,7 +28,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 
             @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x)])
 
-            # Test centered order 
+            # Test centered order
             disc = MOLFiniteDifference([x=>dx], t; approx_order=a)
 
             depvar_ops = map(x->operation(x.val),pdesys.depvars)
@@ -44,7 +44,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
             s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
 
             derivweights = MethodOfLines.DifferentialDiscretizer(pdesys, s, disc)
-            
+
             #@show pde.rhs, operation(pde.rhs), arguments(pde.rhs)
             for II in s.Igrid[s.ū[1]][2:end-1]
                 #II = s.Igrid[end-1]
@@ -67,16 +67,16 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 end
 
 @testset "Test 01: Nonlinear Diffusion discretization" begin
-    
+
     pde = Dt(u(t,x)) ~ Dx(1)(u(t,x))
     bcs = [u(0,x) ~ cos(x), u(t,0) ~ exp(-t), u(t,Float64(π)) ~ -exp(-t)]
 
     @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x)])
 
-    # Test centered order 
-    
+    # Test centered order
+
     depvar_ops = map(x->operation(x.val),pdesys.depvars)
-    
+
     depvars_lhs = MethodOfLines.get_depvars(pde.lhs, depvar_ops)
     depvars_rhs = MethodOfLines.get_depvars(pde.rhs, depvar_ops)
     depvars = collect(depvars_lhs ∪ depvars_rhs)
@@ -84,15 +84,15 @@ end
     # ignore if the only argument is [t]
     indvars = first(Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
     x̄ = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
-    
+
     for order in [2]
         disc = MOLFiniteDifference([x=>dx], t; approx_order=order)
         s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
 
         derivweights = MethodOfLines.DifferentialDiscretizer(pdesys, s, disc)
-        
+
         ufunc(u, I, x) = s.discvars[u][I]
-        #TODO Test Interpolation of params
+        #TODO Test Interpolation of ivs
         # Test simple case
         for II in s.Igrid[s.ū[1]][2:end-1]
             expr = MethodOfLines.cartesian_nonlinear_laplacian((1~1).lhs, II, derivweights, s, depvars, x, u(t,x))
@@ -103,14 +103,14 @@ end
 end
 
 @testset "Test 02: Spherical Diffusion discretization" begin
-    
+
     pde  = Dt(u(t,x)) ~ 1/x^2 * Dx(1)(x^2 * Dx(1)(u(t,x)))
 
     bcs = [u(0,x) ~ cos(x), u(t,0) ~ exp(-t), u(t,Float64(π)) ~ -exp(-t)]
 
     @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x)])
 
-    # Test centered order 
+    # Test centered order
     disc = MOLFiniteDifference([x=>dx], t; approx_order=2)
 
     depvar_ops = map(x->operation(x.val),pdesys.depvars)
@@ -126,9 +126,9 @@ end
     s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
 
     derivweights = MethodOfLines.DifferentialDiscretizer(pdesys, s, disc)
-    
+
     for II in s.Igrid[s.ū[1]][2:end-1]
-        #TODO Test Interpolation of params
+        #TODO Test Interpolation of ivs
         expr = MethodOfLines.spherical_diffusion((1~1).lhs, II, derivweights, s, depvars, x, u(t,x))
         #@show II, expr
     end

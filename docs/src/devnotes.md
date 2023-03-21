@@ -48,7 +48,7 @@ end
 # Note that indexmap is used along with the function `Idx` to create an equivalent index for the discrete form of `u`,
 # which may have a different number of dimensions to `II`
 function generate_central_difference_rules(II::CartesianIndex, s::DiscreteSpace, terms::Vector{<:Term}, indexmap::Dict)
-    rules = [[@rule Differential(x)(u) => second_order_central_difference(Idx(II, s, u, indexmap), s, u, x) for x in params(u, s)] for u in depvars]
+    rules = [[@rule Differential(x)(u) => second_order_central_difference(Idx(II, s, u, indexmap), s, u, x) for x in ivs(u, s)] for u in depvars]
 
     rules = reduce(vcat, rules)
 

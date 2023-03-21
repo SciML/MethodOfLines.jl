@@ -65,7 +65,7 @@ function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace, bs, der
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative
     weights, Itap = _upwind_difference(D, II, s, bs, ispositive, u, jx)
-    return recursive_unwrap(dot(weights, ufunc(u, Itap, x)))
+    return sym_dot(weights, ufunc(u, Itap, x))
 end
 
 function upwind_difference(expr, d::Int, II::CartesianIndex, s::DiscreteSpace, bs, depvars, derivweights, (j, x), u, central_ufunc, indexmap)
@@ -84,14 +84,14 @@ end
             let orders = derivweights.orders[x]
                 setdiff(orders[isodd.(orders)], skip)
             end
-        )] for x in params(u, s)], init = []) for u in depvars], init = []),
+        )] for x in ivs(u, s)], init = []) for u in depvars], init = []),
 
         #Catch division and multiplication, see issue #1
         reduce(safe_vcat, [reduce(safe_vcat, [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(*(~a..., ~b...) / ~c, d, Idx(II, s, u, indexmap), s, filter_interfaces(bcmap[operation(u)][x]), depvars, derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap) for d in (
             let orders = derivweights.orders[x]
                 setdiff(orders[isodd.(orders)], skip)
             end
-        )] for x in params(u, s)], init = []) for u in depvars], init = [])
+        )] for x in ivs(u, s)], init = []) for u in depvars], init = [])
     )
 
     wind_rules = []
@@ -106,7 +106,7 @@ end
     end
 
     return safe_vcat(wind_rules, vec(mapreduce(safe_vcat, depvars, init = []) do u
-        mapreduce(safe_vcat, params(u, s), init = []) do x
+        mapreduce(safe_vcat, ivs(u, s), init = []) do x
             j = x2i(s, u, x)
             let orders = setdiff(derivweights.orders[x], skip)
                 oddorders = orders[isodd.(orders)]

@@ -3,7 +3,8 @@ using LinearAlgebra
 using SciMLBase
 using DiffEqBase
 using ModelingToolkit
-using ModelingToolkit: operation, istree, arguments, variable, get_metadata, get_states
+using ModelingToolkit: operation, istree, arguments, variable, get_metadata, get_states,
+parameters, defaults, varmap_to_vars
 using SymbolicUtils, Symbolics
 using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename, similarterm
 using SymbolicUtils: operation, arguments
@@ -60,6 +61,7 @@ include("system_parsing/pde_system_transformation.jl")
 include("discretization/interface_boundary.jl")
 
 # Schemes
+include("discretization/schemes/function_scheme/function_scheme.jl")
 include("discretization/schemes/centered_difference/centered_difference.jl")
 include("discretization/schemes/upwind_difference/upwind_difference.jl")
 include("discretization/schemes/half_offset_centred_difference.jl")
@@ -79,6 +81,6 @@ include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete, chebyspace
-export UpwindScheme, WENOScheme
+export UpwindScheme, WENOScheme, FunctionalScheme
 
 end
