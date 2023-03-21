@@ -52,7 +52,6 @@ function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, meta
     else
         checks = true
     end
-    end
     try
         if t === nothing
             # At the time of writing, NonlinearProblems require that the system of equations be in this form:
