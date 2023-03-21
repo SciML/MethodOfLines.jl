@@ -47,18 +47,24 @@ function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, meta
     alleqs = vcat(alleqs, unique(bceqs))
     alldepvarsdisc = vec(reduce(vcat, vec(unique(reduce(vcat, vec.(values(discvars)))))))
     # Finalize
+    if haskey(metadata.disc.kwargs, :checks)
+        checks = metadata.disc.kwargs[:checks]
+    else
+        checks = true
+    end
+    end
     try
         if t === nothing
             # At the time of writing, NonlinearProblems require that the system of equations be in this form:
             # 0 ~ ...
             # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
             eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, alleqs)
-            sys = NonlinearSystem(eqs, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata)
+            sys = NonlinearSystem(eqs, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata, checks = checks)
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
-            sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata)
+            sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata, checks = checks)
             return sys, tspan
         end
     catch e
