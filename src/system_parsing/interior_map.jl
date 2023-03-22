@@ -1,4 +1,15 @@
-struct InteriorMap
+@inline function clip_interior!!(lower, upper, s, b::PDEBase.AbstractBoundary)
+    # This x2i is correct
+    dim = x2i(s, depvar(b.u, s), b.x)
+    @assert dim !== nothing "Internal Error: Variable $(b.x) not found in $(depvar(b.u, s)), when parsing boundary condition $(b)"
+    if b isa InterfaceBoundary && isupper(b)
+        return
+    end
+    lower[dim] = lower[dim] + !isupper(b)
+    upper[dim] = upper[dim] + isupper(b)
+end
+
+struct InteriorMap <: AbstractVarEqMapping
     var
     pde
     I
@@ -7,6 +18,7 @@ struct InteriorMap
     stencil_extents
 end
 
+get_eqvar(im::InteriorMap, pde) = im.var[pde]
 #to get an equal mapping, you want to associate every equation to a unique dependent variable that it's solving for
 # this is tearing
 # so there's u and v
@@ -15,7 +27,7 @@ end
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) where {N,M}
+function PDEBase.construct_var_equation_mapping(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) where {N,M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))

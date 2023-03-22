@@ -4,11 +4,8 @@ Replace the PDESystem with an equivalent PDESystem which is compatible with Meth
 Modified copilot explanation:
 
 """
-function transform_pde_system!(v, boundarymap, sys::PDESystem, disc::MOLFiniteDifference)
-    if has_interfaces(boundarymap)
-        @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
-        return sys
-    end
+function PDEBase.transform_pde_system!(v, boundarymap, sys::PDESystem, disc::MOLFiniteDifference)
+
     eqs = copy(sys.eqs)
     bcs = copy(sys.bcs)
     done = false
@@ -38,10 +35,12 @@ function transform_pde_system!(v, boundarymap, sys::PDESystem, disc::MOLFiniteDi
     return sys
 end
 
-function cardinalize_eqs!(pdesys)
-    for (i, eq) in enumerate(pdesys.eqs)
-        pdesys.eqs[i] = eq.lhs - eq.rhs ~ 0
+function PDEBase.should_transform(pdesys, disc)
+    if has_interfaces(boundarymap)
+        @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
+        return false
     end
+    return true
 end
 
 """

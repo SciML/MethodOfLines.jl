@@ -1,6 +1,29 @@
+idx(b::LowerBoundary, s) = 1
+idx(b::UpperBoundary, s) = length(s, b.x)
+idx(b::HigherOrderInterfaceBoundary, s) = length(s, b.x)
+
+@inline function edge(interiormap, s, u, j, islower)
+    I = interiormap.I[interiormap.pde[depvar(u, s)]]
+    # check needed on v1.6
+    length(I) == 0 && return CartesianIndex{0}[]
+    sd(i) = selectdim(I, j, i)
+    I1 = unitindex(ndims(u, s), j)
+    if islower
+        edge = sd(1)
+        # cast the edge of the interior to the edge of the boundary
+        edge = edge .- [I1 * (edge[1][j] - 1)]
+    else
+        edge = sd(size(interiormap.I[interiormap.pde[depvar(u, s)]], j))
+        edge = edge .+ [I1 * (size(s.discvars[depvar(u, s)], j) - edge[1][j])]
+    end
+    return edge
+end
+
+edge(s, b, interiormap) = edge(interiormap, s, b.u, x2i(s, b.u, b.x), !isupper(b))
+
 @inline function generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary::AbstractTruncatingBoundary)
     args = ivs(depvar(boundary.u, s), s)
-    indexmap = Dict([args[i]=>i for i in 1:length(args)])
+    indexmap = Dict([args[i] => i for i in 1:length(args)])
     push!(bceqs, generate_bc_eqs(s, boundaryvalfuncs, boundary, interiormap, indexmap))
 end
 
@@ -29,7 +52,7 @@ function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivwei
             # No interface values in equations
             if b isa InterfaceBoundary
                 II -> []
-            # Only make a map if it is actually possible to substitute in the boundary value given the indexmap
+                # Only make a map if it is actually possible to substitute in the boundary value given the indexmap
             elseif all(x -> haskey(indexmap, x), filter(x -> !(safe_unwrap(x) isa Number), b.indvars))
                 II -> boundary_value_maps(II, s, b, derivweights, indexmap)
             else
@@ -62,7 +85,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
 
     depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II - shift(boundary), s, [], (j, x_), u, ufunc)]
 
-   # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
+    # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars)
     # @show integralvs
 
@@ -136,7 +159,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
 end
 
 
-function generate_bc_eqs(s::DiscreteSpace{N,M,G}, boundaryvalfuncs, boundary::AbstractTruncatingBoundary, interiormap, indexmap) where {N, M, G}
+function generate_bc_eqs(s::DiscreteSpace{N,M,G}, boundaryvalfuncs, boundary::AbstractTruncatingBoundary, interiormap, indexmap) where {N,M,G}
     bc = boundary.eq
     return vec(map(edge(s, boundary, interiormap)) do II
         boundaryvalrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
@@ -200,7 +223,7 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
             push!(eqs, s.discvars[u][II] ~ rhss[1])
         else
             n = length(rhss)
-            push!(eqs, s.discvars[u][II] ~ sum(rhss)/n)
+            push!(eqs, s.discvars[u][II] ~ sum(rhss) / n)
         end
     end
 end
@@ -216,14 +239,14 @@ end
     for j in 1:N
         I1 = II1[j]
         edge = sd(1, j)
-        offset = edge[1][j]-1
+        offset = edge[1][j] - 1
         for k in 1:offset
-            setdiff!(domain, vec(copy(edge).-[I1*k]))
+            setdiff!(domain, vec(copy(edge) .- [I1 * k]))
         end
         edge = sd(size(interior, j), j)
         offset = size(s.discvars[u], j) - size(interior, j)
         for k in 1:offset
-            setdiff!(domain, vec(copy(edge).+[I1*k]))
+            setdiff!(domain, vec(copy(edge) .+ [I1 * k]))
         end
     end
     push!(bceqs, s.discvars[u][domain] .~ 0)
@@ -234,11 +257,11 @@ Create a vector containing indices of the corners of the domain.
 """
 @inline function findcorners(s::DiscreteSpace, lower, upper, u)
     args = remove(arguments(u), s.time)
-    if any(lower.==0) && any(upper.==0)
+    if any(lower .== 0) && any(upper .== 0)
         return CartesianIndex{2}[]
     end
-    return reduce(vcat, vec.(map(0 : 3) do n
-        dig = digits(n, base = 2, pad = 2)
+    return reduce(vcat, vec.(map(0:3) do n
+        dig = digits(n, base=2, pad=2)
         CartesianIndices(Tuple(map(enumerate(dig)) do (i, b)
             x = args[i]
             if b == 1
