@@ -46,7 +46,9 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) w
         push!(extents, pde => (lowerextents, upperextents))
         lower = [max(e, l) for (e, l) in zip(lowerextents, lower)]
         upper = [max(e, u) for (e, u) in zip(upperextents, upper)]
-
+        if any((j, x) -> (lower.+upper.+1)[j] > length(s, x), enumerate(s.x̄))
+            error("The domain is too small to support the requested discretization, got domain size of $(size(s)).")
+        end
         # Don't update this x2i, it is correct.
         pde => generate_interior(lower, upper, u, s, discretization)
     end
