@@ -1,4 +1,4 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap)
+function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, discretization::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
     # Generate replacement rule gen closures for the boundary values like u(t, 1)
     boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
@@ -39,18 +39,22 @@ function discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, 
         rethrow(e)
     end
 end
-function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, metadata)
+function generate_system(alleqs, bceqs, ics, discvars, u0, tspan, metadata)
     t = metadata.discretespace.time
     name = metadata.pdesys.name
+    pdesys = metadata.pdesys
     bceqs = reduce(vcat, bceqs)
     alleqs = reduce(vcat, alleqs)
     alleqs = vcat(alleqs, unique(bceqs))
     alldepvarsdisc = vec(reduce(vcat, vec(unique(reduce(vcat, vec.(values(discvars)))))))
+
+    defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))
+    ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
     # Finalize
     # if haskey(metadata.disc.kwargs, :checks)
     #     checks = metadata.disc.kwargs[:checks]
     # else
-         checks = true
+    checks = true
     # end
     try
         if t === nothing
@@ -58,12 +62,12 @@ function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, meta
             # 0 ~ ...
             # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
             eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, alleqs)
-            sys = NonlinearSystem(eqs, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata, checks = checks)
+            sys = NonlinearSystem(eqs, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata, checks=checks)
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
 
-            sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata, checks = checks)
+            sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata, checks=checks)
             return sys, tspan
         end
     catch e
