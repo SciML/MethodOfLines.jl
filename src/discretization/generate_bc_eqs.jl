@@ -209,7 +209,7 @@ end
 
 @inline function generate_corner_eqs!(bceqs, s, interiormap, N, u)
     interior = interiormap.I[interiormap.pde[u]]
-    N == 0 || ndims(u, s) == 0 && return
+    ndims(u, s) == 0 && return
     sd(i, j) = selectdim(interior, j, i)
     domain = setdiff(s.Igrid[u], interior)
     II1 = unitindices(N)
