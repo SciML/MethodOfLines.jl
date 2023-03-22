@@ -7,6 +7,11 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
+    if GROUP == "All" || GROUP == "Integrals"
+        @time @safetestset "MOLFiniteDifference Interface: Integrals" begin
+            include("pde_systems/MOL_1D_Integration.jl")
+        end
+    end
     if GROUP == "All" || GROUP == "Components"
         @time @safetestset "MOLFiniteDifference Utils" begin
             include("utils_test.jl")
@@ -39,11 +44,7 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     end
 
 
-    if GROUP == "All" || GROUP == "Integrals"
-        @time @safetestset "MOLFiniteDifference Interface: Integrals" begin
-            include("pde_systems/MOL_1D_Integration.jl")
-        end
-    end
+
 
     if GROUP == "All" || GROUP == "Higher_Order"
         @time @safetestset "MOLFiniteDifference Interface: 1D HigherOrder" begin
