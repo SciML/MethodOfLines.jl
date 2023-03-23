@@ -1,4 +1,4 @@
-function PDEBase.discretize_equation!(disc_state, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, discretization::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
+function PDEBase.discretize_equation!(disc_state::PDEBase.EquationState, pde::Equation, interiormap, eqvar, bcmap, depvars, s::DiscreteSpace, derivweights, indexmap, discretization::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
     alleqs = disc_state.eqs
     bceqs = disc_state.bceqs
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
@@ -26,7 +26,7 @@ function PDEBase.discretize_equation!(disc_state, pde, interiormap, eqvar, bcmap
             discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
         end)
     end
-    push!(alleqs, eqs)
+    append!(alleqs, eqs)
 end
 
 function discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)

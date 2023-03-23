@@ -83,7 +83,7 @@ end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
 
-function PDEBase.construct_discrete_space(vars, discretization::MOLFiniteDifference{G}) where {G}
+function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretization::MOLFiniteDifference{G}) where {G}
     x̄ = vars.x̄
     t = vars.time
     depvars = vars.ū
@@ -159,7 +159,7 @@ end
 params(s::DiscreteSpace) = s.ps
 
 get_grid_type(::DiscreteSpace{N,M,G}) where {N,M,G} = G
-get_discvars(s::DiscreteSpace) = s.discvars
+PDEBase.get_discvars(s::DiscreteSpace) = s.discvars
 
 prepare_dx(dx::Integer, xdomain, ::CenterAlignedGrid) = (xdomain[2] - xdomain[1])/(dx - 1)
 prepare_dx(dx::Integer, xdomain, ::EdgeAlignedGrid) = (xdomain[2] - xdomain[1])/dx
@@ -245,6 +245,6 @@ end
 end
 
 
-depvar(u, s::DiscreteSpace) = depvar(u, s.vars)
+PDEBase.depvar(u, s::DiscreteSpace) = depvar(u, s.vars)
 
-x2i(s::DiscreteSpace, u, x) = x2i(s.vars, u, x)
+PDEBase.x2i(s::DiscreteSpace, u, x) = x2i(s.vars, u, x)

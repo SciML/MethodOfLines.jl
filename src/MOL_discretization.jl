@@ -1,6 +1,6 @@
 # Method of lines discretization scheme
 
-function PDEBase.interface_errors(pdesys, v, discretization::MOLFiniteDifference)
+function PDEBase.interface_errors(pdesys::PDESystem, v::PDEBase.VariableMap, discretization::MOLFiniteDifference)
     depvars = v.ū
     indvars = v.x̄
     for x in indvars

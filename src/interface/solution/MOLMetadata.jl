@@ -23,7 +23,7 @@ struct MOLMetadata{hasTime,Ds,Disc,PDE,M,Strat} <: SciMLBase.AbstractDiscretizat
         else
             hasTime = Val(true)
         end
-        use_ODAE = discretization.use_ODAE
+        use_ODAE = disc.use_ODAE
         if use_ODAE
             bcivmap = reduce((d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap)))
             allbcs = let v = discretespace.vars
@@ -39,6 +39,10 @@ struct MOLMetadata{hasTime,Ds,Disc,PDE,M,Strat} <: SciMLBase.AbstractDiscretizat
             disc, pdesys, use_ODAE,
             metaref)
     end
+end
+
+function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference, pdesys::PDESystem, boundarymap, metadata=nothing)
+    return MOLMetadata(s, disc, pdesys, boundarymap, metadata)
 end
 
 

@@ -4,7 +4,7 @@ Replace the PDESystem with an equivalent PDESystem which is compatible with Meth
 Modified copilot explanation:
 
 """
-function PDEBase.transform_pde_system!(v, boundarymap, sys::PDESystem, disc::MOLFiniteDifference)
+function PDEBase.transform_pde_system!(v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLFiniteDifference)
 
     eqs = copy(sys.eqs)
     bcs = copy(sys.bcs)

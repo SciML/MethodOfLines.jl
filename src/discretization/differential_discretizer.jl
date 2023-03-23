@@ -10,7 +10,7 @@ struct DifferentialDiscretizer{T, D1, S} <: AbstractDifferentialDiscretizer
     boundary::Dict{Num,DerivativeOperator}
 end
 
-function PDEBase.construct_differential_discretizer(pdesys, s, discretization::MOLFiniteDifference, orders)
+function PDEBase.construct_differential_discretizer(pdesys, s::DiscreteSpace, discretization::MOLFiniteDifference, orders)
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs isa Vector ? pdesys.bcs : [pdesys.bcs]
     approx_order = discretization.approx_order

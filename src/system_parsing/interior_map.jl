@@ -18,7 +18,7 @@ struct InteriorMap <: AbstractVarEqMapping
     stencil_extents
 end
 
-get_eqvar(im::InteriorMap, pde) = im.var[pde]
+PDEBase.get_eqvar(im::InteriorMap, pde) = im.var[pde]
 #to get an equal mapping, you want to associate every equation to a unique dependent variable that it's solving for
 # this is tearing
 # so there's u and v
@@ -27,7 +27,7 @@ get_eqvar(im::InteriorMap, pde) = im.var[pde]
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function PDEBase.construct_var_equation_mapping(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization) where {N,M}
+function PDEBase.construct_var_equation_mapping(pdes::Vector{Equation}, boundarymap, s::DiscreteSpace{N,M}, discretization::MOLFiniteDifference) where {N,M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
@@ -58,7 +58,8 @@ function PDEBase.construct_var_equation_mapping(pdes, boundarymap, s::DiscreteSp
         push!(extents, pde => (lowerextents, upperextents))
         lower = [max(e, l) for (e, l) in zip(lowerextents, lower)]
         upper = [max(e, u) for (e, u) in zip(upperextents, upper)]
-        if any((j, x) -> (lower.+upper.+1)[j] > length(s, x), enumerate(s.x̄))
+        mindomsize = lower.+upper.+1
+        if any(tup -> mindomsize[tup[1]] > length(s, tup[2]), enumerate(ivs(u, s)))
             error("The domain is too small to support the requested discretization, got domain size of $(size(s)).")
         end
         # Don't update this x2i, it is correct.

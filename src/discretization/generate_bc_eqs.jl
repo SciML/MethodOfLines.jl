@@ -249,7 +249,7 @@ end
             setdiff!(domain, vec(copy(edge) .+ [I1 * k]))
         end
     end
-    push!(bceqs, s.discvars[u][domain] .~ 0)
+    append!(bceqs, s.discvars[u][domain] .~ 0)
 end
 
 """
