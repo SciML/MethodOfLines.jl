@@ -55,7 +55,7 @@ plot(sol[x], transpose(solu))
 To have an integral over the whole domain, be sure to wrap the integral in an auxiliary variable.
 Due to a limitation, the whole domain integral needs to have the same arguments as the integrand, but is constant in x. To use it in an equation one dimension lower, use a boundary value like integral(t, 0.0)
 
-```@example integrals2
+``` julia
 using MethodOfLines, ModelingToolkit, DomainSets, OrdinaryDiffEq, Plots
 
 @parameters t, x
