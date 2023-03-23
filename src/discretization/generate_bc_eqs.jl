@@ -177,7 +177,7 @@ end
 Pads the boundaries with extrapolation equations, extrapolated with 6th order lagrangian polynomials.
 Reuses `central_difference` as this already dispatches the correct stencil, given a `DerivativeOperator` which contains the correct weights.
 """
-function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
+function generate_extrap_eqs!(disc_state, pde, u, s, derivweights, interiormap, bcmap)
     args = ivs(u, s)
     length(args) == 0 && return
 
@@ -220,10 +220,10 @@ function generate_extrap_eqs!(eqs, pde, u, s, derivweights, interiormap, bcmap)
         if length(rhss) == 0
             continue
         elseif length(rhss) == 1
-            push!(eqs, s.discvars[u][II] ~ rhss[1])
+            push!(disc_state.bceqs, s.discvars[u][II] ~ rhss[1])
         else
             n = length(rhss)
-            push!(eqs, s.discvars[u][II] ~ sum(rhss) / n)
+            push!(disc_state.bceqs, s.discvars[u][II] ~ sum(rhss) / n)
         end
     end
 end

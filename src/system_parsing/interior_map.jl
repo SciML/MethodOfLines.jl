@@ -108,7 +108,7 @@ end
 
 function buildmatrix(pdes, s::DiscreteSpace{N,M}) where {N,M}
     m = zeros(Int, M, M)
-    elegiblevars = [getvars(pde, s) for pde in pdes]
+    elegiblevars = [getvarmap(pde, s) for pde in pdes]
     u2i = Dict([u => k for (k, u) in enumerate(s.ū)])
     #@show elegiblevars, s.ū
     for (i, varmap) in enumerate(elegiblevars)
@@ -212,7 +212,7 @@ function get_ranking!(varmap, term, x, s)
     end
 end
 
-function getvars(pde, s)
+function getvarmap(pde, s)
     ct = 0
     ut = []
     # Create ranking for each variable
