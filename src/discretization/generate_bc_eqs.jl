@@ -21,13 +21,13 @@ end
 
 edge(s, b, interiormap) = edge(interiormap, s, b.u, x2i(s, b.u, b.x), !isupper(b))
 
-@inline function generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary::AbstractTruncatingBoundary)
+@inline function generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary::AbstractTruncatingBoundary)
     args = ivs(depvar(boundary.u, s), s)
     indexmap = Dict([args[i] => i for i in 1:length(args)])
-    push!(bceqs, generate_bc_eqs(s, boundaryvalfuncs, boundary, interiormap, indexmap))
+    vcat!(disc_state.bceqs, generate_bc_eqs(s, boundaryvalfuncs, boundary, interiormap, indexmap))
 end
 
-function generate_bc_eqs!(bceqs, s::DiscreteSpace, boundaryvalfuncs, interiormap, boundary::InterfaceBoundary)
+function generate_bc_eqs!(disc_state, s::DiscreteSpace, boundaryvalfuncs, interiormap, boundary::InterfaceBoundary)
     isupper(boundary) && return
     u_ = boundary.u
     x_ = boundary.x
@@ -40,7 +40,7 @@ function generate_bc_eqs!(bceqs, s::DiscreteSpace, boundaryvalfuncs, interiormap
     disc1 = s.discvars[depvar(u_, s)]
     disc2 = s.discvars[depvar(u__, s)]
 
-    push!(bceqs, vec(map(edge(s, boundary, interiormap)) do II
+    vcat!(disc_state.bceqs, vec(map(edge(s, boundary, interiormap)) do II
         disc1[II] ~ disc2[II+Ioffset]
     end))
 
@@ -230,7 +230,7 @@ end
 
 #TODO: Benchmark and optimize this
 
-@inline function generate_corner_eqs!(bceqs, s, interiormap, N, u)
+@inline function generate_corner_eqs!(disc_state, s, interiormap, N, u)
     interior = interiormap.I[interiormap.pde[u]]
     ndims(u, s) == 0 && return
     sd(i, j) = selectdim(interior, j, i)
@@ -249,7 +249,7 @@ end
             setdiff!(domain, vec(copy(edge) .+ [I1 * k]))
         end
     end
-    append!(bceqs, s.discvars[u][domain] .~ 0)
+    append!(disc_state.bceqs, s.discvars[u][domain] .~ 0)
 end
 
 """
@@ -273,15 +273,15 @@ Create a vector containing indices of the corners of the domain.
     end))
 end
 
-@inline function generate_corner_eqs!(bceqs, s, interiormap, pde)
+@inline function generate_corner_eqs!(disc_state, s, interiormap, pde)
     u = interiormap.var[pde]
     N = ndims(u, s)
     if N <= 1
         return
     elseif N == 2
         Icorners = findcorners(s, interiormap.lower[pde], interiormap.upper[pde], u)
-        push!(bceqs, s.discvars[u][Icorners] .~ 0)
+        append!(disc_state.bceqs, s.discvars[u][Icorners] .~ 0)
     else
-        generate_corner_eqs!(bceqs, s, interiormap, N, u)
+        generate_corner_eqs!(disc_state, s, interiormap, N, u)
     end
 end

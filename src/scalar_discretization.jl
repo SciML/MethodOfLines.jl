@@ -1,6 +1,4 @@
 function PDEBase.discretize_equation!(disc_state::PDEBase.EquationState, pde::Equation, interiormap, eqvar, bcmap, depvars, s::DiscreteSpace, derivweights, indexmap, discretization::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
-    alleqs = disc_state.eqs
-    bceqs = disc_state.bceqs
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
     # Generate replacement rule gen closures for the boundary values like u(t, 1)
     boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
@@ -8,13 +6,13 @@ function PDEBase.discretize_equation!(disc_state::PDEBase.EquationState, pde::Eq
     eqvarbcs = mapreduce(x -> bcmap[operation(eqvar)][x], vcat, s.x̄)
     # Generate the boundary conditions for the correct variable
     for boundary in eqvarbcs
-        generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
+        generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
     end
     # Generate extrapolation eqs
-    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, bcmap)
+    generate_extrap_eqs!(disc_state, pde, eqvar, s, derivweights, interiormap, bcmap)
 
     # Set invalid corner points to zero
-    generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
+    generate_corner_eqs!(disc_state, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
     # Extract Interior
     interior = interiormap.I[pde]
     # Generate the discrete form ODEs for the interior
@@ -26,7 +24,9 @@ function PDEBase.discretize_equation!(disc_state::PDEBase.EquationState, pde::Eq
             discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
         end)
     end
-    append!(alleqs, eqs)
+
+    vcat!(disc_state.eqs, eqs)
+
 end
 
 function discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)

@@ -44,9 +44,3 @@ end
 function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference, pdesys::PDESystem, boundarymap, metadata=nothing)
     return MOLMetadata(s, disc, pdesys, boundarymap, metadata)
 end
-
-
-
-function add_metadata!(meta::MOLMetadata, metadata)
-    meta.metadata[] = metadata
-end
