@@ -59,7 +59,7 @@ function get_discrete(pdesys, discretization)
     disc_state = construct_disc_state(discretization)
 
     # Create discretized space and variables, this is called `s` throughout
-    s = DiscreteSpace(v, discretization)
+    s = construct_discrete_space(v, discretization)
 
     return Dict(vcat([Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]))
 end
