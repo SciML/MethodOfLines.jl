@@ -27,7 +27,7 @@ end
 
 function get_discrete(pdesys, discretization)
     t = get_time(discretization)
-    cardinalize_eqs!(pdesys)
+    PDEBase.cardinalize_eqs!(pdesys)
 
     ############################
     # System Parsing and Transformation
