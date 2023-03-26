@@ -7,6 +7,13 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
+
+    if GROUP == "All" || GROUP == "Mixed_Derivatives"
+        @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
+            include("pde_systems/MOL_Mixed_Deriv.jl")
+        end
+    end
+
     if GROUP == "All" || GROUP == "Integrals"
         @time @safetestset "MOLFiniteDifference Interface: Integrals" begin
             include("pde_systems/MOL_1D_Integration.jl")
@@ -122,12 +129,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "Convection"
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin
             include("pde_systems/MOL_1D_Linear_Convection.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Mixed_Derivatives"
-        @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
-            include("pde_systems/MOL_Mixed_Deriv.jl")
         end
     end
 end
