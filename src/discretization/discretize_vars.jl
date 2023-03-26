@@ -156,6 +156,9 @@ function Base.getproperty(s::DiscreteSpace, p::Symbol)
     end
 end
 
+"""
+Gets the parameter symbols of the system
+"""
 params(s::DiscreteSpace) = s.ps
 
 get_grid_type(::DiscreteSpace{N,M,G}) where {N,M,G} = G
