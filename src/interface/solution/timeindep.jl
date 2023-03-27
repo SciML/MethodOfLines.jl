@@ -30,7 +30,7 @@ function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metada
 
     return SciMLBase.PDENoTimeSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
         typeof(sol),typeof(ivgrid),typeof(ivs),typeof(pdesys.dvs),typeof(sol.prob),typeof(sol.alg),
-        typeof(interp)}(umap, sol, ivgrid, ivs,
+        typeof(interp), typeof(stats)}(umap, sol, ivgrid, ivs,
         pdesys.dvs, metadata, sol.prob, sol.alg,
-        interp, sol.retcode)
+        interp, sol.retcode, sol.stats)
 end
