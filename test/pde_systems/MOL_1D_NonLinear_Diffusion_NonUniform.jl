@@ -4,7 +4,7 @@
 # TODO: Add more complex tests.
 
 # Packages and inclusions
-using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets, SciMLBase
 using ModelingToolkit: Differential
 using StableRNGs
 

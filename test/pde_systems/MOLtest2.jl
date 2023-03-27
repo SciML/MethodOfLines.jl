@@ -1,4 +1,4 @@
-using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
+using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq, SciMLBase
 using ModelingToolkit: operation, istree, arguments
 using DomainSets
 using NonlinearSolve
