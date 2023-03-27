@@ -114,7 +114,7 @@ end
 
     sol = solve(prob,FBDF(),saveat=0.1)
 
-    @test sol.retcode == :Success
+    @test sol.retcode == SciMLBase.ReturnCo
 
     xs = sol[x]
     ts = sol[t]

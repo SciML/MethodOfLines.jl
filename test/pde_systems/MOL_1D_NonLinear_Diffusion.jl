@@ -46,7 +46,7 @@ using ModelingToolkit: Differential
     # Solution of the ODE system
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
-    @test sol.retcode == :Success
+    @test sol.retcode ==  SciMLBase.ReturnCode.Success
 
     # Test against exact solution
     x_disc = sol[x]
@@ -161,7 +161,7 @@ end
     # Solution of the ODE system
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
-    @test sol.retcode == :Success
+    @test sol.retcode ==  SciMLBase.ReturnCode.Success
 
     # Test against exact solution
     x_disc = sol[x]
@@ -222,7 +222,7 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
 
-    @test sol.retcode == :Success
+    @test sol.retcode ==  SciMLBase.ReturnCode.Success
 
     # Test against exact solution
     x_disc = sol[x]
@@ -337,7 +337,7 @@ end
     # Solution of the ODE system
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32()) # TODO: check warnings
-    @test sol.retcode == :Success
+    @test sol.retcode ==  SciMLBase.ReturnCode.Success
 
     # Test against exact solution
     x_disc = sol[x]
@@ -394,7 +394,7 @@ end
     # Solution of the ODE system
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32()) # TODO: check warnings
-    @test sol.retcode == :Success
+    @test sol.retcode ==  SciMLBase.ReturnCode.Success
 
 
     # Test against exact solution
@@ -453,7 +453,7 @@ end
     # Solution of the ODE system
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
-    @test_broken sol.retcode == :Success
+    @test_broken sol.retcode ==  SciMLBase.ReturnCode.Success
     fail # don't run the rest of the test
     # Test against exact solution
     x_disc = sol[x]
@@ -510,7 +510,7 @@ end
     # Solution of the ODE system
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
-    @test_broken sol.retcode == :Success
+    @test_broken sol.retcode ==  SciMLBase.ReturnCode.Success
     fail #don't run later tests
     # Test against exact solution
     x_disc = sol[x]
