@@ -18,7 +18,7 @@ makedocs(sitename = "MethodOfLines.jl",
              :parse_error,
              :example_block,
              # Other available options are
-             # :autodocs_block, :cross_references, :docs_block, :eval_block, :example_block, :footnote, :meta_block, :missing_docs, :setup_block
+             # :autodocs_block, :cross_references, :docs_block, :eval_block, :example_block, :footnote, :meta_block, :missing_docs, :setup_block,
          ],
          modules = [MethodOfLines],
          format = Documenter.HTML(analytics = "UA-90474609-3",
