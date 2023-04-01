@@ -143,7 +143,7 @@ gif(anim, "Brusselator2Dsol_u.gif", fps = 8)
 For `v`:
 ```julia
 anim = @animate for k in 1:length(discrete_t)
-    heatmap(solv[k, 2:end, 2:end, k], title="$(discrete_t[k])")
+    heatmap(solv[2:end, 2:end, k], title="$(discrete_t[k])")
 end
 gif(anim, "Brusselator2Dsol_v.gif", fps = 8)
 ```       
