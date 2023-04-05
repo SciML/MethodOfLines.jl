@@ -7,7 +7,7 @@ struct UpwindScheme <: AbstractScheme
     end
 end
 
-extent(scheme::UpwindScheme, dorder) = dorder + scheme.order - 1
+extent(scheme::UpwindScheme, dorder) = 0# dorder + scheme.order - 1
 
 # Functional Schemes
 

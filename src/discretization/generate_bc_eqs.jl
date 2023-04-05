@@ -77,13 +77,19 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap)
 
+    val = filter(z -> z isa Number, arguments(u_))[1]
+    r = x_ => val
+    othervars = map(boundary.depvars) do v
+        substitute(v, r)
+    end
+
     # Shift depending on the boundary
     shift(::LowerBoundary) = zero(II)
     shift(::UpperBoundary) = unitindex(N, j)
 
     depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(derivweights.halfoffsetmap[1][Differential(x_)^d], II - shift(boundary), s, [], (j, x_), u, ufunc) for d in derivweights.orders[x_]]
 
-    depvarbcmaps = [u_ => half_offset_centered_difference(derivweights.interpmap[x_], II - shift(boundary), s, [], (j, x_), u, ufunc)]
+    depvarbcmaps = [v_ => half_offset_centered_difference(derivweights.interpmap[x_], II - shift(boundary), s, [], (x2i(s, depvar(v_, s), s), x_), depvar(v_, s), ufunc) for v_ in [u_; othervars]]
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars)
@@ -110,7 +116,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     end
 
 
-    return vcat(depvarderivbcmaps, depvarbcmaps, integralbcmaps)
+    return vcat(depvarderivbcmaps, integralbcmaps, depvarbcmaps)
 end
 
 function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights, indexmap) where {N,M,G<:CenterAlignedGrid}
@@ -127,9 +133,14 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     IIold = II
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap)
+    val = filter(z -> z isa Number, arguments(u_))[1]
+    r = x_ => val
+    othervars = map(boundary.depvars) do v
+        substitute(v, r)
+    end
 
     depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, [], (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
-    depvarbcmaps = [u_ => s.discvars[u][II]]
+    depvarbcmaps = [v_ => s.discvars[depvar(v_, s)][II] for v_ in [u_; othervars]]
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = unwrap.(filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars))
@@ -155,7 +166,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
         depvarbcmaps = vcat(depvarbcmaps, otherbcmaps)
     end
 
-    return vcat(depvarderivbcmaps, depvarbcmaps, integralbcmaps)
+    return vcat(depvarderivbcmaps, integralbcmaps, depvarbcmaps)
 end
 
 
