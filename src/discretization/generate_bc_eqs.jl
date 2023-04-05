@@ -82,6 +82,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     othervars = map(boundary.depvars) do v
         substitute(v, r)
     end
+    othervars = filter(x -> length(arguments(x)) > 1, othervars)
 
     # Shift depending on the boundary
     shift(::LowerBoundary) = zero(II)
@@ -138,6 +139,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     othervars = map(boundary.depvars) do v
         substitute(v, r)
     end
+    othervars = filter(x -> length(arguments(x)) > 1, othervars)
 
     depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, [], (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
     depvarbcmaps = [v_ => s.discvars[depvar(v_, s)][II] for v_ in [u_; othervars]]
