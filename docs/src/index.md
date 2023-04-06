@@ -42,16 +42,12 @@ Due to an implementation detail, the maximum derivative order that can be discre
 ## Installation
 
 Assuming that you already have Julia correctly installed, it suffices to import
-Optimization.jl in the standard way:
+MethodOfLines.jl in the standard way:
 
 ```julia
 using Pkg
 Pkg.add("MethodOfLines")
 ```
-The packages relevant to the core functionality of Optimization.jl will be imported
-accordingly and, in most cases, you do not have to worry about the manual
-installation of dependencies. However, you will need to add the specific optimizer
-packages.
 
 ## Contributing
 

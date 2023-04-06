@@ -134,17 +134,17 @@ For `u`:
 ```julia
 using Plots
 anim = @animate for k in 1:length(discrete_t)
-    heatmap(solu[k, 2:end, 2:end], title="$(discrete_t[k])") # 2:end since end = 1, periodic condition
+    heatmap(solu[2:end, 2:end, k], title="$(discrete_t[k])") # 2:end since end = 1, periodic condition
 end
-gif(anim, "plots/Brusselator2Dsol_u.gif", fps = 8)
+gif(anim, "Brusselator2Dsol_u.gif", fps = 8)
 ```       
 ![Brusselator2Dsol_u](https://user-images.githubusercontent.com/9698054/159934498-e5c21b13-c63b-4cd2-9149-49e521765141.gif)
 
 For `v`:
 ```julia
 anim = @animate for k in 1:length(discrete_t)
-    heatmap(solv[k, 2:end, 2:end], title="$(discrete_t[k])")
+    heatmap(solv[2:end, 2:end, k], title="$(discrete_t[k])")
 end
-gif(anim, "plots/Brusselator2Dsol_v.gif", fps = 8)
+gif(anim, "Brusselator2Dsol_v.gif", fps = 8)
 ```       
 ![Brusselator2Dsol_v](https://i.imgur.com/3kQNMI3.gif)
