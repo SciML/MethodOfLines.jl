@@ -35,19 +35,19 @@ function get_discrete(pdesys, discretization)
     # Parse the variables in to the right form and store useful information about the system
     v = VariableMap(pdesys, discretization)
     # Check for basic interface errors
-    interface_errors(pdesys, v, discretization)
+    PDEBase.interface_errors(pdesys, v, discretization)
     # Extract tspan
     tspan = t !== nothing ? v.intervals[t] : nothing
     # Find the derivative orders in the bcs
     bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
-    boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
+    boundarymap = PDEBase.parse_bcs(pdesys.bcs, v, bcorders)
     # Check that the boundary map is valid
-    check_boundarymap(boundarymap, discretization)
+    PDEBase.check_boundarymap(boundarymap, discretization)
 
     # Transform system so that it is compatible with the discretization
     if should_transform(pdesys, discretization)
-        pdesys = transform_pde_system!(v, boundarymap, pdesys, discretization)
+        pdesys = PDEBase.transform_pde_system!(v, boundarymap, pdesys, discretization)
     end
 
     pdeeqs = pdesys.eqs
@@ -56,10 +56,10 @@ function get_discrete(pdesys, discretization)
     ############################
     # Discretization of system
     ############################
-    disc_state = construct_disc_state(discretization)
+    disc_state = PDEBase.construct_disc_state(discretization)
 
     # Create discretized space and variables, this is called `s` throughout
-    s = construct_discrete_space(v, discretization)
+    s = PDEBase.construct_discrete_space(v, discretization)
 
     return Dict(vcat([Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]))
 end
