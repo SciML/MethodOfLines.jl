@@ -41,7 +41,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
             indvars = first(Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
             x̄ = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
 
-            s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
+            s = MethodOfLines.construct_discrete_space(domains, depvars, x̄, disc)
 
             derivweights = MethodOfLines.DifferentialDiscretizer(pdesys, s, disc)
 
@@ -87,7 +87,7 @@ end
 
     for order in [2]
         disc = MOLFiniteDifference([x=>dx], t; approx_order=order)
-        s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
+        s = MethodOfLines.construct_discrete_space(domains, depvars, x̄, disc)
 
         derivweights = MethodOfLines.DifferentialDiscretizer(pdesys, s, disc)
 
@@ -123,7 +123,7 @@ end
     indvars = first(Set(filter(xs->!isequal(xs, [t]), map(arguments, depvars))))
     x̄ = first(Set(filter(!isempty, map(u->filter(x-> t === nothing || !isequal(x, t.val), arguments(u)), depvars))))
 
-    s = MethodOfLines.DiscreteSpace(domains, depvars, x̄, disc)
+    s = MethodOfLines.construct_discrete_space(domains, depvars, x̄, disc)
 
     derivweights = MethodOfLines.DifferentialDiscretizer(pdesys, s, disc)
 

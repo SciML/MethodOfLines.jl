@@ -1,6 +1,8 @@
 # Method of lines discretization scheme
 
-function interface_errors(depvars, indvars, discretization)
+function PDEBase.interface_errors(pdesys::PDESystem, v::PDEBase.VariableMap, discretization::MOLFiniteDifference)
+    depvars = v.ū
+    indvars = v.x̄
     for x in indvars
         @assert haskey(discretization.dxs, Num(x)) || haskey(discretization.dxs, x) "Variable $x has no step size"
     end
@@ -12,7 +14,7 @@ function interface_errors(depvars, indvars, discretization)
     end
 end
 
-function check_boundarymap(boundarymap, discretization)
+function PDEBase.check_boundarymap(boundarymap, discretization::MOLFiniteDifference)
     bs = filter_interfaces(flatten_vardict(boundarymap))
     for b in bs
         dx1 = discretization.dxs[Num(b.x)]
@@ -23,44 +25,29 @@ function check_boundarymap(boundarymap, discretization)
     end
 end
 
-function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference{G}) where {G}
-    t = discretization.time
-    disc_strategy = discretization.disc_strategy
-    cardinalize_eqs!(pdesys)
+function get_discrete(pdesys, discretization)
+    t = get_time(discretization)
+    PDEBase.cardinalize_eqs!(pdesys)
 
     ############################
     # System Parsing and Transformation
     ############################
     # Parse the variables in to the right form and store useful information about the system
-    v = VariableMap(pdesys, t)
+    v = VariableMap(pdesys, discretization)
     # Check for basic interface errors
-    interface_errors(v.ū, v.x̄, discretization)
+    PDEBase.interface_errors(pdesys, v, discretization)
     # Extract tspan
     tspan = t !== nothing ? v.intervals[t] : nothing
     # Find the derivative orders in the bcs
     bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
-    boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
-
-    check_boundarymap(boundarymap, discretization)
+    boundarymap = PDEBase.parse_bcs(pdesys.bcs, v, bcorders)
+    # Check that the boundary map is valid
+    PDEBase.check_boundarymap(boundarymap, discretization)
 
     # Transform system so that it is compatible with the discretization
-    if discretization.should_transform
-        if has_interfaces(boundarymap)
-            @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
-        else
-            pdesys = transform_pde_system!(v, boundarymap, pdesys)
-        end
-    end
-
-    # Check if the boundaries warrant using ODAEProblem, as long as this is allowed in the interface
-    use_ODAE = discretization.use_ODAE
-    if use_ODAE
-        bcivmap = reduce((d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap)))
-        allbcs = mapreduce(x -> bcivmap[x], vcat, v.x̄)
-        if all(bc -> bc.order > 0, allbcs)
-            use_ODAE = false
-        end
+    if should_transform(pdesys, discretization)
+        pdesys = PDEBase.transform_pde_system!(v, boundarymap, pdesys, discretization)
     end
 
     pdeeqs = pdesys.eqs
@@ -69,123 +56,10 @@ function SciMLBase.symbolic_discretize(pdesys::PDESystem, discretization::Method
     ############################
     # Discretization of system
     ############################
-    alleqs = []
-    bceqs = []
+    disc_state = PDEBase.construct_disc_state(discretization)
 
     # Create discretized space and variables, this is called `s` throughout
-    s = DiscreteSpace(v, discretization)
-    # Get the interior and variable to solve for each equation
-    #TODO: do the interiormap before and independent of the discretization i.e. `s`
-    interiormap = InteriorMap(pdeeqs, boundarymap, s, discretization)
-    # Get the derivative orders appearing in each equation
-    pdeorders = Dict(map(x -> x => d_orders(x, pdeeqs), v.x̄))
-    bcorders = Dict(map(x -> x => d_orders(x, bcs), v.x̄))
-    orders = Dict(map(x -> x => collect(union(pdeorders[x], bcorders[x])), v.x̄))
-
-    # Generate finite difference weights
-    derivweights = DifferentialDiscretizer(pdesys, s, discretization, orders)
-
-    # Seperate bcs and ics
-    ics = t === nothing ? [] : mapreduce(u -> boundarymap[u][t], vcat, operation.(s.ū))
-
-    bcmap = Dict(map(collect(keys(boundarymap))) do u
-        u => Dict(map(s.x̄) do x
-            x => boundarymap[u][x]
-        end)
-    end)
-
-    ####
-    # Loop over equations, Discretizing them and their dependent variables' boundary conditions
-    ####
-    for pde in pdeeqs
-        # Read the dependent variables on both sides of the equation
-        depvars_lhs = get_depvars(pde.lhs, v.depvar_ops)
-        depvars_rhs = get_depvars(pde.rhs, v.depvar_ops)
-        depvars = collect(depvars_lhs ∪ depvars_rhs)
-        depvars = filter(u -> !any(map(x -> x isa Number, arguments(u))), depvars)
-
-        eqvar = interiormap.var[pde]
-
-        # * Assumes that all variables in the equation have same dimensionality except edgevals
-        args = ivs(eqvar, s)
-        indexmap = Dict([args[i] => i for i in 1:length(args)])
-        if disc_strategy isa ScalarizedDiscretization
-            # Generate the equations for the interior points
-            discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap,
-                depvars, s, derivweights, indexmap)
-        else
-            throw(ArgumentError("Only ScalarizedDiscretization is currently supported"))
-        end
-    end
-
-    u0 = generate_ic_defaults(ics, s, disc_strategy)
-
-    defaults = Dict(pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? u0 : vcat(u0, pdesys.ps))
-    ps = pdesys.ps === nothing || pdesys.ps === SciMLBase.NullParameters() ? Num[] : first.(pdesys.ps)
-    # Combine PDE equations and BC equations
-    metadata = MOLMetadata(s, discretization, pdesys, use_ODAE)
-
-    return generate_system(alleqs, bceqs, ics, s.discvars, defaults, ps, tspan, metadata)
-end
-
-function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MOLFiniteDifference; analytic = nothing, kwargs...)
-    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
-    try
-        simpsys = structural_simplify(sys)
-        if tspan === nothing
-            add_metadata!(get_metadata(sys), sys)
-            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs..., kwargs...)
-        else
-            # Use ODAE if nessesary
-            if getfield(sys, :metadata) isa MOLMetadata && getfield(sys, :metadata).use_ODAE
-                add_metadata!(get_metadata(simpsys), DAEProblem(simpsys; discretization.kwargs..., kwargs...))
-                return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
-            else
-                add_metadata!(get_metadata(simpsys), sys)
-                prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs..., kwargs...)
-                if analytic === nothing
-                    return prob
-                else
-                    f = ODEFunction(pdesys, discretization, analytic=analytic, discretization.kwargs..., kwargs...)
-
-                    return ODEProblem(f, prob.u0, prob.tspan, prob.p; discretization.kwargs..., kwargs...)
-                end
-            end
-        end
-    catch e
-        error_analysis(sys, e)
-    end
-end
-
-function get_discrete(pdesys, discretization)
-    t = discretization.time
-    disc_strategy = discretization.disc_strategy
-    cardinalize_eqs!(pdesys)
-
-    ############################
-    # System Parsing and Transformation
-    ############################
-    # Parse the variables in to the right form and store useful information about the system
-    v = VariableMap(pdesys, t)
-    # Check for basic interface errors
-    interface_errors(v.ū, v.x̄, discretization)
-    # Extract tspan
-    tspan = t !== nothing ? v.intervals[t] : nothing
-    # Find the derivative orders in the bcs
-    bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
-    # Create a map of each variable to their boundary conditions including initial conditions
-    boundarymap = parse_bcs(pdesys.bcs, v, bcorders)
-
-    # Transform system so that it is compatible with the discretization
-    if discretization.should_transform
-        if has_interfaces(boundarymap)
-            @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
-        else
-            pdesys = transform_pde_system!(v, boundarymap, pdesys)
-        end
-    end
-
-    s = DiscreteSpace(v, discretization)
+    s = PDEBase.construct_discrete_space(v, discretization)
 
     return Dict(vcat([Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]))
 end

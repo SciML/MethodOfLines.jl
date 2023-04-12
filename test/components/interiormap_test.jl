@@ -34,7 +34,7 @@ const bigint = div(typemax(Int), 2)
 
     v = MethodOfLines.VariableMap(pdesys, disc)
 
-    s = MethodOfLines.DiscreteSpace(v, disc)
+    s = MethodOfLines.construct_discrete_space(v, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
@@ -75,7 +75,7 @@ end
 
     v = MethodOfLines.VariableMap(pdesys, disc)
 
-    s = MethodOfLines.DiscreteSpace(v, disc)
+    s = MethodOfLines.construct_discrete_space(v, disc)
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
         @test m == [2 2 0; 3 0 3; 4 4 4]
@@ -113,7 +113,7 @@ end
     disc = MOLFiniteDifference([x=>dx, t=>1.0])
 
     v = MethodOfLines.VariableMap(pdesys, disc)
-    s = MethodOfLines.DiscreteSpace(v, disc)
+    s = MethodOfLines.construct_discrete_space(v, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
@@ -154,7 +154,7 @@ end
 
     v = MethodOfLines.VariableMap(pdesys, disc)
 
-    s = MethodOfLines.DiscreteSpace(v, disc)
+    s = MethodOfLines.construct_discrete_space(v, disc)
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
         @test m == [0 2 2; 1 1 0; 2 0 1]

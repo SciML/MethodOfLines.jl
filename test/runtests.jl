@@ -7,6 +7,30 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
+
+    if GROUP == "All" || GROUP == "Sol_Interface"
+        @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
+            include("components/solution_interface.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "Diffusion"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin
+            include("pde_systems/MOL_1D_Linear_Diffusion.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "Mixed_Derivatives"
+        @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
+            include("pde_systems/MOL_Mixed_Deriv.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "Integrals"
+        @time @safetestset "MOLFiniteDifference Interface: Integrals" begin
+            include("pde_systems/MOL_1D_Integration.jl")
+        end
+    end
     if GROUP == "All" || GROUP == "Components"
         @time @safetestset "MOLFiniteDifference Utils" begin
             include("utils_test.jl")
@@ -39,11 +63,7 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     end
 
 
-    if GROUP == "All" || GROUP == "Integrals"
-        @time @safetestset "MOLFiniteDifference Interface: Integrals" begin
-            include("pde_systems/MOL_1D_Integration.jl")
-        end
-    end
+
 
     if GROUP == "All" || GROUP == "Higher_Order"
         @time @safetestset "MOLFiniteDifference Interface: 1D HigherOrder" begin
@@ -76,12 +96,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
-    if GROUP == "All" || GROUP == "Sol_Interface"
-        @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
-            include("components/solution_interface.jl")
-        end
-    end
-
     if GROUP == "All" || GROUP == "MOL_Interface1"
         @time @safetestset "MOLFiniteDifference Interface" begin
             include("pde_systems/MOLtest1.jl")
@@ -111,22 +125,10 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/burgers_eq.jl")
         end
     end
-
-    if GROUP == "All" || GROUP == "Diffusion"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin
-            include("pde_systems/MOL_1D_Linear_Diffusion.jl")
-        end
-    end
-
     if GROUP == "All" || GROUP == "Convection"
+
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin
             include("pde_systems/MOL_1D_Linear_Convection.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Mixed_Derivatives"
-        @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
-            include("pde_systems/MOL_Mixed_Deriv.jl")
         end
     end
 end

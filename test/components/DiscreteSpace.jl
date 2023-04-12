@@ -30,7 +30,7 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
 
     v = MethodOfLines.VariableMap(pdesys, disc)
 
-    s = MethodOfLines.DiscreteSpace(v, disc)
+    s = MethodOfLines.construct_discrete_space(v, disc)
 
     discx = x_min:dx:x_max
     discy = y_min:dy:y_max
@@ -70,7 +70,7 @@ end
     disc = MOLFiniteDifference([x => dx, y => dy], t; approx_order=order, grid_align=edge_align)
     v = MethodOfLines.VariableMap(pdesys, disc)
 
-    s = MethodOfLines.DiscreteSpace(v, disc)
+    s = MethodOfLines.construct_discrete_space(v, disc)
     discx = (x_min-dx/2):dx:(x_max+dx/2)
     discy = (y_min-dy/2):dy:(y_max+dy/2)
 

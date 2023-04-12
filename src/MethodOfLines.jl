@@ -14,8 +14,27 @@ using Interpolations
 using Latexify
 import DomainSets
 
+# See here for the main `symbolic_discretize` and `generate_system` functions
+using PDEBase
+using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i, d_orders, vcat!
 # To Extend
-import SciMLBase.wrap_sol
+import PDEBase.interface_errors
+import PDEBase.check_boundarymap
+import PDEBase.should_transform
+import PDEBase.transform_pde_system!
+import PDEBase.construct_discrete_space
+import PDEBase.construct_disc_state
+import PDEBase.construct_var_equation_mapping
+import PDEBase.construct_differential_discretizer
+import PDEBase.discretize_equation!
+import PDEBase.generate_ic_defaults
+import PDEBase.generate_metadata
+
+import PDEBase.get_time
+import PDEBase.get_eqvar
+import PDEBase.get_discvars
+import PDEBase.depvar
+import PDEBase.x2i
 import Base.display
 import Base.isequal
 import Base.getindex
@@ -31,7 +50,6 @@ include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
 
 include("discretization/discretize_vars.jl")
-include("MOL_symbolic_utils.jl")
 include("MOL_utils.jl")
 include("system_parsing/interior_map.jl")
 
@@ -52,9 +70,6 @@ include("discretization/schemes/extrapolation_weights.jl")
 include("discretization/differential_discretizer.jl")
 
 # System Parsing
-include("system_parsing/variable_map.jl")
-include("system_parsing/bcs/parse_boundaries.jl")
-include("system_parsing/bcs/periodic_map.jl")
 include("system_parsing/pde_system_transformation.jl")
 
 # Interface handling
@@ -76,7 +91,6 @@ include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
 
 # Main
-include("error_analysis.jl")
 include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 

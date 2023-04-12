@@ -1,5 +1,5 @@
 # Use DiffEqOperators to generate weights and calculate derivative orders
-struct DifferentialDiscretizer{T, D1, S}
+struct DifferentialDiscretizer{T, D1, S} <: AbstractDifferentialDiscretizer
     approx_order::Int
     advection_scheme::S
     map::D1
@@ -10,7 +10,7 @@ struct DifferentialDiscretizer{T, D1, S}
     boundary::Dict{Num,DerivativeOperator}
 end
 
-function DifferentialDiscretizer(pdesys, s, discretization, orders)
+function PDEBase.construct_differential_discretizer(pdesys, s::DiscreteSpace, discretization::MOLFiniteDifference, orders)
     pdeeqs = pdesys.eqs isa Vector ? pdesys.eqs : [pdesys.eqs]
     bcs = pdesys.bcs isa Vector ? pdesys.bcs : [pdesys.bcs]
     approx_order = discretization.approx_order

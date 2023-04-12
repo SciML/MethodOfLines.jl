@@ -9,13 +9,13 @@ Used to unpack the solution.
           MOLFiniteDifference object.
 - `pdesys`: a PDESystem object, used in the discretization.
 """
-struct MOLMetadata{hasTime, Ds,Disc,PDE, M, Strat} <: SciMLBase.AbstractDiscretizationMetadata{hasTime}
+struct MOLMetadata{hasTime,Ds,Disc,PDE,M,Strat} <: SciMLBase.AbstractDiscretizationMetadata{hasTime}
     discretespace::Ds
     disc::Disc
     pdesys::PDE
     use_ODAE::Bool
     metadata::M
-    function MOLMetadata(discretespace, disc, pdesys, use_ODAE, metadata = nothing)
+    function MOLMetadata(discretespace, disc, pdesys, boundarymap, metadata=nothing)
         metaref = Ref{Any}()
         metaref[] = metadata
         if discretespace.time isa Nothing
@@ -23,14 +23,24 @@ struct MOLMetadata{hasTime, Ds,Disc,PDE, M, Strat} <: SciMLBase.AbstractDiscreti
         else
             hasTime = Val(true)
         end
-        return new{hasTime, typeof(discretespace),
-                   typeof(disc), typeof(pdesys),
-                   typeof(metaref), typeof(disc.disc_strategy)}(discretespace,
-                                                                                 disc, pdesys, use_ODAE,
-                                                                                 metaref)
+        use_ODAE = disc.use_ODAE
+        if use_ODAE
+            bcivmap = reduce((d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap)))
+            allbcs = let v = discretespace.vars
+                mapreduce(x -> bcivmap[x], vcat, v.x̄)
+            end
+            if all(bc -> bc.order > 0, allbcs)
+                use_ODAE = false
+            end
+        end
+        return new{hasTime,typeof(discretespace),
+            typeof(disc),typeof(pdesys),
+            typeof(metaref),typeof(disc.disc_strategy)}(discretespace,
+            disc, pdesys, use_ODAE,
+            metaref)
     end
 end
 
-function add_metadata!(meta::MOLMetadata, metadata)
-    meta.metadata[] = metadata
+function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference, pdesys::PDESystem, boundarymap, metadata=nothing)
+    return MOLMetadata(s, disc, pdesys, boundarymap, metadata)
 end

@@ -1,4 +1,4 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap)
+function PDEBase.discretize_equation!(disc_state::PDEBase.EquationState, pde::Equation, interiormap, eqvar, bcmap, depvars, s::DiscreteSpace, derivweights, indexmap, discretization::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
     # Generate replacement rule gen closures for the boundary values like u(t, 1)
     boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
@@ -6,13 +6,13 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
     eqvarbcs = mapreduce(x -> bcmap[operation(eqvar)][x], vcat, s.x̄)
     # Generate the boundary conditions for the correct variable
     for boundary in eqvarbcs
-        generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
+        generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
     end
     # Generate extrapolation eqs
-    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, bcmap)
+    generate_extrap_eqs!(disc_state, pde, eqvar, s, derivweights, interiormap, bcmap)
 
     # Set invalid corner points to zero
-    generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
+    generate_corner_eqs!(disc_state, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
     # Extract Interior
     interior = interiormap.I[pde]
     # Generate the discrete form ODEs for the interior
@@ -24,7 +24,9 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
             discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
         end)
     end
-    push!(alleqs, eqs)
+
+    vcat!(disc_state.eqs, eqs)
+
 end
 
 function discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
@@ -36,42 +38,6 @@ function discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, 
         println("A scheme has been incorrectly applied to the following equation: $pde.\n")
         println("The following rules were constructed at index $II:")
         display(rules)
-        rethrow(e)
-    end
-end
-function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, metadata)
-    t = metadata.discretespace.time
-    name = metadata.pdesys.name
-    bceqs = reduce(vcat, bceqs)
-    alleqs = reduce(vcat, alleqs)
-    alleqs = vcat(alleqs, unique(bceqs))
-    alldepvarsdisc = vec(reduce(vcat, vec(unique(reduce(vcat, vec.(values(discvars)))))))
-    # Finalize
-    # if haskey(metadata.disc.kwargs, :checks)
-    #     checks = metadata.disc.kwargs[:checks]
-    # else
-         checks = true
-    # end
-    try
-        if t === nothing
-            # At the time of writing, NonlinearProblems require that the system of equations be in this form:
-            # 0 ~ ...
-            # Thus, before creating a NonlinearSystem we normalize the equations s.t. the lhs is zero.
-            eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, alleqs)
-            sys = NonlinearSystem(eqs, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata, checks = checks)
-            return sys, nothing
-        else
-            # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
-
-            sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults=defaults, name=name, metadata=metadata, checks = checks)
-            return sys, tspan
-        end
-    catch e
-        println("The system of equations is:")
-        println(alleqs)
-        println()
-        println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
-        println()
         rethrow(e)
     end
 end
