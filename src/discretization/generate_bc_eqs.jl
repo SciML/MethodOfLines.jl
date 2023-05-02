@@ -91,7 +91,6 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = filter(v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars)
-    # @show integralvs
 
     integralbcmaps = generate_whole_domain_integration_rules(IIold, s, integralvs, indexmap, nothing, x_)
 
@@ -137,8 +136,6 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
         substitute(v, r)
     end
     othervars = filter(v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))), othervars)
-    @show othervars, II, IIold, boundary.depvars, boundary.eq
-
 
     depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, [], (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
     depvarbcmaps = [v_ => s.discvars[depvar(v_, s)][II] for v_ in [u_; othervars]]
