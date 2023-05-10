@@ -15,7 +15,7 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
             states(odesys)
         end
         # Reshape the solution to flat arrays, faster to do this eagerly.
-        umap = Dict(map(discretespace.ū) do u
+        umap = mapreduce(vcat, discretespace.ū) do u
             let discu = discretespace.discvars[u]
                 solu = map(CartesianIndices(discu)) do I
                     i = sym_to_index(discu[I], solved_states)
@@ -38,12 +38,18 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
                         out[I, :] .= solu[I]
                     end
                 else
-                    @assert false "The time variable must be the first or last argument of the dependent variable $u."
+                    error("The time variable must be the first or last argument of the dependent variable $u.")
                 end
 
-                Num(u) => out
+                # Deal with any replaced variables
+                ureplaced = get(pdesys.replaced_vars, Num(u), nothing)
+                if isnothing(ureplaced)
+                    [Num(u) => out]
+                else
+                    [Num(u) => out, ureplaced => out]
+                end
             end
-        end)
+        end |> Dict
         # Build Interpolations
         interp = build_interpolation(umap, ivs, ivgrid, sol, pdesys)
 

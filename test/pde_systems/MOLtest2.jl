@@ -361,3 +361,55 @@ end
     solu = sol[u(t, x)]
     solv = sol[v(t)]
 end
+
+@testset "New style array variable conversion and interception" begin
+    # Parameters, variables, and derivatives
+    n_comp = 2
+    @parameters t, x, p[1:n_comp], q[1:n_comp]
+    @variables u(..)[1:n_comp]
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    params = Symbolics.scalarize(reduce(vcat,[p .=> [1.5, 2.0], q .=> [1.2, 1.8]]))
+    # 1D PDE and boundary conditions
+
+    eqs  = [Dt(u(t, x)[i]) ~ p[i] * Dxx(u(t, x)[i]) for i in 1:n_comp]
+
+    bcs = [[u(0, x)[i] ~ q[i] * cos(x),
+            u(t, 0)[i] ~ sin(t),
+            u(t, 1)[i] ~ exp(-t) * cos(1),
+            Dx(u(t,0)[i]) ~ 0.0] for i in 1:n_comp]
+    bcs_collected = reduce(vcat, bcs)
+
+    # Space and time domains
+    domains = [t ∈ Interval(0.0, 1.0),
+            x ∈ Interval(0.0, 1.0)]
+
+    # PDE system
+
+    @show eqs, bcs_collected
+
+    @named pdesys = PDESystem(eqs, bcs_collected, domains, [t, x], [u(t, x)[i] for i in 1:n_comp], Symbolics.scalarize(params))
+
+
+    # Method of lines discretization
+    dx = 0.1
+    order = 2
+    discretization = MOLFiniteDifference([x => dx], t; approx_order = order)
+
+    # Convert the PDE problem into an ODE problem
+    prob = discretize(pdesys,discretization) #error occurs here
+
+    # Solve ODE problem
+    sol = solve(prob, Tsit5(), saveat=0.2)
+
+        # Test that the system is correctly constructed
+    varname1 = Symbol("u_Any[1]")
+    varname2 = Symbol("u_Any[2]")
+
+
+    vars = @variables $varname1(..), $varname2(..)
+
+    @test sol[u(t, x)[1]] == sol[vars[1](t, x)]
+    @test sol[u(t, x)[2]] == sol[vars[2](t, x)]
+end
