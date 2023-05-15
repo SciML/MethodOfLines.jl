@@ -1,7 +1,7 @@
 # TODO: Check if the grid is uniform and use the supported higher order interpolations
 
-function build_interpolation(umap, ivs, ivgrid, sol, pdesys)
-    return Dict(map(collect(keys(umap))) do k
+function build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys)
+    return Dict(map(Num.(dvs)) do k
         args = arguments(k.val)
         nodes = (map(args) do arg
                 i = findfirst(isequal(arg), ivs)

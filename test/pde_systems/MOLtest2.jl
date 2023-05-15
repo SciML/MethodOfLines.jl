@@ -38,11 +38,12 @@ using Test
     # define space-time plane
     domains = [x ∈ Interval(0.0, ℓ), t ∈ Interval(0.0, 5.0)]
 
-    @testset "Test 01: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
+    @test_broken begin #@testset "Test 01: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
         D = D₀ / (1.0 + exp(α * (c(x, t) - χ)))
         diff_eq = ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
     @testset "Test 02: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
@@ -50,60 +51,70 @@ using Test
         diff_eq = ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
     @testset "Test 03: ∂t(c(x, t)) ~ ∂x(1.0 / (1.0/D₀ + exp(α * (c(x, t) - χ))/D₀) * ∂x(c(x, t)))" begin
         diff_eq = ∂t(c(x, t)) ~ ∂x(1.0 / (1.0 / D₀ + exp(α * (c(x, t) - χ)) / D₀) * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
-    @testset "Test 04: ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))" begin
+    @test_broken begin #@testset "Test 04: ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))" begin
         diff_eq = ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
     @testset "Test 05: ∂t(c(x, t)) ~ ∂x(1/x * ∂x(c(x, t)))" begin
         diff_eq = ∂t(c(x, t)) ~ ∂x(1 / x * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
-    @testset "Test 06: ∂t(c(x, t)) ~ ∂x(x*∂x(c(x, t)))/c(x,t)" begin
+    @test_broken begin #@testset "Test 06: ∂t(c(x, t)) ~ ∂x(x*∂x(c(x, t)))/c(x,t)" begin
         diff_eq = ∂t(c(x, t)) ~ ∂x(x * ∂x(c(x, t))) / c(x, t)
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
     @testset "Test 07: ∂t(c(x, t)) ~ ∂x(1/(1+c(x,t)) ∂x(c(x, t)))" begin
         diff_eq = ∂t(c(x, t)) ~ ∂x(1 / (1 + c(x, t)) * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
-    @testset "Test 08: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))" begin
+    @test_broken begin #@testset "Test 08: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))" begin
         diff_eq = ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x, t) * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
-    @testset "Test 09: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
-        diff_eq = c(x, t) * ∂x(c(x, t) * ∂x(c(x, t))) / (1 + c(x, t))
+    @test_broken begin #@testset "Test 09: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
+        diff_eq = c(x, t) * ∂x(c(x, t) * ∂x(c(x, t))) / (1 + c(x, t)) ~ 0
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
-    @testset "Test 10: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
-        diff_eq = c(x, t) * ∂x(c(x, t)^(-1) * ∂x(c(x, t)))
+    @test_broken begin #@testset "Test 10: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
+        diff_eq = c(x, t) * ∂x(c(x, t)^(-1) * ∂x(c(x, t))) ~ 0
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
     @testset "Test 11: ∂t(c(x, t)) ~ ∂x(1/(1+c(x,t)^2) ∂x(c(x, t)))" begin
         diff_eq = ∂t(c(x, t)) ~ ∂x(1 / (1 + c(x, t)^2) * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
+        prob = discretize(pdesys, discretization)
     end
 
 end
@@ -360,4 +371,54 @@ end
     discrete_t = sol[t]
     solu = sol[u(t, x)]
     solv = sol[v(t)]
+end
+
+@testset "New style array variable conversion and interception" begin
+    # Parameters, variables, and derivatives
+    n_comp = 2
+    @parameters t, x, p[1:n_comp], q[1:n_comp]
+    @variables u(..)[1:n_comp]
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    params = Symbolics.scalarize(reduce(vcat,[p .=> [1.5, 2.0], q .=> [1.2, 1.8]]))
+    # 1D PDE and boundary conditions
+
+    eqs  = [Dt(u(t, x)[i]) ~ p[i] * Dxx(u(t, x)[i]) for i in 1:n_comp]
+
+    bcs = [[u(0, x)[i] ~ q[i] * cos(x),
+            u(t, 0)[i] ~ sin(t),
+            u(t, 1)[i] ~ exp(-t) * cos(1),
+            Dx(u(t,0)[i]) ~ 0.0] for i in 1:n_comp]
+    bcs_collected = reduce(vcat, bcs)
+
+    # Space and time domains
+    domains = [t ∈ Interval(0.0, 1.0),
+            x ∈ Interval(0.0, 1.0)]
+
+    # PDE system
+
+    @named pdesys = PDESystem(eqs, bcs_collected, domains, [t, x], [u(t, x)[i] for i in 1:n_comp], Symbolics.scalarize(params))
+
+
+    # Method of lines discretization
+    dx = 0.1
+    order = 2
+    discretization = MOLFiniteDifference([x => dx], t; approx_order = order)
+
+    # Convert the PDE problem into an ODE problem
+    prob = discretize(pdesys,discretization) #error occurs here
+
+    # Solve ODE problem
+    sol = solve(prob, Tsit5(), saveat=0.2)
+
+        # Test that the system is correctly constructed
+    varname1 = Symbol("u_Any[1]")
+    varname2 = Symbol("u_Any[2]")
+
+
+    vars = @variables $varname1(..), $varname2(..)
+
+    @test sol[u(t, x)[1]] == sol[vars[1](t, x)]
+    @test sol[u(t, x)[2]] == sol[vars[2](t, x)]
 end

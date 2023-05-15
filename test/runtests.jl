@@ -7,12 +7,17 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
-
     if GROUP == "All" || GROUP == "Sol_Interface"
         @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
             include("components/solution_interface.jl")
         end
     end
+    if GROUP == "All" || GROUP == "MOL_Interface2"
+        @time @safetestset "MOLFiniteDifference Interface" begin
+            include("pde_systems/MOLtest2.jl")
+        end
+    end
+
 
     if GROUP == "All" || GROUP == "Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin
@@ -62,9 +67,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
-
-
-
     if GROUP == "All" || GROUP == "Higher_Order"
         @time @safetestset "MOLFiniteDifference Interface: 1D HigherOrder" begin
             include("pde_systems/MOL_1D_HigherOrder.jl")
@@ -99,12 +101,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "MOL_Interface1"
         @time @safetestset "MOLFiniteDifference Interface" begin
             include("pde_systems/MOLtest1.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "MOL_Interface2"
-        @time @safetestset "MOLFiniteDifference Interface" begin
-            include("pde_systems/MOLtest2.jl")
         end
     end
 
