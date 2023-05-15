@@ -13,7 +13,7 @@ function (sol::SciMLBase.PDESolution{T,N,S,D})(args...;
     if dv === nothing
         @assert length(args) == length(sol.ivs) "Not enough arguments for the number of independent variables  including time where appropriate, got $(length(args)) expected $(length(sol.ivs))."
         return map(sol.dvs) do dv
-            arg_ivs = arguments(dv.val)
+            arg_ivs = arguments(safe_unwrap(dv))
             is = map(arg_ivs) do arg_iv
                 i = findfirst(isequal(arg_iv), sol.ivs)
                 @assert i !== nothing "Independent variable $(arg_iv) in dependent variable $(dv) not found in the solution."
@@ -37,6 +37,8 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     idv = sym_to_index(sym, A.dvs)
     if idv !== nothing
         dv = A.dvs[idv]
+    elseif any(isequal(safe_unwrap(sym)), safe_unwrap.(collect(values(A.disc_data.discretespace.vars.replaced_vars))))
+        dv = sym
     end
     if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
         A.ivdomain[iiv]

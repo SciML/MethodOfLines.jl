@@ -14,8 +14,9 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
         else
             states(odesys)
         end
+        dvs = discretespace.ū
         # Reshape the solution to flat arrays, faster to do this eagerly.
-        umap = mapreduce(vcat, discretespace.ū) do u
+        umap = mapreduce(vcat, dvs) do u
             let discu = discretespace.discvars[u]
                 solu = map(CartesianIndices(discu)) do I
                     i = sym_to_index(discu[I], solved_states)
@@ -42,7 +43,7 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
                 end
 
                 # Deal with any replaced variables
-                ureplaced = get(pdesys.replaced_vars, Num(u), nothing)
+                ureplaced = get(discretespace.vars.replaced_vars, u, nothing)
                 if isnothing(ureplaced)
                     [Num(u) => out]
                 else
@@ -51,7 +52,7 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
             end
         end |> Dict
         # Build Interpolations
-        interp = build_interpolation(umap, ivs, ivgrid, sol, pdesys)
+        interp = build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys)
 
         return SciMLBase.PDETimeSeriesSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
             typeof(sol),typeof(sol.errors),typeof(sol.t),typeof(ivgrid),

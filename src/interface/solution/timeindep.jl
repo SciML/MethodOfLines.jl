@@ -6,8 +6,9 @@ function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metada
     # Extract axies
     ivs = [discretespace.x̄...]
     ivgrid = ((discretespace.grid[x] for x in ivs)...,)
+    dvs = discretespace.ū
     # Reshape the solution to flat arrays
-    umap = mapreduce(vcat, discretespace.ū) do u
+    umap = mapreduce(vcat, dvs) do u
         let discu = discretespace.discvars[u]
             solu = map(CartesianIndices(discu)) do I
                 i = sym_to_index(discu[I], odesys.states)
@@ -23,7 +24,7 @@ function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metada
                 out[I] = solu[I]
             end
             # Deal with any replaced variables
-            ureplaced = get(pdesys.replaced_vars, Num(u), nothing)
+            ureplaced = get(discretespace.vars.replaced_vars, u, nothing)
             if isnothing(ureplaced)
                 [Num(u) => out]
             else
@@ -32,7 +33,7 @@ function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metada
         end
     end |> Dict
     # Build Interpolations
-    interp = build_interpolation(umap, ivs, ivgrid, sol, pdesys)
+    interp = build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys)
 
     return SciMLBase.PDENoTimeSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
         typeof(sol),typeof(ivgrid),typeof(ivs),typeof(pdesys.dvs),typeof(sol.prob),typeof(sol.alg),
