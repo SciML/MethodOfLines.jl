@@ -33,7 +33,7 @@ function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metada
         end
     end |> Dict
     # Build Interpolations
-    interp = build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys)
+    interp = build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars)
 
     return SciMLBase.PDENoTimeSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
         typeof(sol),typeof(ivgrid),typeof(ivs),typeof(pdesys.dvs),typeof(sol.prob),typeof(sol.alg),
