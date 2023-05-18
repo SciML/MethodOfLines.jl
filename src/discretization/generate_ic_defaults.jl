@@ -1,5 +1,8 @@
 function PDEBase.generate_ic_defaults(tconds, s::DiscreteSpace, ::MOLFiniteDifference{G,DS}) where {G,DS<:ScalarizedDiscretization}
     t = s.time
+    if length(tconds) != length(s.ū)
+        error("The number of initial conditions must match the number of dependent variables.")
+    end
     if s.time !== nothing
         u0 = mapreduce(vcat, tconds) do ic
             if isupper(ic)
