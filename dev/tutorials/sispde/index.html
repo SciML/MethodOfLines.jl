@@ -90,30 +90,30 @@ I_solution = sol[I(t, x)]
 p = surface(discrete_x, discrete_t, S_solution)
 display(p)</code></pre><h3 id="Solving-steady-state-problem"><a class="docs-heading-anchor" href="#Solving-steady-state-problem">Solving steady state problem</a><a id="Solving-steady-state-problem-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-steady-state-problem" title="Permalink"></a></h3><p>Change the elliptic problem to steady state problem of reaction diffusion equation.</p><p>See more solvers in <a href="https://docs.sciml.ai/DiffEqDocs/stable/solvers/steady_state_solve/">Steady State Solvers · DifferentialEquations.jl</a></p><pre><code class="language-julia hljs">steadystateprob = SteadyStateProblem(prob)
 steadystate = solve(steadystateprob, DynamicSS(Tsit5()))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">u: 198-element Vector{Float64}:
- 0.33178366462087955
- 0.33177327553531966
- 0.3317891113916232
- 0.3317547434598103
- 0.3317908871991917
- 0.3317337314356576
- 0.3317911177871214
- 0.331712442268254
- 0.33179191509552775
- 0.33169304927470383
+ 0.3317836646199149
+ 0.33177327554007546
+ 0.3317891113830377
+ 0.33175474347217593
+ 0.33179088718301514
+ 0.3317337314555886
+ 0.33179111776341325
+ 0.3317124422956773
+ 0.331791915064374
+ 0.33169304930951954
  ⋮
- 0.6560941213703573
- 0.6561639796904698
- 0.656234727732394
- 0.6563041441211118
- 0.656369819930536
- 0.6564293278188935
- 0.6564800894274067
- 0.6565194894486499
- 0.656544799858127</code></pre><h3 id="The-effect-of-human-mobility-on-endemic-size"><a class="docs-heading-anchor" href="#The-effect-of-human-mobility-on-endemic-size">The effect of human mobility on endemic size</a><a id="The-effect-of-human-mobility-on-endemic-size-1"></a><a class="docs-heading-anchor-permalink" href="#The-effect-of-human-mobility-on-endemic-size" title="Permalink"></a></h3><p>Set the endemic size <span>$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$</span></p><pre><code class="language-julia hljs">function episize!(dS, dI)
+ 0.6560941213703428
+ 0.6561639796904456
+ 0.656234727732378
+ 0.656304144121089
+ 0.6563698199305188
+ 0.6564293278188716
+ 0.656480089427388
+ 0.6565194894486291
+ 0.6565447998581072</code></pre><h3 id="The-effect-of-human-mobility-on-endemic-size"><a class="docs-heading-anchor" href="#The-effect-of-human-mobility-on-endemic-size">The effect of human mobility on endemic size</a><a id="The-effect-of-human-mobility-on-endemic-size-1"></a><a class="docs-heading-anchor-permalink" href="#The-effect-of-human-mobility-on-endemic-size" title="Permalink"></a></h3><p>Set the endemic size <span>$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$</span></p><pre><code class="language-julia hljs">function episize!(dS, dI)
     newprob = remake(prob, p=[dS, dI, 3, 0.1])
     steadystateprob = SteadyStateProblem(newprob)
     state = solve(steadystateprob, DynamicSS(Tsit5()))
     y = sum(state[100:end]) / 99
     return y
 end
-episize!(exp(1.0),exp(0.5))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.6656214868928569</code></pre><p>References:</p><ul><li>Allen L J S, Bolker B M, Lou Y, et al. Asymptotic profiles of the steady states for an SIS epidemic reaction-diffusion model[J]. Discrete &amp; Continuous Dynamical Systems, 2008, 21(1): 1.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../heatss/">« Steady State Heat Equation - No Time Dependence - NonlinearProblem</a><a class="docs-footer-nextpage" href="../icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Monday 15 May 2023 16:24">Monday 15 May 2023</span>. Using Julia version 1.9.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+episize!(exp(1.0),exp(0.5))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.6656214868928666</code></pre><p>References:</p><ul><li>Allen L J S, Bolker B M, Lou Y, et al. Asymptotic profiles of the steady states for an SIS epidemic reaction-diffusion model[J]. Discrete &amp; Continuous Dynamical Systems, 2008, 21(1): 1.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../heatss/">« Steady State Heat Equation - No Time Dependence - NonlinearProblem</a><a class="docs-footer-nextpage" href="../icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Tuesday 23 May 2023 23:46">Tuesday 23 May 2023</span>. Using Julia version 1.9.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
