@@ -421,4 +421,7 @@ end
 
     @test sol[u(t, x)[1]] == sol[vars[1](t, x)]
     @test sol[u(t, x)[2]] == sol[vars[2](t, x)]
+
+    @test sol(0.1, 0.1, dv = u(t, x)[1]) == sol(0.1, 0.1, dv = vars[1](t, x))
+    @test sol(0.1, 0.1, dv = u(t, x)[2]) == sol(0.1, 0.1, dv = vars[2](t, x))
 end
