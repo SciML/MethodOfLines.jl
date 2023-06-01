@@ -247,6 +247,10 @@ end
     end
 end
 
+@inline function generate_grid(x̄, axies, intervals, discretization::MOLFiniteDifference{G}) where {G<:StaggeredGrid}
+
+end
+
 
 PDEBase.depvar(u, s::DiscreteSpace) = depvar(u, s.vars)
 
