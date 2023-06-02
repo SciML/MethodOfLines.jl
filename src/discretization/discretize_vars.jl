@@ -164,6 +164,7 @@ params(s::DiscreteSpace) = s.ps
 get_grid_type(::DiscreteSpace{N,M,G}) where {N,M,G} = G
 PDEBase.get_discvars(s::DiscreteSpace) = s.discvars
 
+prepare_dx(dx::Integer, xdomain, ::StaggeredGrid) = (xdomain[2] - xdomain[1])/(2*dx)
 prepare_dx(dx::Integer, xdomain, ::CenterAlignedGrid) = (xdomain[2] - xdomain[1])/(dx - 1)
 prepare_dx(dx::Integer, xdomain, ::EdgeAlignedGrid) = (xdomain[2] - xdomain[1])/dx
 prepare_dx(dx, xdomain, ::AbstractGrid) = dx
@@ -247,8 +248,15 @@ end
     end
 end
 
+# returns a dictionary, mapping elements of x̄ to discretized domains i.e. Dict(x=>0.0:0.1:10.0) for @sym x
+# for staggered grid, I want my variables available in the center of a grid with twice the resolution (for now)
 @inline function generate_grid(x̄, axies, intervals, discretization::MOLFiniteDifference{G}) where {G<:StaggeredGrid}
-
+    dict = Dict(axies);
+    return map(x̄) do x
+        xdomain = intervals[x];
+        dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align);
+        x => xdomain[1]:dx:xdomain[2]
+    end
 end
 
 
