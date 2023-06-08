@@ -5,7 +5,7 @@ function cardinalize_eqs!(pdesys)
 end
 
 function PDEBase.symbolic_discretize(pdesys::PDEBase.PDESystem, discretization::MOLFiniteDifference)
-    println("this is MY FUNCTION NOW")
+    @info "inside MethodOfLines extension of PDEBase.symbolic_discretize"
     t = get_time(discretization)
     cardinalize_eqs!(pdesys)
     pdesys, replaced_vars = make_pdesys_compatible(pdesys)
