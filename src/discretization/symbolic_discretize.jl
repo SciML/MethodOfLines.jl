@@ -5,7 +5,11 @@ function cardinalize_eqs!(pdesys)
 end
 
 function PDEBase.symbolic_discretize(pdesys::PDEBase.PDESystem, discretization::MOLFiniteDifference)
-    @info "inside MethodOfLines extension of PDEBase.symbolic_discretize"
+    symbolic_discretize(pdesys, discretization, discretization.grid_align)
+end
+
+function symbolic_discretize(pdesys::PDEBase.PDESystem, discretization::MOLFiniteDifference, ::AbstractGrid)
+    @info "inside MethodOfLines extension of PDEBase.symbolic_discretize:AbstractGrid"
     t = get_time(discretization)
     cardinalize_eqs!(pdesys)
     pdesys, replaced_vars = make_pdesys_compatible(pdesys)
@@ -87,4 +91,9 @@ function PDEBase.symbolic_discretize(pdesys::PDEBase.PDESystem, discretization::
     metadata = generate_metadata(s, discretization, pdesys, boundarymap)
 
     return generate_system(disc_state, s, u0, tspan, metadata, discretization)
+end
+
+function symbolic_discretize(pdesys::PDEBase.PDESystem, discretization::MOLFiniteDifference, ::StaggeredGrid)
+    @info "inside MethodOfLines extension of PDEBase.symbolic_discretize:StaggeredGrid"
+    return symbolic_discretize(pdesys::PDEBase.PDESystem, discretization, CenterAlignedGrid());
 end
