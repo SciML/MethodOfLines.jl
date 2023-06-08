@@ -1,8 +1,3 @@
-function cardinalize_eqs!(pdesys)
-    for (i, eq) in enumerate(pdesys.eqs)
-        pdesys.eqs[i] = eq.lhs - eq.rhs ~ 0
-    end
-end
 
 function PDEBase.symbolic_discretize(pdesys::PDEBase.PDESystem, discretization::MOLFiniteDifference)
     symbolic_discretize(pdesys, discretization, discretization.grid_align)
