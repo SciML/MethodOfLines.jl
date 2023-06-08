@@ -60,10 +60,10 @@ function symbolic_discretize(pdesys::PDEBase.PDESystem, discretization::MOLFinit
     ics = t === nothing ? [] : mapreduce(u -> boundarymap[u][t], vcat, operation.(depvars(v)))
 
     bcmap = Dict(map(collect(keys(boundarymap))) do u
-        u => Dict(map(indvars(v)) do x
-            x => boundarymap[u][x]
-        end)
-    end)
+                 u => Dict(map(indvars(v)) do x
+                           x => boundarymap[u][x]
+                           end)
+                 end)
 
     ####
     # Loop over equations, Discretizing them and their dependent variables' boundary conditions
@@ -80,7 +80,7 @@ function symbolic_discretize(pdesys::PDEBase.PDESystem, discretization::MOLFinit
         # * Assumes that all variables in the equation have same dimensionality except edgevals
         args = PDEBase.ivs(eqvar, v)
         indexmap = Dict([args[i] => i for i in 1:length(args)])
-            # Generate the equations for the interior points
+        # Generate the equations for the interior points
         discretize_equation!(disc_state, pde, vareqmap, eqvar, bcmap,
                              depvars, s, derivweights, indexmap, discretization)
     end
