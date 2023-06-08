@@ -165,6 +165,7 @@ get_grid_type(::DiscreteSpace{N,M,G}) where {N,M,G} = G
 PDEBase.get_discvars(s::DiscreteSpace) = s.discvars
 
 prepare_dx(dx::Integer, xdomain, ::StaggeredGrid) = (xdomain[2] - xdomain[1])/(2*dx)
+prepare_dx(dx::AbstractFloat, xdomain, ::StaggeredGrid) = dx/2;
 prepare_dx(dx::Integer, xdomain, ::CenterAlignedGrid) = (xdomain[2] - xdomain[1])/(dx - 1)
 prepare_dx(dx::Integer, xdomain, ::EdgeAlignedGrid) = (xdomain[2] - xdomain[1])/dx
 prepare_dx(dx, xdomain, ::AbstractGrid) = dx
