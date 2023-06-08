@@ -17,6 +17,7 @@ import DomainSets
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
 using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i, d_orders, vcat!
+using PDEBase: make_pdesys_compatible, parse_bcs, generate_system
 # To Extend
 import PDEBase.interface_errors
 import PDEBase.check_boundarymap
@@ -27,6 +28,7 @@ import PDEBase.construct_disc_state
 import PDEBase.construct_var_equation_mapping
 import PDEBase.construct_differential_discretizer
 import PDEBase.discretize_equation!
+import PDEBase.symbolic_discretize
 import PDEBase.generate_ic_defaults
 import PDEBase.generate_metadata
 
@@ -48,10 +50,10 @@ include("interface/grid_types.jl")
 include("interface/scheme_types.jl")
 include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
-
 include("discretization/discretize_vars.jl")
 include("MOL_utils.jl")
 include("system_parsing/interior_map.jl")
+include("discretization/symbolic_discretize.jl")
 
 # Solution Interface
 include("interface/solution/MOLMetadata.jl")
