@@ -17,7 +17,7 @@ import DomainSets
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
 using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i, d_orders, vcat!
-using PDEBase: make_pdesys_compatible, parse_bcs, generate_system, cardinalize_eqs!
+using PDEBase: make_pdesys_compatible, parse_bcs, generate_system, cardinalize_eqs!, error_analysis
 # To Extend
 import PDEBase.interface_errors
 import PDEBase.check_boundarymap
@@ -37,6 +37,9 @@ import PDEBase.get_eqvar
 import PDEBase.get_discvars
 import PDEBase.depvar
 import PDEBase.x2i
+
+import SciMLBase.discretize
+
 import Base.display
 import Base.isequal
 import Base.getindex

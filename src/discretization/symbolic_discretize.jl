@@ -169,7 +169,45 @@ function symbolic_discretize(pdesys::PDEBase.PDESystem, discretization::MOLFinit
         # Combine PDE equations and BC equations
         metadata = generate_metadata(s, discretization, pdesys, boundarymap)
 
-        push!(systems,generate_system(disc_state, s, u0, tspan, metadata, discretization))
+        push!(systems, generate_system(disc_state, s, u0, tspan, metadata, discretization))
     end
     return systems;
+end
+
+function SciMLBase.discretize(pdesys::PDESystem,
+                              discretization::MOLFiniteDifference;
+                              analytic = nothing, kwargs...)
+    @info "in extension of SciMLBase.discretize"
+    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
+    try
+        simpsys = structural_simplify(sys)
+        if tspan === nothing
+            add_metadata!(get_metadata(sys), sys)
+            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states));
+                                           discretization.kwargs..., kwargs...)
+        else
+            # Use ODAE if nessesary
+            if hasfield(typeof(sys.metadata), :use_ODAE) && sys.metadata.use_ODAE
+                add_metadata!(get_metadata(simpsys),
+                              DAEProblem(simpsys; discretization.kwargs..., kwargs...))
+                return prob = ODAEProblem(simpsys, Pair[], tspan; discretization.kwargs...,
+                                          kwargs...)
+            else
+                add_metadata!(get_metadata(simpsys), sys)
+                prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...,
+                                  kwargs...)
+                if analytic === nothing
+                    return prob
+                else
+                    f = ODEFunction(pdesys, discretization, analytic = analytic,
+                                    discretization.kwargs..., kwargs...)
+
+                    return ODEProblem(f, prob.u0, prob.tspan, prob.p;
+                                      discretization.kwargs..., kwargs...)
+                end
+            end
+        end
+    catch e
+        error_analysis(sys, e)
+    end
 end
