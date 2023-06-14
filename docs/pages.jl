@@ -16,6 +16,7 @@ pages = [
     "Advection Schemes" => "advection_schemes.md",
     "Non-Uniform Rectilinear Grids" => "nonuniform.md",
     "Curvilinear Grids" => "curvilinear_grids.md",
+    "FAQs" => "faq.md",
     "How it Works" => "howitworks.md",
     "Notes for Developers: Implement a Scheme" => "devnotes.md",
     "Generated Examples" => ["generated/bruss_code.md", "generated/bruss_ode_eqs.md"],
