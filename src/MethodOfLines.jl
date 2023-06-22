@@ -17,6 +17,10 @@ import DomainSets
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
 using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i, d_orders, vcat!
+
+# staggered changes
+using PDEBase: cardinalize_eqs!, make_pdesys_compatible, parse_bcs, generate_system, Interval
+
 # To Extend
 import PDEBase.interface_errors
 import PDEBase.check_boundarymap
@@ -29,6 +33,7 @@ import PDEBase.construct_differential_discretizer
 import PDEBase.discretize_equation!
 import PDEBase.generate_ic_defaults
 import PDEBase.generate_metadata
+import PDEBase.symbolic_discretize
 
 import PDEBase.get_time
 import PDEBase.get_eqvar
@@ -89,10 +94,12 @@ include("discretization/schemes/integral_expansion/integral_expansion.jl")
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
+include("discretization/symbolic_discretize.jl")
 
 # Main
 include("scalar_discretization.jl")
 include("MOL_discretization.jl")
+
 
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme
