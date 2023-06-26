@@ -112,6 +112,37 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
 end
 
+function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretization::MOLFiniteDifference{G}) where {G<:StaggeredGrid}
+    @info "in staggered grid"
+    x̄ = vars.x̄
+    t = vars.time
+    depvars = vars.ū
+    nspace = length(x̄)
+
+    # Discretize space
+    axies = discretize_space(x̄, vars, discretization)
+    
+    # Define the grid on which the dependent variables will be evaluated (see #378)
+    # center_align is recommended for Dirichlet BCs
+    # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
+
+    grid = generate_grid(x̄, axies, vars, discretization)
+    dxs = generate_dxs(x̄, grid, vars, discretization)
+
+    axies = Dict(axies)
+    grid = Dict(grid)
+
+    # Build symbolic variables
+    Iaxies = [depvars[1] => [CartesianIndex(i) for i in 1:2:length(axies[x̄[1]])],
+              depvars[2] => [CartesianIndex(i) for i in 2:2:length(axies[x̄[1]])]]
+#    Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
+    Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
+
+    depvarsdisc = discretize_dep_vars(depvars, grid, vars);
+
+    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
+end
+
 
 function Base.getproperty(s::DiscreteSpace, p::Symbol)
     if p in [:ū, :x̄, :ps, :time, :args, :x2i, :i2x]
@@ -162,10 +193,49 @@ end
 """
 map dependent variables
 """
-@inline function discretize_dep_vars(depvars, grid, vars)
+# @inline function discretize_dep_vars(depvars, grid, vars)
+#     x̄ = vars.x̄;
+#     t = vars.time;
+#     depvarsdisc = map(depvars) do u
+#         op = SymbolicUtils.operation(u)
+#         if op isa  SymbolicUtils.BasicSymbolic{SymbolicUtils.FnType{Tuple, Real}}
+#             sym = Symbol(string(op))
+#         else
+#             sym = nameof(op)
+#         end
+#         if t === nothing
+#             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
+#             u => unwrap.(collect(first(@variables $sym[uaxes...])))
+#         elseif isequal(SymbolicUtils.arguments(u), [t])
+#             u => fill(safe_unwrap(u), ()) #Create a 0-dimensional array
+#         else
+#             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
+#             u => unwrap.(collect(first(@variables $sym(t)[uaxes...])))
+#         end
+#     end
+#     return depvarsdisc
+# end
+
+function discretize_dep_vars_sg(depvars, grid, vars, igrid)
+    @info "in sg custom discretize_dep_vars"
     x̄ = vars.x̄;
     t = vars.time;
-    depvarsdisc = map(depvars) do u
+    result = []
+    for u in depvars
+        op = SymbolicUtils.operation(u)
+        sym = Symbol(string(op));
+        uaxes = collect(axes(grid[x])[1])
+        push!(result, u => unwrap.(collect(first(@variables $sym(t)[uaxes...]))));
+    end
+    return result;
+end
+
+function discretize_dep_vars(depvars, grid, vars)
+    @info "in equivalent"
+    x̄ = vars.x̄;
+    t = vars.time;
+    result = []
+    for u in depvars
         op = SymbolicUtils.operation(u)
         if op isa  SymbolicUtils.BasicSymbolic{SymbolicUtils.FnType{Tuple, Real}}
             sym = Symbol(string(op))
@@ -174,17 +244,16 @@ map dependent variables
         end
         if t === nothing
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
-            u => unwrap.(collect(first(@variables $sym[uaxes...])))
+            push!(result, u => unwrap.(collect(first(@variables $sym[uaxes...]))))
         elseif isequal(SymbolicUtils.arguments(u), [t])
-            u => fill(safe_unwrap(u), ()) #Create a 0-dimensional array
+            push!(result, u => fill(safe_unwrap(u), ())) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            u => unwrap.(collect(first(@variables $sym(t)[uaxes...])))
+            push!(result, u => unwrap.(collect(first(@variables $sym(t)[uaxes...]))))
         end
     end
-    return depvarsdisc
+    return result
 end
-
 
 """
 Gets the parameter symbols of the system
