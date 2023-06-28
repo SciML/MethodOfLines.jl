@@ -3,41 +3,41 @@
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
   gtag('config', 'UA-90474609-3', {'page_path': location.pathname + location.search + location.hash});
-</script><script data-outdated-warner src="assets/warner.js"></script><link rel="canonical" href="https://docs.sciml.ai/MethodOfLines/stable/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script><link href="assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href><img src="assets/logo.png" alt="MethodOfLines.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href>MethodOfLines.jl</a></span></div><form class="docs-search" action="search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li class="is-active"><a class="tocitem" href>MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a><ul class="internal"><li><a class="tocitem" href="#Installation"><span>Installation</span></a></li><li><a class="tocitem" href="#Contributing"><span>Contributing</span></a></li><li><a class="tocitem" href="#limitations"><span>Known Limitations</span></a></li><li><a class="tocitem" href="#Reproducibility"><span>Reproducibility</span></a></li></ul></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="tutorials/brusselator/">Getting Started</a></li><li><a class="tocitem" href="tutorials/heat/">Solving the Heat Equation</a></li><li><a class="tocitem" href="tutorials/params/">Adding parameters</a></li><li><a class="tocitem" href="tutorials/heatss/">Steady State Heat Equation - No Time Dependence - NonlinearProblem</a></li><li><a class="tocitem" href="tutorials/sispde/">Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li><li><a class="tocitem" href="tutorials/icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data</a></li><li><a class="tocitem" href="tutorials/PIDE/">Solving PIDEs (Integrals)</a></li></ul></li><li><a class="tocitem" href="MOLFiniteDifference/">MOLFiniteDifference</a></li><li><a class="tocitem" href="solutions/">Solution Interface - PDESolutions</a></li><li><a class="tocitem" href="get_grid/">Grid and Solution Retrieval - Deprecated</a></li><li><a class="tocitem" href="boundary_conditions/">Boundary Conditions</a></li><li><a class="tocitem" href="advection_schemes/">Advection Schemes</a></li><li><a class="tocitem" href="nonuniform/">Non-Uniform Rectilinear Grids</a></li><li><a class="tocitem" href="curvilinear_grids/">Curvilinear Grids</a></li><li><a class="tocitem" href="howitworks/">How it Works</a></li><li><a class="tocitem" href="devnotes/">Notes for Developers: Implement a Scheme</a></li><li><span class="tocitem">Generated Examples</span><ul><li><a class="tocitem" href="generated/bruss_code/">Generated Code for the Brusselator Equation</a></li><li><a class="tocitem" href="generated/bruss_ode_eqs/">Generated ODE system for the Brusselator Equation</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="api/discretization/">Discretization</a></li><li><a class="tocitem" href="api/utils/">Utilities</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/MethodOfLines.jl/blob/master/docs/src/index.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="index"><a class="docs-heading-anchor" href="#index">MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a><a id="index-1"></a><a class="docs-heading-anchor-permalink" href="#index" title="Permalink"></a></h1><p><a href="https://github.com/SciML/MethodOfLines.jl">MethodOfLines.jl</a> is a Julia package for automated finite difference discretization of symbolicaly-defined PDEs in N dimensions.</p><p>It uses symbolic expressions for systems of partial differential equations as defined with <code>ModelingToolkit.jl</code>, and <code>Interval</code> from <code>DomainSets.jl</code> to define the space(time) over which the simulation runs.</p><p>It is a SciML “Discretizer” package, a class of packages which export the methods:</p><ul><li><code>discretize(sys::PDESystem, disc::D) where {D &lt;: AbstractDiscretization}</code>, which returns an <code>AbstractSciMLProblem</code> to be solved with the ecosystem&#39;s solvers.</li><li><code>symbolic_discretize(sys::PDESystem, disc::D) where {D &lt;: AbstractDiscretization}</code>, which returns an <code>AbstractSystem</code> from <code>ModelingToolkit.jl</code>.</li></ul><p>A Discretizer also optionally provides automatic solution wrapping, for easing the retrieval of shaped portions of the solution, and multidimensional interpolations. This feature is provided by <code>MethodOfLines.jl</code>, see the <a href="solutions/#sol">solution interface</a> page for more information.</p><p>The <code>AbstractDiscretization</code> that <code>MethodOfLines.jl</code> provides is the <a href="MOLFiniteDifference/#molfd"><code>MOLFiniteDifference</code></a>, see its documentation for full information about interface options.</p><p>The package&#39;s handling is quite general, it is recommended to try out your system of equations and post an issue if you run in to trouble. If you want to solve it, we want to support it.</p><p>Issues with questions on usage are also welcome as they help us improve the docs.</p><p>See <a href="tutorials/brusselator/#brusselator">here</a> for a full tutorial, involving the Brusselator equation.</p><p>Allowable terms in the system include, but are not limited to</p><ul><li>Advection</li><li>Diffusion</li><li>Reaction</li><li>Nonlinear Diffusion</li><li>Spherical Laplacian</li><li>Any Julia function of the symbolic parameters/dependent variables and other parameters in the environment that&#39;s defined on the whole domain. Note that more complicated functions may require registration with <code>@register</code>, see the <a href="https://docs.sciml.ai/ModelingToolkit/stable/basics/Validation/#User-Defined-Registered-Functions-and-Types">ModelingToolkit.jl docs</a>.</li></ul><p>Boundary conditions include, but are not limited to:</p><ul><li>Dirichlet</li><li>Neumann (can also include time derivative)</li><li>Robin (can also include time derivative)</li><li>Periodic</li><li>Any Julia function that returns a number</li></ul><p>Currently, the centered difference, upwind difference, nonlinear Laplacian and spherical Laplacian schemes are implemented. If you know of a scheme with better stability or accuracy in any specific case, please post an issue with a link to a paper.</p><p>Due to an implementation detail, the maximum derivative order that can be discretized by MOL is <code>div(typemax(Int), 2)</code>, in 64 bit <code>4611686018427387903</code>. We hope that this is enough for your purposes!</p><h2 id="Installation"><a class="docs-heading-anchor" href="#Installation">Installation</a><a id="Installation-1"></a><a class="docs-heading-anchor-permalink" href="#Installation" title="Permalink"></a></h2><p>Assuming that you already have Julia correctly installed, it suffices to import MethodOfLines.jl in the standard way:</p><pre><code class="language-julia hljs">using Pkg
+</script><script data-outdated-warner src="assets/warner.js"></script><link rel="canonical" href="https://docs.sciml.ai/MethodOfLines/stable/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script><link href="assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href><img src="assets/logo.png" alt="MethodOfLines.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href>MethodOfLines.jl</a></span></div><form class="docs-search" action="search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li class="is-active"><a class="tocitem" href>MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a><ul class="internal"><li><a class="tocitem" href="#Installation"><span>Installation</span></a></li><li><a class="tocitem" href="#Contributing"><span>Contributing</span></a></li><li><a class="tocitem" href="#limitations"><span>Known Limitations</span></a></li><li><a class="tocitem" href="#Reproducibility"><span>Reproducibility</span></a></li></ul></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="tutorials/brusselator/">Getting Started</a></li><li><a class="tocitem" href="tutorials/heat/">Solving the Heat Equation</a></li><li><a class="tocitem" href="tutorials/params/">Adding parameters</a></li><li><a class="tocitem" href="tutorials/heatss/">Steady State Heat Equation - No Time Dependence - NonlinearProblem</a></li><li><a class="tocitem" href="tutorials/sispde/">Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li><li><a class="tocitem" href="tutorials/icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data</a></li><li><a class="tocitem" href="tutorials/PIDE/">Solving PIDEs (Integrals)</a></li></ul></li><li><a class="tocitem" href="MOLFiniteDifference/">MOLFiniteDifference</a></li><li><a class="tocitem" href="solutions/">Solution Interface - PDESolutions</a></li><li><a class="tocitem" href="get_grid/">Grid and Solution Retrieval - Deprecated</a></li><li><a class="tocitem" href="boundary_conditions/">Boundary Conditions</a></li><li><a class="tocitem" href="advection_schemes/">Advection Schemes</a></li><li><a class="tocitem" href="nonuniform/">Non-Uniform Rectilinear Grids</a></li><li><a class="tocitem" href="curvilinear_grids/">Curvilinear Grids</a></li><li><a class="tocitem" href="faq/">FAQs</a></li><li><a class="tocitem" href="howitworks/">How it Works</a></li><li><a class="tocitem" href="devnotes/">Notes for Developers: Implement a Scheme</a></li><li><span class="tocitem">Generated Examples</span><ul><li><a class="tocitem" href="generated/bruss_code/">Generated Code for the Brusselator Equation</a></li><li><a class="tocitem" href="generated/bruss_ode_eqs/">Generated ODE system for the Brusselator Equation</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="api/discretization/">Discretization</a></li><li><a class="tocitem" href="api/utils/">Utilities</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/MethodOfLines.jl/blob/master/docs/src/index.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="index"><a class="docs-heading-anchor" href="#index">MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a><a id="index-1"></a><a class="docs-heading-anchor-permalink" href="#index" title="Permalink"></a></h1><p><a href="https://github.com/SciML/MethodOfLines.jl">MethodOfLines.jl</a> is a Julia package for automated finite difference discretization of symbolicaly-defined PDEs in N dimensions.</p><p>It uses symbolic expressions for systems of partial differential equations as defined with <code>ModelingToolkit.jl</code>, and <code>Interval</code> from <code>DomainSets.jl</code> to define the space(time) over which the simulation runs.</p><p>It is a SciML “Discretizer” package, a class of packages which export the methods:</p><ul><li><code>discretize(sys::PDESystem, disc::D) where {D &lt;: AbstractDiscretization}</code>, which returns an <code>AbstractSciMLProblem</code> to be solved with the ecosystem&#39;s solvers.</li><li><code>symbolic_discretize(sys::PDESystem, disc::D) where {D &lt;: AbstractDiscretization}</code>, which returns an <code>AbstractSystem</code> from <code>ModelingToolkit.jl</code>.</li></ul><p>A Discretizer also optionally provides automatic solution wrapping, for easing the retrieval of shaped portions of the solution, and multidimensional interpolations. This feature is provided by <code>MethodOfLines.jl</code>, see the <a href="solutions/#sol">solution interface</a> page for more information.</p><p>The <code>AbstractDiscretization</code> that <code>MethodOfLines.jl</code> provides is the <a href="MOLFiniteDifference/#molfd"><code>MOLFiniteDifference</code></a>, see its documentation for full information about interface options.</p><p>The package&#39;s handling is quite general, it is recommended to try out your system of equations and post an issue if you run in to trouble. If you want to solve it, we want to support it.</p><p>Issues with questions on usage are also welcome as they help us improve the docs.</p><p>See <a href="tutorials/brusselator/#brusselator">here</a> for a full tutorial, involving the Brusselator equation.</p><p>Allowable terms in the system include, but are not limited to</p><ul><li>Advection</li><li>Diffusion</li><li>Reaction</li><li>Nonlinear Diffusion</li><li>Spherical Laplacian</li><li>Any Julia function of the symbolic parameters/dependent variables and other parameters in the environment that&#39;s defined on the whole domain. Note that more complicated functions may require registration with <code>@register</code>, see the <a href="https://docs.sciml.ai/ModelingToolkit/stable/basics/Validation/#User-Defined-Registered-Functions-and-Types">ModelingToolkit.jl docs</a>.</li></ul><p>Boundary conditions include, but are not limited to:</p><ul><li>Dirichlet</li><li>Neumann (can also include time derivative)</li><li>Robin (can also include time derivative)</li><li>Periodic</li><li>Any Julia function that returns a number</li></ul><p>Currently, the centered difference, upwind difference, nonlinear Laplacian and spherical Laplacian schemes are implemented. If you know of a scheme with better stability or accuracy in any specific case, please post an issue with a link to a paper.</p><p>Due to an implementation detail, the maximum derivative order that can be discretized by MOL is <code>div(typemax(Int), 2)</code>, in 64 bit <code>4611686018427387903</code>. We hope that this is enough for your purposes!</p><h2 id="Installation"><a class="docs-heading-anchor" href="#Installation">Installation</a><a id="Installation-1"></a><a class="docs-heading-anchor-permalink" href="#Installation" title="Permalink"></a></h2><p>Assuming that you already have Julia correctly installed, it suffices to import MethodOfLines.jl in the standard way:</p><pre><code class="language-julia hljs">using Pkg
 Pkg.add(&quot;MethodOfLines&quot;)</code></pre><h2 id="Contributing"><a class="docs-heading-anchor" href="#Contributing">Contributing</a><a id="Contributing-1"></a><a class="docs-heading-anchor-permalink" href="#Contributing" title="Permalink"></a></h2><ul><li>Please refer to the <a href="https://github.com/SciML/ColPrac/blob/master/README.md">SciML ColPrac: Contributor&#39;s Guide on Collaborative Practices for Community Packages</a> for guidance on PRs, issues, and other matters relating to contributing to SciML.</li><li>See the <a href="https://github.com/SciML/SciMLStyle">SciML Style Guide</a> for common coding practices and other style decisions.</li><li>There are a few community forums:<ul><li>The #diffeq-bridged and #sciml-bridged channels in the <a href="https://julialang.org/slack/">Julia Slack</a></li><li>The #diffeq-bridged and #sciml-bridged channels in the <a href="https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged">Julia Zulip</a></li><li>On the <a href="https://discourse.julialang.org">Julia Discourse forums</a></li><li>See also <a href="https://sciml.ai/community/">SciML Community page</a></li></ul></li></ul><h2 id="limitations"><a class="docs-heading-anchor" href="#limitations">Known Limitations</a><a id="limitations-1"></a><a class="docs-heading-anchor-permalink" href="#limitations" title="Permalink"></a></h2><p>Currently, the package can discretize almost any system, with some assumptions listed below</p><ul><li>That the grid is Cartesian.</li><li>Boundary conditions in time are supplied as initial conditions, not at the end of the simulation interval. If your system requires a final condition, please use a change of variables to rectify this. This is unlikely to change due to upstream constraints.</li><li>Integral equations are not supported.</li><li>That dependant variables always have the same argument signature, except in BCs.</li><li>That higher order interface bcs are accompanied by a simple interface of the form <code>u1(t, x_int) ~ u2(t, x_int)</code></li><li>That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.</li><li>That odd order derivatives do not multiply or divide each other, unless the WENO Scheme is used.</li><li>That the WENO scheme must be used when there are mixed derivatives.</li><li>Note that the WENO Scheme is often unstable in more than 1 spatial dimension due to difficulties with boundary handling, this can be avoided if you supply 2 or more bcs per boundary in the dimension along which an advection term acts.</li></ul><h2 id="Reproducibility"><a class="docs-heading-anchor" href="#Reproducibility">Reproducibility</a><a id="Reproducibility-1"></a><a class="docs-heading-anchor-permalink" href="#Reproducibility" title="Permalink"></a></h2><details><summary>The documentation of this SciML package was built using these direct dependencies,</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/MethodOfLines.jl/MethodOfLines.jl/docs/Project.toml`
-  [0c46a032] DifferentialEquations v7.7.0
+  [0c46a032] DifferentialEquations v7.8.0
   [e30172f5] Documenter v0.27.24
-  [5b8099bc] DomainSets v0.6.6
+  [5b8099bc] DomainSets v0.6.7
   [94925ecb] MethodOfLines v0.9.4 `~/work/MethodOfLines.jl/MethodOfLines.jl`
-  [961ee093] ModelingToolkit v8.56.0
-  [8913a72c] NonlinearSolve v1.6.0
-  [1dea7af3] OrdinaryDiffEq v6.51.2
-  [91a5bcdd] Plots v1.38.12</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.9.0
-Commit 8e630552924 (2023-05-07 11:25 UTC)
+  [961ee093] ModelingToolkit v8.60.0
+  [8913a72c] NonlinearSolve v1.8.0
+  [1dea7af3] OrdinaryDiffEq v6.53.2
+  [91a5bcdd] Plots v1.38.16</code></pre></details><details><summary>and using this machine and Julia version.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Julia Version 1.9.1
+Commit 147bdf428cd (2023-06-07 08:27 UTC)
 Platform Info:
   OS: Linux (x86_64-linux-gnu)
-  CPU: 2 × Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz
+  CPU: 2 × Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz
   WORD_SIZE: 64
   LIBM: libopenlibm
-  LLVM: libLLVM-14.0.6 (ORCJIT, icelake-server)
+  LLVM: libLLVM-14.0.6 (ORCJIT, skylake-avx512)
   Threads: 1 on 2 virtual cores</code></pre></details><details><summary>A more complete overview of all dependencies and their versions is also provided.</summary><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Status `~/work/MethodOfLines.jl/MethodOfLines.jl/docs/Manifest.toml`
-  [47edcb42] ADTypes v0.1.3
+  [47edcb42] ADTypes v0.1.5
   [a4c015fc] ANSIColoredPrinters v0.0.1
-⌅ [c3fe647b] AbstractAlgebra v0.29.4
+  [c3fe647b] AbstractAlgebra v0.30.9
   [1520ce14] AbstractTrees v0.4.4
   [79e6a3ab] Adapt v3.6.2
   [ec485272] ArnoldiMethod v0.2.0
-  [4fba245c] ArrayInterface v7.4.5
+  [4fba245c] ArrayInterface v7.4.11
   [30b0a656] ArrayInterfaceCore v0.1.29
-⌃ [4c555306] ArrayLayouts v0.8.18
+  [4c555306] ArrayLayouts v1.0.8
   [13072b0f] AxisAlgorithms v1.0.1
-⌃ [aae01518] BandedMatrices v0.17.18
+  [aae01518] BandedMatrices v0.17.28
   [e2ed5e7c] Bijections v0.1.4
   [d1d4a3ce] BitFlags v0.1.7
   [62783981] BitTwiddlingConvenienceFunctions v0.1.5
-  [764a87c0] BoundaryValueDiffEq v2.11.0
+⌅ [764a87c0] BoundaryValueDiffEq v2.11.0
   [fa961155] CEnum v0.4.2
-  [2a0fbf3d] CPUSummary v0.2.2
+  [2a0fbf3d] CPUSummary v0.2.3
   [00ebfdb7] CSTParser v3.3.6
   [49dc2e85] Calculus v0.5.1
   [d360d2e6] ChainRulesCore v1.16.0
@@ -49,9 +49,9 @@ Platform Info:
   [5ae59095] Colors v0.12.10
   [861a8166] Combinatorics v1.0.2
   [a80b9123] CommonMark v0.8.12
-  [38540f10] CommonSolve v0.2.3
+  [38540f10] CommonSolve v0.2.4
   [bbf7d656] CommonSubexpressions v0.3.0
-  [34da2185] Compat v4.6.1
+  [34da2185] Compat v4.7.0
   [b152e2b5] CompositeTypes v0.1.3
   [f0e56b4a] ConcurrentUtilities v2.2.0
   [187b0558] ConstructionBase v1.5.2
@@ -63,113 +63,113 @@ Platform Info:
   [e2d170a0] DataValueInterfaces v1.0.0
   [bcd4f6db] DelayDiffEq v5.42.0
   [8bb1440f] DelimitedFiles v1.9.1
-  [2b5f629d] DiffEqBase v6.125.0
+  [2b5f629d] DiffEqBase v6.126.0
   [459566f4] DiffEqCallbacks v2.26.1
-  [77a26b50] DiffEqNoiseProcess v5.16.0
+  [77a26b50] DiffEqNoiseProcess v5.17.2
   [163ba53b] DiffResults v1.1.0
-  [b552c78f] DiffRules v1.13.0
-  [0c46a032] DifferentialEquations v7.7.0
+  [b552c78f] DiffRules v1.15.1
+  [0c46a032] DifferentialEquations v7.8.0
   [b4f34e82] Distances v0.10.8
-  [31c24e10] Distributions v0.25.94
+  [31c24e10] Distributions v0.25.97
   [ffbed154] DocStringExtensions v0.9.3
   [e30172f5] Documenter v0.27.24
-  [5b8099bc] DomainSets v0.6.6
+  [5b8099bc] DomainSets v0.6.7
   [fa6b7ba4] DualNumbers v0.6.8
-  [7c1d4256] DynamicPolynomials v0.4.6
+⌅ [7c1d4256] DynamicPolynomials v0.4.6
   [4e289a0a] EnumX v1.0.4
+  [460bff9d] ExceptionUnwrapping v0.1.9
   [d4d017d3] ExponentialUtilities v1.24.0
   [e2ba6199] ExprTools v0.1.9
   [c87230d0] FFMPEG v0.4.1
   [7034ab61] FastBroadcast v0.2.5
   [9aa1b823] FastClosures v0.3.2
   [29a986be] FastLapackInterface v1.2.9
-⌅ [1a297f60] FillArrays v0.13.11
-  [6a86dc24] FiniteDiff v2.20.0
+  [1a297f60] FillArrays v1.2.1
+  [6a86dc24] FiniteDiff v2.21.1
   [53c48c17] FixedPointNumbers v0.8.4
   [59287772] Formatting v0.4.2
   [f6369f11] ForwardDiff v0.10.35
   [069b7b12] FunctionWrappers v1.1.3
   [77dc65aa] FunctionWrappersWrappers v0.1.3
   [46192b85] GPUArraysCore v0.1.5
-  [28b8d3ca] GR v0.72.6
+  [28b8d3ca] GR v0.72.7
   [c145ed77] GenericSchur v0.5.3
   [c27321d9] Glob v1.3.1
   [86223c79] Graphs v1.8.0
   [42e2da0e] Grisu v1.0.2
-  [0b43b601] Groebner v0.3.4
+  [0b43b601] Groebner v0.3.6
   [d5909c97] GroupsCore v0.4.0
-  [cd3eb016] HTTP v1.9.5
-  [3e5b6fbb] HostCPUFeatures v0.1.14
-  [34004b35] HypergeometricFunctions v0.3.16
+  [cd3eb016] HTTP v1.9.7
+  [3e5b6fbb] HostCPUFeatures v0.1.15
+  [34004b35] HypergeometricFunctions v0.3.17
   [b5f81e59] IOCapture v0.2.3
   [615f187c] IfElse v0.1.1
   [d25df0c9] Inflate v0.1.3
-  [18e54dd8] IntegerMathUtils v0.1.0
+  [18e54dd8] IntegerMathUtils v0.1.1
   [a98d9a8b] Interpolations v0.14.7
   [8197267c] IntervalSets v0.7.4
   [92d709cd] IrrationalConstants v0.2.2
-  [42fd0dbc] IterativeSolvers v0.9.2
   [82899510] IteratorInterfaceExtensions v1.0.0
   [1019f520] JLFzf v0.1.5
   [692b3bcd] JLLWrappers v1.4.1
   [682c06a0] JSON v0.21.4
-  [98e50ef6] JuliaFormatter v1.0.29
+  [98e50ef6] JuliaFormatter v1.0.34
   [ccbc3e58] JumpProcesses v9.6.3
   [ef3ab10e] KLU v0.4.0
   [ba0b0d4f] Krylov v0.9.1
-  [0b1a1467] KrylovKit v0.6.0
   [b964fa9f] LaTeXStrings v1.3.0
   [2ee39098] LabelledArrays v1.14.0
   [984bce1d] LambertW v0.4.6
-  [23fbe1c1] Latexify v0.16.0
+  [23fbe1c1] Latexify v0.16.1
   [10f19ff3] LayoutPointers v0.1.14
   [50d2b5c4] Lazy v0.15.1
   [2d8b4e74] LevyArea v1.0.0
   [d3d80556] LineSearches v7.2.0
-  [7ed4a6bd] LinearSolve v1.42.0
-  [2ab3a3ac] LogExpFunctions v0.3.23
+  [7ed4a6bd] LinearSolve v2.2.1
+  [2ab3a3ac] LogExpFunctions v0.3.24
   [e6f89c97] LoggingExtras v1.0.0
-  [bdcacae8] LoopVectorization v0.12.159
+  [bdcacae8] LoopVectorization v0.12.162
+  [d8e11817] MLStyle v0.4.17
   [1914dd2f] MacroTools v0.5.10
   [d125e4d3] ManualMemory v0.1.8
   [739be429] MbedTLS v1.1.7
   [442fdcdd] Measures v0.3.2
   [94925ecb] MethodOfLines v0.9.4 `~/work/MethodOfLines.jl/MethodOfLines.jl`
   [e1d29d7a] Missings v1.1.0
-  [961ee093] ModelingToolkit v8.56.0
+  [961ee093] ModelingToolkit v8.60.0
   [46d2c3a1] MuladdMacro v0.2.4
-  [102ac46a] MultivariatePolynomials v0.4.7
+⌅ [102ac46a] MultivariatePolynomials v0.4.7
   [d8a4904e] MutableArithmetics v1.3.0
   [d41bc354] NLSolversBase v7.8.3
   [2774e3e8] NLsolve v4.5.1
   [77ba4419] NaNMath v1.0.2
-  [8913a72c] NonlinearSolve v1.6.0
+  [8913a72c] NonlinearSolve v1.8.0
   [6fe1bfb0] OffsetArrays v1.12.9
   [4d8831e6] OpenSSL v1.4.1
-  [429524aa] Optim v1.7.5
+  [429524aa] Optim v1.7.6
   [bac558e1] OrderedCollections v1.6.0
-  [1dea7af3] OrdinaryDiffEq v6.51.2
+  [1dea7af3] OrdinaryDiffEq v6.53.2
   [a7812802] PDEBase v0.1.2
   [90014a1f] PDMats v0.11.17
   [d96e819e] Parameters v0.12.3
-  [69de0a69] Parsers v2.5.10
+  [69de0a69] Parsers v2.7.1
   [b98c9c47] Pipe v1.3.0
   [ccf2f8ad] PlotThemes v3.1.0
   [995b91a9] PlotUtils v1.3.5
-  [91a5bcdd] Plots v1.38.12
+  [91a5bcdd] Plots v1.38.16
   [e409e4f3] PoissonRandom v0.4.4
   [f517fe37] Polyester v0.7.3
   [1d0040c9] PolyesterWeave v0.2.1
   [85a6dd25] PositiveFactorizations v0.2.4
   [d236fae5] PreallocationTools v0.4.12
-  [aea7be01] PrecompileTools v1.1.1
+  [aea7be01] PrecompileTools v1.1.2
   [21216c6a] Preferences v1.4.0
   [27ebfcd6] Primes v0.5.3
   [1fd47b50] QuadGK v2.8.2
   [74087812] Random123 v1.6.1
   [fb686558] RandomExtensions v0.4.3
   [e6cf234a] RandomNumbers v1.5.3
-  [c84ed2f1] Ratios v0.4.4
+  [c84ed2f1] Ratios v0.4.5
   [3cdcf5f2] RecipesBase v1.3.4
   [01d81517] RecipesPipeline v0.6.12
   [731186ca] RecursiveArrayTools v2.38.5
@@ -179,38 +179,38 @@ Platform Info:
   [ae029012] Requires v1.3.0
   [ae5879a3] ResettableStacks v1.1.1
   [79098fc4] Rmath v0.7.1
-  [7e49a35a] RuntimeGeneratedFunctions v0.5.7
+⌅ [7e49a35a] RuntimeGeneratedFunctions v0.5.9
   [94e857df] SIMDTypes v0.1.0
   [476501e8] SLEEFPirates v0.6.39
-  [0bca4576] SciMLBase v1.92.2
-  [e9a6253c] SciMLNLSolve v0.1.6
-  [c0aeaf25] SciMLOperators v0.2.9
+  [0bca4576] SciMLBase v1.93.0
+  [e9a6253c] SciMLNLSolve v0.1.8
+  [c0aeaf25] SciMLOperators v0.3.2
   [6c6a2e73] Scratch v1.2.0
   [efcf1570] Setfield v1.1.1
   [992d4aef] Showoff v1.0.3
   [777ac1f9] SimpleBufferStream v1.1.0
-  [727e6d20] SimpleNonlinearSolve v0.1.14
+  [727e6d20] SimpleNonlinearSolve v0.1.16
   [699a6c99] SimpleTraits v0.9.4
   [ce78b400] SimpleUnPack v1.1.0
   [66db9d55] SnoopPrecompile v1.0.3
-  [a2af1166] SortingAlgorithms v1.1.0
-⌅ [47a9eef4] SparseDiffTools v1.31.0
+  [a2af1166] SortingAlgorithms v1.1.1
+  [47a9eef4] SparseDiffTools v2.4.1
   [e56a9233] Sparspak v0.3.9
-  [276daf66] SpecialFunctions v2.2.0
+  [276daf66] SpecialFunctions v2.3.0
   [aedffcd0] Static v0.8.7
   [0d7ed370] StaticArrayInterface v1.4.0
-  [90137ffa] StaticArrays v1.5.25
+  [90137ffa] StaticArrays v1.5.26
   [1e83bf80] StaticArraysCore v1.4.0
   [82ae8749] StatsAPI v1.6.0
-⌅ [2913bbd2] StatsBase v0.33.21
+  [2913bbd2] StatsBase v0.34.0
   [4c63d2b9] StatsFuns v1.3.0
   [9672c7b4] SteadyStateDiffEq v1.15.0
-  [789caeaf] StochasticDiffEq v6.60.0
-  [7792a7ef] StrideArraysCore v0.4.14
-  [c3572dad] Sundials v4.18.0
+  [789caeaf] StochasticDiffEq v6.61.1
+  [7792a7ef] StrideArraysCore v0.4.15
+  [c3572dad] Sundials v4.19.0
   [2efcf032] SymbolicIndexingInterface v0.2.2
   [d1185830] SymbolicUtils v1.0.5
-  [0c5d862f] Symbolics v5.3.1
+  [0c5d862f] Symbolics v5.5.0
   [3783bdb8] TableTraits v1.0.1
   [bd369af6] Tables v1.10.1
   [62fd8b95] TensorCore v0.1.1
@@ -227,6 +227,7 @@ Platform Info:
   [3a884ed6] UnPack v1.0.2
   [1cfade01] UnicodeFun v0.4.1
   [1986cc42] Unitful v1.14.0
+  [45397f5d] UnitfulLatexify v1.6.3
   [a7c27f48] Unityper v0.1.2
   [41fe7b60] Unzip v0.2.0
   [3d5dd08c] VectorizationBase v0.21.64
@@ -235,13 +236,13 @@ Platform Info:
   [700de1a5] ZygoteRules v0.2.3
   [6e34b625] Bzip2_jll v1.0.8+0
   [83423d85] Cairo_jll v1.16.1+1
-  [2e619515] Expat_jll v2.4.8+0
+  [2e619515] Expat_jll v2.5.0+0
   [b22a6f82] FFMPEG_jll v4.4.2+2
   [a3f928ae] Fontconfig_jll v2.13.93+0
   [d7e528f0] FreeType2_jll v2.10.4+0
   [559328eb] FriBidi_jll v1.0.10+0
   [0656b61e] GLFW_jll v3.3.8+0
-  [d2c73de3] GR_jll v0.72.6+0
+  [d2c73de3] GR_jll v0.72.7+0
   [78b55507] Gettext_jll v0.21.0+0
   [7746bdde] Glib_jll v2.74.0+2
   [3b182d85] Graphite2_jll v1.3.14+0
@@ -249,6 +250,7 @@ Platform Info:
   [aacddb02] JpegTurbo_jll v2.1.91+0
   [c1c5ebd0] LAME_jll v3.100.1+0
   [88015f11] LERC_jll v3.0.0+1
+  [1d63c593] LLVMOpenMP_jll v15.0.4+0
   [dd4b983a] LZO_jll v2.10.1+0
 ⌅ [e9f186c6] Libffi_jll v3.2.2+1
   [d4300ac3] Libgcrypt_jll v1.8.7+0
@@ -256,13 +258,13 @@ Platform Info:
   [7add5ba3] Libgpg_error_jll v1.42.0+0
   [94ce4f54] Libiconv_jll v1.16.1+2
   [4b2f31a3] Libmount_jll v2.35.0+0
-  [89763e89] Libtiff_jll v4.4.0+0
+⌅ [89763e89] Libtiff_jll v4.4.0+0
   [38a345b3] Libuuid_jll v2.36.0+0
   [e7412a2a] Ogg_jll v1.3.5+1
-⌅ [458c3c95] OpenSSL_jll v1.1.20+0
+⌅ [458c3c95] OpenSSL_jll v1.1.21+0
   [efe28fd5] OpenSpecFun_jll v0.5.5+0
   [91d4177d] Opus_jll v1.3.2+0
-  [30392449] Pixman_jll v0.40.1+0
+  [30392449] Pixman_jll v0.42.2+0
   [ea2cea3b] Qt5Base_jll v5.15.3+2
   [f50d1b31] Rmath_jll v0.4.0+0
   [fb77eaff] Sundials_jll v5.2.1+0
@@ -344,9 +346,9 @@ Platform Info:
   [efcefdf7] PCRE2_jll v10.42.0+0
   [bea87d4a] SuiteSparse_jll v5.10.1+6
   [83775a58] Zlib_jll v1.2.13+0
-  [8e850b90] libblastrampoline_jll v5.7.0+0
+  [8e850b90] libblastrampoline_jll v5.8.0+0
   [8e850ede] nghttp2_jll v1.48.0+0
   [3f19e933] p7zip_jll v17.4.0+0
-Info Packages marked with ⌃ and ⌅ have new versions available, but those with ⌅ are restricted by compatibility constraints from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
+Info Packages marked with ⌅ have new versions available but compatibility constraints restrict them from upgrading. To see why use `status --outdated -m`</code></pre></details>You can also download the 
 <a href="https://github.com/SciML/MethodOfLines.jl/tree/gh-pages/v0.9.4/assets/Manifest.toml">manifest</a> file and the
-<a href="https://github.com/SciML/MethodOfLines.jl/tree/gh-pages/v0.9.4/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/brusselator/">Getting Started »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Tuesday 23 May 2023 23:46">Tuesday 23 May 2023</span>. Using Julia version 1.9.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+<a href="https://github.com/SciML/MethodOfLines.jl/tree/gh-pages/v0.9.4/assets/Project.toml">project</a> file.</article><nav class="docs-footer"><a class="docs-footer-nextpage" href="tutorials/brusselator/">Getting Started »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Wednesday 28 June 2023 14:12">Wednesday 28 June 2023</span>. Using Julia version 1.9.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
