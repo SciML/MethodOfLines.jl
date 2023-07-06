@@ -157,7 +157,7 @@ end
     s = MethodOfLines.construct_discrete_space(v, disc)
     m = MethodOfLines.buildmatrix(pde, s)
     if VERSION >= v"1.7"
-        @test m == [0 2 2; 1 1 0; 2 0 1]
+        @test m == [2 0 2; 0 1 1; 1 2 0]
     else
         @test m == [2 2 0; 0 1 1; 1 0 2]
     end
