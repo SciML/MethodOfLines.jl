@@ -94,7 +94,6 @@ include("discretization/schemes/integral_expansion/integral_expansion.jl")
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
-include("discretization/symbolic_discretize.jl")
 
 # Main
 include("scalar_discretization.jl")
