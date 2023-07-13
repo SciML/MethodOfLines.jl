@@ -80,6 +80,9 @@ end
 
     rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(~b..., ~c..., cartesian_nonlinear_laplacian(1 / ~a, Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][x]), depvars, x, u)) for x in ivs(u, s)]) for u in depvars], init = []))
 
+    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule /(*(~~b, ($(Differential(x))(*(~~a, $(Differential(x))(u), ~~d))), ~~c), ~e) => /(*(~b..., ~c..., cartesian_nonlinear_laplacian(*(~a..., ~d...), Idx(II, s, u, indexmap), derivweights, s, filter_interfaces(bcmap[operation(u)][x]), depvars, x, u)), substitute(~e, valmaps(s, u, depvars, indexmap))) for x in ivs(u, s)]) for u in depvars], init = []))
+
+
     nonlinlap_rules = []
     for t in terms
         for r in rules
