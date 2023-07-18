@@ -32,7 +32,6 @@ function PDEBase.transform_pde_system!(v::PDEBase.VariableMap, boundarymap, sys:
     end
 
     sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū), sys.ps, name=sys.name)
-    @show sys
     return sys
 end
 
