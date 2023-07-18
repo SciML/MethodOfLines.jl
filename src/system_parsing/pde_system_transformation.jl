@@ -36,7 +36,7 @@ function PDEBase.transform_pde_system!(v::PDEBase.VariableMap, boundarymap, sys:
     return sys
 end
 
-function PDEBase.should_transform(pdesys, disc)
+function PDEBase.should_transform(pdesys::PDESystem, disc::MOLFiniteDifference, boundarymap)
     if has_interfaces(boundarymap)
         @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
         return false
