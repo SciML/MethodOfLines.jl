@@ -39,7 +39,7 @@ const bigint = div(typemax(Int), 2)
     m = MethodOfLines.buildmatrix(pde, s)
     
     test = [1 2+bigint 0; 1 0 2+bigint; 2+bigint 1 1]
-    
+    perms = permutations([1, 2, 3])
     @test any(perms) do perm
         m == test[:, perm]
     end
