@@ -92,3 +92,7 @@ gif(anim, "mol_convection_2d_test.gif", fps=5)
 At the moment, MOL effectively generates an assignment statement to a calculation in its generated code for all points in space, for all variables. Due to the configuration of LLVM for Julia, this leads the compiler to check all operations against all other operations to see what to [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data), leading to bad scaling properties with increasing point count.
 
 There are changes in the works to roll this back in to `for` loops over each point, by maintaining some structural information, which will remedy this problem. Watch this space!
+
+## Why are the corners of my domain held at 0?
+
+The corner points do not have a valid discretization, and as such are held at 0.
