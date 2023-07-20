@@ -127,4 +127,11 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/MOL_1D_Linear_Convection.jl")
         end
     end
+
+    if GROUP == "All" || GROUP == "Nonlinlap_ADV"
+        @time @safetestset "MOLFiniteDifference Interface: Advanced Nonlinear Diffusion" begin
+            include("pde_systems/nonlinear_laplacian_advanced.jl")
+        end
+        end
+    end
 end
