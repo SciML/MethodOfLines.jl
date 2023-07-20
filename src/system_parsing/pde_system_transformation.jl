@@ -103,10 +103,6 @@ function nonlinlap_check(term, differential)
                 end
             end
 
-            if length(findall(has_derivatives, args)) > 1
-                return nothing
-            end
-        
             is = findall(args) do arg
                 if istree(arg)
                     op = operation(arg)
