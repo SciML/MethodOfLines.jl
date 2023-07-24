@@ -49,7 +49,7 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
 
     # Get the correct weights and stencils for this II
     interp_weights_and_stencil = [get_half_offset_weights_and_stencil(inner_interpolater, I, s, bs, u, jx) for I in outerstencil]
-    deriv_weights_and_stencil(u, i, order) = get_half_offset_weights_and_stencil(derivweights.halfoffsetmap[1][Differential(x)^order], outerstencil[i], s, bs, u, x2i(s, u, x)) for D in (D_inner, D_outer)
+    deriv_weights_and_stencil(u, i, order) = get_half_offset_weights_and_stencil(derivweights.halfoffsetmap[1][Differential(x)^order], outerstencil[i], s, bs, u, (x2i(s, u, x), x)) 
 
     # map variables to symbolically inerpolated/extrapolated expressions
     map_vars_to_interpolated(stencil, weights) = [v => sym_dot(weights, s.discvars[v][interface_wrap(stencil)]) for v in depvars]
@@ -59,49 +59,46 @@ function cartesian_nonlinear_laplacian(expr, II, derivweights, s::DiscreteSpace,
     map_ivs_to_interpolated(stencil, weights) = safe_vcat([x => dot(weights, getindex.((s.grid[x],), getindex.(interface_wrap(stencil), (j,))))], [s.x̄[k] => s.grid[s.x̄[k]][II[k]] for k in setdiff(1:N, [j])])
 
     # Go ham and try to discretize anything that appears inside the nonlinear laplacian
-    drules = generate_deriv_rules(II, s, depvars, derivweights, bmap, jx, outerstencil, deriv_weights_and_stencil)
+    drules = generate_deriv_rules(II, s, depvars, derivweights, bcmap, jx, outerstencil, deriv_weights_and_stencil, interface_wrap)
 
-    # Take the inner finite difference
-    inner_difference = [sym_dot(inner_weights, s.discvars[u][interface_wrap(inner_stencil)]) for (inner_weights, inner_stencil) in inner_deriv_weights_and_stencil]
-
-    # Symbolically interpolate the multiplying expression
-
-
-    interpolated_expr = map(enumerate(interp_weights_and_stencil)) do (i, (weights, stencil))
-        rules = vcat(drules(i), map_vars_to_interpolated(stencil, weights), map_ivs_to_interpolated(stencil, weights))
+    # Symbolically interpolate the expression
+    interpolated_expr = map(enumerate(interp_weights_and_stencil)) do (i, weights_stencil)
+        weights, stencil = weights_stencil
+        rules = vcat(mapreduce(d -> d(i), vcat, drules), map_vars_to_interpolated(stencil, weights), map_ivs_to_interpolated(stencil, weights))
         substitute(expr*Differential(x)(u), rules)
     end
 
     # multiply the inner finite difference by the interpolated expression, and finally take the outer finite difference
-    return sym_dot(outerweights, inner_difference .* interpolated_expr)
+    return sym_dot(outerweights, interpolated_expr)
 end
 
-function generate_deriv_rules(II, s::DiscreteSpace, depvars, derivweights, bmap, jx,  outerstencil, deriv_weights_and_stencil)
+function generate_deriv_rules(II, s::DiscreteSpace, depvars, derivweights, bmap, jx,  outerstencil, deriv_weights_and_stencil, interface_wrap)
     # Generate rules for the derivatives of the variables
     j, x = jx
     mapreduce(vcat, depvars) do u
-        map(ivs(u, s)) do y
+        mapreduce(vcat, ivs(u, s)) do y
             let orders = derivweights.orders[x]
-            mapreduce(vcat, orders) do order
-                # If we're differentiating with respect to the same variable, we need to use the correct weights and stencil
-                # for the order of the derivative
-                if isequal(x, y)
-                    (i) -> begin
-                        let weights, stencil = deriv_weights_and_stencil(u, i, order)
-                            (Differential(x)^order)(u) => sym_dot(weights, s.discvars[u][interface_wrap(stencil)])
+                map(orders) do order
+                    # If we're differentiating with respect to the same variable, we need to use the correct weights and stencil
+                    # for the order of the derivative
+                    if isequal(x, y)
+                        (i) -> begin
+                            let (weights, stencil) = deriv_weights_and_stencil(u, i, order)
+                                [(Differential(x)^order)(u) => sym_dot(weights, s.discvars[u][interface_wrap(stencil)])]
+                            end
                         end
-                    end
-                else
-                    # Otherwise, we will use the usual rules shifted
-                    (i) -> begin
-                        let II = outerstencil[i]
-                            central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, bmap, indexmap, nothing)
-                            advection_rules = generate_advection_rules(derivweights.advection_scheme, II, s, depvars, derivweights, bmap, indexmap, nothing)
-                            advection_rules = vcat(advection_rules,
-                                                generate_winding_rules(II, s, depvars, derivweights, bmap,
-                                                indexmap, nothing; skip = [1]))
-                            vcat(central_deriv_rules_cartesian, advection_rules) 
-                        end   
+                    else
+                        # Otherwise, we will use the usual rules shifted
+                        (i) -> begin
+                            let II = outerstencil[i]
+                                central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, bmap, indexmap, nothing)
+                                advection_rules = generate_advection_rules(derivweights.advection_scheme, II, s, depvars, derivweights, bmap, indexmap, nothing)
+                                advection_rules = vcat(advection_rules,
+                                                    generate_winding_rules(II, s, depvars, derivweights, bmap,
+                                                    indexmap, nothing; skip = [1]))
+                                vcat(central_deriv_rules_cartesian, advection_rules) 
+                            end   
+                        end
                     end
                 end
             end
