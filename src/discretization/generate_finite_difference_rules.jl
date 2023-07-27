@@ -81,3 +81,20 @@ function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, 
     integration_rules = vcat(integration_rules, vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)))
     return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules)
 end
+
+function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace{W,M,G}, depvars, pde::Equation, derivweights::DifferentialDiscretizer, bmap, indexmap) where {W,M,G<:StaggeredGrid}
+    terms = split_terms(pde, s.x̄)
+    if length(II) != 0
+        # Standard cartesian centered difference scheme
+        central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
+    else
+        central_deriv_rules_cartesian = []
+    end
+    advection_rules = []
+    nonlinlap_rules = []
+    spherical_diffusion_rules = []
+    integration_rules = []
+
+    integration_rules = vcat(integration_rules, vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)))
+    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules)
+end

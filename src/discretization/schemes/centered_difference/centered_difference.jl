@@ -91,15 +91,13 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s::DiscreteS
     haslower, hasupper = haslowerupper(bs, x)
 
     if (II[j] <= D.boundary_point_count) & !haslower
-        @error "haven't implemented this yet"
-        # weights = D.low_boundary_coefs[II[j]]
-        # offset = 1 - II[j]
-        # Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
+        weights = D.low_boundary_coefs[II[j]]
+        offset = 1 - II[j]
+        Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
     elseif (II[j] > (length(s, x) - D.boundary_point_count)) & !hasupper
-        @error "haven't implemented this yet"
-        # weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
-        # offset = length(s, x) - II[j]
-        # Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):1:0]
+        weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
+        offset = length(s, x) - II[j]
+        Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):1:0]
     else
         weights = [1.0; -1.0];
         #weights = D.stencil_coefs
