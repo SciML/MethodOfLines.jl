@@ -8,7 +8,7 @@ Based on https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretiz
 
 See scheme 1 in appendix A. The r = 0 case is treated in a later appendix
 """
-function spherical_diffusion(innerexpr, II, derivweights, s, bcmap, depvars, r, u)
+function spherical_diffusion(innerexpr, II, derivweights, s, indexmap, bcmap, depvars, r, u)
     # Based on the paper https://web.mit.edu/braatzgroup/analysis_of_finite_difference_discretization_schemes_for_diffusion_in_spheres_with_variable_diffusivity.pdf
     bs = filter_interfaces(bcmap[operation(u)][r])
 
@@ -33,17 +33,17 @@ function spherical_diffusion(innerexpr, II, derivweights, s, bcmap, depvars, r, 
     D_1_u = central_difference(D_1, II, s, bs, (s.x2i[r], r), u, ufunc_u)
     # See scheme 1 in appendix A of the paper
 
-    return exprhere*(D_1_u/substitute(r, _rsubs(r, II)) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, bcmap, depvars, r, u))
+    return exprhere*(D_1_u/substitute(r, _rsubs(r, II)) + cartesian_nonlinear_laplacian(innerexpr, II, derivweights, s, indexmap, bcmap, depvars, r, u))
 end
 
 @inline function generate_spherical_diffusion_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
-    rules = reduce(safe_vcat, [vec([@rule *(~~a, 1 / (r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, bcmap , depvars, r, u), ~b...)
+    rules = reduce(safe_vcat, [vec([@rule *(~~a, 1 / (r^2), ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), ~~b) => *(~a..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, indexmap, bcmap , depvars, r, u), ~b...)
                                for r in ivs(u, s)]) for u in depvars], init = [])
 
-    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, bcmap, depvars, r, u))
+    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule /(*(~~a, $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)), ~~b), (r^2)) => *(~a..., ~b..., spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, indexmap, bcmap, depvars, r, u))
                                            for r in ivs(u, s)]) for u in depvars], init = []))
 
-    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, bcmap, depvars, r, u)
+    rules = safe_vcat(rules, reduce(safe_vcat, [vec([@rule /(($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))), (r^2)) => spherical_diffusion(*(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap), derivweights, s, indexmap, bcmap, depvars, r, u)
                                            for r in ivs(u, s)]) for u in depvars], init = []))
 
     spherical_diffusion_rules = []

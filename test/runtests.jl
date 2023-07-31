@@ -7,6 +7,20 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
+    if GROUP == "All" || GROUP == "Diffusion_NU"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
+            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
+        end
+    end
+    
+    if GROUP == "All" || GROUP == "Nonlinlap_ADV"
+        @time @safetestset "MOLFiniteDifference Interface: Advanced Nonlinear Diffusion" begin
+            include("pde_systems/nonlinear_laplacian_advanced.jl")
+        end
+        end
+    end
+
+
     if GROUP == "All" || GROUP == "Sol_Interface"
         @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
             include("components/solution_interface.jl")
@@ -58,12 +72,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "Convection_WENO"
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection, WENO Scheme." begin
             include("pde_systems/MOL_1D_Linear_Convection_WENO.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Diffusion_NU"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
-            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
         end
     end
 
@@ -125,13 +133,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin
             include("pde_systems/MOL_1D_Linear_Convection.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Nonlinlap_ADV"
-        @time @safetestset "MOLFiniteDifference Interface: Advanced Nonlinear Diffusion" begin
-            include("pde_systems/nonlinear_laplacian_advanced.jl")
-        end
         end
     end
 end
