@@ -1,5 +1,5 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
-using DomainSets
+using DomainSets, JuliaSimCompiler
 
 # using Plots
 

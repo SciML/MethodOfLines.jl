@@ -20,6 +20,12 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 
+[weakdeps]
+JuliaSimCompiler = "8391cb6b-4921-5777-4e45-fd9aab8cb88d"
+
+[extensions]
+MethodOfLinesJuliaSimCompilerExt = ["JuliaSimCompiler"]
+
 [compat]
 Combinatorics = "1"
 DiffEqBase = "6"
@@ -29,9 +35,9 @@ Interpolations = "0.14"
 Latexify = "0.15, 0.16"
 ModelingToolkit = "8"
 OrdinaryDiffEq = "6"
-PDEBase = "0.1.4"
 SafeTestsets = "0.0.1"
-SciMLBase = "1.90, 1.91"
+SciMLBase = "1.94"
+PDEBase = "0.1.4"
 StaticArrays = "1"
 SymbolicUtils = "1"
 Symbolics = "5"
@@ -42,7 +48,8 @@ julia = "1.6"
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
+JuliaSimCompiler = "8391cb6b-4921-5777-4e45-fd9aab8cb88d"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "NonlinearSolve", "SafeTestsets", "StableRNGs"]
+test = ["Test", "NonlinearSolve", "SafeTestsets", "StableRNGs", "JuliaSimCompiler"]

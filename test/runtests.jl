@@ -7,6 +7,12 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
+    if GROUP == "All" || GROUP == "Brusselator"
+        @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
+            include("pde_systems/brusselator_eq.jl")
+        end
+    end
+
     if GROUP == "All" || GROUP == "Sol_Interface"
         @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
             include("components/solution_interface.jl")
@@ -107,12 +113,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "2D_Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 2D Diffusion" begin
             include("pde_systems/MOL_2D_Diffusion.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Brusselator"
-        @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
-            include("pde_systems/brusselator_eq.jl")
         end
     end
 

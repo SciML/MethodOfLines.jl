@@ -1,12 +1,13 @@
 module MethodOfLinesJuliaSimCompilerExt
     using MethodOfLines, JuliaSimCompiler, PDEBase
 
-function add_metadata!(m::JuliaSimCompiler.SystemInfo, meta)
-    m.system_type.metadata[] = meta
+function add_metadata!(sys::JuliaSimCompiler.IRSystem, meta)
+    sys.info.parent.metadata.metadata[] = meta
 end
 
 function generate_system(disc_state::PDEBase.EquationState, s, u0, tspan, metadata,
     disc::MethodOfLines.MOLFiniteDifference)
+    println("JuliaSimCompiler: generate_system")
     discvars = get_discvars(s)
     t = get_time(disc)
     name = metadata.pdesys.name
@@ -35,9 +36,9 @@ function generate_system(disc_state::PDEBase.EquationState, s, u0, tspan, metada
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
-
             sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults = defaults, 
-                            checks = checks)
+                            name = name,
+                            metadata = metadata, checks = checks)
             sys = IRSystem(sys)
             return sys, tspan
         end
@@ -50,4 +51,6 @@ function generate_system(disc_state::PDEBase.EquationState, s, u0, tspan, metada
         rethrow(e)
     end
 end
+
+export generate_system
 end
