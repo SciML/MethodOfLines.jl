@@ -1,11 +1,11 @@
 module MethodOfLinesJuliaSimCompilerExt
-    using MethodOfLines, JuliaSimCompiler, PDEBase
-
+    using JuliaSimCompiler, MethodOfLines, PDEBase, SciMLBase, ModelingToolkit
+    using PDEBase: get_discvars, get_time
 function add_metadata!(sys::JuliaSimCompiler.IRSystem, meta)
     sys.info.parent.metadata.metadata[] = meta
 end
 
-function generate_system(disc_state::PDEBase.EquationState, s, u0, tspan, metadata,
+function PDEBase.generate_system(disc_state::PDEBase.EquationState, s, u0, tspan, metadata,
     disc::MethodOfLines.MOLFiniteDifference)
     println("JuliaSimCompiler: generate_system")
     discvars = get_discvars(s)
@@ -51,5 +51,4 @@ function generate_system(disc_state::PDEBase.EquationState, s, u0, tspan, metada
     end
 end
 
-export generate_system
 end
