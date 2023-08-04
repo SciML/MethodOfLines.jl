@@ -36,8 +36,7 @@ function generate_system(disc_state::PDEBase.EquationState, s, u0, tspan, metada
             return sys, nothing
         else
             # * In the end we have reduced the problem to a system of equations in terms of Dt that can be solved by an ODE solver.
-            sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults = defaults, 
-                            name = name,
+            sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults = defaults, name = name,
                             metadata = metadata, checks = checks)
             sys = IRSystem(sys)
             return sys, tspan
