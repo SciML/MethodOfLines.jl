@@ -64,7 +64,7 @@
         
             bcs = [u(0, x) ~ x,
                 u(t, x_min) ~ analytic_u2(t, x_min),
-                u(t, x_max) ~ analytic_u(2t, x_max)]
+                u(t, x_max) ~ analytic_u2(t, x_max)]
         
             domains = [t ∈ Interval(t_min, t_max),
                 x ∈ Interval(x_min, x_max)]
