@@ -12,7 +12,8 @@ using IfElse
 using StaticArrays
 using Interpolations
 using Latexify
-import DomainSets
+using PrecompileTools
+using DomainSets
 
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
@@ -94,6 +95,10 @@ include("discretization/generate_ic_defaults.jl")
 include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 
+## PrecompileTools
+include("precompile.jl")
+
+# Export
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme
 
