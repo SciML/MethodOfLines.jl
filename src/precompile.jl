@@ -22,7 +22,7 @@
             u0(x, y, t) = 22(y * (1 - y))^(3 / 2)
             v0(x, y, t) = 27(x * (1 - x))^(3 / 2)
 
-            eq = [Dt(u(x, y, t)) ~ 1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) + α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
+            eq = [Dt(u(x, y, t)) ~ 1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) + α * ∇²(u(x, y, t)) + brusselator_f(x, y, t) + Dx(u(x, y, t)) + Dy(v(x, y, t))
                 Dt(v(x, y, t)) ~ 3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 + α * ∇²(v(x, y, t)) + Dx(v(x, y, t)*Dx(u(x, y, t))) + Dy(v(x, y, t)*Dy(u(x, y, t)))]
 
             domains = [x ∈ Interval(x_min, x_max),
@@ -45,8 +45,7 @@
             discretization = MOLFiniteDifference([x => N, y => N], t, approx_order=order, grid_align=center_align)
 
             # Convert the PDE problem into an ODE problem
-            println("Discretization:")
-            @time prob = discretize(pdesys, discretization)
+            prob = discretize(pdesys, discretization)
 
         end
         begin
@@ -59,42 +58,13 @@
             t_min = 0.0
             t_max = 6.0
         
-            analytic_u(t, x) = x / (t + 1)
+            analytic_u2(t, x) = x / (t + 1)
         
             eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
         
             bcs = [u(0, x) ~ x,
-                u(t, x_min) ~ analytic_u(t, x_min),
-                u(t, x_max) ~ analytic_u(t, x_max)]
-        
-            domains = [t ∈ Interval(t_min, t_max),
-                x ∈ Interval(x_min, x_max)]
-        
-            dx = 6
-        
-            @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-        
-            disc = MOLFiniteDifference([x => dx], t, advection_scheme=UpwindScheme())
-        
-            prob = discretize(pdesys, disc)
-        end
-        begin
-            @parameters x t
-            @variables u(..)
-            Dx = Differential(x)
-            Dt = Differential(t)
-            x_min = 0.0
-            x_max = 1.0
-            t_min = 0.0
-            t_max = 6.0
-        
-            analytic_u(t, x) = x / (t + 1)
-        
-            eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
-        
-            bcs = [u(0, x) ~ x,
-                u(t, x_min) ~ analytic_u(t, x_min),
-                u(t, x_max) ~ analytic_u(t, x_max)]
+                u(t, x_min) ~ analytic_u2(t, x_min),
+                u(t, x_max) ~ analytic_u(2t, x_max)]
         
             domains = [t ∈ Interval(t_min, t_max),
                 x ∈ Interval(x_min, x_max)]
