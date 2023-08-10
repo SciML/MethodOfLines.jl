@@ -48,6 +48,8 @@ import Base.checkbounds
 import Base.getproperty
 import Base.ndims
 
+import SciMLBase.discretize
+
 # Interface
 include("interface/grid_types.jl")
 include("interface/scheme_types.jl")
