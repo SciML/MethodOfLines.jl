@@ -91,16 +91,27 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s::DiscreteS
     haslower, hasupper = haslowerupper(bs, x)
 
     if (II[j] <= D.boundary_point_count) & !haslower
-        weights = D.low_boundary_coefs[II[j]]
-        offset = 1 - II[j]
-        Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
+        if (!is_staggered)# can use centered diff
+            weights = [1.0; -1.0];
+            Itap = [II + (i*I1) for i in 0:1];
+        else #need one-sided
+            @warn "one-sided difference for lower boundary is not implemented"
+            weights = D.low_boundary_coefs[II[j]]
+            offset = 1 - II[j]
+            Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length-1)]
+        end
     elseif (II[j] > (length(s, x) - D.boundary_point_count)) & !hasupper
-        weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
-        offset = length(s, x) - II[j]
-        Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):1:0]
+        if (!is_staggered) # need one-sided
+            @warn "one-sided difference for upper boundary is not implemented"
+            weights = D.high_boundary_coefs[length(s, x)-II[j]+1]
+            offset = length(s, x) - II[j]
+            Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length+1):1:0]
+        else
+            weights = [-1.0; 1.0];
+            Itap = [II + (i*I1) for i in -1:0];
+        end
     else
         weights = [1.0; -1.0];
-        #weights = D.stencil_coefs
         Itap = [bwrap(II + i * I1, bs, s, jx) for i in staggered_range(length(weights), is_staggered)]
     end
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
