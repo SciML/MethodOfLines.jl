@@ -7,7 +7,7 @@ Dx = Differential(x);
 
 a = 5.0;#1.0/2.0;
 L = 8.0;
-dx = 0.125;
+dx = 1.0;#0.125;
 dt = dx/a;
 tmax = 1000.0;
 
@@ -31,6 +31,11 @@ domains = [t in Interval(0.0, tmax),
 discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid());
 
 prob = discretize(pdesys, discretization);
+u0 = prob.u0
+len = floor(Int, length(u0)/2);
+tsteps = prob.tspan[1]:dt:prob.tspan[2]
+dynamical_f1 = DynamicalODEFunction(prob.f).f1;
+dynamical_f2 = DynamicalODEFunction(prob.f).f2;
 
 function calc_du!(du, u, p, t)
     placeholder = copy(du);

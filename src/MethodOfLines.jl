@@ -20,6 +20,7 @@ using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, dep
 
 # staggered changes
 using PDEBase: cardinalize_eqs!, make_pdesys_compatible, parse_bcs, generate_system, Interval
+using PDEBase: error_analysis, add_metadata!
 
 # To Extend
 import PDEBase.interface_errors
@@ -96,6 +97,7 @@ include("discretization/schemes/integral_expansion/integral_expansion.jl")
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
+include("discretization/staggered_discretize.jl")
 
 # Main
 include("scalar_discretization.jl")
