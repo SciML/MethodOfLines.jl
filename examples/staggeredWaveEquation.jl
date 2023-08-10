@@ -28,26 +28,9 @@ domains = [t in Interval(0.0, tmax),
 
 @named pdesys = PDESystem(eq, bcs, domains, [t,x], [ρ(t,x), ϕ(t,x)]);
 
-#discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.CenterAlignedGrid());
 discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid());
 
 prob = discretize(pdesys, discretization);
-
-len = floor(Int, length(prob.u0)/2);
-#@variables rho[1:len] phi[1:len]
-@variables rho[1:len] phi[1:len+1]
-drho = (prob.f([collect(rho); collect(phi)], nothing, 0.0)[1:len]);
-dphi = (prob.f([collect(rho); collect(phi)], nothing, 0.0)[len+1:end]);
-
-gen_drho = eval(Symbolics.build_function(drho, collect(rho), collect(phi))[2]);
-gen_dphi = eval(Symbolics.build_function(dphi, collect(rho), collect(phi))[2]);
-
-dynamical_f1(_drho,u,p,t) = gen_drho(_drho, u[1:len], u[len+1:end]);
-dynamical_f2(_dphi,u,p,t) = gen_dphi(_dphi, u[1:len], u[len+1:end]);
-u0 = [prob.u0[1:len]; prob.u0[len+1:end]];
-prob = DynamicalODEProblem(dynamical_f1, dynamical_f2, u0[1:len], u0[len+1:end], (0.0,1.0))
-tsteps = 0.0:dt:tmax
-#sol = solve(prob, IRKN3(), dt=dt, saveat=tsteps);
 
 function calc_du!(du, u, p, t)
     placeholder = copy(du);
