@@ -84,7 +84,6 @@ end
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
 
 function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretization::MOLFiniteDifference{G}) where {G}
-    @info "in OG"
     x̄ = vars.x̄
     t = vars.time
     depvars = vars.ū
@@ -113,7 +112,6 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
 end
 
 function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretization::MOLFiniteDifference{G}) where {G<:StaggeredGrid}
-    @info "in staggered grid"
     x̄ = vars.x̄
     t = vars.time
     depvars = vars.ū
@@ -193,49 +191,10 @@ end
 """
 map dependent variables
 """
-# @inline function discretize_dep_vars(depvars, grid, vars)
-#     x̄ = vars.x̄;
-#     t = vars.time;
-#     depvarsdisc = map(depvars) do u
-#         op = SymbolicUtils.operation(u)
-#         if op isa  SymbolicUtils.BasicSymbolic{SymbolicUtils.FnType{Tuple, Real}}
-#             sym = Symbol(string(op))
-#         else
-#             sym = nameof(op)
-#         end
-#         if t === nothing
-#             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
-#             u => unwrap.(collect(first(@variables $sym[uaxes...])))
-#         elseif isequal(SymbolicUtils.arguments(u), [t])
-#             u => fill(safe_unwrap(u), ()) #Create a 0-dimensional array
-#         else
-#             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-#             u => unwrap.(collect(first(@variables $sym(t)[uaxes...])))
-#         end
-#     end
-#     return depvarsdisc
-# end
-
-function discretize_dep_vars_sg(depvars, grid, vars, igrid)
-    @info "in sg custom discretize_dep_vars"
+@inline function discretize_dep_vars(depvars, grid, vars)
     x̄ = vars.x̄;
     t = vars.time;
-    result = []
-    for u in depvars
-        op = SymbolicUtils.operation(u)
-        sym = Symbol(string(op));
-        uaxes = collect(axes(grid[x])[1])
-        push!(result, u => unwrap.(collect(first(@variables $sym(t)[uaxes...]))));
-    end
-    return result;
-end
-
-function discretize_dep_vars(depvars, grid, vars)
-    @info "in equivalent"
-    x̄ = vars.x̄;
-    t = vars.time;
-    result = []
-    for u in depvars
+    depvarsdisc = map(depvars) do u
         op = SymbolicUtils.operation(u)
         if op isa  SymbolicUtils.BasicSymbolic{SymbolicUtils.FnType{Tuple, Real}}
             sym = Symbol(string(op))
@@ -244,15 +203,15 @@ function discretize_dep_vars(depvars, grid, vars)
         end
         if t === nothing
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
-            push!(result, u => unwrap.(collect(first(@variables $sym[uaxes...]))))
+            u => unwrap.(collect(first(@variables $sym[uaxes...])))
         elseif isequal(SymbolicUtils.arguments(u), [t])
-            push!(result, u => fill(safe_unwrap(u), ())) #Create a 0-dimensional array
+            u => fill(safe_unwrap(u), ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            push!(result, u => unwrap.(collect(first(@variables $sym(t)[uaxes...]))))
+            u => unwrap.(collect(first(@variables $sym(t)[uaxes...])))
         end
     end
-    return result
+    return depvarsdisc
 end
 
 """
