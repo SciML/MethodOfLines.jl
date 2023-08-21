@@ -17,7 +17,6 @@ function mixed_central_difference((Dx, Dy), II, s, (xbs, ybs), (jx, ky), u, ufun
             wx * wy * ufunc(u, I, x)
         end
     end
-    @show out
 
     return out
 end
