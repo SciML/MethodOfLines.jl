@@ -29,7 +29,7 @@ function CN_solve(prob, dt)
     return sol;
 end
 
-@testset "1D wave equation, staggered grid, interior only" begin
+#@testset "1D wave equation, staggered grid, interior only" begin
     @parameters t x
     @variables ρ(..) ϕ(..)
     Dt = Differential(t);
@@ -41,8 +41,8 @@ end
     dt = dx/a;
     tmax = 1000.0;
 
-    #initialFunction(x) = exp(-(x)^2);
-    initialFunction(x) = abs(x-L)/(2*L);
+    initialFunction(x) = exp(-(x)^2);
+    #initialFunction(x) = abs(x-L)/(2*L);
     #initialFunction(x) = tanh(-x)+1;
     eq = [Dt(ρ(t,x)) + Dx(ϕ(t,x)) ~ 0,
           Dt(ϕ(t,x)) + a^2 * Dx(ρ(t,x)) ~ 0]
@@ -57,24 +57,22 @@ end
                x in Interval(-L, L)];
 
     @named pdesys = PDESystem(eq, bcs, domains, [t,x], [ρ(t,x), ϕ(t,x)]);
+    
 
     discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid());
     prob = discretize(pdesys, discretization);
     
     sol = CN_solve(prob, dt);
     
-    # function plot_sol(sol; time_range=1:200:1000)
-    #     p_rho = plot();
-    #     p_phi = plot();
-    #     for i in time_range
-    #         plot!(p_rho, sol[1:len,i], label="t=$(tsteps[i])");
-    #         plot!(p_phi, sol[len+1:end,i], label="t=$(tsteps[i])");
-    #     end
-    #     plot!(p_phi, title="Mass flux: ϕ");
-    #     plot!(p_rho, title="Density: ρ");
-    #     return plot(p_rho, p_phi);
-    # end
+    function plot_sol(sol; time_range=1:200:1000)
+        p_rho = plot();
+        for i in time_range
+            plot!(p_rho, sol[1:floor(Int, length(sol[:,1])/2),i])
+        end
+        plot!(p_rho, title="Density: ρ");
+        return plot(p_rho);
+    end
 
-    # plot_sol(sol)
+    plot_sol(sol)
     @test 1==1
-end
+#end

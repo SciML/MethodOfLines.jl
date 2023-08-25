@@ -85,8 +85,11 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s::DiscreteS
     ndims(u, s) == 0 && return 0
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
+
+    # TODO use metadata
     staggered_range(len, is_staggered) = !is_staggered ? (len-1:-1:0) : (0:-1:-len+1);
     is_staggered = isequal(u, s.vars.ū[2]) ? true : false;
+
     # offset is important due to boundary proximity
     haslower, hasupper = haslowerupper(bs, x)
 

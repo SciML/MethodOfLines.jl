@@ -79,6 +79,7 @@ struct DiscreteSpace{N,M,G} <: AbstractCartesianDiscreteSpace
     dxs
     Iaxies
     Igrid
+    staggeredvars
 end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
@@ -131,9 +132,9 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
     grid = Dict(grid)
 
     # Build symbolic variables
-    Iaxies = [depvars[1] => [CartesianIndex(i) for i in 1:2:length(axies[x̄[1]])],
-              depvars[2] => [CartesianIndex(i) for i in 2:2:length(axies[x̄[1]])]]
-#    Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
+    # Iaxies = [depvars[1] => [CartesianIndex(i) for i in 1:2:length(axies[x̄[1]])],
+    #           depvars[2] => [CartesianIndex(i) for i in 2:2:length(axies[x̄[1]])]]
+    Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
     Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars);
