@@ -59,7 +59,7 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t,x], [ρ(t,x), ϕ(t,x)]);
     
 
-    discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid());
+    discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid(), staggered_var=ρ(t,x));
     prob = discretize(pdesys, discretization);
     
     sol = CN_solve(prob, dt);

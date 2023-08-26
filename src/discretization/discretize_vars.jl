@@ -109,7 +109,7 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars);
 
-    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
+    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), nothing)
 end
 
 function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretization::MOLFiniteDifference{G}) where {G<:StaggeredGrid}
@@ -132,14 +132,17 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
     grid = Dict(grid)
 
     # Build symbolic variables
-    # Iaxies = [depvars[1] => [CartesianIndex(i) for i in 1:2:length(axies[x̄[1]])],
-    #           depvars[2] => [CartesianIndex(i) for i in 2:2:length(axies[x̄[1]])]]
     Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
     Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars);
 
-    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
+    # determine which variables are grid/stagger aligned
+    staggered_var = discretization.kwargs[:staggered_var];
+    center_aligned_var = depvars[findfirst(u->u!==staggered_var, depvars)]
+    staggered_dict = Dict(staggered_var=>StaggeredVar, center_aligned_var=>CenterAlignedVar);
+
+    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), staggered_dict)
 end
 
 
