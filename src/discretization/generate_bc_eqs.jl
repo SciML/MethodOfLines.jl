@@ -137,7 +137,8 @@ function boundary_value_maps(II, s::DiscreteSpace{N,M,G}, boundary, derivweights
     end
     othervars = filter(v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))), othervars)
 
-    depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights.map[Differential(x_)^d], II, s, [], (x2i(s, u, x_), x_), u, ufunc) for d in derivweights.orders[x_]]
+    depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(derivweights, II, s, [], (x2i(s, u, x_), x_), u, ufunc, d) for d in derivweights.orders[x_]];
+    # generate_cartesian_rules(II, s, [u], derivweights, depvarbcmaps, indexmap, []);
     depvarbcmaps = [v_ => s.discvars[depvar(v_, s)][II] for v_ in [u_; othervars]]
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value

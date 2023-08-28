@@ -19,5 +19,5 @@ abstract type AbstractVarAlign end
 struct CenterAlignedVar <: AbstractVarAlign
 end
 
-struct StaggeredVar <: AbstractVarAlign
+struct EdgeAlignedVar <: AbstractVarAlign
 end

@@ -138,9 +138,9 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
     depvarsdisc = discretize_dep_vars(depvars, grid, vars);
 
     # determine which variables are grid/stagger aligned
-    staggered_var = operation(unwrap(discretization.kwargs[:staggered_var]));
-    center_aligned_var = operation(unwrap(depvars[findfirst(u->u!==staggered_var, depvars)]))
-    staggered_dict = Dict(staggered_var=>StaggeredVar, center_aligned_var=>CenterAlignedVar);
+    edge_aligned_var = operation(unwrap(discretization.kwargs[:edge_aligned_var]));
+    center_aligned_var = operation(unwrap(depvars[findfirst(u->operation(unwrap(u))!==edge_aligned_var, depvars)]));
+    staggered_dict = Dict(edge_aligned_var=>EdgeAlignedVar, center_aligned_var=>CenterAlignedVar);
 
     return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), staggered_dict)
 end

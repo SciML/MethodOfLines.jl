@@ -48,8 +48,8 @@ function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_sche
     @assert (time isa Num) | (time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
 
     if (grid_align == StaggeredGrid() &&
-        !(:staggered_var in keys(kwargs)))
-        @warn "when using StaggeredGrid(), you must set 'staggered_var' keyword arg"
+        !(:edge_aligned_var in keys(kwargs)))
+        @warn "when using StaggeredGrid(), you must set 'edge_aligned_var' keyword arg"
     end
 
     dxs = dxs isa Dict ? dxs : Dict(dxs)

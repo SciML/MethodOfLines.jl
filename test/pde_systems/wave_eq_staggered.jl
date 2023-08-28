@@ -11,7 +11,7 @@ function CN_solve(prob, dt)
         placeholder = copy(du);
         dynamical_f1(du, u, p, t);
         dynamical_f2(placeholder, [(u[1:len] + dt*du[1:len]); u[len+1:end]], p, t);
-        du[len+1:end] .= placeholder[1:len+1];
+        du[len+1:end] .= placeholder[1:len];
         return;
     end
 
@@ -29,7 +29,7 @@ function CN_solve(prob, dt)
     return sol;
 end
 
-#@testset "1D wave equation, staggered grid, interior only" begin
+@testset "1D wave equation, staggered grid, interior only" begin
     @parameters t x
     @variables ρ(..) ϕ(..)
     Dt = Differential(t);
@@ -37,7 +37,7 @@ end
 
     a = 5.0;#1.0/2.0;
     L = 8.0;
-    dx = 1.0;#0.125;
+    dx = 0.125;
     dt = dx/a;
     tmax = 1000.0;
 
@@ -48,10 +48,10 @@ end
           Dt(ϕ(t,x)) + a^2 * Dx(ρ(t,x)) ~ 0]
     bcs = [ρ(0,x) ~ initialFunction(x),
            ϕ(0.0,x) ~ 0.0,
-           ρ(t,-L) ~ initialFunction(-L)*exp(-(t^2)),
-           ρ(t,L) ~ 0.0,
-           ϕ(t,-L) ~ exp((t^2)),
-           Dt(ϕ(t,L)) ~ -a^2*Dx(ρ(t,L))];
+           Dx(ρ(t,-L)) ~ 0.0,#initialFunction(-L),
+           Dx(ρ(t,L)) ~ 0.0,
+           ϕ(t,-L) ~ 0.0,
+           ϕ(t,L) ~ 0.0];#-a^2*Dx(ρ(t,L))];
 
     domains = [t in Interval(0.0, tmax),
                x in Interval(-L, L)];
@@ -59,12 +59,12 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t,x], [ρ(t,x), ϕ(t,x)]);
     
 
-    discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid(), staggered_var=ρ(t,x));
+    discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid(), edge_aligned_var=ϕ(t,x));
     prob = discretize(pdesys, discretization);
     
     sol = CN_solve(prob, dt);
     
-    function plot_sol(sol; time_range=1:200:1000)
+    function plot_sol(sol; time_range=1:10:100)
         p_rho = plot();
         for i in time_range
             plot!(p_rho, sol[1:floor(Int, length(sol[:,1])/2),i])
@@ -74,5 +74,6 @@ end
     end
 
     plot_sol(sol)
-    @test 1==1
-#end
+    @test sol[:,1] ≈ sol[:,128]
+    @test sol[:,128] ≈ sol[:,255]
+end
