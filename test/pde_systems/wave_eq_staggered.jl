@@ -29,7 +29,7 @@ function CN_solve(prob, dt)
     return sol;
 end
 
-@testset "1D wave equation, staggered grid, interior only" begin
+@testset "1D wave equation, staggered grid, Mixed BC" begin
     @parameters t x
     @variables ρ(..) ϕ(..)
     Dt = Differential(t);
@@ -76,4 +76,53 @@ end
     plot_sol(sol)
     @test sol[:,1] ≈ sol[:,128]
     @test sol[:,128] ≈ sol[:,255]
+end
+
+
+@testset "1D wave equation, staggered grid, Neumann BC" begin
+    @parameters t x
+    @variables ρ(..) ϕ(..)
+    Dt = Differential(t);
+    Dx = Differential(x);
+
+    a = 5.0;#1.0/2.0;
+    L = 8.0;
+    dx = 0.125;
+    dt = dx/a;
+    tmax = 1000.0;
+
+    initialFunction(x) = exp(-(x)^2);
+    #initialFunction(x) = abs(x-L)/(2*L);
+    #initialFunction(x) = tanh(-x)+1;
+    eq = [Dt(ρ(t,x)) + Dx(ϕ(t,x)) ~ 0,
+          Dt(ϕ(t,x)) + a^2 * Dx(ρ(t,x)) ~ 0]
+    bcs = [ρ(0,x) ~ initialFunction(x),
+           ϕ(0.0,x) ~ 0.0,
+           Dt(ρ(t,-L)) ~ -Dx(ϕ(t,-L)),
+           ρ(t,L) ~ 0.0,
+           ϕ(t,-L) ~ 0.0,
+           ϕ(t,L) ~ 0.0];
+
+    domains = [t in Interval(0.0, tmax),
+               x in Interval(-L, L)];
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t,x], [ρ(t,x), ϕ(t,x)]);
+    
+
+    discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid(), edge_aligned_var=ϕ(t,x));
+    prob = discretize(pdesys, discretization);
+    
+    sol = CN_solve(prob, dt);
+    
+    function plot_sol(sol; time_range=1:10:100)
+        p_rho = plot();
+        for i in time_range
+            plot!(p_rho, sol[1:floor(Int, length(sol[:,1])/2),i])
+        end
+        plot!(p_rho, title="Density: ρ");
+        return plot(p_rho);
+    end
+
+    plot_sol(sol)
+    @test 1 == 1
 end
