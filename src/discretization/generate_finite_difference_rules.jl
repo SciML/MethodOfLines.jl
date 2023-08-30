@@ -76,6 +76,7 @@ function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, 
         advection_rules = []
         nonlinlap_rules = []
         spherical_diffusion_rules = []
+        mixed_deriv_rules_cartesian = []
         integration_rules = []
     end
 
