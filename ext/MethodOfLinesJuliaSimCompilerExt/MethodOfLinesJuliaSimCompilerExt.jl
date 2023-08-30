@@ -40,6 +40,7 @@ function PDEBase.generate_system(disc_state::PDEBase.EquationState, s, u0, tspan
 			sys = ODESystem(alleqs, t, alldepvarsdisc, ps, defaults = defaults, name = name,
 				metadata = metadata, checks = checks)
 			@show sys.eqs
+			@show sys.observed
 			sys = IRSystem(sys)
 			return sys, tspan
 		end
