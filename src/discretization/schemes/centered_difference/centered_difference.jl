@@ -2,7 +2,7 @@
 Performs a centered difference in `x` centered at index `II` of `u`
 ufunc is a function that returns the correct discretization indexed at Itap, it is designed this way to allow for central differences of arbitrary expressions which may be needed in some schemes
 """
-function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u, ufunc) where {T,N,Wind,DX<:Number}
+function central_difference_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u) where {T,N,Wind,DX<:Number}
     j, x = jx
     ndims(u, s) == 0 && return 0
     # unit index in direction of the derivative
@@ -23,10 +23,10 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u
         Itap = [bwrap(II + i * I1, bs, s, jx) for i in half_range(D.stencil_length)]
     end
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
-    return sym_dot(weights, ufunc(u, Itap, x))
+    return weights, Itap
 end
 
-function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u, ufunc) where {T,N,Wind,DX<:AbstractVector}
+function central_difference_weights_and_stencil(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u) where {T,N,Wind,DX<:AbstractVector}
     j, x = jx
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     ndims(u, s) == 0 && return 0
@@ -48,6 +48,12 @@ function central_difference(D::DerivativeOperator{T,N,Wind,DX}, II, s, bs, jx, u
     end
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
 
+    return weights, Itap
+end
+
+function central_difference(D, II, s, bs, jx, u, ufunc)
+    j, x = jx
+    weights, Itap = central_difference_weights_and_stencil(D, II, s, bs, jx, u)
     return sym_dot(weights, ufunc(u, Itap, x))
 end
 
