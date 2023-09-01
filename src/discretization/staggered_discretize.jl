@@ -19,7 +19,7 @@ function SciMLBase.discretize(pdesys::PDESystem,
         error_analysis(sys, e)
     end
 end
-
+ 
 function symbolic_trace(prob, sys)
     get_var_from_state(state) = operation(arguments(state)[1]);
     states = get_states(sys);
