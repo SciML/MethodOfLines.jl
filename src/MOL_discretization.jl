@@ -46,7 +46,7 @@ function get_discrete(pdesys, discretization)
     PDEBase.check_boundarymap(boundarymap, discretization)
 
     # Transform system so that it is compatible with the discretization
-    if should_transform(pdesys, discretization)
+    if should_transform(pdesys, discretization, boundarymap)
         pdesys = PDEBase.transform_pde_system!(v, boundarymap, pdesys, discretization)
     end
 
