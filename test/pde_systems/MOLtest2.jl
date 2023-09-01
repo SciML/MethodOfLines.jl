@@ -425,3 +425,53 @@ end
     @test sol(0.1, 0.1, dv = u(t, x)[1]) == sol(0.1, 0.1, dv = vars[1](t, x))
     @test sol(0.1, 0.1, dv = u(t, x)[2]) == sol(0.1, 0.1, dv = vars[2](t, x))
 end
+
+@testset "Budkyo-Sellers, nonlinlap case" begin
+    using MethodOfLines, DomainSets, ModelingToolkit, OrdinaryDiffEq
+
+    @parameters φ t
+    @variables Tₛ(..)
+
+    Dt = Differential(t)
+    Dφ = Differential(φ)
+
+    A = 210 # W/m^2
+    B = 2 # W/m^2K
+    D = 0.6 # W/m^2K
+
+    P₂(x) = 0.5*(3*(x)^2 - 1)
+    α_func(ϕ) = 0.354 + 0.25*P₂(sin(ϕ))
+    Q_func(t, ϕ) =430*cos(ϕ)
+
+    s_in_y = 31556952.0
+
+    φmin = -Float64(π/2)+0.1
+    φmax =  Float64(π/2)-0.1
+
+    # Water fraction
+    f = 0.7
+    # rho is density of Water
+    ρ = 1025 # kg/m^3
+    # specific heat of Water
+    c_w = 4186 #J/(kgK)
+    # Depth of water
+    H = 70 #m
+
+    #Heat Cap of earth
+    C = f*ρ*c_w*H
+
+    eq = Dt(Tₛ(t, φ)) ~ ((1 - α_func(φ))*Q_func(t, φ) - A - B*Tₛ(t, φ) + D*Dφ(cos(φ)*Dφ(Tₛ(t, φ)))/cos(φ))/C
+
+    bcs = [Tₛ(0, φ) ~ 12 - 40*P₂(sin(φ)),
+        Dφ(Tₛ(t, φmin)) ~ 0.0,
+        Dφ(Tₛ(t, φmax)) ~ 0.0]
+    domains = [t in IntervalDomain(0, 19*s_in_y), φ in IntervalDomain(φmin, φmax)]
+
+    @named sys = PDESystem(eq, bcs, domains, [t, φ], [Tₛ(t, φ)])
+
+    discretization = MOLFiniteDifference([φ => 80], t, order = 4)
+
+    prob = discretize(sys, discretization) # ERROR HERE
+
+    sol = solve(prob, FBDF(), saveat = s_in_y)
+end

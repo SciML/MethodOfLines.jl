@@ -5,7 +5,6 @@ Modified copilot explanation:
 
 """
 function PDEBase.transform_pde_system!(v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLFiniteDifference)
-
     eqs = copy(sys.eqs)
     bcs = copy(sys.bcs)
     done = false
@@ -35,7 +34,7 @@ function PDEBase.transform_pde_system!(v::PDEBase.VariableMap, boundarymap, sys:
     return sys
 end
 
-function PDEBase.should_transform(pdesys, disc)
+function PDEBase.should_transform(pdesys::PDESystem, disc::MOLFiniteDifference, boundarymap)
     if has_interfaces(boundarymap)
         @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
         return false
@@ -46,13 +45,15 @@ end
 """
 Returns the term if it is incompatible, and whether to expand the term.
 """
-function filter_equivalent_differentials(term, differential, v)
+function filter_differentials(term, differential, v, depth=0)
     S = Symbolics
     SU = SymbolicUtils
     if S.istree(term)
         op = SU.operation(term)
         if op isa Differential && isequal(op.x, differential.x)
-            return filter_equivalent_differentials(SU.arguments(term)[1], differential, v)
+            return filter_differentials(SU.arguments(term)[1], differential, v, depth + 1)
+        elseif op isa Differential && !isequal(op.x, differential.x) && depth <= 1
+            return check_deriv_arg(arguments(term)[1], v)
         else
             return check_deriv_arg(term, v)
         end
@@ -135,7 +136,7 @@ function descend_to_incompatible(term, v)
                 if nonlinlapterm !== nothing
                     badterm, shouldexpand = check_deriv_arg(nonlinlapterm, v)
                 else
-                    badterm, shouldexpand = filter_equivalent_differentials(term, op, v)
+                    badterm, shouldexpand = filter_differentials(arguments(term)[1], op, v, 1)
                 end
 
                 if badterm !== nothing
