@@ -3,6 +3,7 @@ using ModelingToolkit: operation, istree, arguments
 using DomainSets
 using NonlinearSolve
 using StableRNGs
+using JuliaSimCompiler
 using Test
 
 # # Define some variables

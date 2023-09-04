@@ -1,7 +1,7 @@
 # 1D diffusion problem
 
 # Packages and inclusions
-using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets, JuliaSimCompiler
+using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using ModelingToolkit: Differential
 
 # Tests
