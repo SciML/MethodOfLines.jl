@@ -12,11 +12,12 @@ using IfElse
 using StaticArrays
 using Interpolations
 using Latexify
-import DomainSets
+using PrecompileTools
+using DomainSets
 
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
-using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i, d_orders, vcat!
+using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i, d_orders, vcat!, update_varmap!, get_ops
 # To Extend
 import PDEBase.interface_errors
 import PDEBase.check_boundarymap
@@ -78,6 +79,7 @@ include("discretization/interface_boundary.jl")
 # Schemes
 include("discretization/schemes/function_scheme/function_scheme.jl")
 include("discretization/schemes/centered_difference/centered_difference.jl")
+include("discretization/schemes/2nd_order_mixed_deriv/2nd_order_mixed_deriv.jl")
 include("discretization/schemes/upwind_difference/upwind_difference.jl")
 include("discretization/schemes/half_offset_centred_difference.jl")
 include("discretization/schemes/nonlinear_laplacian/nonlinear_laplacian.jl")
@@ -94,6 +96,10 @@ include("discretization/generate_ic_defaults.jl")
 include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 
+## PrecompileTools
+include("precompile.jl")
+
+# Export
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme
 
