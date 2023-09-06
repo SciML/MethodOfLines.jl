@@ -12,6 +12,7 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/MOL_Mixed_Deriv.jl")
         end
     end
+
     if GROUP == "All" || GROUP == "Brusselator"
         @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
             include("pde_systems/brusselator_eq.jl")
