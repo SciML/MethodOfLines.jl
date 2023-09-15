@@ -1,10 +1,10 @@
-using DomainSets, JuliaSimCompiler
+using DomainSets
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 
 # using Plots
 
 # local sol
-begin #@testset "Test 01: Brusselator equation 2D" begin
+@testset "Test 01: Brusselator equation 2D" begin
        @parameters x y t
        @variables u(..) v(..)
        Difft = Differential(t)
@@ -61,6 +61,10 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
        println("Solve:")
        @time sol = solve(prob, TRBDF2(),saveat=0.01)
 
+       solu = sol[u(x, y, t)]
+       solv = sol[v(x, y, t)]
+
+       t = sol[t]
        # Solve reference problem
 
        xyd_brusselator = range(0,stop=1,length=N)
@@ -97,10 +101,6 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
 
        msol = solve(prob,TRBDF2(),saveat=0.01) # 2.771 s (5452 allocations: 65.73 MiB)
 
-       solu = sol[u(x, y, t)]
-       solv = sol[v(x, y, t)]
-
-       t = sol[t]
        @testset "." begin
         for k in div(length(t), 2):length(t)
                 msolu = msol.u[k][:,:,1]

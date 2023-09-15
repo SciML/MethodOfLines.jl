@@ -27,7 +27,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "MOL_Interface2"
         @time @safetestset "MOLFiniteDifference Interface" begin
             include("pde_systems/MOLtest2.jl")
-            include("pde_systems/MOLtest2_JSC.jl")
         end
     end
 
@@ -108,7 +107,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "MOL_Interface1"
         @time @safetestset "MOLFiniteDifference Interface" begin
             include("pde_systems/MOLtest1.jl")
-            include("pde_systems/MOLtest1_JSC.jl")
         end
     end
 
@@ -127,6 +125,17 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin
             include("pde_systems/MOL_1D_Linear_Convection.jl")
+        end
+    end
+    ############### JSC #####################
+    if GROUP == "All" || GROUP == "MOL_Interface2_JSC"
+        @time @safetestset "MOLFiniteDifference Interface" begin
+            include("pde_systems/MOLtest2_JSC.jl")
+        end
+    end
+    if GROUP == "All" || GROUP == "MOL_Interface1_JSC"
+        @time @safetestset "MOLFiniteDifference Interface" begin
+            include("pde_systems/MOLtest1_JSC.jl")
         end
     end
 end
