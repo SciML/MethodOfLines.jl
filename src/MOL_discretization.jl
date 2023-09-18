@@ -97,7 +97,7 @@ function SciMLBase.ODEFunction(pdesys::PDESystem, discretization::MethodOfLines.
                 gridlocs = get_gridloc.(us, (s,))
                 f_analytic = generate_function_from_gridlocs(analytic, gridlocs, s)
             end
-            return ODEFunction(simpsys; analytic = f_analytic, discretization.kwargs..., kwargs...)
+            return ODEFunction(simpsys; analytic = f_analytic, eval_module = @__MODULE__, discretization.kwargs..., kwargs...)
         end
     catch e
         println("The system of equations is:")
