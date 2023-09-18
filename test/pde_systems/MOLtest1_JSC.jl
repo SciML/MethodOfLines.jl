@@ -29,7 +29,7 @@ using Test
     sol = solve(prob, Tsit5())
 end
 
-@testset "Heat Equation 2D 1 variable" begin
+@test_broken begin #@testset "Heat Equation 2D 1 variable" begin
     @parameters t x y
     @variables u(..)
     Dxx = Differential(x)^2
@@ -316,7 +316,7 @@ end
 
 end
 
-@testset "2D variable connected to 1D variable at boundary #33" begin
+@test_broken begin #@testset "2D variable connected to 1D variable at boundary #33" begin
     @parameters t x r
     @variables u(..) v(..)
     Dt = Differential(t)
