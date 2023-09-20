@@ -1,4 +1,5 @@
 using SafeTestsets
+using Pkg
 
 const GROUP = get(ENV, "GROUP", "All")
 const is_APPVEYOR = Sys.iswindows() && haskey(ENV, "APPVEYOR")
@@ -129,11 +130,13 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     end
     ############### JSC #####################
     if GROUP == "All" || GROUP == "MOL_Interface2_JSC"
+        Pkg.add("JuliaSimCompiler")
         @time @safetestset "MOLFiniteDifference Interface" begin
             include("pde_systems/MOLtest2_JSC.jl")
         end
     end
     if GROUP == "All" || GROUP == "MOL_Interface1_JSC"
+        Pkg.add("JuliaSimCompiler")
         @time @safetestset "MOLFiniteDifference Interface" begin
             include("pde_systems/MOLtest1_JSC.jl")
         end
