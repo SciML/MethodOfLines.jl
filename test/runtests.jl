@@ -1,4 +1,5 @@
 using SafeTestsets
+using Pkg
 
 const GROUP = get(ENV, "GROUP", "All")
 const is_APPVEYOR = Sys.iswindows() && haskey(ENV, "APPVEYOR")
@@ -10,6 +11,12 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "Mixed_Derivatives"
         @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
             include("pde_systems/MOL_Mixed_Deriv.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "Brusselator"
+        @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
+            include("pde_systems/brusselator_eq.jl")
         end
     end
 
@@ -110,12 +117,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
-    if GROUP == "All" || GROUP == "Brusselator"
-        @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
-            include("pde_systems/brusselator_eq.jl")
-        end
-    end
-
     if GROUP == "All" || GROUP == "Burgers"
         @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin
             include("pde_systems/burgers_eq.jl")
@@ -125,6 +126,19 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin
             include("pde_systems/MOL_1D_Linear_Convection.jl")
+        end
+    end
+    ############### JSC #####################
+    if GROUP == "All" || GROUP == "MOL_Interface2_JSC"
+        Pkg.add("JuliaSimCompiler")
+        @time @safetestset "MOLFiniteDifference Interface" begin
+            include("pde_systems/MOLtest2_JSC.jl")
+        end
+    end
+    if GROUP == "All" || GROUP == "MOL_Interface1_JSC"
+        Pkg.add("JuliaSimCompiler")
+        @time @safetestset "MOLFiniteDifference Interface" begin
+            include("pde_systems/MOLtest1_JSC.jl")
         end
     end
 end

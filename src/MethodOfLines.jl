@@ -14,6 +14,9 @@ using Interpolations
 using Latexify
 using PrecompileTools
 using DomainSets
+using RuntimeGeneratedFunctions
+RuntimeGeneratedFunctions.init(@__MODULE__)
+
 
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
