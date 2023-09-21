@@ -22,12 +22,6 @@ SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 TermInterface = "8ea1fca8-c5ef-4a55-8b96-4e9afe9c9a3c"
 
-[weakdeps]
-JuliaSimCompiler = "8391cb6b-4921-5777-4e45-fd9aab8cb88d"
-
-[extensions]
-MethodOfLinesJuliaSimCompilerExt = ["JuliaSimCompiler"]
-
 [compat]
 Combinatorics = "1"
 DiffEqBase = "6"
