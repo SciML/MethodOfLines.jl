@@ -10,19 +10,10 @@ include("pages.jl")
 
 makedocs(sitename = "MethodOfLines.jl",
          authors = "Chris Rackauckas, Alex Jones et al.",
-         clean = true,
-         doctest = false,
-         strict = [
-             :doctest,
-             :linkcheck,
-             :parse_error,
-             :example_block,
-             # Other available options are
-             # :autodocs_block, :cross_references, :docs_block, :eval_block, :example_block, :footnote, :meta_block, :missing_docs, :setup_block,
-         ],
+         clean = true, doctest = false, linkcheck = true,
          modules = [MethodOfLines],
-         format = Documenter.HTML(analytics = "UA-90474609-3",
-                                  assets = ["assets/favicon.ico"],
+         warnonly = [:docs_block, :missing_docs, :cross_references],
+         format = Documenter.HTML(assets = ["assets/favicon.ico"],
                                   canonical = "https://docs.sciml.ai/MethodOfLines/stable/"),
          pages = pages)
 
