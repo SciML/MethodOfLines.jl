@@ -48,11 +48,11 @@ solu = sol[u(t, x)]
 using Plots
 plt = plot()
 
-for i in 1:length(discrete_t)
+for i in eachindex(discrete_t)
     plot!(discrete_x, solu[i, :], label="Numerical, t=$(discrete_t[i])")
     scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
 end
-display(plt)
+plt
 ```
 ### Neumann boundary conditions
 
@@ -103,11 +103,11 @@ solu = sol[u(t, x)]
 using Plots
 plt = plot()
 
-for i in 1:length(discrete_t)
+for i in eachindex(discrete_t)
     plot!(discrete_x, solu[i, :], label="Numerical, t=$(discrete_t[i])")
     scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
 end
-display(plt)
+plt
 ```
 
 ### Robin boundary conditions
@@ -159,11 +159,11 @@ solu = sol[u(t, x)]
 using Plots
 plt = plot()
 
-for i in 1:length(discrete_t)
+for i in eachindex(discrete_t)
     plot!(discrete_x, solu[i, :], label="Numerical, t=$(discrete_t[i])")
     scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label="Exact, t=$(discrete_t[i])")
 end
-display(plt)
+plt
 ```
 
 
