@@ -42,7 +42,7 @@ using ModelingToolkit: Differential
 
     for disc in [discretization, discretization_edge, discretization_centered, discretization_approx_order4]
         # Convert the PDE problem into an ODE problem
-        prob = discrebranch tize(pdesys, disc)
+        prob = discretize(pdesys, disc)
 
         # Solve ODE problem      # Solve ODE problem
         sol = solve(prob, Tsit5(), saveat=0.1)
