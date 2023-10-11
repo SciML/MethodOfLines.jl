@@ -30,7 +30,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         @time @safetestset "MOLFiniteDifference Interface: Advanced Nonlinear Diffusion" begin
             include("pde_systems/nonlinear_laplacian_advanced.jl")
         end
-        end
     end
 
     if GROUP == "All" || GROUP == "Sol_Interface"
