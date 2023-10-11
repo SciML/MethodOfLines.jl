@@ -1095,7 +1095,7 @@ version = "0.3.2"
 deps = ["Combinatorics", "DiffEqBase", "DomainSets", "IfElse", "Interpolations", "Latexify", "LinearAlgebra", "ModelingToolkit", "OrdinaryDiffEq", "PDEBase", "PrecompileTools", "RuntimeGeneratedFunctions", "SciMLBase", "StaticArrays", "SymbolicUtils", "Symbolics", "TermInterface"]
 path = "/home/runner/work/MethodOfLines.jl/MethodOfLines.jl"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
-version = "0.10.0"
+version = "0.10.1"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
