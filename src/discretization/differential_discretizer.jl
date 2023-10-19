@@ -8,6 +8,7 @@ struct DifferentialDiscretizer{T, D1, S} <: AbstractDifferentialDiscretizer
     interpmap::Dict{Num,DerivativeOperator}
     orders::Dict{Num,Vector{Int}}
     boundary::Dict{Num,DerivativeOperator}
+    callbacks
 end
 
 function PDEBase.construct_differential_discretizer(pdesys, s::DiscreteSpace, discretization::MOLFiniteDifference, orders)
@@ -15,6 +16,7 @@ function PDEBase.construct_differential_discretizer(pdesys, s::DiscreteSpace, di
     bcs = pdesys.bcs isa Vector ? pdesys.bcs : [pdesys.bcs]
     approx_order = discretization.approx_order
     advection_scheme = discretization.advection_scheme
+    callbacks = discretization.callbacks
     upwind_order = advection_scheme isa UpwindScheme ? advection_scheme.order : 1
 
     differentialmap = Array{Pair{Num,DerivativeOperator},1}()
@@ -63,5 +65,5 @@ function PDEBase.construct_differential_discretizer(pdesys, s::DiscreteSpace, di
         push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), dx))
     end
 
-    return DifferentialDiscretizer{eltype(orders),typeof(Dict(differentialmap)),typeof(advection_scheme)}(approx_order, advection_scheme, Dict(differentialmap), (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)), Dict(interp), Dict(orders), Dict(boundary))
+    return DifferentialDiscretizer{eltype(orders),typeof(Dict(differentialmap)),typeof(advection_scheme)}(approx_order, advection_scheme, Dict(differentialmap), (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)), Dict(interp), Dict(orders), Dict(boundary), callbacks)
 end
