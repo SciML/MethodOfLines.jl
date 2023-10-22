@@ -1,4 +1,4 @@
-using Test, MethodOfLines;
+using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils, LinearAlgebra
 
 @testset "staggered constructor" begin
     @parameters t x

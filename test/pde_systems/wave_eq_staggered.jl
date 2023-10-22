@@ -1,4 +1,4 @@
-using Test, OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets, Plots;
+using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils, LinearAlgebra
 
 @testset "1D wave equation, staggered grid, Mixed BC" begin
     @parameters t x
