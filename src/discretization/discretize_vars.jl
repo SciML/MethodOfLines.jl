@@ -97,7 +97,7 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
     # center_align is recommended for Dirichlet BCs
     # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
 
-    grid = generate_grid(x̄, axies, vars, discretization)
+    grid = generate_grid(x̄, axies, vars.intervals, discretization)
     dxs = generate_dxs(x̄, grid, vars, discretization)
 
     axies = Dict(axies)
@@ -125,7 +125,7 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
     # center_align is recommended for Dirichlet BCs
     # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
 
-    grid = generate_grid(x̄, axies, vars, discretization)
+    grid = generate_grid(x̄, axies, vars.intervals, discretization)
     dxs = generate_dxs(x̄, grid, vars, discretization)
 
     axies = Dict(axies)
