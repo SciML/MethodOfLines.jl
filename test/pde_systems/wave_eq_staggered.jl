@@ -1,4 +1,5 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils, LinearAlgebra
+using OrdinaryDiffEq
 
 @testset "1D wave equation, staggered grid, Mixed BC" begin
     @parameters t x
@@ -101,7 +102,7 @@ end
     
     sol = solve(prob, SplitEuler(), dt=dt);
     
-    test_ind = floor(Int, (2(L-dx)/a)/(dt))
+    test_ind = round(Int, ((2*L-dx)/a)/(dt))
     @test maximum(sol[1:128,1] .- sol[1:128,test_ind]) < max(dx^2, dt)
     @test maximum(sol[1:128,1] .- sol[1:128,2*test_ind]) < 10*max(dx^2, dt)
 end
