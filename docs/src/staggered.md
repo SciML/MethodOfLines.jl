@@ -1,6 +1,6 @@
 # Staggered Grids
 
-For more examples of staggered grid implementations for the wave equation, see the tests `/test/pde_systems/wave_eq_staggered.jl`
+For more examples of staggered grid implementations for the wave equation, see the tests `/test/pde_systems/wave_eq_staggered.jl` 
 
 Hyperbolic PDEs are often most written as a system of first-order equations. When the original system is of second-order (e.g., wave equation), this results in a natural splitting of variables as demonstrated below. Staggered-grid numerical schemes have been developed for such equations as efficient and conservative finite difference schemes.
 
