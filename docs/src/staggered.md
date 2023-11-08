@@ -1,4 +1,4 @@
-# Staggered Grids
+# Staggered Grids 
 
 For more examples of staggered grid implementations for the wave equation, see the tests `/test/pde_systems/wave_eq_staggered.jl` 
 
