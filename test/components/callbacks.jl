@@ -1,4 +1,4 @@
-using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
+using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils, OrdinaryDiffEq
 
 @testset "Discrete callback" begin
     @parameters x, t
@@ -18,18 +18,21 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
 
     domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 
-    pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     cb = MOLDiscCallback((s, p) -> prod(p), [0.1, pi])
     a_cb = cb.sym
     cbeq = Dt(u(t, x)) ~ a_cb*Dxx(u(t, x))
 
-    cbpdesys = PDESystem(cbeq, bcs, domains, [t, x], [u(t, x)], callbacks = [cb])
+    @named cbpdesys = PDESystem(cbeq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => 0.1], t; approx_order=2)
+    disc = MOLFiniteDifference([x => 0.1], t; approx_order=2, callbacks = [cb])
 
     prob = discretize(pdesys, disc)
     cbprob = discretize(cbpdesys, disc)
 
-    @test solve(prob, Tsit5(), saveat=0.1) ≈ solve(cbprob, Tsit5(), saveat=0.1) 
+    sol1 = solve(prob, Tsit5(), saveat=0.1)
+    sol2 = solve(cbprob, Tsit5(), saveat=0.1) 
+
+    @test sol1[u(t, x)] ≈ sol2[u(t, x)]
 end
