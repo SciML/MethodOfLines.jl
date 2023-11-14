@@ -5,7 +5,7 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
     @variables u(..)
     Dt = Differential(t)
     Dxx = Differential(x)^2
-    t_min = 0.0
+    t_min = 0.0 
     t_max = 2.0
     x_min = 0.0
     x_max = 2.0
