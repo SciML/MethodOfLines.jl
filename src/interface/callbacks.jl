@@ -4,7 +4,7 @@ struct MOLDiscCallback
     sym
 end
 
-function MOLDiscCallback(s, disc_ps)
+function MOLDiscCallback(f, disc_ps)
     symh = hash(f)
     sym = unwrap(first(@parameters(Symbol("MOLDiscCallback_$symh"))))
     return MOLDiscCallback(f, disc_ps, sym)
