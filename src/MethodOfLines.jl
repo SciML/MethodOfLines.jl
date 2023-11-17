@@ -14,6 +14,9 @@ using Interpolations
 using Latexify
 using PrecompileTools
 using DomainSets
+using RuntimeGeneratedFunctions
+RuntimeGeneratedFunctions.init(@__MODULE__)
+
 
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
@@ -55,6 +58,7 @@ import SciMLBase.discretize
 # Interface
 include("interface/grid_types.jl")
 include("interface/scheme_types.jl")
+include("interface/callbacks.jl")
 include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
 
@@ -77,6 +81,7 @@ include("discretization/schemes/upwind_difference/upwind_diff_weights.jl")
 include("discretization/schemes/half_offset_weights.jl")
 include("discretization/schemes/extrapolation_weights.jl")
 include("discretization/differential_discretizer.jl")
+include("discretization/schemes/callbacks/callback_rules.jl")
 
 # System Parsing
 include("system_parsing/pde_system_transformation.jl")
@@ -110,6 +115,6 @@ include("precompile.jl")
 
 # Export
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete, chebyspace
-export UpwindScheme, WENOScheme, FunctionalScheme
+export UpwindScheme, WENOScheme, FunctionalScheme, MOLDiscCallback
 
 end

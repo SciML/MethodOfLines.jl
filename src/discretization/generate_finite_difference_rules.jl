@@ -80,8 +80,10 @@ function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, 
         integration_rules = []
     end
 
+    cb_rules = generate_cb_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
+
     integration_rules = vcat(integration_rules, vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)))
-    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(mixed_deriv_rules_cartesian), vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules)
+    return vcat(cb_rules, vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(mixed_deriv_rules_cartesian), vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules)
 end
 
 function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace{W,M,G}, depvars, pde::Equation, derivweights::DifferentialDiscretizer, bmap, indexmap) where {W,M,G<:StaggeredGrid}

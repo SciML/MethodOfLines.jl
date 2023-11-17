@@ -11,7 +11,7 @@ function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metada
     umap = mapreduce(vcat, dvs) do u
         let discu = discretespace.discvars[u]
             solu = map(CartesianIndices(discu)) do I
-                i = sym_to_index(discu[I], odesys.states)
+                i = sym_to_index(discu[I], get_states(odesys))
                 # Handle Observed
                 if i !== nothing
                     sol.u[i]

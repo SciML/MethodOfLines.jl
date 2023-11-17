@@ -1,13 +1,13 @@
-using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using DomainSets
+using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 
 # using Plots
 
 # local sol
-begin #@testset "Test 01: Brusselator equation 2D" begin
+@testset "Test 01: Brusselator equation 2D" begin
        @parameters x y t
        @variables u(..) v(..)
-       Dt = Differential(t)
+       Difft = Differential(t)
        Dx = Differential(x)
        Dy = Differential(y)
        Dxx = Differential(x)^2
@@ -26,8 +26,8 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
        u0(x,y,t) = 22(y*(1-y))^(3/2)
        v0(x,y,t) = 27(x*(1-x))^(3/2)
 
-       eq = [Dt(u(x,y,t)) ~ 1. + v(x,y,t)*u(x,y,t)^2 - 4.4*u(x,y,t) + α*∇²(u(x,y,t)) + brusselator_f(x, y, t),
-             Dt(v(x,y,t)) ~ 3.4*u(x,y,t) - v(x,y,t)*u(x,y,t)^2 + α*∇²(v(x,y,t))]
+       eq = [Difft(u(x,y,t)) ~ 1. + v(x,y,t)*u(x,y,t)^2 - 4.4*u(x,y,t) + α*∇²(u(x,y,t)) + brusselator_f(x, y, t),
+             Difft(v(x,y,t)) ~ 3.4*u(x,y,t) - v(x,y,t)*u(x,y,t)^2 + α*∇²(v(x,y,t))]
 
        domains = [x ∈ Interval(x_min, x_max),
                   y ∈ Interval(y_min, y_max),
@@ -61,6 +61,10 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
        println("Solve:")
        @time sol = solve(prob, TRBDF2(),saveat=0.01)
 
+       solu = sol[u(x, y, t)]
+       solv = sol[v(x, y, t)]
+
+       t = sol[t]
        # Solve reference problem
 
        xyd_brusselator = range(0,stop=1,length=N)
@@ -97,10 +101,6 @@ begin #@testset "Test 01: Brusselator equation 2D" begin
 
        msol = solve(prob,TRBDF2(),saveat=0.01) # 2.771 s (5452 allocations: 65.73 MiB)
 
-       solu = sol[u(x, y, t)]
-       solv = sol[v(x, y, t)]
-
-       t = sol[t]
        @testset "." begin
         for k in div(length(t), 2):length(t)
                 msolu = msol.u[k][:,:,1]

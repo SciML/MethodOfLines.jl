@@ -9,6 +9,7 @@ pages = [
         "tutorials/icbc_sampled.md",
         "tutorials/PIDE.md",
     ],
+    "Performance Tips" => "performance.md",
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
     "Solution Interface - PDESolutions" => "solutions.md",
     "Grid and Solution Retrieval - Deprecated" => "get_grid.md",

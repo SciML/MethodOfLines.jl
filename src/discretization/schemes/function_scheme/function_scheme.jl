@@ -35,7 +35,7 @@ function function_scheme(F::FunctionalScheme, II, s, bs, jx, u, ufunc)
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
     u_disc = ufunc(u, Itap, x)
     ps = vcat(F.ps, params(s))
-    t = s.time
+    t = Num(s.time)
     itap = map(I -> I[j], Itap)
     discx = @view s.grid[x][itap]
     dx = s.dxs[x]

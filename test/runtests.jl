@@ -1,4 +1,5 @@
 using SafeTestsets
+using Pkg
 
 const GROUP = get(ENV, "GROUP", "All")
 const is_APPVEYOR = Sys.iswindows() && haskey(ENV, "APPVEYOR")
@@ -10,6 +11,24 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "Mixed_Derivatives"
         @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
             include("pde_systems/MOL_Mixed_Deriv.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "Brusselator"
+        @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
+            include("pde_systems/brusselator_eq.jl")
+        end
+    end
+
+    if GROUP == "All" || GROUP == "Diffusion_NU"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
+            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
+        end
+    end
+    
+    if GROUP == "All" || GROUP == "Nonlinlap_ADV"
+        @time @safetestset "MOLFiniteDifference Interface: Advanced Nonlinear Diffusion" begin
+            include("pde_systems/nonlinear_laplacian_advanced.jl")
         end
     end
 
@@ -55,19 +74,15 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         @time @safetestset "MOLFiniteDifference Interface: Staggered constructors" begin
             include("components/staggered_constructors.jl")
         end
-
+        @time @safetestset "Discrete Callbacks" begin
+            include("components/callbacks.jl")
+        end
         #@time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
     end
 
     if GROUP == "All" || GROUP == "Convection_WENO"
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection, WENO Scheme." begin
             include("pde_systems/MOL_1D_Linear_Convection_WENO.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Diffusion_NU"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
-            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
         end
     end
 
@@ -111,12 +126,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
     if GROUP == "All" || GROUP == "2D_Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 2D Diffusion" begin
             include("pde_systems/MOL_2D_Diffusion.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Brusselator"
-        @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
-            include("pde_systems/brusselator_eq.jl")
         end
     end
 

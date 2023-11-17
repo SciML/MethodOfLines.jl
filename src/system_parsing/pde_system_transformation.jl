@@ -8,7 +8,7 @@ function PDEBase.transform_pde_system!(v::PDEBase.VariableMap, boundarymap, sys:
     eqs = copy(sys.eqs)
     bcs = copy(sys.bcs)
     done = false
-    # Replace bad terms with a greedy strategy until the system comes up clean
+    # Replace bad terms with a greedy strategy until the system comes up clean.
     while !done
         done = true
         for eq in eqs
@@ -35,6 +35,9 @@ function PDEBase.transform_pde_system!(v::PDEBase.VariableMap, boundarymap, sys:
 end
 
 function PDEBase.should_transform(pdesys::PDESystem, disc::MOLFiniteDifference, boundarymap)
+    if !disc.should_transform
+        return false
+    end
     if has_interfaces(boundarymap)
         @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
         return false
