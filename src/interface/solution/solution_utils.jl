@@ -12,10 +12,14 @@ function build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, replaced_vars)
         kreplaced = get(replaced_vars, k, nothing)
         if all(length.(nodes) .> 1)
             interp = interpolate(nodes, umap[k], Gridded(Linear()))
-        else
-            i = findfirst(a -> a <= 1, length.(nodes))
-            @warn "Solution has length 1 in dimension $(ivs[i]). Interpolation will not be possible for variable $k. Solution return code is $(sol.retcode)."
+        elseif all(length.(nodes) .== 1)
+            @warn "Solution has length 1 in all dimensions. Interpolation will not be possible. Solution return code is $(sol.retcode)."
             interp = nothing
+        # If one or more ivs have only length 1 but not all
+        else
+            is_todrop = tuple(findall(a->a==1, length.(nodes))...)
+            is = findall(a->a > 1, length.(nodes))
+            interp = interpolate(nodes[is], dropdims(umap[k], dims=is_todrop), Gridded(Linear()))
         end
         if isnothing(kreplaced)
             [k => interp]
@@ -24,5 +28,6 @@ function build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, replaced_vars)
         end
     end |> Dict
 end
+
 
 sym_to_index(sym, syms) = findfirst(isequal(sym), syms)

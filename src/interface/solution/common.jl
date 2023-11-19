@@ -19,11 +19,26 @@ function (sol::SciMLBase.PDESolution{T,N,S,D})(args...;
                 @assert i !== nothing "Independent variable $(arg_iv) in dependent variable $(dv) not found in the solution."
                 i
             end
-
+            if any(length.(sol.ivdomain) .== 1)
+                is = drop_singleton_inds(is, sol.ivdomain)
+            end
             sol.interp[dv](args[is]...)
         end
     end
+    if any(length.(sol.ivdomain) .== 1)
+        good_inds = get_good_inds(sol.ivdomain)
+        return sol.interp[dv](args[good_inds]...)
+    end
     return sol.interp[dv](args...)
+end
+
+function drop_singleton_inds(is, ivdomain)
+    bad_is = findall(a->length(a) == 1, ivdomain)
+    filter(a->!(a in bad_is), is)
+end
+
+function get_good_inds(ivdomain)
+    findall(a->length(a) > 1, ivdomain)
 end
 
 Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D},
