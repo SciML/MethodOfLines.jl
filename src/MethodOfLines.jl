@@ -21,6 +21,11 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
 using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i, d_orders, vcat!, update_varmap!, get_ops
+
+# staggered changes
+using PDEBase: cardinalize_eqs!, make_pdesys_compatible, parse_bcs, generate_system, Interval
+using PDEBase: error_analysis, add_metadata!
+
 # To Extend
 import PDEBase.interface_errors
 import PDEBase.check_boundarymap
@@ -33,6 +38,7 @@ import PDEBase.construct_differential_discretizer
 import PDEBase.discretize_equation!
 import PDEBase.generate_ic_defaults
 import PDEBase.generate_metadata
+import PDEBase.symbolic_discretize
 
 import PDEBase.get_time
 import PDEBase.get_eqvar
@@ -46,6 +52,8 @@ import Base.checkindex
 import Base.checkbounds
 import Base.getproperty
 import Base.ndims
+
+import SciMLBase.discretize
 
 # Interface
 include("interface/grid_types.jl")
@@ -96,6 +104,7 @@ include("discretization/schemes/integral_expansion/integral_expansion.jl")
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
+include("discretization/staggered_discretize.jl")
 
 # Main
 include("scalar_discretization.jl")

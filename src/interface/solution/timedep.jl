@@ -1,4 +1,12 @@
 
+function generate_ivgrid(discretespace, ivs, t, metadata::MOLMetadata{G}) where {G}
+    return ((isequal(discretespace.time, x) ? t : discretespace.grid[x] for x in ivs)...,)
+end
+
+function generate_ivgrid(discretespace, ivs, t, metadata::MOLMetadata{G}) where {G<:StaggeredGrid}
+    return #TODO ((isequal(discretespace.time, x) ? t : discretespace.grid[x] for x in ivs)...,)
+end
+
 function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata) where {T}
     try
         odesys = sol.prob.f.sys
@@ -6,7 +14,7 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
         discretespace = metadata.discretespace
 
         ivs = [discretespace.time, discretespace.x̄...]
-        ivgrid = ((isequal(discretespace.time, x) ? sol.t : discretespace.grid[x] for x in ivs)...,)
+        ivgrid = generate_ivgrid(discretespace, ivs, sol.t, metadata)
 
         solved_states = if metadata.use_ODAE
             deriv_states = metadata.metadata[]

@@ -71,6 +71,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         @time @safetestset "ODEFunction" begin
             include("components/ODEFunction_test.jl")
         end
+        @time @safetestset "MOLFiniteDifference Interface: Staggered constructors" begin
+            include("components/staggered_constructors.jl")
+        end
         @time @safetestset "Discrete Callbacks" begin
             include("components/callbacks.jl")
         end
@@ -135,6 +138,12 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin
             include("pde_systems/MOL_1D_Linear_Convection.jl")
+        end
+    end
+    if GROUP == "All" || GROUP == "Wave_Eq_Staggered"
+
+        @time @safetestset "MOLFiniteDifference Interface: 1D Wave Equation, Staggered" begin
+            include("pde_systems/wave_eq_staggered.jl")
         end
     end
 end

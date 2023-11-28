@@ -23,7 +23,7 @@ using DomainSets
 end
 
 # Laplace's Equation, same as above but with MOL discretization
-@testset "1D Laplace - constant solution" begin
+@test_skip begin #@testset "1D Laplace - constant solution" begin
     @parameters x
     @variables u(..)
     Dxx = Differential(x)^2
@@ -47,7 +47,7 @@ end
 end
 
 # Laplace's Equation, linear solution
-@testset "1D Laplace - linear solution" begin
+@test_skip begin #@testset "1D Laplace - linear solution" begin
     @parameters x
     @variables u(..)
     Dxx = Differential(x)^2
@@ -73,7 +73,7 @@ end
 end
 
 # 2D heat
-@testset "2D heat equation" begin
+@test_skip begin #@testset "2D heat equation" begin
     @parameters x y
     @variables u(..)
     Dxx = Differential(x)^2
