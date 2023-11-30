@@ -43,6 +43,5 @@ struct MOLMetadata{hasTime,Ds,Disc,PDE,M,C,Strat} <: SciMLBase.AbstractDiscretiz
 end
 
 function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference, pdesys::PDESystem, boundarymap, complexmap, metadata=nothing)
-    @show complexmap
     return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, metadata)
 end
