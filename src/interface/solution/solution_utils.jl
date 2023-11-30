@@ -26,3 +26,5 @@ function build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, replaced_vars)
 end
 
 sym_to_index(sym, syms) = findfirst(isequal(sym), syms)
+
+iscomplex(A::SciMLBase.AbstractPDESolution) = !isnothing(A.disc_data.complexmap)
