@@ -29,3 +29,5 @@ end
 # end
 
 sym_to_index(sym, syms) = findfirst(isequal(sym), syms)
+
+iscomplex(A::SciMLBase.AbstractPDESolution) = !isnothing(A.disc_data.complexmap)

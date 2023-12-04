@@ -475,3 +475,37 @@ end
 
     sol = solve(prob, FBDF(), saveat = s_in_y)
 end
+
+
+@testset "Schroedinger Equation" begin
+    @parameters x z
+    @variables A(..)
+    Dx = Differential(x)
+    Dz = Differential(z)
+    Dzz = Differential(z)^2
+
+    xmin = 0.0
+    xmax = 1e-1
+    zmax = 10.0
+    zmin = -zmax
+
+    c0 = 1.0
+    A0(x, z) = c0 * sech(c0 * z / sqrt(2)) * exp(im * c0^2 * x / 2)
+
+    domains = [x ∈ Interval(xmin, xmax), z ∈ Interval(zmin, zmax)]
+
+    eq = [im * Dx(A(x, z)) + Dzz(A(x, z)) ~ -abs2(A(x, z)) * A(x, z)]
+    bcs = [A(xmin, z) ~ A0(xmin, z),
+        A(x, zmin) ~ 0,
+        A(x, zmax) ~ 0]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [x, z], [A(x, z)])
+
+    N = 100
+    dz = 1 / N
+    order = 2
+
+    discretization = MOLFiniteDifference([z => dz], x)
+
+    @time prob = discretize(pdesys, discretization)
+end

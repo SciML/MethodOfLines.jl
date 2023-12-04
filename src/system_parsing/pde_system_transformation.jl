@@ -254,7 +254,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, v, term)
     append!(bcs, map(bc -> bc.eq, newbcs))
     # Add the new boundary conditions and initial conditions to the boundarymap
     update_boundarymap!(boundarymap, newbcs, newop, v)
-    # update pmap
+    # update pmap 
 end
 
 function generate_bc_rules(bcs, v)
