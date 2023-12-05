@@ -61,7 +61,6 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
         end |> Dict
         # Build Interpolations
         interp = build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars)
-        @show metadata.complexmap
 
         return SciMLBase.PDETimeSeriesSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
             typeof(sol),typeof(sol.errors),typeof(sol.t),typeof(ivgrid),
