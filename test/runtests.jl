@@ -8,6 +8,12 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
+    if GROUP == "All" || GROUP == "Complex"
+        @time @safetestset "MOLFiniteDifference Interface" begin
+            include("pde_systems/schroedinger.jl")
+        end
+    end
+
     if GROUP == "All" || GROUP == "Mixed_Derivatives"
         @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
             include("pde_systems/MOL_Mixed_Deriv.jl")
