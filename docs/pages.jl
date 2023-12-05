@@ -8,6 +8,7 @@ pages = [
         "tutorials/sispde.md",
         "tutorials/icbc_sampled.md",
         "tutorials/PIDE.md",
+        "tutorials/schroedinger.md",
     ],
     "Performance Tips" => "performance.md",
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
