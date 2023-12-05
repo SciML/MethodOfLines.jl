@@ -25,6 +25,9 @@ function build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, replaced_vars)
     end |> Dict
 end
 
+# function build_interpolation(umap, dvs, ivs, ivgrid, sol{G}, pdesys, replaced_vars) where {G<:StaggeredGrid}
+# end
+
 sym_to_index(sym, syms) = findfirst(isequal(sym), syms)
 
 iscomplex(A::SciMLBase.AbstractPDESolution) = !isnothing(A.disc_data.complexmap)

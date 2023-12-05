@@ -45,3 +45,7 @@ end
 function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference, pdesys::PDESystem, boundarymap, complexmap, metadata=nothing)
     return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, metadata)
 end
+
+# function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference{G,D}, pdesys::PDESystem, boundarymap, metadata=nothing) where {G<:StaggeredGrid}
+#     return MOLMetadata(s, disc, pdesys, boundarymap, metadata)
+# end

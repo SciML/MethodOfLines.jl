@@ -34,6 +34,7 @@ jobs:
           - Burgers
           - Brusselator
           - Mixed_Derivatives
+          - Wave_Eq_Staggered
           - Complex
         version:
           - '1'

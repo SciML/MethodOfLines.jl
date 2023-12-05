@@ -79,6 +79,7 @@ struct DiscreteSpace{N,M,G} <: AbstractCartesianDiscreteSpace
     dxs
     Iaxies
     Igrid
+    staggeredvars
 end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
@@ -90,6 +91,74 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
     nspace = length(x̄)
 
     # Discretize space
+    axies = discretize_space(x̄, vars, discretization)
+    
+    # Define the grid on which the dependent variables will be evaluated (see #378)
+    # center_align is recommended for Dirichlet BCs
+    # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
+
+    grid = generate_grid(x̄, axies, vars.intervals, discretization)
+    dxs = generate_dxs(x̄, grid, vars, discretization)
+
+    axies = Dict(axies)
+    grid = Dict(grid)
+
+    # Build symbolic variables
+    Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
+    Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
+
+    depvarsdisc = discretize_dep_vars(depvars, grid, vars);
+
+    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), nothing)
+end
+
+function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretization::MOLFiniteDifference{G}) where {G<:StaggeredGrid}
+    x̄ = vars.x̄
+    t = vars.time
+    depvars = vars.ū
+    nspace = length(x̄)
+
+    # Discretize space
+    axies = discretize_space(x̄, vars, discretization)
+    
+    # Define the grid on which the dependent variables will be evaluated (see #378)
+    # center_align is recommended for Dirichlet BCs
+    # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
+
+    grid = generate_grid(x̄, axies, vars.intervals, discretization)
+    dxs = generate_dxs(x̄, grid, vars, discretization)
+
+    axies = Dict(axies)
+    grid = Dict(grid)
+
+    # Build symbolic variables
+    Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
+    Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
+
+    depvarsdisc = discretize_dep_vars(depvars, grid, vars);
+
+    # determine which variables are grid/stagger aligned
+    edge_aligned_var = operation(unwrap(discretization.kwargs[:edge_aligned_var]));
+    center_aligned_var = operation(unwrap(depvars[findfirst(u->operation(unwrap(u))!==edge_aligned_var, depvars)]));
+    staggered_dict = Dict(edge_aligned_var=>EdgeAlignedVar, center_aligned_var=>CenterAlignedVar);
+
+    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), staggered_dict)
+end
+
+
+function Base.getproperty(s::DiscreteSpace, p::Symbol)
+    if p in [:ū, :x̄, :ps, :time, :args, :x2i, :i2x]
+        getfield(s.vars, p)
+    else
+        getfield(s, p)
+    end
+end
+
+
+"""
+Discretize space
+"""
+@inline function discretize_space(x̄, vars, discretization)
     axies = map(x̄) do x
         xdomain = vars.intervals[x]
         dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
@@ -102,12 +171,13 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
         end
         x => discx
     end
-    # Define the grid on which the dependent variables will be evaluated (see #378)
-    # center_align is recommended for Dirichlet BCs
-    # edge_align is recommended for Neumann BCs (spatial discretization is conservative)
+    return axies;
+end
 
-    grid = generate_grid(x̄, axies, vars.intervals, discretization)
-
+"""
+generate dxs
+"""
+@inline function generate_dxs(x̄, grid, vars, discretization)
     dxs = map(x̄) do x
         discx = Dict(grid)[x]
         if discx isa StepRangeLen
@@ -119,14 +189,15 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
             throw(ArgumentError("Supplied d$x is not a Number or AbstractVector, got $(typeof(discretization.dxs[x])) for $x"))
         end
     end
+    return dxs;
+end
 
-    axies = Dict(axies)
-    grid = Dict(grid)
-
-    # Build symbolic variables
-    Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
-    Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,)) for u in depvars]
-
+"""
+map dependent variables
+"""
+@inline function discretize_dep_vars(depvars, grid, vars)
+    x̄ = vars.x̄;
+    t = vars.time;
     depvarsdisc = map(depvars) do u
         op = SymbolicUtils.operation(u)
         if op isa  SymbolicUtils.BasicSymbolic{SymbolicUtils.FnType{Tuple, Real}}
@@ -144,16 +215,7 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap, discretizat
             u => unwrap.(collect(first(@variables $sym(t)[uaxes...])))
         end
     end
-
-    return DiscreteSpace{nspace,length(depvars),G}(vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid))
-end
-
-function Base.getproperty(s::DiscreteSpace, p::Symbol)
-    if p in [:ū, :x̄, :ps, :time, :args, :x2i, :i2x]
-        getfield(s.vars, p)
-    else
-        getfield(s, p)
-    end
+    return depvarsdisc
 end
 
 """
@@ -228,6 +290,10 @@ map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N,M}) where {N,M} 
 # TODO: Allow other grids
 
 @inline function generate_grid(x̄, axies, intervals, discretization::MOLFiniteDifference{G}) where {G<:CenterAlignedGrid}
+    return axies
+end
+
+@inline function generate_grid(x̄, axies, intervals, discretization::MOLFiniteDifference{G}) where {G<:StaggeredGrid}
     return axies
 end
 
