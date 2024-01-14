@@ -4,7 +4,7 @@ function SciMLBase.discretize(pdesys::PDESystem,
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
         simpsys = structural_simplify(sys)
-        if tspan === nothing
+        if tspan === nothing 
             add_metadata!(get_metadata(sys), sys)
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.states));
                                            discretization.kwargs..., kwargs...)
