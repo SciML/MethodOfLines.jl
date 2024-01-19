@@ -46,9 +46,9 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     elseif any(isequal(safe_unwrap(sym)), safe_unwrap.(collect(values(A.disc_data.discretespace.vars.replaced_vars))))
         dv = sym
     end
-    if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
+    if symbolic_type(sym) != NotSymbolic() && iv !== nothing && isequal(sym, iv)
         A.ivdomain[iiv]
-    elseif SciMLBase.issymbollike(sym) && dv !== nothing && isequal(sym, dv)
+    elseif symbolic_type(sym) != NotSymbolic() && dv !== nothing && isequal(sym, dv)
             A.u[sym]
     elseif iscomplex(A) && istree(safe_unwrap(sym))
         symargs = arguments(safe_unwrap(sym))
@@ -71,12 +71,12 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     if idv !== nothing
         dv = A.dvs[idv]
     end
-    if SciMLBase.issymbollike(sym) && iv !== nothing && isequal(sym, iv)
+    if symbolic_type(sym) != NotSymbolic() && iv !== nothing && isequal(sym, iv)
         A.ivdomains[iiv][args...]
-    elseif SciMLBase.issymbollike(sym) && dv !== nothing && isequal(sym, dv)
+    elseif symbolic_type(sym) != NotSymbolic() && dv !== nothing && isequal(sym, dv)
         A.u[sym][args...]
     end
-    if iscomplex(A) && SciMlBase.issymbollike(sym) && istree(safe_unwrap(sym))
+    if iscomplex(A) && symbolic_type(sym) != NotSymbolic() && istree(safe_unwrap(sym))
         symargs = arguments(safe_unwrap(sym))
         redv, imdv = A.disc_data.complexmap[operation(safe_unwrap(sym))]
         A.u[Num(redv(symargs...))][args...] .+ im * A.u[Num(imdv(symargs...))][args...]
