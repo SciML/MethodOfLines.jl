@@ -2,7 +2,7 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 using ModelingToolkit: Differential
 
 # Broken in MTK
-@test_broken begin #@testset "Test 00: Dtt(u) + Dtx(u(t,x)) - Dxx(u(t,x)) ~ Dxx(x)" begin
+@test_skip @testset "Test 00: Dtt(u) + Dtx(u(t,x)) - Dxx(u(t,x)) ~ Dxx(x)" begin
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -43,7 +43,7 @@ using ModelingToolkit: Differential
     @test_broken usol ≈ asol atol = 1e-3
 end
 
-@test_broken begin # "Test 01: Dt(u) ~ Dxy(u)" begin
+@testset "Test 01: Dt(u) ~ Dxy(u)" begin
     @parameters t x y
     @variables u(..)
     Dt = Differential(t)
@@ -70,7 +70,7 @@ end
     @test_broken sol.retcode == SciMLBase.ReturnCode.Success
 end
 
-@test_broken begin#@testset "Mixed steady state problem" begin
+@testset "Mixed steady state problem" begin
     @parameters x y
     @variables u(..)
     Dx = Differential(x)

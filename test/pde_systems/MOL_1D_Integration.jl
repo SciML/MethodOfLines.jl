@@ -40,7 +40,7 @@ using MethodOfLines, ModelingToolkit, LinearAlgebra, Test, OrdinaryDiffEq, Domai
     @test cumuSumsol ≈ exact atol = 0.36
 end
 
-@test_broken begin #@testset "Test 00: Test simple integration case (0 .. x), with sys transformation" begin
+@test_skip @testset "Test 00: Test simple integration case (0 .. x), with sys transformation" begin
     # test integrals
     @parameters t, x
     @variables cumuSum(..)
@@ -119,7 +119,7 @@ end
     @test cumuSumsol ≈ exact atol = 0.3
 end
 
-@test_broken begin #@testset "Test 02: Test integration with arbitrary limits, (a .. b)" begin
+@test_skip @testset "Test 02: Test integration with arbitrary limits, (a .. b)" begin
     # test integrals
     @parameters t, x
     @variables integrand(..) cumuSum(..)

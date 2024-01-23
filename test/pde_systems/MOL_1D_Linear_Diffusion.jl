@@ -99,7 +99,6 @@ end
 end
 
 @testset "Test 02: Dt(u(t,x)) ~ Dx(D(t,x))*Dx(u(t,x))+D(t,x)*Dxx(u(t,x))" begin
-    #@test_broken begin
     # Parameters, variables, and derivatives
     @parameters t x
     @variables u(..) D(..)

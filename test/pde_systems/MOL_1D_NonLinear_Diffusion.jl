@@ -414,7 +414,7 @@ end
 
 end
 
-@test_broken begin #@testset "Test 03: Dt(u(t,x)) ~ Dx(1. / (u(t,x)^2 - 1.) * Dx(u(t,x)))" begin
+@testset "Test 03: Dt(u(t,x)) ~ Dx(1. / (u(t,x)^2 - 1.) * Dx(u(t,x)))" begin
 
     # Variables, parameters, and derivatives
     @parameters t x
@@ -454,7 +454,7 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
     @test_broken sol.retcode == SciMLBase.ReturnCode.Success
-    fail # don't run the rest of the test
+    return # don't run the rest of the test
     # Test against exact solution
     x_disc = sol[x]
     t_disc = sol[t]
@@ -472,7 +472,7 @@ end
 
 end
 
-@test_broken begin #@testset "Test 03a: Dt(u(t,x)) ~ Dx(1. / (-1. + u(t,x)^2) * Dx(u(t,x)))" begin
+@testset "Test 03a: Dt(u(t,x)) ~ Dx(1. / (-1. + u(t,x)^2) * Dx(u(t,x)))" begin
 
     # Variables, parameters, and derivatives
     @parameters t x
@@ -511,7 +511,7 @@ end
     using OrdinaryDiffEq
     sol = solve(prob, Rosenbrock32())
     @test_broken sol.retcode == SciMLBase.ReturnCode.Success
-    fail #don't run later tests
+    return #don't run later tests
     # Test against exact solution
     x_disc = sol[x]
     t_disc = sol[t]
@@ -526,5 +526,4 @@ end
     #plot(r_space, asf, seriestype = :scatter,label="Analytic solution")
     #plot!(r_space, sol′, label="Numeric solution")
     #savefig("MOL_NonLinear_Diffusion_1D_Test03.png")
-
 end

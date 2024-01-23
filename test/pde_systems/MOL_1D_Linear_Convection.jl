@@ -410,49 +410,49 @@ end
 end
 
 
-# @test_broken begin #@testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
-#     # Parameters, variables, and derivatives
-#     @parameters t x
-#     @variables v(..) u(..)
-#     Dt = Differential(t)
-#     Dx = Differential(x)
+@test_skip @testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
+    # Parameters, variables, and derivatives
+    @parameters t x
+    @variables v(..) u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
 
-#     # 1D PDE and boundary conditions
-#     eq = [Dt(u(t, x)) ~ -Dx(v(t, x) * u(t, x)),
-#         v(t, x) ~ 1.0 ]
-#     asf(x) = (0.5 / (0.2 * sqrt(2.0 * 3.1415))) * exp(-(x - 1.0)^2 / (2.0 * 0.2^2))
+    # 1D PDE and boundary conditions
+    eq = [Dt(u(t, x)) ~ -Dx(v(t, x) * u(t, x)),
+        v(t, x) ~ 1.0 ]
+    asf(x) = (0.5 / (0.2 * sqrt(2.0 * 3.1415))) * exp(-(x - 1.0)^2 / (2.0 * 0.2^2))
 
-#     bcs = [u(0, x) ~ asf(x),
-#         u(t, 0) ~ u(t, 2),
-#         v(0, x) ~ v(t, 2)]
+    bcs = [u(0, x) ~ asf(x),
+        u(t, 0) ~ u(t, 2),
+        v(0, x) ~ v(t, 2)]
 
-#     # Space and time domains
-#     domains = [t ∈ Interval(0.0, 2.0),
-#         x ∈ Interval(0.0, 2.0)]
+    # Space and time domains
+    domains = [t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 2.0)]
 
-#     # PDE system
-#     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x), v(t, x)])
+    # PDE system
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x), v(t, x)])
 
-#     # Method of lines discretization
-#     dx = 2 / 80
-#     order = 1
-#     discretization = MOLFiniteDifference([x => dx], t)
+    # Method of lines discretization
+    dx = 2 / 80
+    order = 1
+    discretization = MOLFiniteDifference([x => dx], t)
 
-#     # Convert the PDE problem into an ODE problem
-#     prob = discretize(pdesys, discretization)
+    # Convert the PDE problem into an ODE problem
+    prob = discretize(pdesys, discretization)
 
-#     # Solve ODE problem
-#     using OrdinaryDiffEq
-#     sol = solve(prob, FBDF(), saveat=0.1)
-#     x_interval = sol[x][2:end]
-#     utrue = asf.(x_interval)
-#     # Plot and save results
-#     # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
-#     # plot!(x_sol, sol.u[end], label="Numeric solution")
-#     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
+    # Solve ODE problem
+    using OrdinaryDiffEq
+    sol = solve(prob, FBDF(), saveat=0.1)
+    x_interval = sol[x][2:end]
+    utrue = asf.(x_interval)
+    # Plot and save results
+    # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
+    # plot!(x_sol, sol.u[end], label="Numeric solution")
+    # plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-#     # savefig("plots/MOL_Linear_Convection_Test00.png")
+    # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-#     @test_broken sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
-#     # Too dispersive ^
-# end
+    @test_broken sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    # Too dispersive ^
+end
