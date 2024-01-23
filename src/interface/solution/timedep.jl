@@ -26,28 +26,38 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
         # Reshape the solution to flat arrays, faster to do this eagerly.
         umap = mapreduce(vcat, dvs) do u
             let discu = discretespace.discvars[u]
-                solu = map(CartesianIndices(discu)) do I
-                    i = sym_to_index(discu[I], solved_states)
-                    # Handle Observed
-                    if i !== nothing
-                        sol[i, :]
-                    else
-                        SciMLBase.observed(sol, safe_unwrap(discu[I]), :)
-                    end
-                end
-                # Correct placement of time axis
+                # Initialize output with correct placement of time axis.
                 if isequal(arguments(u)[1], discretespace.time)
                     out = zeros(T, length(sol.t), size(discu)...)
-                    for I in CartesianIndices(discu)
-                        out[:, I] .= solu[I]
-                    end
                 elseif isequal(arguments(u)[end], discretespace.time)
                     out = zeros(T, size(discu)..., length(sol.t))
-                    for I in CartesianIndices(discu)
-                        out[I, :] .= solu[I]
-                    end
                 else
                     error("The time variable must be the first or last argument of the dependent variable $u.")
+                end
+                
+                # Build the flat arrays with time in the outer loop.
+                # It is important for time to be in the outer loop because
+                # this function may access data interpolators which may be
+                # optimized to sequentially step through time.
+                for ti ∈ eachindex(sol.t)
+                    Is = CartesianIndices(discu)
+                    is = sym_to_index.(discu[Is], (solved_states,))
+                    
+                    # Handle Observed
+                    if is[1] !== nothing
+                        solu = sol[is, ti]
+                    else
+                        solu = SciMLBase.observed.((sol,), safe_unwrap.(discu[Is]), (ti,))
+                    end
+
+                    # Correct placement of time axis
+                    if isequal(arguments(u)[1], discretespace.time)
+                        out[ti, Is] .= solu
+                    elseif isequal(arguments(u)[end], discretespace.time)
+                        out[Is, ti] .= solu
+                    else
+                        @assert false "The time variable must be the first or last argument of the dependent variable $u."
+                    end
                 end
 
                 # Deal with any replaced variables
