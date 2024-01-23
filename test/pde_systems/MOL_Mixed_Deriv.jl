@@ -1,4 +1,4 @@
-using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets, NonlinearSolve
 using ModelingToolkit: Differential
 
 # Broken in MTK
