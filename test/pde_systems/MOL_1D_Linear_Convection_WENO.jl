@@ -295,7 +295,7 @@ end
 
     @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 end
-@test_broken begin #@testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
+@testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
     # Parameters, variables, and derivatives
     @parameters t x
     @variables v(..) u(..)

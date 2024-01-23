@@ -6,7 +6,7 @@ using ModelingToolkit: Differential
 
 # Beam Equation
 #! Broken due to overlapping inner corner bc eqs - determine state sharing heuristic; sort by dorder and give precedence to higher
-@test_broken begin #@testset "Test 00: Beam Equation" begin
+@test_skip @testset "Test 00: Beam Equation" begin
     @parameters x, t
     @variables u(..)
     Dt = Differential(t)
@@ -42,7 +42,7 @@ using ModelingToolkit: Differential
 end
 
 # Beam Equation with Velocity
-@test_broken begin#@testset "Test 01: Beam Equation with velocity" begin
+@testset "Test 01: Beam Equation with velocity" begin
     @parameters x, t
     @variables u(..), v(..)
     Dt = Differential(t)
@@ -79,7 +79,7 @@ end
     sol = solve(prob, FBDF())
 end
 
-@test_broken begin#@testset "KdV Single Soliton equation" begin
+@testset "KdV Single Soliton equation" begin
     @parameters x, t
     @variables u(..)
     Dt = Differential(t)
