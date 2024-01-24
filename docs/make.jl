@@ -16,7 +16,7 @@ makedocs(sitename = "MethodOfLines.jl",
              :example_block,
              # Other available options are
              # :autodocs_block, :cross_references, :docs_block, :eval_block, :example_block, :footnote, :meta_block, :missing_docs, :setup_block
-         ]
+         ],
          authors = "Chris Rackauckas, Alex Jones et al.",
          clean = true, doctest = false, linkcheck = true,
          modules = [MethodOfLines],
