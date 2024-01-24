@@ -2,7 +2,7 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 using ModelingToolkit: Differential
 
 # Broken in MTK
-@test_skip @testset "Test 00: Dtt(u) + Dtx(u(t,x)) - Dxx(u(t,x)) ~ Dxx(x)" begin
+@testset "Test 00: Dtt(u) + Dtx(u(t,x)) - Dxx(u(t,x)) ~ Dxx(x)" begin
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -32,15 +32,15 @@ using ModelingToolkit: Differential
     dx = (xmax-xmin)/20
     discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
-    prob = discretize(pdesys, discretization)
-    sol = solve(prob, FBDF())
+    @test_throws "ExtraVariables" (prob = discretize(pdesys, discretization))
+    # sol = solve(prob, FBDF())
 
-    xdisc = sol[x]
-    tdisc = sol[t]
-    usol = sol[u(t,x)]
+    # xdisc = sol[x]
+    # tdisc = sol[t]
+    # usol = sol[u(t,x)]
 
-    asol = [assf(t, x) for t in tdisc, x in xdisc]
-    @test_broken usol ≈ asol atol = 1e-3
+    # asol = [assf(t, x) for t in tdisc, x in xdisc]
+    # @test_broken usol ≈ asol atol = 1e-3
 end
 
 @testset "Test 01: Dt(u) ~ Dxy(u)" begin

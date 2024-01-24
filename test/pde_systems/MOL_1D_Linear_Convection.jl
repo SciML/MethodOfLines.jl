@@ -410,7 +410,7 @@ end
 end
 
 
-@test_skip @testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
+@testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
     # Parameters, variables, and derivatives
     @parameters t x
     @variables v(..) u(..)
@@ -439,20 +439,20 @@ end
     discretization = MOLFiniteDifference([x => dx], t)
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    @test_throws "InterfaceBoundary has no field order" (prob = discretize(pdesys, discretization))
 
     # Solve ODE problem
-    using OrdinaryDiffEq
-    sol = solve(prob, FBDF(), saveat=0.1)
-    x_interval = sol[x][2:end]
-    utrue = asf.(x_interval)
-    # Plot and save results
-    # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
-    # plot!(x_sol, sol.u[end], label="Numeric solution")
-    # plot!(x_sol, u.-sol.u[end], label="Differential Error")
+    # using OrdinaryDiffEq
+    # sol = solve(prob, FBDF(), saveat=0.1)
+    # x_interval = sol[x][2:end]
+    # utrue = asf.(x_interval)
+    # # Plot and save results
+    # # plot(x_sol, u, seriestype = :scatter,label="Analytic solution")
+    # # plot!(x_sol, sol.u[end], label="Numeric solution")
+    # # plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
-    # savefig("plots/MOL_Linear_Convection_Test00.png")
+    # # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-    @test_broken sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    # @test_broken sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
     # Too dispersive ^
 end

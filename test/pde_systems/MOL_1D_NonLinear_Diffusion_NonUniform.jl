@@ -433,7 +433,7 @@ end
 
 end
 
-@test_skip @testset "Test 03: Dt(u(t,x)) ~ Dx(1. / (u(t,x)^2 - 1.) * Dx(u(t,x)))" begin
+@testset "Test 03: Dt(u(t,x)) ~ Dx(1. / (u(t,x)^2 - 1.) * Dx(u(t,x)))" begin
 
     # Variables, parameters, and derivatives
     @parameters t x
@@ -495,7 +495,7 @@ end
     #savefig("MOL_NonLinear_Diffusion_1D_Test03.png")
 end
 
-@test_skip @testset "Test 03a: Dt(u(t,x)) ~ Dx(1. / (-1. + u(t,x)^2) * Dx(u(t,x)))" begin
+@testset "Test 03a: Dt(u(t,x)) ~ Dx(1. / (-1. + u(t,x)^2) * Dx(u(t,x)))" begin
 
     # Variables, parameters, and derivatives
     @parameters t x

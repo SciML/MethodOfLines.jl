@@ -6,7 +6,7 @@ using ModelingToolkit: Differential
 
 # Beam Equation
 #! Broken due to overlapping inner corner bc eqs - determine state sharing heuristic; sort by dorder and give precedence to higher
-@test_skip @testset "Test 00: Beam Equation" begin
+@testset "Test 00: Beam Equation" begin
     @parameters x, t
     @variables u(..)
     Dt = Differential(t)
@@ -36,9 +36,10 @@ using ModelingToolkit: Differential
 
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
     discretization = MOLFiniteDifference([x=>dx],t, approx_order=4)
-    prob = discretize(pdesys,discretization)
+    @test_throws ArgumentError discretize(pdesys,discretization)
 
-    sol = solve(prob, FBDF())
+    # prob = discretize(pdesys,discretization)
+    # sol = solve(prob, FBDF())
 end
 
 # Beam Equation with Velocity
