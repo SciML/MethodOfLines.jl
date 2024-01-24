@@ -67,7 +67,7 @@ end
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
     sol = solve(prob, FBDF(), saveat = 0.1);
-    @test_broken sol.retcode == SciMLBase.ReturnCode.Success
+    @test_broken SciMLBase.successful_retcode(sol)
 end
 
 @testset "Mixed steady state problem" begin
@@ -107,7 +107,7 @@ end
     
     sol = solve(prob, NewtonRaphson());
     
-    @test_broken sol.retcode == SciMLBase.ReturnCode.Success
+    @test_broken SciMLBase.successful_retcode(sol)
     
     solu = sol[u(x, y)]
     solx = sol[x]

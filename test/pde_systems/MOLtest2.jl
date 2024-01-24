@@ -167,7 +167,7 @@ end
 
     solc = hcat(solc1[:, :], solc2[:, 2:end])
 
-    @test sol.retcode == SciMLBase.ReturnCode.Success
+    @test SciMLBase.successful_retcode(sol)
 end
 
 @testset "Another boundaries appearing in equations case" begin
