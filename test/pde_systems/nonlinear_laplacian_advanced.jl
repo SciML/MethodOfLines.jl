@@ -80,7 +80,7 @@ end
 
     sol = solve(prob, FBDF())
 
-    @test sol.retcode == SciMLBase.ReturnCode.Success
+    @test SciMLBase.successful_retcode(sol)
 
     solx = sol[x]
     soly = sol[y]

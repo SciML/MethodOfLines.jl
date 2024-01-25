@@ -6,7 +6,7 @@ using ModelingToolkit: Differential
 
 # Beam Equation
 #! Broken due to overlapping inner corner bc eqs - determine state sharing heuristic; sort by dorder and give precedence to higher
-@test_broken begin #@testset "Test 00: Beam Equation" begin
+@testset "Test 00: Beam Equation" begin
     @parameters x, t
     @variables u(..)
     Dt = Differential(t)
@@ -36,13 +36,14 @@ using ModelingToolkit: Differential
 
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
     discretization = MOLFiniteDifference([x=>dx],t, approx_order=4)
-    prob = discretize(pdesys,discretization)
+    @test_broken discretize(pdesys,discretization) isa ODEProblem
 
-    sol = solve(prob, FBDF())
+    # prob = discretize(pdesys,discretization)
+    # sol = solve(prob, FBDF())
 end
 
 # Beam Equation with Velocity
-@test_broken begin#@testset "Test 01: Beam Equation with velocity" begin
+@testset "Test 01: Beam Equation with velocity" begin
     @parameters x, t
     @variables u(..), v(..)
     Dt = Differential(t)
@@ -79,7 +80,7 @@ end
     sol = solve(prob, FBDF())
 end
 
-@test_broken begin#@testset "KdV Single Soliton equation" begin
+@testset "KdV Single Soliton equation" begin
     @parameters x, t
     @variables u(..)
     Dt = Differential(t)
@@ -114,7 +115,7 @@ end
 
     sol = solve(prob,FBDF(),saveat=0.1)
 
-    @test sol.retcode == SciMLBase.ReturnCode.Success
+    @test SciMLBase.successful_retcode(sol)
 
     xs = sol[x]
     ts = sol[t]

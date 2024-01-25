@@ -40,10 +40,10 @@ using MethodOfLines, ModelingToolkit, LinearAlgebra, Test, OrdinaryDiffEq, Domai
     @test cumuSumsol ≈ exact atol = 0.36
 end
 
-@test_broken begin #@testset "Test 00: Test simple integration case (0 .. x), with sys transformation" begin
+@testset "Test 00: Test simple integration case (0 .. x), with sys transformation" begin
     # test integrals
     @parameters t, x
-    @variables cumuSum(..)
+    @variables integrand(..) cumuSum(..)
     Dt = Differential(t)
     Dx = Differential(x)
     xmin = 0.0
@@ -64,18 +64,18 @@ end
 
     disc = MOLFiniteDifference([x => 120], t)
 
-    prob = discretize(pde_system, disc)
+    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    # prob = discretize(pde_system, disc)
+    # sol = solve(prob, Tsit5())
 
-    sol = solve(prob, Tsit5())
+    # xdisc = sol[x]
+    # tdisc = sol[t]
 
-    xdisc = sol[x]
-    tdisc = sol[t]
+    # cumuSumsol = sol[cumuSum(t, x)]
 
-    cumuSumsol = sol[cumuSum(t, x)]
+    # exact = [asf(t_, x_) for t_ in tdisc, x_ in xdisc]
 
-    exact = [asf(t_, x_) for t_ in tdisc, x_ in xdisc]
-
-    @test cumuSumsol ≈ exact atol = 0.36
+    # @test cumuSumsol ≈ exact atol = 0.36
 end
 
 @testset "Test 01: Test integration over whole domain, (xmin .. xmax)" begin
@@ -119,7 +119,7 @@ end
     @test cumuSumsol ≈ exact atol = 0.3
 end
 
-@test_broken begin #@testset "Test 02: Test integration with arbitrary limits, (a .. b)" begin
+@testset "Test 02: Test integration with arbitrary limits, (a .. b)" begin
     # test integrals
     @parameters t, x
     @variables integrand(..) cumuSum(..)
@@ -145,16 +145,16 @@ end
 
     disc = MOLFiniteDifference([x => 120], t)
 
-    prob = discretize(pde_system, disc)
+    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    # prob = discretize(pde_system, disc)
+    # sol = solve(prob, Tsit5(), saveat=0.1)
 
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    # xdisc = sol[x]
+    # tdisc = sol[t]
 
-    xdisc = sol[x]
-    tdisc = sol[t]
+    # cumuSumsol = sol[cumuSum(t)]
 
-    cumuSumsol = sol[cumuSum(t)]
+    # exact = [asf(t_, 3.0) - asf(t_, 0.5) for t_ in tdisc]
 
-    exact = [asf(t_, 3.0) - asf(t_, 0.5) for t_ in tdisc]
-
-    @test cumuSumsol ≈ exact atol = 0.36
+    # @test cumuSumsol ≈ exact atol = 0.36
 end

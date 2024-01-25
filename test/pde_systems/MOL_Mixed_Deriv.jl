@@ -1,8 +1,8 @@
-using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets, NonlinearSolve
 using ModelingToolkit: Differential
 
 # Broken in MTK
-@test_broken begin #@testset "Test 00: Dtt(u) + Dtx(u(t,x)) - Dxx(u(t,x)) ~ Dxx(x)" begin
+@testset "Test 00: Dtt(u) + Dtx(u(t,x)) - Dxx(u(t,x)) ~ Dxx(x)" begin
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -32,18 +32,19 @@ using ModelingToolkit: Differential
     dx = (xmax-xmin)/20
     discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
-    prob = discretize(pdesys, discretization)
-    sol = solve(prob, FBDF())
+    @test_broken (discretize(pdesys, discretization) isa ODEProblem)
+    # prob = discretize(pdesys, discretization)
+    # sol = solve(prob, FBDF())
 
-    xdisc = sol[x]
-    tdisc = sol[t]
-    usol = sol[u(t,x)]
+    # xdisc = sol[x]
+    # tdisc = sol[t]
+    # usol = sol[u(t,x)]
 
-    asol = [assf(t, x) for t in tdisc, x in xdisc]
-    @test_broken usol ≈ asol atol = 1e-3
+    # asol = [assf(t, x) for t in tdisc, x in xdisc]
+    # @test_broken usol ≈ asol atol = 1e-3
 end
 
-@test_broken begin # "Test 01: Dt(u) ~ Dxy(u)" begin
+@testset "Test 01: Dt(u) ~ Dxy(u)" begin
     @parameters t x y
     @variables u(..)
     Dt = Differential(t)
@@ -67,10 +68,10 @@ end
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
     sol = solve(prob, FBDF(), saveat = 0.1);
-    @test_broken sol.retcode == SciMLBase.ReturnCode.Success
+    @test_broken SciMLBase.successful_retcode(sol)
 end
 
-@test_broken begin#@testset "Mixed steady state problem" begin
+@testset "Mixed steady state problem" begin
     @parameters x y
     @variables u(..)
     Dx = Differential(x)
@@ -107,7 +108,7 @@ end
     
     sol = solve(prob, NewtonRaphson());
     
-    @test_broken sol.retcode == SciMLBase.ReturnCode.Success
+    @test_broken SciMLBase.successful_retcode(sol)
     
     solu = sol[u(x, y)]
     solx = sol[x]
