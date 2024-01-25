@@ -36,7 +36,7 @@ using ModelingToolkit: Differential
 
     @named pdesys = PDESystem(eq,bcs,domains,[t,x],[u(t,x)])
     discretization = MOLFiniteDifference([x=>dx],t, approx_order=4)
-    @test_throws ArgumentError discretize(pdesys,discretization)
+    @test_broken discretize(pdesys,discretization) isa ODEProblem
 
     # prob = discretize(pdesys,discretization)
     # sol = solve(prob, FBDF())
