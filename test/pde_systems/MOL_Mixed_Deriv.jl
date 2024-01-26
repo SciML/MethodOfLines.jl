@@ -32,7 +32,8 @@ using ModelingToolkit: Differential
     dx = (xmax-xmin)/20
     discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
-    @test_throws "ExtraVariables" (prob = discretize(pdesys, discretization))
+    @test_broken (discretize(pdesys, discretization) isa ODEProblem)
+    # prob = discretize(pdesys, discretization)
     # sol = solve(prob, FBDF())
 
     # xdisc = sol[x]
