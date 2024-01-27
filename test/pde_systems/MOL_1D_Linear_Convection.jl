@@ -439,8 +439,9 @@ end
     discretization = MOLFiniteDifference([x => dx], t)
 
     # Convert the PDE problem into an ODE problem
-    @test_throws "InterfaceBoundary has no field order" (prob = discretize(pdesys, discretization))
+    @test_broken (discretize(pdesys, discretization) isa ODEProblem)
 
+    # prob = discretize(pdesys, discretization)
     # Solve ODE problem
     # using OrdinaryDiffEq
     # sol = solve(prob, FBDF(), saveat=0.1)

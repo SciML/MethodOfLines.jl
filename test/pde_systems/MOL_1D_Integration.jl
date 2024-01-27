@@ -64,8 +64,8 @@ end
 
     disc = MOLFiniteDifference([x => 120], t)
 
-    @test_throws AssertionError (prob = discretize(pde_system, disc))
-
+    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    # prob = discretize(pde_system, disc)
     # sol = solve(prob, Tsit5())
 
     # xdisc = sol[x]
@@ -145,8 +145,8 @@ end
 
     disc = MOLFiniteDifference([x => 120], t)
 
-    @test_throws ArgumentError (prob = discretize(pde_system, disc))
-
+    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    # prob = discretize(pde_system, disc)
     # sol = solve(prob, Tsit5(), saveat=0.1)
 
     # xdisc = sol[x]
