@@ -1,6 +1,7 @@
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
+DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 IfElse = "615f187c-cbe4-4ef1-ba3b-2fcf58d6d173"
