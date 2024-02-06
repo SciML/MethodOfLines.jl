@@ -1,0 +1,28 @@
+steps:
+  - label: "Build and Deploy Documentation"
+
+    plugins:
+      - staticfloat/cryptic#v2:
+          variables:
+            - DOCUMENTER_KEY="U2FsdGVkX1+vn2Ea+xFstdtP0XCp1SNC/Qk1hMAha9OjpzZ91KoIrHnpww908LlxQ8AGDkrhHXxPSaAhT5R9Cxbppg8KaDFvpDpuZjWZ/shQc+5kKKc1pJoJWDPXOzoFu9loPfJh7XLmhrPmeqJ5fLTcQcuBbl4GpAT5Uth8M887N/Z6N+NtGpUUnTyADQXy0X6xRwQaDhfoja8CRyQHC3FFLDzDcxWurKbG/EdwEXAsrYlnvbTBimRz3R4bgRFY7DO7G6C40uHP+7r6GqzeUBXIY+5IDNLelXyhQX8zvpOzsllcg2rA0+S5lrMIPjYaLkojJqgGoXMkLFP1mDrF7T6IkE9cio1nVRaxg8uvaUPCmWXJAktsJW7LLDSlncjhIgfcPpYpuGWVhACX3ykK4Z+ynM7VmhxVuA1z98evCZpd3ZM2+vA77lyHsMMMMUK+ydJKRrEJhkO1j1ocWinvdeoT3krsQV1kYj26Q5WUfcPEZ7NYiN2JyXxYYBc6Rmm5WnE9otbMSK9gLS4Ni9mEP/4lR0i7SvYvOFA7Ku+RdVmo/t+R+2ieR0Xdn1TtH7SJzDdbPcTZh+VTQ5ZjDCde5eulv141j7nBPBLkkdZsXPwDO5s6kz2Icu5ekg/c2d9lQc0VwCeYkn70tOITV7tbrMzZAaVS4C889s/eOQ4yvRANN6VNvXloRxb/8X3NlhInmsR4TH2cwLXSwf2Gmr2eWN9Iz8AniVYz4tvjJ0dkJ2QZlvN2mB6Eso7L7uihAvfJn+85/1VwAJ2MEVDTstIuqIrcLsbBwDOBsA2xebgxPv9B0KwoAHsPmvauMD6PKMCuvMdndBDoVWubwXSiTYica447sSU9U44AYSij8wZ8Y4LftQmtihByD3kPvEybgxdKxFttWK27Hi/tTpES57ScXYgs/n5yvI6kREa8myOS7uhZo8ZZCogwPKDS2Jm9LqJe0Idwibcmi9A7WM2fsfs0rQhDoElfobgIZ4OH4lvzA+nqt18jq6g/WUadr2nLNKXiqDEAi2LxbxOAXy3cdELq2iuIQ0zi8arLC998A5cbnl7l9HkiU5dxn+Vqi6akhAnfk0k97BlwH9z47xajAylhkdq7Tg75YWF1j3F4IbGZkHaKRT3nCmrZt8nGLIu5qoPcAfpXMniFLVSOQwPNR1xn4xhHOEU8SHHC9xA/PSoCL9qgXIbjf5R2nwi/odcKFBNGFJKEqkrrFbR+Cu9Fd7JBtzsMEvbH5n0N9fxHmVPqjfWNHMkGMPClYQfBdTh1Q01X8WNntqr0egrTdpccq9VKr5uOzsh7gFAlaE5IPBCuQH6xCuxP2Sg/nv3YBluu/xPjDZf6hes+JnAiHuFLN6S0H4pLTmKbPWqalMy6ZhxoY7nXdoP++T9x+s39pkb9zHwn"
+      - staticfloat/ssh-agent:
+          keyvars:
+            - "DOCUMENTER_KEY"
+      - JuliaCI/julia#v1:
+          version: "1"
+      - staticfloat/sandbox#v1:
+          rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v5.45/aws_uploader.x86_64.tar.gz"
+          rootfs_treehash: "8f1a718279b12f889395723b856fc868a8890dfa"
+          workspaces:
+            # Include `/cache` so that `julia` install can properly cache its Julia downloads
+            - "/cache:/cache"
+
+    command: |
+      julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+      # git config user.name buildkite
+      # git config user.email methodoflines@buildkite.com
+      # julia --project=docs docs/make.jl
+    agents:
+      queue: "juliaecosystem"
+      arch: "x86_64"
+      sandbox_capable: true
