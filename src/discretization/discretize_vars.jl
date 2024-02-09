@@ -280,8 +280,28 @@ gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where {N} = ndims(u, s) == 0
 
 
 varmaps(s::DiscreteSpace, depvars, II, indexmap) = [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
-
 valmaps(s::DiscreteSpace, u, depvars, II, indexmap) = length(II) == 0 ? [] : vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
+function valmaps(s::DiscreteSpace{N,M,G}, u, depvars, II, indexmap) where {N,M,G<:StaggeredGrid}
+    if (length(II) == 0)
+        return 0;
+    else
+        interpolated_varmap = []
+        if (length(depvars) > 1)
+            if (s.staggeredvars[operation(u)] == CenterAlignedVar)
+                ii = vcat(II, II+CartesianIndex(1))
+            else
+                ii = vcat(II, II-CartesianIndex(1))
+            end
+            interpolate(vars) = (vars[1] + vars[2])/2; #take average for now...can/should we generalize?
+            interpolated_var = depvars[findfirst(x->operation(x)!==operation(u), depvars)]
+            interpolated_varmap = [interpolated_var=>interpolate([s.discvars[interpolated_var][Idx(i, s, interpolated_var, indexmap)] for i in ii])]
+        end
+        
+        return vcat(varmaps(s, [depvars[findfirst(x->operation(x)==operation(u), depvars)]], II, indexmap),
+                    interpolated_varmap,
+                    gridvals(s, u, II))
+    end
+end
 
 valmaps(s, u, depvars, indexmap) = valmaps.([s], [u], [depvars], s.Igrid[u], [indexmap])
 
