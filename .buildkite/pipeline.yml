@@ -19,9 +19,9 @@ steps:
 
     command: |
       julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
-      # git config user.name buildkite
-      # git config user.email methodoflines@buildkite.com
-      # julia --project=docs docs/make.jl
+      git config user.name buildkite
+      git config user.email methodoflines@buildkite.com
+      julia --project=docs docs/make.jl
     agents:
       queue: "juliaecosystem"
       arch: "x86_64"
