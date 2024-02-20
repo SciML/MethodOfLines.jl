@@ -1,4 +1,5 @@
-function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metadata::MOLMetadata) where {T}
+function SciMLBase.PDENoTimeSolution(
+        sol::SciMLBase.NonlinearSolution{T}, metadata::MOLMetadata) where {T}
     odesys = sol.prob.f.sys
 
     pdesys = metadata.pdesys
@@ -33,10 +34,12 @@ function SciMLBase.PDENoTimeSolution(sol::SciMLBase.NonlinearSolution{T}, metada
         end
     end |> Dict
     # Build Interpolations
-    interp = build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars)
+    interp = build_interpolation(
+        umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars)
 
-    return SciMLBase.PDENoTimeSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
-        typeof(sol),typeof(ivgrid),typeof(ivs),typeof(pdesys.dvs),typeof(sol.prob),typeof(sol.alg),
+    return SciMLBase.PDENoTimeSolution{
+        T, length(discretespace.ū), typeof(umap), typeof(metadata),
+        typeof(sol), typeof(ivgrid), typeof(ivs), typeof(pdesys.dvs), typeof(sol.prob), typeof(sol.alg),
         typeof(interp), typeof(sol.stats)}(umap, sol, ivgrid, ivs,
         pdesys.dvs, metadata, sol.prob, sol.alg,
         interp, sol.retcode, sol.stats)

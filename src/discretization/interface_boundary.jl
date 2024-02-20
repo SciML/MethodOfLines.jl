@@ -7,7 +7,6 @@ end
 Base.getindex(A::Array, IR::RefCartesianIndex) = IR.A === nothing ? A[IR.I] : IR.A[IR.I]
 Base.getindex(I::RefCartesianIndex, i::Int) = I.I[i]
 
-
 function Base.getindex(A::Array, Is::Vector{<:RefCartesianIndex})
     map(Is) do I
         A[I]
@@ -22,7 +21,7 @@ Base.:+(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I + J.I, J.
 Base.:-(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I - J.I, J.A)
 
 (b::InterfaceBoundary)(I, s, jx) = wrapinterface(I, s, b, jx)
-            (b::AbstractBoundary)(I, s, jx) = I
+(b::AbstractBoundary)(I, s, jx) = I
 
 function bwrap(I, bs, s, jx)
     for b in bs
@@ -46,13 +45,14 @@ end
 Allow stencils indexing over periodic boundaries. Index through this function.
 """
 
-
-function wrapinterface(I::RefCartesianIndex{N,Nothing}, s::DiscreteSpace, b::InterfaceBoundary, jx) where {N}
+function wrapinterface(I::RefCartesianIndex{N, Nothing}, s::DiscreteSpace,
+        b::InterfaceBoundary, jx) where {N}
     j, x = jx
     return _wrapinterface(I.I, s, b, j)
 end
 
-@inline function wrapinterface(I::RefCartesianIndex, s::DiscreteSpace, ::InterfaceBoundary, jx)
+@inline function wrapinterface(
+        I::RefCartesianIndex, s::DiscreteSpace, ::InterfaceBoundary, jx)
     return I
 end
 
@@ -89,7 +89,7 @@ function _wrapinterface(I, s, b::InterfaceBoundary{Val{false}(), Val{true}()}, j
     end
 end
 
-function _wrapinterface(I, s, b::InterfaceBoundary{Val{true}(),Val{false}()}, j)
+function _wrapinterface(I, s, b::InterfaceBoundary{Val{true}(), Val{false}()}, j)
     l1 = length(s, b.x)
     if I[j] > l1
         u = b.u
@@ -105,6 +105,6 @@ function _wrapinterface(I, s, b::InterfaceBoundary{Val{true}(),Val{false}()}, j)
     end
 end
 
-function _wrapinterface(I, s, b::InterfaceBoundary{B, B}, j) where B
+function _wrapinterface(I, s, b::InterfaceBoundary{B, B}, j) where {B}
     throw(ArgumentError("Interface $(b.eq) joins two variables at the same end of the domain, this is not supported. Please post an issue if you need this feature."))
 end

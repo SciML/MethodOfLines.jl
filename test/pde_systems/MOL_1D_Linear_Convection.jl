@@ -37,7 +37,7 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, Euler(), dt = 0.025, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -48,8 +48,7 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 00a: Dt(u(t,x)) ~ Dx(u(t,x))" begin
@@ -84,7 +83,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, Euler(), dt = 0.025, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -95,8 +94,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 00b: Dt(u(t,x)) - Dx(u(t,x)) ~ 0" begin
@@ -131,7 +129,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, Euler(), dt = 0.025, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -142,8 +140,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 00c: Dt(u(t,x)) + Dx(u(t,x)) ~ 0" begin
@@ -177,7 +174,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, Euler(), dt = 0.025, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -188,8 +185,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 01: Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.001" begin
@@ -223,7 +219,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, Euler(), dt = 0.025, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -234,8 +230,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 02: Dt(u(t,x)) ~ -v*Dx(u(t,x))" begin
@@ -270,7 +265,7 @@ end
 
     # Solve ODE problemdoes this mean that - doesn't seem to affect things
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, Euler(), dt = 0.025, saveat = 0.1)
 
     # Plot and save results
     # using Plots
@@ -290,8 +285,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
@@ -314,11 +308,9 @@ end
 
     # Space and time domains
 
-
     # Space and time domains
     domains = [t ∈ Interval(0.0, 2.0),
         x ∈ Interval(0.0, 2.0)]
-
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x), v(t, x)])
@@ -333,7 +325,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, Euler(), dt = 0.025, saveat = 0.1)
 
     #Plot and save results
     # using Plots
@@ -355,8 +347,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 04: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=0.999 + 0.001 * t * x " begin
@@ -394,7 +385,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, Euler(), dt=0.025, saveat=0.1)
+    sol = solve(prob, Euler(), dt = 0.025, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -405,10 +396,8 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
-
 
 @testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
     # Parameters, variables, and derivatives
@@ -419,7 +408,7 @@ end
 
     # 1D PDE and boundary conditions
     eq = [Dt(u(t, x)) ~ -Dx(v(t, x) * u(t, x)),
-        v(t, x) ~ 1.0 ]
+        v(t, x) ~ 1.0]
     asf(x) = (0.5 / (0.2 * sqrt(2.0 * 3.1415))) * exp(-(x - 1.0)^2 / (2.0 * 0.2^2))
 
     bcs = [u(0, x) ~ asf(x),

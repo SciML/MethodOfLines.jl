@@ -3,11 +3,13 @@ function generate_ivgrid(discretespace, ivs, t, metadata::MOLMetadata{G}) where 
     return ((isequal(discretespace.time, x) ? t : discretespace.grid[x] for x in ivs)...,)
 end
 
-function generate_ivgrid(discretespace, ivs, t, metadata::MOLMetadata{G}) where {G<:StaggeredGrid}
+function generate_ivgrid(
+        discretespace, ivs, t, metadata::MOLMetadata{G}) where {G <: StaggeredGrid}
     return #TODO ((isequal(discretespace.time, x) ? t : discretespace.grid[x] for x in ivs)...,)
 end
 
-function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata) where {T}
+function SciMLBase.PDETimeSeriesSolution(
+        sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata) where {T}
     try
         odesys = sol.prob.f.sys
         pdesys = metadata.pdesys
@@ -60,11 +62,13 @@ function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, 
             end
         end |> Dict
         # Build Interpolations
-        interp = build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars)
+        interp = build_interpolation(
+            umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars)
 
-        return SciMLBase.PDETimeSeriesSolution{T,length(discretespace.ū),typeof(umap),typeof(metadata),
-            typeof(sol),typeof(sol.errors),typeof(sol.t),typeof(ivgrid),
-            typeof(ivs),typeof(pdesys.dvs),typeof(sol.prob),typeof(sol.alg),
+        return SciMLBase.PDETimeSeriesSolution{
+            T, length(discretespace.ū), typeof(umap), typeof(metadata),
+            typeof(sol), typeof(sol.errors), typeof(sol.t), typeof(ivgrid),
+            typeof(ivs), typeof(pdesys.dvs), typeof(sol.prob), typeof(sol.alg),
             typeof(interp), typeof(sol.stats)}(umap, sol, sol.errors, sol.t, ivgrid, ivs,
             pdesys.dvs, metadata, sol.prob, sol.alg,
             interp, sol.dense, sol.tslocation,

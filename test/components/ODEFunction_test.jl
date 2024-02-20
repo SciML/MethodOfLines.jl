@@ -11,7 +11,7 @@ t_max = 6.0
 
 analytic_u(p, t, x) = x / (t + p[1])
 
-eq = Dt(u(t, x)) ~ -a*u(t, x) * Dx(u(t, x))
+eq = Dt(u(t, x)) ~ -a * u(t, x) * Dx(u(t, x))
 
 bcs = [u(0, x) ~ x,
     u(t, x_min) ~ analytic_u([1], t, x_min),
@@ -20,9 +20,10 @@ bcs = [u(0, x) ~ x,
 domains = [t ∈ Interval(t_min, t_max),
     x ∈ Interval(x_min, x_max)]
 
-@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [a => 1.0], analytic_func = [u(t, x) => analytic_u])
+@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [a => 1.0],
+    analytic_func = [u(t, x) => analytic_u])
 
-disc = MOLFiniteDifference([x => 30], t, advection_scheme=WENOScheme())
+disc = MOLFiniteDifference([x => 30], t, advection_scheme = WENOScheme())
 
 prob = discretize(pdesys, disc; analytic = pdesys.analytic_func)
 

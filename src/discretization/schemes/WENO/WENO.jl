@@ -63,5 +63,6 @@ end
 """
 function WENOScheme(epsilon = 1e-6)
     boundary_f = [nothing, nothing]
-    return FunctionalScheme{5, 0}(weno_f, boundary_f, boundary_f, false, [epsilon], name = "WENO")
+    return FunctionalScheme{5, 0}(
+        weno_f, boundary_f, boundary_f, false, [epsilon], name = "WENO")
 end

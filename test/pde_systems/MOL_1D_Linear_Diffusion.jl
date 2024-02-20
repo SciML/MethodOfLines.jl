@@ -29,36 +29,36 @@ using ModelingToolkit: Differential
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization
-    dx = range(0.0, Float64(π), length=30)
+    dx = range(0.0, Float64(π), length = 30)
     dx_ = dx[2] - dx[1]
 
     order = 2
     discretization = MOLFiniteDifference([x => dx_], t)
-    discretization_edge = MOLFiniteDifference([x => dx_], t; grid_align=edge_align)
+    discretization_edge = MOLFiniteDifference([x => dx_], t; grid_align = edge_align)
     # Explicitly specify order of centered difference
-    discretization_centered = MOLFiniteDifference([x => dx_], t; approx_order=order)
+    discretization_centered = MOLFiniteDifference([x => dx_], t; approx_order = order)
     # Higher order centered difference
-    discretization_approx_order4 = MOLFiniteDifference([x => dx_], t; approx_order=4)
+    discretization_approx_order4 = MOLFiniteDifference([x => dx_], t; approx_order = 4)
 
-    for disc in [discretization, discretization_edge, discretization_centered, discretization_approx_order4]
+    for disc in [discretization, discretization_edge,
+        discretization_centered, discretization_approx_order4]
         # Convert the PDE problem into an ODE problem
         prob = discretize(pdesys, disc)
 
         # Solve ODE problem      # Solve ODE problem
-        sol = solve(prob, Tsit5(), saveat=0.1)
+        sol = solve(prob, Tsit5(), saveat = 0.1)
 
-        x_disc = sol[x][2:end-1]
+        x_disc = sol[x][2:(end - 1)]
         t_disc = sol[t]
-        u_approx = sol[u(t, x)][:, 2:end-1]
+        u_approx = sol[u(t, x)][:, 2:(end - 1)]
 
         # Test against exact solution
         for i in 1:length(sol)
             exact = u_exact(x_disc, t_disc[i])
-            @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
+            @test all(isapprox.(u_approx[i, :], exact, atol = 0.01))
         end
     end
 end
-
 
 @testset "Test 01: Dt(u(t,x)) ~ D*Dxx(u(t,x))" begin
     # Parameters, variables, and derivatives
@@ -89,13 +89,13 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
 
     solu = sol[u(t, x)]
     # Test
     n = size(solu, 2)
 
-    @test solu[end, :] ≈ zeros(n) atol = 0.001
+    @test solu[end, :]≈zeros(n) atol=0.001
 end
 
 @testset "Test 02: Dt(u(t,x)) ~ Dx(D(t,x))*Dx(u(t,x))+D(t,x)*Dxx(u(t,x))" begin
@@ -111,7 +111,7 @@ end
 
     # 1D PDE and boundary conditions
 
-    eq = [Dt(u(t, x)) ~ DxD * Dx(u(t, x)) + D(t, x) * Dxx(u(t, x)),]
+    eq = [Dt(u(t, x)) ~ DxD * Dx(u(t, x)) + D(t, x) * Dxx(u(t, x))]
 
     bcs = [u(0, x) ~ -x * (x - 1) * sin(x),
         u(t, 0) ~ 0.0,
@@ -133,13 +133,13 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
 
     solu = sol[u(t, x)]
     # Test
     n = size(solu, 2)
 
-    @test solu[end, :] ≈ zeros(n) atol = 0.001
+    @test solu[end, :]≈zeros(n) atol=0.001
 end
 
 @testset "Test 03: Dt(u(t,x)) ~ Dxx(u(t,x)), homogeneous Neumann BCs, order 8" begin
@@ -167,17 +167,17 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization
-    dx = range(0.0, Float64(π), length=300)
+    dx = range(0.0, Float64(π), length = 300)
     dx_ = dx[2] - dx[1]#range(0.0,Float64(π),length=300)
     order = 8
     discretization = MOLFiniteDifference([x => dx_], t)
-    discretization_edge = MOLFiniteDifference([x => dx_], t; grid_align=edge_align)
+    discretization_edge = MOLFiniteDifference([x => dx_], t; grid_align = edge_align)
     # Convert the PDE problem into an ODE problem
     for disc in [discretization, discretization_edge]
         prob = discretize(pdesys, disc)
 
         # Solve ODE problem
-        sol = solve(prob, Tsit5(), saveat=0.1)
+        sol = solve(prob, Tsit5(), saveat = 0.1)
 
         x_sol = sol[x]
         t_sol = sol[t]
@@ -197,8 +197,8 @@ end
         # Test against exact solution
         for i in 1:length(sol)
             exact = u_exact(x_sol, t_sol[i])
-            @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
-            @test sum(u_approx[i, :]) ≈ 0 atol = 1e-10
+            @test all(isapprox.(u_approx[i, :], exact, atol = 0.01))
+            @test sum(u_approx[i, :])≈0 atol=1e-10
         end
     end
 end
@@ -228,18 +228,19 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization
-    dx = range(0.0, Float64(π), length=30)
+    dx = range(0.0, Float64(π), length = 30)
     dx_ = dx[2] - dx[1]
     order = 2
-    discretization = MOLFiniteDifference([x => dx_], t, approx_order=2)
-    discretization_edge = MOLFiniteDifference([x => dx_], t; grid_align=edge_align, approx_order=2)
+    discretization = MOLFiniteDifference([x => dx_], t, approx_order = 2)
+    discretization_edge = MOLFiniteDifference(
+        [x => dx_], t; grid_align = edge_align, approx_order = 2)
 
     # Convert the PDE problem into an ODE problem
-    for (j, disc) ∈ enumerate([discretization, discretization_edge])
+    for (j, disc) in enumerate([discretization, discretization_edge])
         prob = discretize(pdesys, disc)
 
         # Solve ODE problem
-        sol = solve(prob, Tsit5(), saveat=0.1)
+        sol = solve(prob, Tsit5(), saveat = 0.1)
 
         solx = sol[x]
         solt = sol[t]
@@ -260,10 +261,10 @@ end
         integral_u_exact = t -> sum(u_approx[1, :] * dx_) + 2 * (exp(-t) - 1)
         for i in 1:length(solt)
             exact = u_exact(solx, solt[i])
-            @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
+            @test all(isapprox.(u_approx[i, :], exact, atol = 0.01))
             # test mass conservation
             integral_u_approx = sum(u_approx[i, :] * dx_)
-            @test integral_u_exact(solt[i]) ≈ integral_u_approx atol = 0.01
+            @test integral_u_exact(solt[i])≈integral_u_approx atol=0.01
         end
     end
 end
@@ -293,7 +294,7 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization
-    dx = range(0.0, Float64(π), length=30)
+    dx = range(0.0, Float64(π), length = 30)
     dx_ = dx[2] - dx[1]
     order = 2
     discretization = MOLFiniteDifference([x => dx_], t)
@@ -302,7 +303,7 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
     u_approx = sol[u(t, x)]
     discx = sol[x]
     disct = sol[t]
@@ -310,7 +311,7 @@ end
     # Test against exact solution
     for i in 1:length(sol[t])
         exact = u_exact(discx, disct[i])
-        @test all(isapprox.(u_approx[i, :], exact, atol=0.01))
+        @test all(isapprox.(u_approx[i, :], exact, atol = 0.01))
     end
 end
 
@@ -342,15 +343,16 @@ end
 
     dx = 0.01
     order = 4
-    discretization = MOLFiniteDifference([x => dx], t; approx_order=order)
-    discretization_edge = MOLFiniteDifference([x => dx], t; approx_order=order, grid_align=edge_align)
+    discretization = MOLFiniteDifference([x => dx], t; approx_order = order)
+    discretization_edge = MOLFiniteDifference(
+        [x => dx], t; approx_order = order, grid_align = edge_align)
 
-    for disc ∈ [discretization, discretization_edge]
+    for disc in [discretization, discretization_edge]
         # Convert the PDE problem into an ODE problem
         prob = discretize(pdesys, disc)
 
         # Solve ODE problem
-        sol = solve(prob, Rodas4(), saveat=0.1)
+        sol = solve(prob, Rodas4(), saveat = 0.1)
         x_disc = sol[x]
         t_disc = sol[t]
         u_approx = sol[u(t, x)]
@@ -358,11 +360,10 @@ end
         # Test against exact solution
         for i in 1:length(sol[t])
             exact = u_exact(x_disc, t_disc[i])
-            @test all(isapprox.(u_approx[i, :], exact, atol=0.1))
+            @test all(isapprox.(u_approx[i, :], exact, atol = 0.1))
         end
     end
 end
-
 
 @testset "Test 06: Dt(u(t,x)) ~ Dxx(u(t,x)), time-dependent Robin BCs, Order 6" begin
     # Method of Manufactured Solutions
@@ -391,13 +392,13 @@ end
     # Method of lines discretization
     dx = 0.01
     order = 6
-    discretization = MOLFiniteDifference([x => dx], t, approx_order=order)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = order)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Rodas4(), reltol=1e-6, saveat=0.1)
+    sol = solve(prob, Rodas4(), reltol = 1e-6, saveat = 0.1)
 
     u_approx = sol[u(t, x)]
     discx = sol[x]
@@ -405,9 +406,8 @@ end
 
     # Test against exact solution
     for i in 1:length(t)
-
         exact = u_exact(discx, t[i])
-        @test all(isapprox.(u_approx[i, :], exact, atol=0.06))
+        @test all(isapprox.(u_approx[i, :], exact, atol = 0.06))
     end
 end
 
@@ -441,14 +441,14 @@ end
     # Method of lines discretization
     dr = 0.1
     order = 4
-    discretization = MOLFiniteDifference([r => dr], t, approx_order=4)
+    discretization = MOLFiniteDifference([r => dr], t, approx_order = 4)
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Rodas4(), saveat=0.1)
+    sol = solve(prob, Rodas4(), saveat = 0.1)
 
     u_approx = sol[u(t, r)]
-    r = sol[r][2:end-1]
+    r = sol[r][2:(end - 1)]
     t = sol[t]
     # if shouldplot
     #     anim = @animate for (i,T) in enumerate(t)
@@ -460,11 +460,10 @@ end
     #     gif(anim, "plots/MOL_Linear_Diffusion_1D_Test07.gif", fps = 5)
     # end
 
-
     # Test against exact solution
     for i in 1:length(t)
         exact = u_exact(r, t[i])
-        @test all(isapprox.(u_approx[i, 2:end-1], exact, atol=0.06))
+        @test all(isapprox.(u_approx[i, 2:(end - 1)], exact, atol = 0.06))
     end
 end
 
@@ -501,10 +500,10 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
 
     u_approx = sol[u(t, r)]
-    r = sol[r][2:end-1]
+    r = sol[r][2:(end - 1)]
     t = sol[t]
 
     # if shouldplot
@@ -520,7 +519,7 @@ end
     # Test against exact solution
     for i in 1:length(t)
         exact = u_exact(r, t[i])
-        @test all(isapprox.(u_approx[i, 2:end-1], exact, atol=0.06))
+        @test all(isapprox.(u_approx[i, 2:(end - 1)], exact, atol = 0.06))
     end
 end
 
@@ -555,7 +554,7 @@ end
 
     # Method of lines discretization
     l = 100
-    dx = range(0.0, 1.0, length=l)
+    dx = range(0.0, 1.0, length = l)
     dx_ = dx[2] - dx[1]
     order = 6
     discretization = MOLFiniteDifference([x => dx_], t)
@@ -564,17 +563,17 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
 
-    x_sol = sol[x][2:end-1]
+    x_sol = sol[x][2:(end - 1)]
     t_sol = sol[t]
     solu = sol[u(t, x)]
     solv = sol[v(t, x)]
 
     # Test against exact solution
     for i in 1:length(sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, 2:end-1], atol=0.01))
-        @test all(isapprox.(v_exact(x_sol, t_sol[i]), solv[i, 2:end-1], atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, 2:(end - 1)], atol = 0.01))
+        @test all(isapprox.(v_exact(x_sol, t_sol[i]), solv[i, 2:(end - 1)], atol = 0.01))
     end
 end
 
@@ -596,7 +595,8 @@ end
     domains = [t ∈ Interval(0.0, 1.0),
         x ∈ Interval(0.0, 1.0)]
 
-    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn => 0.5, Dp => 2])
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn => 0.5, Dp => 2])
     discretization = MOLFiniteDifference([x => 0.1], t)
     prob = discretize(pdesys, discretization)
     @test prob.p == [0.5, 2]
@@ -638,9 +638,9 @@ end
 
     # Method of lines discretization
     l = 100
-    dx = range(0.0, 1.0, length=l)
+    dx = range(0.0, 1.0, length = l)
     dx_ = dx[2] - dx[1]
-    dy = range(0.0, 2.0, length=l)
+    dy = range(0.0, 2.0, length = l)
     dy_ = dy[2] - dy[1]
     order = 4
     discretization = MOLFiniteDifference([x => dx_, y => dy_], t)
@@ -649,7 +649,7 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
 
     x_sol = sol[x]
     y_sol = sol[y]
@@ -659,8 +659,8 @@ end
 
     # Test against exact solution
     for i in 1:length(sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :], atol=0.01))
-        @test all(isapprox.(v_exact(y_sol, t_sol[i]), solv[i, :], atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :], atol = 0.01))
+        @test all(isapprox.(v_exact(y_sol, t_sol[i]), solv[i, :], atol = 0.01))
     end
 end
 
@@ -698,9 +698,9 @@ end
 
     # Method of lines discretization
     l = 100
-    dx = range(0.0, 1.0, length=l)
+    dx = range(0.0, 1.0, length = l)
     dx_ = dx[2] - dx[1]
-    dy = range(0.0, 2.0, length=l)
+    dy = range(0.0, 2.0, length = l)
     dy_ = dy[2] - dy[1]
     order = 2
     discretization = MOLFiniteDifference([x => dx_, y => dy_], t)
@@ -709,7 +709,7 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
 
     solu1 = sol[u[1](t, x)]
     solu2 = sol[u[2](t, y)]
@@ -720,8 +720,8 @@ end
 
     # Test against exact solution
     for i in 1:length(t_sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu1[i, :], atol=0.01))
-        @test all(isapprox.(v_exact(y_sol, t_sol[i]), solu2[i, :], atol=0.01))
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu1[i, :], atol = 0.01))
+        @test all(isapprox.(v_exact(y_sol, t_sol[i]), solu2[i, :], atol = 0.01))
     end
 end
 
@@ -753,7 +753,7 @@ end
 
     # Method of lines discretization
     l = 100
-    dx = range(0.0, 1.0, length=l)
+    dx = range(0.0, 1.0, length = l)
     dx_ = dx[2] - dx[1]
     order = 2
     discretization = MOLFiniteDifference([x => dx_], t)
@@ -762,7 +762,7 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
 
     x_sol = sol[x]
     t_sol = sol[t]
@@ -771,8 +771,8 @@ end
 
     # Test against exact solution
     for i in 1:length(sol)
-        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :], atol=0.01))
-        @test v_exact(t_sol[i]) ≈ solv[i] atol = 0.01
+        @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :], atol = 0.01))
+        @test v_exact(t_sol[i])≈solv[i] atol=0.01
     end
 end
 
@@ -789,17 +789,17 @@ end
     Dxx2 = Dx2^2
 
     eqs = [Dt(c1(t, x1)) ~ Dxx1(c1(t, x1)),
-            Dt(c2(t, x2)) ~ Dxx2(c2(t, x2))]
+        Dt(c2(t, x2)) ~ Dxx2(c2(t, x2))]
 
     bcs = [c1(0, x1) ~ -x1 * (x1 - 1) * sin(x1),
-           c2(0, x2) ~ x2 * (x2 - 1) * sin(x2),
-           c1(t, 0) ~ 0,
-           c1(t, 0.5) ~ c2(t, 0.5),
-           c2(t, 1) ~ 0]
+        c2(0, x2) ~ x2 * (x2 - 1) * sin(x2),
+        c1(t, 0) ~ 0,
+        c1(t, 0.5) ~ c2(t, 0.5),
+        c2(t, 1) ~ 0]
 
     domains = [t ∈ Interval(0.0, 1.0),
-               x1 ∈ Interval(0.0, 0.5),
-               x2 ∈ Interval(0.5, 1.0)]
+        x1 ∈ Interval(0.0, 0.5),
+        x2 ∈ Interval(0.5, 1.0)]
 
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
 
@@ -809,7 +809,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
 
     x1_sol = sol[x1]
     x2_sol = sol[x2]
@@ -818,5 +818,5 @@ end
     solc2 = sol[c2(t, x2)]
 
     solc = vcat(solc1[end, :], solc2[end, 2:end])
-    @test solc ≈ zeros(length(solc)) atol = 0.001
+    @test solc≈zeros(length(solc)) atol=0.001
 end

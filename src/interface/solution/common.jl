@@ -1,6 +1,6 @@
 
-function (sol::SciMLBase.PDESolution{T,N,S,D})(args...;
-    dv=nothing) where {T,N,S,D<:MOLMetadata}
+function (sol::SciMLBase.PDESolution{T, N, S, D})(args...;
+        dv = nothing) where {T, N, S, D <: MOLMetadata}
     # Colon reconstructs on gridpoints
     args = map(enumerate(args)) do (i, arg)
         if arg isa Colon
@@ -11,12 +11,12 @@ function (sol::SciMLBase.PDESolution{T,N,S,D})(args...;
     end
     # If no dv is given, return interpolations for every dv
     if dv === nothing
-        @assert length(args) == length(sol.ivs) "Not enough arguments for the number of independent variables  including time where appropriate, got $(length(args)) expected $(length(sol.ivs))."
+        @assert length(args)==length(sol.ivs) "Not enough arguments for the number of independent variables  including time where appropriate, got $(length(args)) expected $(length(sol.ivs))."
         return map(sol.dvs) do dv
             arg_ivs = arguments(safe_unwrap(dv))
             is = map(arg_ivs) do arg_iv
                 i = findfirst(isequal(arg_iv), sol.ivs)
-                @assert i !== nothing "Independent variable $(arg_iv) in dependent variable $(dv) not found in the solution."
+                @assert i!==nothing "Independent variable $(arg_iv) in dependent variable $(dv) not found in the solution."
                 i
             end
 
@@ -26,14 +26,15 @@ function (sol::SciMLBase.PDESolution{T,N,S,D})(args...;
     if iscomplex(sol) && !any(isequal(safe_unwrap(dv)), sol.dvs)
         symargs = arguments(safe_unwrap(dv))
         redv, imdv = sol.disc_data_complexmap[dv]
-        return sol.interp[Num(redv(symargs...))](args...) .+ im * sol.interp[Num(imdv(symargs...))](args...)
+        return sol.interp[Num(redv(symargs...))](args...) .+
+               im * sol.interp[Num(imdv(symargs...))](args...)
     else
         return sol.interp[dv](args...)
     end
 end
 
-Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D},
-    sym) where {T,N,S,D<:MOLMetadata}
+Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T, N, S, D},
+        sym) where {T, N, S, D <: MOLMetadata}
     iv = nothing
     dv = nothing
     iiv = sym_to_index(sym, A.ivs)
@@ -43,13 +44,14 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     idv = sym_to_index(sym, A.dvs)
     if idv !== nothing
         dv = A.dvs[idv]
-    elseif any(isequal(safe_unwrap(sym)), safe_unwrap.(collect(values(A.disc_data.discretespace.vars.replaced_vars))))
+    elseif any(isequal(safe_unwrap(sym)),
+        safe_unwrap.(collect(values(A.disc_data.discretespace.vars.replaced_vars))))
         dv = sym
     end
     if symbolic_type(sym) != NotSymbolic() && iv !== nothing && isequal(sym, iv)
         A.ivdomain[iiv]
     elseif symbolic_type(sym) != NotSymbolic() && dv !== nothing && isequal(sym, dv)
-            A.u[sym]
+        A.u[sym]
     elseif iscomplex(A) && istree(safe_unwrap(sym))
         symargs = arguments(safe_unwrap(sym))
         redv, imdv = A.disc_data.complexmap[operation(safe_unwrap(sym))]
@@ -59,8 +61,8 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     end
 end
 
-Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D}, sym,
-    args...) where {T,N,S,D<:MOLMetadata}
+Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T, N, S, D}, sym,
+        args...) where {T, N, S, D <: MOLMetadata}
     iv = nothing
     dv = nothing
     iiv = sym_to_index(sym, A.ivs)
@@ -85,7 +87,8 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T,N,S,D
     end
 end
 
-function Base.display(pdesol::SciMLBase.PDESolution{T,N,S,D}) where {T, N, S, D <: MOLMetadata}
+function Base.display(pdesol::SciMLBase.PDESolution{
+        T, N, S, D}) where {T, N, S, D <: MOLMetadata}
     sys = pdesol.disc_data.pdesys
     println("PDESolution:")
     println("  Return Code:")
@@ -97,11 +100,13 @@ function Base.display(pdesol::SciMLBase.PDESolution{T,N,S,D}) where {T, N, S, D 
     println("  Domain:")
     for (i, xdisc) in enumerate(pdesol.ivdomain)
         x = pdesol.ivs[i]
-        if all([xdisc[i+1] - xdisc[i] ≈ xdisc[2] - xdisc[1] for i in 1:length(xdisc)-1])
+        if all([xdisc[i + 1] - xdisc[i] ≈ xdisc[2] - xdisc[1]
+                for i in 1:(length(xdisc) - 1)])
             step = xdisc[2] - xdisc[1]
             println("    $(x) ∈ ($(xdisc[1]), $(xdisc[end])) with $(length(xdisc)) points, step size $(step)")
         else
-            avgstep = sum([xdisc[i+1] - xdisc[i] for i in 1:length(xdisc)-1]) / (length(xdisc)-1)
+            avgstep = sum([xdisc[i + 1] - xdisc[i] for i in 1:(length(xdisc) - 1)]) /
+                      (length(xdisc) - 1)
             println("    $(x) ∈ ($(xdisc[1]), $(xdisc[end])) with $(length(xdisc)) non-uniform points. average step size $(avgstep)")
         end
     end

@@ -43,7 +43,8 @@ using StableRNGs
     # Method oflines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -59,7 +60,7 @@ using StableRNGs
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf ≈ sol′[end, :] atol = 0.1
+    @test asf≈sol′[end, :] atol=0.1
 
     # Plots
     #using Plots
@@ -117,7 +118,6 @@ end
 #     sol′ = sol[u(t, x)][end, :]
 #     @test asf ≈ sol′ atol = 0.1
 
-
 #     # Plots
 #     #using Plots
 #     #plot(r_space, asf, seriestype = :scatter,label="analytic solution")
@@ -161,9 +161,10 @@ end
     # Method of lines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
-    discretization = MOLFiniteDifference([x => dx], t, approx_order=2)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = 2)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_origial([x=>dx],t)
@@ -180,7 +181,7 @@ end
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf ≈ sol′[end, :] atol = 0.1
+    @test asf≈sol′[end, :] atol=0.1
     # Plots
     #using Plots
     #plot(r_space, asf, seriestype = :scatter,label="analytic solution")
@@ -224,9 +225,10 @@ end
     # Method of lines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
-    discretization = MOLFiniteDifference([x => dx], t, approx_order=4)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_origial([x=>dx],t)
@@ -243,7 +245,7 @@ end
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf ≈ sol′[end, :] atol = 0.1
+    @test asf≈sol′[end, :] atol=0.1
     # Plots
     #using Plots
     #plot(r_space, asf, seriestype = :scatter,label="analytic solution")
@@ -309,8 +311,6 @@ end
 
 # end
 
-
-
 @testset "Test 02: Dt(u(t,x)) ~ Dx(1. / (1. + u(t,x)^2) * Dx(u(t,x))) Neumann BCs" begin
 
     # Variables, parameters, and derivatives
@@ -345,7 +345,8 @@ end
     # Method of lines discretization
     dx = 0:0.01:0.8
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -362,7 +363,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -405,7 +406,8 @@ end
     # Method of lines discretization
     dx = 0:0.01:0.8
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -423,7 +425,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -467,7 +469,8 @@ end
     # Method of lines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -483,10 +486,10 @@ end
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf ≈ sol′[end, :] atol = 0.1
+    @test asf≈sol′[end, :] atol=0.1
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -528,7 +531,8 @@ end
     # Method of lines discretization
     dx = 0:0.01:2
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -546,7 +550,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots

@@ -4,10 +4,11 @@ using SciMLBase
 using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: operation, istree, arguments, variable, get_metadata, get_states,
-parameters, defaults, varmap_to_vars
+                       parameters, defaults, varmap_to_vars
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
-using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename, similarterm
+using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename,
+                 similarterm
 using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays
@@ -18,13 +19,14 @@ using DomainSets
 using RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
-
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
-using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i, d_orders, vcat!, update_varmap!, get_ops
+using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i,
+               d_orders, vcat!, update_varmap!, get_ops
 
 # staggered changes
-using PDEBase: cardinalize_eqs!, make_pdesys_compatible, parse_bcs, generate_system, Interval
+using PDEBase: cardinalize_eqs!, make_pdesys_compatible, parse_bcs, generate_system,
+               Interval
 using PDEBase: error_analysis, add_metadata!
 
 # To Extend
@@ -115,7 +117,8 @@ include("MOL_discretization.jl")
 include("precompile.jl")
 
 # Export
-export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code, grid_align, edge_align, center_align, get_discrete, chebyspace
+export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
+       grid_align, edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme, MOLDiscCallback
 
 end

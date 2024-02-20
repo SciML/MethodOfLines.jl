@@ -53,7 +53,7 @@ using ModelingToolkit: Differential
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf ≈ sol′[end, :] atol = 0.1
+    @test asf≈sol′[end, :] atol=0.1
 
     # Plots
     #using Plots
@@ -152,7 +152,7 @@ end
 
     # Method of lines discretization
     dx = 0.01
-    discretization = MOLFiniteDifference([x => dx], t, approx_order=2)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = 2)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_origial([x=>dx],t)
@@ -168,7 +168,7 @@ end
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf ≈ sol′[end, :] atol = 0.1
+    @test asf≈sol′[end, :] atol=0.1
 
     # Plots
     #using Plots
@@ -212,7 +212,7 @@ end
 
     # Method of lines discretization
     dx = 0.01
-    discretization = MOLFiniteDifference([x => dx], t, approx_order=4)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_origial([x=>dx],t)
@@ -229,7 +229,7 @@ end
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf ≈ sol′[end, :] atol = 0.1
+    @test asf≈sol′[end, :] atol=0.1
 
     # Plots
     #using Plots
@@ -296,8 +296,6 @@ end
 
 # end
 
-
-
 @testset "Test 02: Dt(u(t,x)) ~ Dx(1. / (1. + u(t,x)^2) * Dx(u(t,x))) Neumann BCs" begin
 
     # Variables, parameters, and derivatives
@@ -346,7 +344,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -396,7 +394,6 @@ end
     sol = solve(prob, Rosenbrock32()) # TODO: check warnings
     @test SciMLBase.successful_retcode(sol)
 
-
     # Test against exact solution
     x_disc = sol[x]
     t_disc = sol[t]
@@ -404,7 +401,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -462,7 +459,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -519,7 +516,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test_broken asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
+    @test_broken asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots

@@ -31,7 +31,7 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
         end
     end
-    
+
     if GROUP == "All" || GROUP == "Nonlinlap_ADV"
         @time @safetestset "MOLFiniteDifference Interface: Advanced Nonlinear Diffusion" begin
             include("pde_systems/nonlinear_laplacian_advanced.jl")
@@ -48,7 +48,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/MOLtest2.jl")
         end
     end
-
 
     if GROUP == "All" || GROUP == "Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin
@@ -110,7 +109,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
-
     if GROUP == "All" || GROUP == "Nonlinear_Diffusion"
         @time @safetestset "MOLFiniteDifference Interface: 1D Non-Linear Diffusion" begin
             include("pde_systems/MOL_1D_NonLinear_Diffusion.jl")
@@ -141,13 +139,11 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
     if GROUP == "All" || GROUP == "Convection"
-
         @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin
             include("pde_systems/MOL_1D_Linear_Convection.jl")
         end
     end
     if GROUP == "All" || GROUP == "Wave_Eq_Staggered"
-
         @time @safetestset "MOLFiniteDifference Interface: 1D Wave Equation, Staggered" begin
             include("pde_systems/wave_eq_staggered.jl")
         end
