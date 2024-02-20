@@ -10,7 +10,6 @@ Dx = Differential(x)
 Dy = Differential(y)
 Dt = Differential(t)
 
-
 t_min = 0.0
 t_max = 7.0
 x_min = -5.0
@@ -31,49 +30,49 @@ theta = 0.0
 
 # create function for bivariate gaussian
 
-function bivariate_gaussian(x, y; A=1.0, x0=0.0, y0=0.0, sigma_x=1.0, sigma_y=1.0, theta=0.0)
-    
-    a = cos(theta)^2/(2*sigma_x^2) + sin(theta)^2/(2*sigma_y^2)
-    b = -1*sin(2*theta)/(4*sigma_x^2) + sin(2*theta)/(4*sigma_y^2)
-    c = sin(theta)^2/(2*sigma_x^2) + cos(theta)^2/(2*sigma_y^2)
-    return A*exp(-(a*(x - x0)^2 + 2*b*(x - x0)*(y - y0) + c*(y - y0)^2 ))
+function bivariate_gaussian(
+        x, y; A = 1.0, x0 = 0.0, y0 = 0.0, sigma_x = 1.0, sigma_y = 1.0, theta = 0.0)
+    a = cos(theta)^2 / (2 * sigma_x^2) + sin(theta)^2 / (2 * sigma_y^2)
+    b = -1 * sin(2 * theta) / (4 * sigma_x^2) + sin(2 * theta) / (4 * sigma_y^2)
+    c = sin(theta)^2 / (2 * sigma_x^2) + cos(theta)^2 / (2 * sigma_y^2)
+    return A * exp(-(a * (x - x0)^2 + 2 * b * (x - x0) * (y - y0) + c * (y - y0)^2))
 end;
-
 
 # equation system
 
-eq = Dt(u(t, x, y)) - Dx(u(t, x, y)) - Dy(u(t, x, y)) ~ 0 
+eq = Dt(u(t, x, y)) - Dx(u(t, x, y)) - Dy(u(t, x, y)) ~ 0
 
 # boundary conditions
 
 bcs = [
-        u(t_min, x, y) ~ bivariate_gaussian(x, y; A=A, x0=x0, y0=y0, sigma_x=sigma_x, sigma_y=sigma_y, theta=theta),
-        u(t, x_min, y) ~ u(t, x_max, y),    # &lt;--- SHOULD BE A PERIODIC BOUNDARY CONDITION
-        u(t, x, y_min) ~ u(t, x, y_max),    # &lt;--- SHOULD BE A PERIODIC BOUNDARY CONDITION
+    u(t_min, x, y) ~ bivariate_gaussian(
+        x, y; A = A, x0 = x0, y0 = y0, sigma_x = sigma_x, sigma_y = sigma_y, theta = theta),
+    u(t, x_min, y) ~ u(t, x_max, y),    # &lt;--- SHOULD BE A PERIODIC BOUNDARY CONDITION
+    u(t, x, y_min) ~ u(t, x, y_max)    # &lt;--- SHOULD BE A PERIODIC BOUNDARY CONDITION
 ]
 
 domains = [
-            t ∈ Interval(t_min, t_max),
-            x ∈ Interval(x_min, x_max),
-            y ∈ Interval(y_min, y_max)
+    t ∈ Interval(t_min, t_max),
+    x ∈ Interval(x_min, x_max),
+    y ∈ Interval(y_min, y_max)
 ]
 
 @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
 
-discretization = MOLFiniteDifference([x =&gt; dx, y =&gt; dy], t; advection_scheme=UpwindScheme())
+discretization = MOLFiniteDifference(
+    [x =&gt; dx, y =&gt; dy], t; advection_scheme = UpwindScheme())
 
 prob = discretize(pdesys, discretization)
 
-sol = solve(prob, SSPRK54(), dt=0.01, saveat=0.1)
+sol = solve(prob, SSPRK54(), dt = 0.01, saveat = 0.1)
 
 discrete_t = sol[t]
 solu = sol[u(t, x, y)]
 
-
-anim = @animate for i=1:length(discrete_t)
-    surface(solu[i,:,:], camera=(55.0, 30.0), size=(500,500), zlabel=(&quot;z&quot;), 
-            zlims=(0.0, 1.2), xlabel = (&quot;x&quot;), ylabel=(&quot;y&quot;), clims=(0.0,1.0), 
-            title=&quot;t = $i&quot; )
+anim = @animate for i in 1:length(discrete_t)
+    surface(solu[i, :, :], camera = (55.0, 30.0), size = (500, 500), zlabel = (&quot;z&quot;),
+        zlims = (0.0, 1.2), xlabel = (&quot;x&quot;), ylabel = (&quot;y&quot;), clims = (0.0, 1.0),
+        title = &quot;t = $i&quot;)
 end
 
-gif(anim, &quot;mol_convection_2d_test.gif&quot;, fps=5)</code></pre><p><img src="https://github.com/SciML/MethodOfLines.jl/assets/9698054/45f4ace0-6291-478d-abb8-93d68ae3c9aa" alt="convection test"/></p><h2 id="Why-is-my-large-discretized-system-taking-so-long-to-compile?"><a class="docs-heading-anchor" href="#Why-is-my-large-discretized-system-taking-so-long-to-compile?">Why is my large discretized system taking so long to compile?</a><a id="Why-is-my-large-discretized-system-taking-so-long-to-compile?-1"></a><a class="docs-heading-anchor-permalink" href="#Why-is-my-large-discretized-system-taking-so-long-to-compile?" title="Permalink"></a></h2><p>At the moment, MOL effectively generates an assignment statement to a calculation in its generated code for all points in space, for all variables. Due to the configuration of LLVM for Julia, this leads the compiler to check all operations against all other operations to see what to <a href="https://en.wikipedia.org/wiki/Single_instruction,_multiple_data">SIMD</a>, leading to bad scaling properties with increasing point count.</p><p>There are changes in the works to roll this back in to <code>for</code> loops over each point, by maintaining some structural information, which will remedy this problem. Watch this space!</p><h2 id="Why-are-the-corners-of-my-domain-held-at-0?"><a class="docs-heading-anchor" href="#Why-are-the-corners-of-my-domain-held-at-0?">Why are the corners of my domain held at 0?</a><a id="Why-are-the-corners-of-my-domain-held-at-0?-1"></a><a class="docs-heading-anchor-permalink" href="#Why-are-the-corners-of-my-domain-held-at-0?" title="Permalink"></a></h2><p>The corner points do not have a valid discretization, and as such are held at 0.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../curvilinear_grids/">« Curvilinear Grids</a><a class="docs-footer-nextpage" href="../howitworks/">How it Works »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.2.1 on <span class="colophon-date" title="Tuesday 20 February 2024 12:22">Tuesday 20 February 2024</span>. Using Julia version 1.10.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+gif(anim, &quot;mol_convection_2d_test.gif&quot;, fps = 5)</code></pre><p><img src="https://github.com/SciML/MethodOfLines.jl/assets/9698054/45f4ace0-6291-478d-abb8-93d68ae3c9aa" alt="convection test"/></p><h2 id="Why-is-my-large-discretized-system-taking-so-long-to-compile?"><a class="docs-heading-anchor" href="#Why-is-my-large-discretized-system-taking-so-long-to-compile?">Why is my large discretized system taking so long to compile?</a><a id="Why-is-my-large-discretized-system-taking-so-long-to-compile?-1"></a><a class="docs-heading-anchor-permalink" href="#Why-is-my-large-discretized-system-taking-so-long-to-compile?" title="Permalink"></a></h2><p>At the moment, MOL effectively generates an assignment statement to a calculation in its generated code for all points in space, for all variables. Due to the configuration of LLVM for Julia, this leads the compiler to check all operations against all other operations to see what to <a href="https://en.wikipedia.org/wiki/Single_instruction,_multiple_data">SIMD</a>, leading to bad scaling properties with increasing point count.</p><p>There are changes in the works to roll this back in to <code>for</code> loops over each point, by maintaining some structural information, which will remedy this problem. Watch this space!</p><h2 id="Why-are-the-corners-of-my-domain-held-at-0?"><a class="docs-heading-anchor" href="#Why-are-the-corners-of-my-domain-held-at-0?">Why are the corners of my domain held at 0?</a><a id="Why-are-the-corners-of-my-domain-held-at-0?-1"></a><a class="docs-heading-anchor-permalink" href="#Why-are-the-corners-of-my-domain-held-at-0?" title="Permalink"></a></h2><p>The corner points do not have a valid discretization, and as such are held at 0.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../curvilinear_grids/">« Curvilinear Grids</a><a class="docs-footer-nextpage" href="../howitworks/">How it Works »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.2.1 on <span class="colophon-date" title="Tuesday 20 February 2024 16:23">Tuesday 20 February 2024</span>. Using Julia version 1.10.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
