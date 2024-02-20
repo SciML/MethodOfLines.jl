@@ -44,13 +44,12 @@ using ModelingToolkit: Differential
     # Space and time domains
     @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
 
-
     # Test against exact solution
     Nx = floor(Int64, (x_max - x_min) / dx) + 1
     Ny = floor(Int64, (y_max - y_min) / dy) + 1
 
     # Method of lines discretization
-    discretization = MOLFiniteDifference([x => dx, y => dy], t; approx_order=order)
+    discretization = MOLFiniteDifference([x => dx, y => dy], t; approx_order = order)
     prob = ModelingToolkit.discretize(pdesys, discretization)
     # Solution of the ODE system
     sol = solve(prob, Tsit5())
@@ -61,7 +60,7 @@ using ModelingToolkit: Differential
 
     # Test against exact solution
     sol′ = sol[u(t, x, y)]
-    @test asf ≈ sol′[end, :, :] atol = 0.4
+    @test asf≈sol′[end, :, :] atol=0.4
 
     #Plot
     #using Plots
@@ -88,8 +87,10 @@ end
     analytic_sol_func(t, x, y) = exp(x + y) * cos(x + y + 4t)
 
     # Equation
-    eq = Dt(u(t, x, y)) ~ Dx((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 * Dx(u(t, x, y))) +
-                          Dy((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 * Dy(u(t, x, y)))
+    eq = Dt(u(t, x, y)) ~ Dx((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
+                             Dx(u(t, x, y))) +
+                          Dy((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
+                             Dy(u(t, x, y)))
 
     # Initial and boundary conditions
     bcs = [u(t_min, x, y) ~ analytic_sol_func(t_min, x, y),
@@ -125,7 +126,7 @@ end
     m = max(asf...)
     sol′ = sol[u(t, x, y)]
 
-    @test asf / m ≈ sol′[end, :, :] / m atol = 0.4 # TODO: use lower atol when g(x) is improved in MOL_discretize.jl
+    @test asf / m≈sol′[end, :, :] / m atol=0.4 # TODO: use lower atol when g(x) is improved in MOL_discretize.jl
 
     #Plot
     #using Plots

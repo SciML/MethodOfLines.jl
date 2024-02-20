@@ -14,14 +14,14 @@ Dt = Differential(t)
 Dxx = Differential(x)^2
 
 # 1D PDE and boundary conditions
-eq  = Dt(u(t, x)) ~ Dxx(u(t, x))
+eq = Dt(u(t, x)) ~ Dxx(u(t, x))
 bcs = [u(0, x) ~ cos(x),
-        u(t, 0) ~ exp(-t),
-        u(t, 1) ~ exp(-t) * cos(1)]
+    u(t, 0) ~ exp(-t),
+    u(t, 1) ~ exp(-t) * cos(1)]
 
 # Space and time domains
 domains = [t ∈ Interval(0.0, 1.0),
-           x ∈ Interval(0.0, 1.0)]
+    x ∈ Interval(0.0, 1.0)]
 
 # PDE system
 @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])

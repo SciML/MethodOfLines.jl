@@ -1,6 +1,6 @@
 # [Solving PIDEs (Integrals)](@id integral)
 
-It is also possible to solve PIDEs with MethodOfLines.jl. 
+It is also possible to solve PIDEs with MethodOfLines.jl.
 
 Consider the following system:
 
@@ -62,7 +62,7 @@ plot(sol[x], transpose(solu))
 To have an integral over the whole domain, be sure to wrap the integral in an auxiliary variable.
 Due to a limitation, the whole domain integral needs to have the same arguments as the integrand, but is constant in x. To use it in an equation one dimension lower, use a boundary value like integral(t, 0.0)
 
-``` julia
+```julia
 using MethodOfLines, ModelingToolkit, DomainSets, OrdinaryDiffEq, Plots
 
 @parameters t, x
@@ -75,7 +75,7 @@ xmax = 2.0 * pi
 Ix = Integral(x in DomainSets.ClosedInterval(xmin, xmax)) # integral over domain
 
 eqs = [integral(t, x) ~ Ix(integrand(t, x))
-    integrand(t, x) ~ t * cos(x)]
+       integrand(t, x) ~ t * cos(x)]
 
 bcs = [integral(0, x) ~ 0.0,
     integrand(0, x) ~ 0.0]

@@ -11,11 +11,11 @@ function get_f_and_taps(F::FunctionalScheme, II, s, bs, jx, u)
     if (II[j] <= lower_point_count) & !haslower
         f = F.lower[II[j]]
         offset = 1 - II[j]
-        Itap = [II + (i + offset) * I1 for i in 0:(F.boundary_points-1)]
+        Itap = [II + (i + offset) * I1 for i in 0:(F.boundary_points - 1)]
     elseif (II[j] > (length(s, x) - upper_point_count)) & !hasupper
-        f = F.upper[length(s, x)-II[j]+1]
+        f = F.upper[length(s, x) - II[j] + 1]
         offset = length(s, x) - II[j]
-        Itap = [II + (i + offset) * I1 for i in (-F.boundary_points+1):1:0]
+        Itap = [II + (i + offset) * I1 for i in (-F.boundary_points + 1):1:0]
     else
         f = F.interior
         Itap = [bwrap(II + i * I1, bs, s, jx) for i in half_range(F.interior_points)]
@@ -41,7 +41,7 @@ function function_scheme(F::FunctionalScheme, II, s, bs, jx, u, ufunc)
     dx = s.dxs[x]
     if F.is_nonuniform
         if dx isa AbstractVector
-            dx = @views dx[itap[1:end-1]]
+            dx = @views dx[itap[1:(end - 1)]]
         end
     elseif dx isa AbstractVector
         error("Scheme $(F.name) not implemented for nonuniform dxs.")
@@ -50,14 +50,17 @@ function function_scheme(F::FunctionalScheme, II, s, bs, jx, u, ufunc)
     return f(u_disc, ps, t, discx, dx)
 end
 
-@inline function generate_advection_rules(F::FunctionalScheme, II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
+@inline function generate_advection_rules(
+        F::FunctionalScheme, II::CartesianIndex, s::DiscreteSpace, depvars,
+        derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
     central_ufunc(u, I, x) = s.discvars[u][I]
-    return reduce(safe_vcat, [[(Differential(x))(u) =>
-                                        function_scheme(F,
-                                                        Idx(II, s, u, indexmap), s,
-                                                        filter_interfaces(bcmap[operation(u)][x]),
-                                                        (x2i(s, u, x), x), u,
-                                                        central_ufunc)
-                                for x in ivs(u, s)]
-                               for u in depvars], init=[])
+    return reduce(safe_vcat,
+        [[(Differential(x))(u) => function_scheme(F,
+              Idx(II, s, u, indexmap), s,
+              filter_interfaces(bcmap[operation(u)][x]),
+              (x2i(s, u, x), x), u,
+              central_ufunc)
+          for x in ivs(u, s)]
+         for u in depvars],
+        init = [])
 end

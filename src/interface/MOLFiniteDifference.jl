@@ -23,31 +23,35 @@ A discretization algorithm.
 - `kwargs`: Any other keyword arguments you want to pass to the `ODEProblem`.
 
 """
-struct MOLFiniteDifference{G,D} <: AbstractEquationSystemDiscretization
-    dxs
-    time
+struct MOLFiniteDifference{G, D} <: AbstractEquationSystemDiscretization
+    dxs::Any
+    time::Any
     approx_order::Int
-    advection_scheme
+    advection_scheme::Any
     grid_align::G
     should_transform::Bool
     use_ODAE::Bool
     disc_strategy::D
     useIR::Bool
-    callbacks
-    kwargs
+    callbacks::Any
+    kwargs::Any
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_scheme = UpwindScheme(), grid_align=CenterAlignedGrid(), discretization_strategy = ScalarizedDiscretization(), upwind_order = nothing, should_transform = true, use_ODAE = false, useIR = true, callbacks = [], kwargs...)
+function MOLFiniteDifference(dxs, time = nothing; approx_order = 2,
+        advection_scheme = UpwindScheme(), grid_align = CenterAlignedGrid(),
+        discretization_strategy = ScalarizedDiscretization(),
+        upwind_order = nothing, should_transform = true,
+        use_ODAE = false, useIR = true, callbacks = [], kwargs...)
     if upwind_order !== nothing
         @warn "`upwind_order` no longer does anything, and will be removed in a future release. See the docs for the current interface."
     end
     if approx_order % 2 != 0
         @warn "Discretization approx_order must be even, rounding up to $(approx_order+1)"
     end
-    @assert approx_order >= 1 "approx_order must be at least 1"
+    @assert approx_order>=1 "approx_order must be at least 1"
 
-    @assert (time isa Num) | (time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
+    @assert (time isa Num)|(time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
 
     if (grid_align == StaggeredGrid() &&
         !(:edge_aligned_var in keys(kwargs)))
@@ -56,7 +60,9 @@ function MOLFiniteDifference(dxs, time=nothing; approx_order = 2, advection_sche
 
     dxs = dxs isa Dict ? dxs : Dict(dxs)
 
-    return MOLFiniteDifference{typeof(grid_align), typeof(discretization_strategy)}(dxs, time, approx_order, advection_scheme, grid_align, should_transform, use_ODAE, discretization_strategy, useIR, callbacks, kwargs)
+    return MOLFiniteDifference{typeof(grid_align), typeof(discretization_strategy)}(
+        dxs, time, approx_order, advection_scheme, grid_align, should_transform,
+        use_ODAE, discretization_strategy, useIR, callbacks, kwargs)
 end
 
 PDEBase.get_time(disc::MOLFiniteDifference) = disc.time

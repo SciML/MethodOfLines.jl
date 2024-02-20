@@ -1,25 +1,26 @@
 ####
 # Utils for DerivativeOperator generation in schemes
 ####
-@inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindices(M)[j] : II
-half_range(x) = -div(x, 2):div(x, 2)
+@inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindices(M)[j] :
+                                                      II
+half_range(x) = (-div(x, 2)):div(x, 2)
 index(i::Int, N::Int) = i + div(N, 2) + 1
 
 function generate_coordinates(i::Int, stencil_x, dummy_x,
-    dx::AbstractVector{T}) where {T<:Real}
+        dx::AbstractVector{T}) where {T <: Real}
     len = length(stencil_x)
     stencil_x .= stencil_x .* zero(T)
     for idx in 1:div(len, 2)
         shifted_idx1 = index(idx, len)
         shifted_idx2 = index(-idx, len)
-        stencil_x[shifted_idx1] = stencil_x[shifted_idx1-1] + dx[i+idx-1]
-        stencil_x[shifted_idx2] = stencil_x[shifted_idx2+1] - dx[i-idx]
+        stencil_x[shifted_idx1] = stencil_x[shifted_idx1 - 1] + dx[i + idx - 1]
+        stencil_x[shifted_idx2] = stencil_x[shifted_idx2 + 1] - dx[i - idx]
     end
     return stencil_x
 end
 
 function _get_gridloc(s, ut, is...)
-    u = Sym{SymbolicUtils.FnType{Tuple,Real}}(nameof(operation(ut)))
+    u = Sym{SymbolicUtils.FnType{Tuple, Real}}(nameof(operation(ut)))
     u = operation(s.ū[findfirst(isequal(u), operation.(s.ū))])
     args = remove(s.args[u], s.time)
     gridloc = map(enumerate(args)) do (i, x)

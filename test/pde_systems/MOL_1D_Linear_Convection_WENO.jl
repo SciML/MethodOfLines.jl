@@ -29,14 +29,14 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt = 0.01, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -47,8 +47,7 @@ using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSet
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 00a: Dt(u(t,x)) ~ Dx(u(t,x))" begin
@@ -75,14 +74,14 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt = 0.01, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -93,8 +92,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 00b: Dt(u(t,x)) - Dx(u(t,x)) ~ 0" begin
@@ -121,14 +119,14 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt = 0.01, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -139,8 +137,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 00c: Dt(u(t,x)) + Dx(u(t,x)) ~ 0" begin
@@ -167,7 +164,7 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
     # explicitly specify upwind order
 
     # Convert the PDE problem into an ODE problem
@@ -175,7 +172,7 @@ end
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt = 0.01, saveat = 0.1)
 
     x_interval = sol[x][2:end]
     utrue = asf.(x_interval)
@@ -186,8 +183,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 01: Dt(u(t,x)) ~ -Dx(u(t,x)) + 0.001" begin
@@ -214,15 +210,14 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
-
+    sol = solve(prob, SSPRK33(), dt = 0.01, saveat = 0.1)
 
     # Test
     x_interval = sol[x][2:end]
@@ -234,8 +229,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 02: Dt(u(t,x)) ~ -v*Dx(u(t,x))" begin
@@ -263,14 +257,14 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problemdoes this mean that - doesn't seem to affect things
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt = 0.01, saveat = 0.1)
 
     # Plot and save results
     # using Plots
@@ -292,8 +286,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 @testset "Test 03: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=1" begin
     # Parameters, variables, and derivatives
@@ -311,14 +304,11 @@ end
         v(0, x) ~ 1.0,
         v(t, 0) ~ v(t, 2)]
 
-
     # Space and time domains
-
 
     # Space and time domains
     domains = [t ∈ Interval(0.0, 2.0),
         x ∈ Interval(0.0, 2.0)]
-
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x), v(t, x)])
@@ -326,14 +316,14 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt = 0.01, saveat = 0.1)
 
     #Plot and save results
     # using Plots
@@ -355,8 +345,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 04: Dt(u(t,x)) ~ -Dx(v(t,x))*u(t,x)-v(t,x)*Dx(u(t,x)) with v(t,x)=0.999 + 0.001 * t * x " begin
@@ -386,14 +375,14 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
-    sol = solve(prob, SSPRK33(), dt=0.01, saveat=0.1)
+    sol = solve(prob, SSPRK33(), dt = 0.01, saveat = 0.1)
 
     # Plot and save results
     # using Plots
@@ -415,8 +404,7 @@ end
 
     # savefig("plots/MOL_Linear_Convection_Test00.png")
 
-
-    @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
+    @test sol[u(t, x)][end, 2:end]≈utrue atol=0.1
 end
 
 @testset "Test 05 - Alan's Example: Dt(u(t, x)) + α * Dx(u(t, x)) ~ β * Dxx(u(t, x)) + γ * Dxxx(u(t, x)) - δ * Dxxxx(u(t, x))" begin
@@ -434,7 +422,8 @@ end
     γ = 1.1
     δ = 3.1
 
-    eq = Dt(u(t, x)) + α * Dx(u(t, x)) ~ β * Dxx(u(t, x)) + γ * Dxxx(u(t, x)) - δ * Dxxxx(u(t, x))
+    eq = Dt(u(t, x)) + α * Dx(u(t, x)) ~ β * Dxx(u(t, x)) + γ * Dxxx(u(t, x)) -
+                                         δ * Dxxxx(u(t, x))
     domain = [x ∈ Interval(0.0, 2π),
         t ∈ Interval(0.0, 3.0)]
 
@@ -446,13 +435,13 @@ end
     # Method of lines discretization
     dx = 2π / 30
     order = 2
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(sys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Rodas4P(), saveat=0.01)
+    sol = solve(prob, Rodas4P(), saveat = 0.01)
 
     asf(t, x) = 0.5 * (exp(-t * 4(β + 4δ)) * cos(t * (-8γ - 2α) + 2x) + 1)
 
@@ -465,7 +454,7 @@ end
     for i in eachindex(t_grid)
         norm_exact = exact[i, :] ./ maximum(exact[i, :])
         norm_usol = solu[i, :] ./ maximum(solu[i, :])
-        @test norm_exact ≈ norm_usol atol = 0.1
+        @test norm_exact≈norm_usol atol=0.1
     end
 end
 # @testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
@@ -522,7 +511,6 @@ end
 #     # plot!(x_sol, u.-sol.u[end], label="Differential Error")
 
 #     # savefig("plots/MOL_Linear_Convection_Test00.png")
-
 
 #     @test sol[u(t, x)][end, 2:end] ≈ utrue atol = 0.1
 # end

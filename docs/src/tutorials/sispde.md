@@ -49,8 +49,13 @@ function ratio(x, brn, ϵ)
 end
 
 # 1D PDE and boundary conditions
-eq = [Dt(S(t, x)) ~ dS * Dxx(S(t, x)) - ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) + γ(x) * I(t, x),
-    Dt(I(t, x)) ~ dI * Dxx(I(t, x)) + ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) - γ(x) * I(t, x)]
+eq = [
+    Dt(S(t, x)) ~ dS * Dxx(S(t, x)) -
+                  ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) +
+                  γ(x) * I(t, x),
+    Dt(I(t, x)) ~ dI * Dxx(I(t, x)) +
+                  ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) -
+                  γ(x) * I(t, x)]
 bcs = [S(0, x) ~ 0.9 + 0.1 * sin(2 * pi * x),
     I(0, x) ~ 0.1 + 0.1 * cos(2 * pi * x),
     Dx(S(t, 0)) ~ 0.0,
@@ -63,7 +68,8 @@ domains = [t ∈ Interval(0.0, 10.0),
     x ∈ Interval(0.0, 1.0)]
 
 # PDE system
-@named pdesys = PDESystem(eq, bcs, domains, [t, x], [S(t, x), I(t, x)], [dS => 0.5, dI => 0.1, brn => 3, ϵ => 0.1])
+@named pdesys = PDESystem(eq, bcs, domains, [t, x], [S(t, x), I(t, x)],
+    [dS => 0.5, dI => 0.1, brn => 3, ϵ => 0.1])
 
 # Method of lines discretization
 # Need a small dx here for accuracy
@@ -79,7 +85,7 @@ prob = discretize(pdesys, discretization);
 
 ```@example sispde
 # Solving SIS reaction diffusion model
-sol = solve(prob, Tsit5(), saveat=0.2);
+sol = solve(prob, Tsit5(), saveat = 0.2);
 
 # Retriving the results
 discrete_x = sol[x]
@@ -109,15 +115,15 @@ $$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$$
 
 ```@example sispde
 function episize!(dS, dI)
-    newprob = remake(prob, p=[dS, dI, 3, 0.1])
+    newprob = remake(prob, p = [dS, dI, 3, 0.1])
     steadystateprob = SteadyStateProblem(newprob)
     state = solve(steadystateprob, DynamicSS(Tsit5()))
     y = sum(state[100:end]) / 99
     return y
 end
-episize!(exp(1.0),exp(0.5))
+episize!(exp(1.0), exp(0.5))
 ```
 
 References:
 
-- Allen L J S, Bolker B M, Lou Y, et al. Asymptotic profiles of the steady states for an SIS epidemic reaction-diffusion model[J]. Discrete & Continuous Dynamical Systems, 2008, 21(1): 1.
+  - Allen L J S, Bolker B M, Lou Y, et al. Asymptotic profiles of the steady states for an SIS epidemic reaction-diffusion model[J]. Discrete & Continuous Dynamical Systems, 2008, 21(1): 1.

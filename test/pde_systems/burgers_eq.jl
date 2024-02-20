@@ -28,7 +28,7 @@ using StableRNGs
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => dx], t, advection_scheme=UpwindScheme())
+    disc = MOLFiniteDifference([x => dx], t, advection_scheme = UpwindScheme())
 
     prob = discretize(pdesys, disc)
 
@@ -45,7 +45,7 @@ using StableRNGs
     for (i, t) in enumerate(sol.t)
         u_analytic = analytic_u.([t], x_disc)
         u_disc = solu[i, :]
-        @test all(isapprox.(u_analytic, u_disc, atol=1e-3))
+        @test all(isapprox.(u_analytic, u_disc, atol = 1e-3))
     end
 end
 
@@ -74,7 +74,7 @@ end
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => dx], t, advection_scheme=WENOScheme())
+    disc = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
     prob = discretize(pdesys, disc)
 
@@ -91,7 +91,7 @@ end
     for (i, t) in enumerate(sol.t)
         u_analytic = analytic_u.([t], x_disc)
         u_disc = solu[i, :]
-        @test all(isapprox.(u_analytic, u_disc, atol=1e-3))
+        @test all(isapprox.(u_analytic, u_disc, atol = 1e-3))
     end
 end
 
@@ -120,9 +120,10 @@ end
 
     dx = 0:0.05:1
     dx = collect(dx)
-    dx[2:end-1] .= dx[2:end-1] .+ rand(StableRNG(0), [0.001, -0.001], length(dx[2:end-1]))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
-    disc = MOLFiniteDifference([x => dx], t, upwind_order=1)
+    disc = MOLFiniteDifference([x => dx], t, upwind_order = 1)
 
     prob = discretize(pdesys, disc)
 
@@ -134,7 +135,7 @@ end
     for (i, t_disc) in enumerate(sol.t)
         u_analytic = analytic_u.([t_disc], x_disc)
         u_disc = solu[i, :]
-        @test all(isapprox.(u_analytic, u_disc, atol=1 * 10^(-2.5)))
+        @test all(isapprox.(u_analytic, u_disc, atol = 1 * 10^(-2.5)))
     end
 end
 
@@ -193,7 +194,6 @@ end
 #     Nx = floor(Int64, (x_max - x_min) / dx) + 1
 #     Ny = floor(Int64, (y_max - y_min) / dy) + 1
 
-
 #     # anim = @animate for k in 1:length(t)
 #     #        solu′ = reshape([sol.u[k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
 #     #        #solv′ = reshape([sol[v[(i-1)*Ny+j]][k] for i in 1:Nx for j in 1:Ny],(Nx,Ny))
@@ -218,7 +218,6 @@ end
 #     #        heatmap(asfu)
 #     # end
 #     # gif(anim, "plots/Burgers2Dexact.gif", fps = 5)
-
 
 #     #    mu = max(asfu...)
 #     #    mv = max(asfv...)

@@ -1,7 +1,7 @@
 @inline function clip_interior!!(lower, upper, s, b::PDEBase.AbstractBoundary)
     # This x2i is correct
     dim = x2i(s, depvar(b.u, s), b.x)
-    @assert dim !== nothing "Internal Error: Variable $(b.x) not found in $(depvar(b.u, s)), when parsing boundary condition $(b)"
+    @assert dim!==nothing "Internal Error: Variable $(b.x) not found in $(depvar(b.u, s)), when parsing boundary condition $(b)"
     if b isa InterfaceBoundary && isupper(b)
         return
     end
@@ -10,12 +10,12 @@
 end
 
 struct InteriorMap <: AbstractVarEqMapping
-    var
-    pde
-    I
-    lower
-    upper
-    stencil_extents
+    var::Any
+    pde::Any
+    I::Any
+    lower::Any
+    upper::Any
+    stencil_extents::Any
 end
 
 PDEBase.get_eqvar(im::InteriorMap, pde) = im.var[pde]
@@ -27,8 +27,10 @@ PDEBase.get_eqvar(im::InteriorMap, pde) = im.var[pde]
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function PDEBase.construct_var_equation_mapping(pdes::Vector{Equation}, boundarymap, s::DiscreteSpace{N,M}, discretization::MOLFiniteDifference) where {N,M}
-    @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
+function PDEBase.construct_var_equation_mapping(
+        pdes::Vector{Equation}, boundarymap, s::DiscreteSpace{N, M},
+        discretization::MOLFiniteDifference) where {N, M}
+    @assert length(pdes)==M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
 
@@ -54,11 +56,12 @@ function PDEBase.construct_var_equation_mapping(pdes::Vector{Equation}, boundary
         pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
 
         # Add ghost points to pad stencil extents
-        lowerextents, upperextents = calculate_stencil_extents(s, u, discretization, pdeorders, boundarymap)
+        lowerextents, upperextents = calculate_stencil_extents(
+            s, u, discretization, pdeorders, boundarymap)
         push!(extents, pde => (lowerextents, upperextents))
         lower = [max(e, l) for (e, l) in zip(lowerextents, lower)]
         upper = [max(e, u) for (e, u) in zip(upperextents, upper)]
-        mindomsize = lower.+upper.+1
+        mindomsize = lower .+ upper .+ 1
         if any(tup -> mindomsize[tup[1]] > length(s, tup[2]), enumerate(ivs(u, s)))
             error("The domain is too small to support the requested discretization, got domain size of $(size(s)).")
         end
@@ -66,21 +69,25 @@ function PDEBase.construct_var_equation_mapping(pdes::Vector{Equation}, boundary
         pde => generate_interior(lower, upper, u, s, discretization)
     end
 
-
     pdemap = [k.second => k.first for k in varmap]
-    return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(extents))
+    return InteriorMap(
+        varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(extents))
 end
 
-function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
+function generate_interior(lower, upper, u, s,
+        disc::MOLFiniteDifference{G, D}) where {G, D <: ScalarizedDiscretization}
     args = remove(arguments(u), s.time)
 
-    ret = s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
+    ret = s.Igrid[u][[((1 + lower[x2i(s, u, x)]):(length(s.grid[x]) - upper[x2i(s, u, x)]))
+                      for x in args]...]
     return ret
 end
 
-function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G, D}) where {G, D<:ArrayDiscretization}
+function generate_interior(lower, upper, u, s,
+        disc::MOLFiniteDifference{G, D}) where {G, D <: ArrayDiscretization}
     args = remove(arguments(u), s.time)
-    return [(1+lower[x2i(s, u, x)], length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]
+    return [(1 + lower[x2i(s, u, x)], length(s.grid[x]) - upper[x2i(s, u, x)])
+            for x in args]
 end
 
 function calculate_stencil_extents(s, u, discretization, orders, bcmap)
@@ -91,7 +98,7 @@ function calculate_stencil_extents(s, u, discretization, orders, bcmap)
     lowerextents = zeros(Int, length(args))
     upperextents = zeros(Int, length(args))
 
-    for (j,x) in enumerate(args)
+    for (j, x) in enumerate(args)
         # Skip if periodic in x
         haslower, hasupper = haslowerupper(filter_interfaces(bcmap[operation(u)][x]), x)
         for dorder in filter(isodd, orders[x])
@@ -107,7 +114,7 @@ function calculate_stencil_extents(s, u, discretization, orders, bcmap)
     return lowerextents, upperextents
 end
 
-function buildmatrix(pdes, s::DiscreteSpace{N,M}) where {N,M}
+function buildmatrix(pdes, s::DiscreteSpace{N, M}) where {N, M}
     m = zeros(Int, M, M)
     elegiblevars = [getvarmap(pde, s) for pde in pdes]
     u2i = Dict([u => k for (k, u) in enumerate(s.ū)])
@@ -124,16 +131,16 @@ function build_variable_mapping(m, vars, pdes)
     notzero(x) = x > 0 ? 1 : 0
     varpdemap = []
     N = length(pdes)
-    rows = sum(m, dims=2)
-    cols = sum(m, dims=1)
+    rows = sum(m, dims = 2)
+    cols = sum(m, dims = 1)
     i = findfirst(isequal(0), rows)
     j = findfirst(isequal(0), cols)
-    @assert i === nothing "Equation $(pdes[i[1]]) is not an equation for any of the dependent variables."
-    @assert j === nothing "Variable $(vars[j[2]]) does not appear in any equation, therefore cannot be solved for"
+    @assert i===nothing "Equation $(pdes[i[1]]) is not an equation for any of the dependent variables."
+    @assert j===nothing "Variable $(vars[j[2]]) does not appear in any equation, therefore cannot be solved for"
     for k in 1:N
         # Check if any of the pdes only have one valid variable
         m_ones = notzero.(m)
-        cols = sum(m_ones, dims=1)
+        cols = sum(m_ones, dims = 1)
         j = findfirst(isequal(1), cols)
         if j !== nothing
             j = j[2]
@@ -148,7 +155,7 @@ function build_variable_mapping(m, vars, pdes)
             continue
         end
         # Check if any of the variables only have one valid pde
-        rows = sum(m_ones, dims=2)
+        rows = sum(m_ones, dims = 2)
         i = findfirst(isequal(1), rows)
         if i !== nothing
             i = i[1]
@@ -170,7 +177,7 @@ function build_variable_mapping(m, vars, pdes)
         m[i, :] .= 0
         m[:, j] .= 0
     end
-    @assert length(varpdemap) == N "Could not map all PDEs to variables to solve for, the system is unbalanced."
+    @assert length(varpdemap)==N "Could not map all PDEs to variables to solve for, the system is unbalanced."
     return varpdemap
 end
 

@@ -1,7 +1,7 @@
 struct MOLDiscCallback
     f::Function
-    p
-    sym
+    p::Any
+    sym::Any
 end
 
 function MOLDiscCallback(f, disc_ps)

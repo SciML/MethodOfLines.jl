@@ -4,7 +4,8 @@ Replace the PDESystem with an equivalent PDESystem which is compatible with Meth
 Modified copilot explanation:
 
 """
-function PDEBase.transform_pde_system!(v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLFiniteDifference)
+function PDEBase.transform_pde_system!(
+        v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLFiniteDifference)
     eqs = copy(sys.eqs)
     bcs = copy(sys.bcs)
     done = false
@@ -30,7 +31,7 @@ function PDEBase.transform_pde_system!(v::PDEBase.VariableMap, boundarymap, sys:
         end
     end
 
-    sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū), sys.ps, name=sys.name)
+    sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū), sys.ps, name = sys.name)
     return sys
 end
 
@@ -48,7 +49,7 @@ end
 """
 Returns the term if it is incompatible, and whether to expand the term.
 """
-function filter_differentials(term, differential, v, depth=0)
+function filter_differentials(term, differential, v, depth = 0)
     S = Symbolics
     SU = SymbolicUtils
     if S.istree(term)
@@ -139,7 +140,8 @@ function descend_to_incompatible(term, v)
                 if nonlinlapterm !== nothing
                     badterm, shouldexpand = check_deriv_arg(nonlinlapterm, v)
                 else
-                    badterm, shouldexpand = filter_differentials(arguments(term)[1], op, v, 1)
+                    badterm, shouldexpand = filter_differentials(
+                        arguments(term)[1], op, v, 1)
                 end
 
                 if badterm !== nothing
@@ -152,12 +154,16 @@ function descend_to_incompatible(term, v)
             end
         elseif op isa Integral
             if any(isequal(op.domain.variables), v.x̄)
-                euler = isequal(op.domain.domain.left, v.intervals[op.domain.variables][1]) && isequal(op.domain.domain.right, Num(op.domain.variables))
-                whole = isequal(op.domain.domain.left, v.intervals[op.domain.variables][1]) && isequal(op.domain.domain.right, v.intervals[op.domain.variables][2])
+                euler = isequal(
+                    op.domain.domain.left, v.intervals[op.domain.variables][1]) &&
+                        isequal(op.domain.domain.right, Num(op.domain.variables))
+                whole = isequal(
+                    op.domain.domain.left, v.intervals[op.domain.variables][1]) &&
+                        isequal(op.domain.domain.right, v.intervals[op.domain.variables][2])
                 if any([euler, whole])
                     u = arguments(term)[1]
                     out = check_deriv_arg(u, v)
-                    @assert out == (nothing, false) "Integral $term must be purely of a variable, got $u. Try wrapping the integral argument with an auxiliary variable."
+                    @assert out==(nothing, false) "Integral $term must be purely of a variable, got $u. Try wrapping the integral argument with an auxiliary variable."
                     return (nothing, nothing, false)
                 else
                     throw(ArgumentError("Integration Domain only supported for integrals from start of iterval to the variable, got $(op.domain.domain) in $(term)"))
@@ -240,13 +246,15 @@ function create_aux_variable!(eqs, bcs, boundarymap, v, term)
         for iv in all_ivs(v)
             # if this is a periodic boundary, just add a new periodic condition
             interfaces = filter_interfaces(boundarymap[dv][iv])
-            @assert length(interfaces) == 0 "Interface BCs like $(interfaces[1].eq) are not yet supported in conjunction with system transformation, please transform manually if needed and set `should_transform=false` in the discretization. If you need this feature, please open an issue on GitHub."
+            @assert length(interfaces)==0 "Interface BCs like $(interfaces[1].eq) are not yet supported in conjunction with system transformation, please transform manually if needed and set `should_transform=false` in the discretization. If you need this feature, please open an issue on GitHub."
 
             boundaries = boundarymap[dv][iv]
             length(bcs) == 0 && continue
 
-            generate_aux_bcs!(newbcs, newvar, term, filter(isupper, boundaries), v, rulesforeachboundary(iv, true))
-            generate_aux_bcs!(newbcs, newvar, term, filter(!isupper, boundaries), v, rulesforeachboundary(iv, false))
+            generate_aux_bcs!(newbcs, newvar, term, filter(isupper, boundaries),
+                v, rulesforeachboundary(iv, true))
+            generate_aux_bcs!(newbcs, newvar, term, filter(!isupper, boundaries),
+                v, rulesforeachboundary(iv, false))
         end
     end
     newbcs = unique(newbcs)
@@ -258,7 +266,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, v, term)
 end
 
 function generate_bc_rules(bcs, v)
-    bcs = reverse(sort(bcs, by=bc -> bc.order))
+    bcs = reverse(sort(bcs, by = bc -> bc.order))
     map(bcs) do bc
         deriv = bc.order == 0 ? identity : (Differential(bc.x)^bc.order)
         bcrule_lhs = deriv(operation(bc.u)(v.args[operation(bc.u)]...))

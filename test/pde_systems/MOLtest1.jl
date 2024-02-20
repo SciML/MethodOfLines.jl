@@ -23,7 +23,7 @@ using Test
         x ∈ Interval(0.0, 1.0)]
 
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
-    discretization = MOLFiniteDifference([x => 0.1], t; grid_align=edge_align)
+    discretization = MOLFiniteDifference([x => 0.1], t; grid_align = edge_align)
     prob = discretize(pdesys, discretization) # This gives an ODEProblem since it's time-dependent
     sol = solve(prob, Tsit5())
 end
@@ -67,7 +67,6 @@ end
 
 # Diffusion in a sphere
 @testset "Spherical Diffusion" begin
-
     @parameters t r
     @variables u(..)
     Dt = Differential(t)
@@ -100,7 +99,7 @@ end
     γ = 1
     eq = Dt(u(x, t)) + u(x, t) * Dx(u(x, t)) + α * Dx2(u(x, t)) + β * Dx3(u(x, t)) + γ * Dx4(u(x, t)) ~ 0
 
-    du(x, t; z=-x / 2 + t) = 15 / 2 * (tanh(z) + 1) * (3 * tanh(z) - 1) * sech(z)^2
+    du(x, t; z = -x / 2 + t) = 15 / 2 * (tanh(z) + 1) * (3 * tanh(z) - 1) * sech(z)^2
 
     bcs = [u(x, 0) ~ x^2,
         Dx(u(-10, t)) ~ du(-10, t),
@@ -113,7 +112,7 @@ end
     dx = 0.4
     dt = 0.2
 
-    discretization = MOLFiniteDifference([x => dx], t; approx_order=4)
+    discretization = MOLFiniteDifference([x => dx], t; approx_order = 4)
     @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
     prob = discretize(pdesys, discretization)
 end
@@ -154,7 +153,7 @@ end
     # Method of lines discretization
     dx = 0.1
     order = 2
-    discretization = MOLFiniteDifference([x => dx, t => dt], approx_order=order)
+    discretization = MOLFiniteDifference([x => dx, t => dt], approx_order = order)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -192,7 +191,7 @@ end
     # Method of lines discretization
     dx = 0.1
     order = 2
-    discretization = MOLFiniteDifference([x => dx], t, approx_order=order)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = order)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -222,28 +221,28 @@ end
 
     # Equations
     eqs = Vector{ModelingToolkit.Equation}(undef, N)
-    for i = 1:N
+    for i in 1:N
         eqs[i] = Dxx(u[i](x)) ~ u[i](x)
     end
 
     # Initial and boundary conditions
     bcs = Vector{ModelingToolkit.Equation}(undef, 2 * N)
-    for i = 1:N
+    for i in 1:N
         bcs[i] = Dx(u[i](x_min)) ~ 0.0
     end
 
-    for i = 1:N
-        bcs[i+N] = u[i](x_max) ~ rand(StableRNG(0),)
+    for i in 1:N
+        bcs[i + N] = u[i](x_max) ~ rand(StableRNG(0),)
     end
 
     # Space and time domains
     domains = [x ∈ Interval(x_min, x_max)]
 
     # PDE system
-    @named pdesys = PDESystem(eqs, bcs, domains, [x], collect([u[i](x) for i = 1:N]))
+    @named pdesys = PDESystem(eqs, bcs, domains, [x], collect([u[i](x) for i in 1:N]))
 
     # Method of lines discretization
-    discretization = MOLFiniteDifference([x => dx], nothing, approx_order=order)
+    discretization = MOLFiniteDifference([x => dx], nothing, approx_order = order)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     # # Solution of the ODE system
@@ -272,8 +271,11 @@ end
     u0(x, y, t) = 22(y * (1 - y))^(3 / 2)
     v0(x, y, t) = 27(x * (1 - x))^(3 / 2)
 
-    eq = [Dt(u(x, y, t)) ~ 1.0 + Dy(v(x, y, t)) * u(x, y, t)^2 - 4.4 * u(x, y, t) + α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
-        Dt(v(x, y, t)) ~ -3.4 * Dx(u(x, y, t)) - v(x, y, t) * u(x, y, t)^2 + α * ∇²(v(x, y, t))]
+    eq = [
+        Dt(u(x, y, t)) ~ 1.0 + Dy(v(x, y, t)) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
+                         α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
+        Dt(v(x, y, t)) ~ -3.4 * Dx(u(x, y, t)) - v(x, y, t) * u(x, y, t)^2 +
+                         α * ∇²(v(x, y, t))]
 
     domains = [x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),
@@ -307,12 +309,11 @@ end
 
     order = 2
 
-    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order=order)
+    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order = order)
 
     prob = discretize(pdesys, discretization)
 
     sol = solve(prob, TRBDF2())
-
 end
 
 @testset "2D variable connected to 1D variable at boundary #33" begin
@@ -343,7 +344,7 @@ end
     dx = 0.1
     dr = 0.1
     order = 2
-    discretization = MOLFiniteDifference([x => dx, r => dr], t, approx_order=order)
+    discretization = MOLFiniteDifference([x => dx, r => dr], t, approx_order = order)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)

@@ -7,8 +7,6 @@ using Test
 
 # # Define some variables
 
-
-
 @testset "Testing discretization of varied systems" begin
     @parameters x t
 
@@ -34,7 +32,6 @@ using Test
         # no flux BC
         ∂x(c(ℓ, t)) ~ 0.0]
 
-
     # define space-time plane
     domains = [x ∈ Interval(0.0, ℓ), t ∈ Interval(0.0, 5.0)]
 
@@ -43,7 +40,7 @@ using Test
         diff_eq = ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test_broken  (discretize(pdesys, discretization) isa ODEProblem)
+        @test_broken (discretize(pdesys, discretization) isa ODEProblem)
     end
 
     @testset "Test 02: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
@@ -55,7 +52,8 @@ using Test
     end
 
     @testset "Test 03: ∂t(c(x, t)) ~ ∂x(1.0 / (1.0/D₀ + exp(α * (c(x, t) - χ))/D₀) * ∂x(c(x, t)))" begin
-        diff_eq = ∂t(c(x, t)) ~ ∂x(1.0 / (1.0 / D₀ + exp(α * (c(x, t) - χ)) / D₀) * ∂x(c(x, t)))
+        diff_eq = ∂t(c(x, t)) ~ ∂x(1.0 / (1.0 / D₀ + exp(α * (c(x, t) - χ)) / D₀) *
+                                   ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
         prob = discretize(pdesys, discretization)
@@ -116,7 +114,6 @@ using Test
         discretization = MOLFiniteDifference([x => Δx], t)
         prob = discretize(pdesys, discretization)
     end
-
 end
 
 @testset "Nonlinlap with flux interface boundary condition" begin
@@ -157,7 +154,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, FBDF(), saveat=0.01)
+    sol = solve(prob, FBDF(), saveat = 0.01)
 
     x1_sol = sol[x1]
     x2_sol = sol[x2]
@@ -171,7 +168,6 @@ end
 end
 
 @testset "Another boundaries appearing in equations case" begin
-
     g = 9.81
 
     @parameters x z t
@@ -199,7 +195,7 @@ end
         Dx(φ̃(t, 0.0)) ~ 0.0,
         Dx(φ̃(t, 1.0)) ~ 0.0,
         Dx(η(t, 0.0)) ~ 0.0,
-        Dx(η(t, 1.0)) ~ 0.0,
+        Dx(η(t, 1.0)) ~ 0.0
     ]
 
     domains = [x ∈ Interval(0.0, 1.0),
@@ -209,14 +205,13 @@ end
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x, z],
         [φ(t, x, z), φ̃(t, x), η(t, x)])
 
-
     dx = 0.1
     dz = 0.1
     order = 2
 
     discretization = MOLFiniteDifference([x => dx, z => dz], t,
-        approx_order=order,
-        grid_align=center_align)
+        approx_order = order,
+        grid_align = center_align)
 
     println("Discretization:")
     prob = discretize(pdesys, discretization)
@@ -233,7 +228,6 @@ end
     Dt = Differential(t)
     Da = Differential(a)
     Ia = Integral(a in DomainSets.ClosedInterval(amin, amax))
-
 
     eqs = [Dt(S(t)) ~ -β * S(t) * Ia(I(a, t)),
         Dt(I(a, t)) + Da(I(a, t)) ~ -γ * I(a, t),
@@ -256,7 +250,6 @@ end
     prob = MethodOfLines.discretize(pde_system, discretization)
 
     sol = solve(prob, FBDF())
-
 end
 
 @testset "Dt in BCs" begin
@@ -288,7 +281,7 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Rodas4(), saveat=0.2)
+    sol = solve(prob, Rodas4(), saveat = 0.2)
 
     discrete_x = sol[x]
     discrete_t = sol[t]
@@ -344,7 +337,6 @@ end
 end
 
 @testset "ODE connected to PDE" begin
-
     @parameters t x
     @variables u(..) v(..)
     Dt = Differential(t)
@@ -381,25 +373,25 @@ end
     Dt = Differential(t)
     Dx = Differential(x)
     Dxx = Differential(x)^2
-    params = Symbolics.scalarize(reduce(vcat,[p .=> [1.5, 2.0], q .=> [1.2, 1.8]]))
+    params = Symbolics.scalarize(reduce(vcat, [p .=> [1.5, 2.0], q .=> [1.2, 1.8]]))
     # 1D PDE and boundary conditions
 
-    eqs  = [Dt(u(t, x)[i]) ~ p[i] * Dxx(u(t, x)[i]) for i in 1:n_comp]
+    eqs = [Dt(u(t, x)[i]) ~ p[i] * Dxx(u(t, x)[i]) for i in 1:n_comp]
 
     bcs = [[u(0, x)[i] ~ q[i] * cos(x),
-            u(t, 0)[i] ~ sin(t),
-            u(t, 1)[i] ~ exp(-t) * cos(1),
-            Dx(u(t,0)[i]) ~ 0.0] for i in 1:n_comp]
+               u(t, 0)[i] ~ sin(t),
+               u(t, 1)[i] ~ exp(-t) * cos(1),
+               Dx(u(t, 0)[i]) ~ 0.0] for i in 1:n_comp]
     bcs_collected = reduce(vcat, bcs)
 
     # Space and time domains
     domains = [t ∈ Interval(0.0, 1.0),
-            x ∈ Interval(0.0, 1.0)]
+        x ∈ Interval(0.0, 1.0)]
 
     # PDE system
 
-    @named pdesys = PDESystem(eqs, bcs_collected, domains, [t, x], [u(t, x)[i] for i in 1:n_comp], Symbolics.scalarize(params))
-
+    @named pdesys = PDESystem(eqs, bcs_collected, domains, [t, x],
+        [u(t, x)[i] for i in 1:n_comp], Symbolics.scalarize(params))
 
     # Method of lines discretization
     dx = 0.1
@@ -407,15 +399,14 @@ end
     discretization = MOLFiniteDifference([x => dx], t; approx_order = order)
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys,discretization) #error occurs here
+    prob = discretize(pdesys, discretization) #error occurs here
 
     # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat=0.2)
+    sol = solve(prob, Tsit5(), saveat = 0.2)
 
-        # Test that the system is correctly constructed
+    # Test that the system is correctly constructed
     varname1 = Symbol("u_Any[1]")
     varname2 = Symbol("u_Any[2]")
-
 
     vars = @variables $varname1(..), $varname2(..)
 
@@ -439,14 +430,14 @@ end
     B = 2 # W/m^2K
     D = 0.6 # W/m^2K
 
-    P₂(x) = 0.5*(3*(x)^2 - 1)
-    α_func(ϕ) = 0.354 + 0.25*P₂(sin(ϕ))
-    Q_func(t, ϕ) =430*cos(ϕ)
+    P₂(x) = 0.5 * (3 * (x)^2 - 1)
+    α_func(ϕ) = 0.354 + 0.25 * P₂(sin(ϕ))
+    Q_func(t, ϕ) = 430 * cos(ϕ)
 
     s_in_y = 31556952.0
 
-    φmin = -Float64(π/2)+0.1
-    φmax =  Float64(π/2)-0.1
+    φmin = -Float64(π / 2) + 0.1
+    φmax = Float64(π / 2) - 0.1
 
     # Water fraction
     f = 0.7
@@ -458,14 +449,15 @@ end
     H = 70 #m
 
     #Heat Cap of earth
-    C = f*ρ*c_w*H
+    C = f * ρ * c_w * H
 
-    eq = Dt(Tₛ(t, φ)) ~ ((1 - α_func(φ))*Q_func(t, φ) - A - B*Tₛ(t, φ) + D*Dφ(cos(φ)*Dφ(Tₛ(t, φ)))/cos(φ))/C
+    eq = Dt(Tₛ(t, φ)) ~ ((1 - α_func(φ)) * Q_func(t, φ) - A - B * Tₛ(t, φ) +
+                         D * Dφ(cos(φ) * Dφ(Tₛ(t, φ))) / cos(φ)) / C
 
-    bcs = [Tₛ(0, φ) ~ 12 - 40*P₂(sin(φ)),
+    bcs = [Tₛ(0, φ) ~ 12 - 40 * P₂(sin(φ)),
         Dφ(Tₛ(t, φmin)) ~ 0.0,
         Dφ(Tₛ(t, φmax)) ~ 0.0]
-    domains = [t in IntervalDomain(0, 19*s_in_y), φ in IntervalDomain(φmin, φmax)]
+    domains = [t in IntervalDomain(0, 19 * s_in_y), φ in IntervalDomain(φmin, φmax)]
 
     @named sys = PDESystem(eq, bcs, domains, [t, φ], [Tₛ(t, φ)])
 
@@ -475,7 +467,6 @@ end
 
     sol = solve(prob, FBDF(), saveat = s_in_y)
 end
-
 
 @testset "Schroedinger Equation" begin
     @parameters x z
