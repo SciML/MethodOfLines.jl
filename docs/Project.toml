@@ -44,7 +44,7 @@ StaticArrays = "1"
 SymbolicIndexingInterface = "0.3.0"
 SymbolicUtils = "1"
 Symbolics = "5"
-TermInterface = "0.2, 0.3"
+TermInterface = "0.2, 0.3, 0.4"
 julia = "1.9"
 
 [extras]
