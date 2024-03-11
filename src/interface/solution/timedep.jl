@@ -18,18 +18,18 @@ function SciMLBase.PDETimeSeriesSolution(
         ivs = [discretespace.time, discretespace.x̄...]
         ivgrid = generate_ivgrid(discretespace, ivs, sol.t, metadata)
 
-        solved_states = if metadata.use_ODAE
-            deriv_states = metadata.metadata[]
-            states(odesys)[deriv_states]
+        solved_unknowns = if metadata.use_ODAE
+            deriv_unknowns = metadata.metadata[]
+            unknowns(odesys)[deriv_unknowns]
         else
-            states(odesys)
+            unknowns(odesys)
         end
         dvs = discretespace.ū
         # Reshape the solution to flat arrays, faster to do this eagerly.
         umap = mapreduce(vcat, dvs) do u
             let discu = discretespace.discvars[u]
                 solu = map(CartesianIndices(discu)) do I
-                    i = sym_to_index(discu[I], solved_states)
+                    i = sym_to_index(discu[I], solved_unknowns)
                     # Handle Observed
                     if i !== nothing
                         sol[i, :]
