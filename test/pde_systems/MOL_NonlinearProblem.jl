@@ -14,8 +14,9 @@ using DomainSets
         0 ~ b + d - 2 * c,
         0 ~ d - 1]
     @named ns = NonlinearSystem(eqs, [a, b, c, d], [])
-    f = eval(generate_function(ns, [a, b, c, d])[2])
+    ns = structural_simplify(ns)
     prob = NonlinearProblem(ns, zeros(4), [])
+
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
     @test map(v -> sol[v], [a, b, c, d]) ≈ ones(4)
