@@ -126,8 +126,4 @@ episize!(exp(1.0), exp(0.5))
 
 References:
 
-<<<<<<< HEAD
   - Allen L J S, Bolker B M, Lou Y, et al. Asymptotic profiles of the steady states for an SIS epidemic reaction-diffusion model[J]. Discrete & Continuous Dynamical Systems, 2008, 21(1): 1.
-=======
-- Allen L J S, Bolker B M, Lou Y, et al. Asymptotic profiles of the steady unknowns for an SIS epidemic reaction-diffusion model[J]. Discrete & Continuous Dynamical Systems, 2008, 21(1): 1.
->>>>>>> 48f9c95 (update)
