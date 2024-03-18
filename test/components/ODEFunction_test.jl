@@ -18,7 +18,7 @@ function analytic_u(p, t, x)
     x / (t + p[1])
 end
 eq = Dt(u(t, x)) ~ -a * u(t, x) * Dx(u(t, x))
-
+ 
 bcs = [u(0, x) ~ x,
     u(t, x_min) ~ analytic_u([1], t, x_min),
     u(t, x_max) ~ analytic_u([1], t, x_max)]
