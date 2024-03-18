@@ -5,7 +5,7 @@ using ModelingToolkit, MethodOfLines, DomainSets, OrdinaryDiffEq, Test
 Dx = Differential(x)
 Dt = Differential(t)
 x_min = 0.0
-x_max = 1.0
+x_max = 1.0 
 t_min = 0.0
 t_max = 6.0
 
