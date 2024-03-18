@@ -9,7 +9,9 @@ x_max = 1.0
 t_min = 0.0
 t_max = 6.0
 
-analytic_u(p, t, x) = x / (t + p[1])
+function analytic_u(p, t, x) 
+    @show p
+    x / (t + p[1])
 
 eq = Dt(u(t, x)) ~ -a * u(t, x) * Dx(u(t, x))
 
