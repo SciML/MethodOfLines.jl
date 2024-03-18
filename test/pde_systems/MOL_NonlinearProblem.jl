@@ -2,7 +2,7 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test
-using ModelingToolkit: Differential
+using ModelingToolkit: Differential, get_unknowns
 using NonlinearSolve
 using DomainSets
 
@@ -15,11 +15,11 @@ using DomainSets
         0 ~ d - 1]
     @named ns = NonlinearSystem(eqs, [a, b, c, d], [])
     sns = structural_simplify(ns)
-    prob = NonlinearProblem(sns, zeros(4), [])
+    prob = NonlinearProblem(sns, zeros(length(get_unknowns(sns))), [])
 
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
-    @test map(v -> sol[v], [a, b, c, d]) ≈ ones(4)
+    @test map(v -> sol[v], [a, b, c, d]) ≈ ones(length(get_unknowns(sns)))
 end 
 
 # Laplace's Equation, same as above but with MOL discretization
