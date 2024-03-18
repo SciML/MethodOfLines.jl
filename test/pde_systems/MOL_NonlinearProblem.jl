@@ -19,7 +19,7 @@ using DomainSets
 
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
-    @test map(v -> sol[v], [a, b, c, d]) ≈ ones(length(get_unknowns(sns)))
+    @test map(v -> sol[v], [a, b, c, d]) ≈ ones(4)
 end 
 
 # Laplace's Equation, same as above but with MOL discretization
