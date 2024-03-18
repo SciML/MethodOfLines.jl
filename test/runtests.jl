@@ -8,6 +8,30 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
+    if GROUP == "All" || GROUP == "Components"
+        @time @safetestset "MOLFiniteDifference Utils" begin
+            include("utils_test.jl")
+        end
+        @time @safetestset "Discretization of space and grid types" begin
+            include("components/DiscreteSpace.jl")
+        end
+        @time @safetestset "Variable PDE mapping and interior construction" begin
+            include("components/interiormap_test.jl")
+        end
+        @time @safetestset "Fornberg" begin
+            include("components/MOLfornberg_weights.jl")
+        end
+        @time @safetestset "ODEFunction" begin
+            include("components/ODEFunction_test.jl")
+        end
+        @time @safetestset "MOLFiniteDifference Interface: Staggered constructors" begin
+            include("components/staggered_constructors.jl")
+        end
+        @time @safetestset "Discrete Callbacks" begin
+            include("components/callbacks.jl")
+        end
+        #@time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
+    end
     if GROUP == "All" || GROUP == "Complex"
         @time @safetestset "MOLFiniteDifference Interface" begin
             include("pde_systems/schroedinger.jl")
@@ -59,30 +83,6 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         @time @safetestset "MOLFiniteDifference Interface: Integrals" begin
             include("pde_systems/MOL_1D_Integration.jl")
         end
-    end
-    if GROUP == "All" || GROUP == "Components"
-        @time @safetestset "MOLFiniteDifference Utils" begin
-            include("utils_test.jl")
-        end
-        @time @safetestset "Discretization of space and grid types" begin
-            include("components/DiscreteSpace.jl")
-        end
-        @time @safetestset "Variable PDE mapping and interior construction" begin
-            include("components/interiormap_test.jl")
-        end
-        @time @safetestset "Fornberg" begin
-            include("components/MOLfornberg_weights.jl")
-        end
-        @time @safetestset "ODEFunction" begin
-            include("components/ODEFunction_test.jl")
-        end
-        @time @safetestset "MOLFiniteDifference Interface: Staggered constructors" begin
-            include("components/staggered_constructors.jl")
-        end
-        @time @safetestset "Discrete Callbacks" begin
-            include("components/callbacks.jl")
-        end
-        #@time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
     end
 
     if GROUP == "All" || GROUP == "Convection_WENO"
