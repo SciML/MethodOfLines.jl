@@ -600,7 +600,7 @@ end
     end
 end
 
-@testset "Test 11: linear diffusion, two variables, mixed BCs, with parameters" begin
+@testset "Test 11: linear diffusion, two variables, mixed BCs, with parameters" begin 
     @parameters t x
     @parameters Dn, Dp
     @variables u(..) v(..)
