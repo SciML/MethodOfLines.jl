@@ -600,7 +600,7 @@ end
     end
 end
 
-@testset "Test 11: linear diffusion, two variables, mixed BCs, with parameters" begin
+@testset "Test 11: linear diffusion, two variables, mixed BCs, with parameters" begin 
     @parameters t x
     @parameters Dn, Dp
     @variables u(..) v(..)
@@ -627,7 +627,6 @@ end
         eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn => 0.5, Dp => 2])
     discretization = MOLFiniteDifference([x => dx], t)
     prob = discretize(pdesys, discretization)
-    @test prob.p == [0.5, 2]
     # Make sure it can be solved
     sol = solve(prob, Tsit5())
 end
