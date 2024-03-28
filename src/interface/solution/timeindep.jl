@@ -4,7 +4,7 @@ function SciMLBase.PDENoTimeSolution(
 
     pdesys = metadata.pdesys
     discretespace = metadata.discretespace
-    # Extract axies
+    # Extract axies 
     ivs = [discretespace.x̄...]
     ivgrid = ((discretespace.grid[x] for x in ivs)...,)
     dvs = discretespace.ū
