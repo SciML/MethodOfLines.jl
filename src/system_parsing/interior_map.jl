@@ -193,7 +193,7 @@ Creates a ranking of the variables in the term, based on their derivative order.
 The heuristic that should work is, if there's a time derivative then use that variable, otherwise use the highest derivative for that variable. If there are two with the highest derivative, pick first from the list that hasn't been chosen for another equation
 """
 function get_ranking!(varmap, term, x, s)
-    if !istree(term)
+    if !iscall(term)
         return (0, [])
     end
     S = Symbolics

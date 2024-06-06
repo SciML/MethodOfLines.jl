@@ -103,7 +103,7 @@ end
 
     solu = map(d -> sol.original_sol[d], grid[u(x, y)])
 
-    @test_broken sol[u(x, y)] == solu
+    @test sol[u(x, y)] == solu
 
     @test sol(pi / 4, pi / 4, dv = u(x, y)) isa Float64
     @test sol(pi / 4, :)[1] isa Vector{Float64}

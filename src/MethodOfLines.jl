@@ -3,12 +3,11 @@ using LinearAlgebra
 using SciMLBase
 using DiffEqBase
 using ModelingToolkit
-using ModelingToolkit: operation, istree, arguments, variable, get_metadata, get_unknowns,
+using ModelingToolkit: operation, iscall, arguments, variable, get_metadata, get_unknowns,
 parameters, defaults, varmap_to_vars
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
-using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename,
-                 similarterm
+using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename
 using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays
