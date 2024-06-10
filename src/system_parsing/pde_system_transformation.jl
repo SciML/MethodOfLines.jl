@@ -52,7 +52,7 @@ Returns the term if it is incompatible, and whether to expand the term.
 function filter_differentials(term, differential, v, depth = 0)
     S = Symbolics
     SU = SymbolicUtils
-    if S.istree(term)
+    if S.iscall(term)
         op = SU.operation(term)
         if op isa Differential && isequal(op.x, differential.x)
             return filter_differentials(SU.arguments(term)[1], differential, v, depth + 1)
@@ -70,7 +70,7 @@ end
 Check that term is a compatible derivative argument, and return the term if it is not and whether to expand.
 """
 function check_deriv_arg(term, v)
-    if istree(term)
+    if iscall(term)
         op = operation(term)
         if any(isequal(op), v.depvar_ops)
             return nothing, false
@@ -90,26 +90,26 @@ end
 Check if term is a compatible part of a nonlinear laplacian, including spherical laplacian, and return the argument to the innermost derivative if it is.
 """
 function nonlinlap_check(term, differential)
-    if istree(term)
+    if iscall(term)
         op = operation(term)
         if (op == *) || (op == /)
             args = arguments(term)
-            if istree(args[1]) && operation(args[1]) == *
+            if iscall(args[1]) && operation(args[1]) == *
                 term = args[1]
                 args = arguments(term)
-            elseif istree(args[1]) && operation(args[1]) == /
+            elseif iscall(args[1]) && operation(args[1]) == /
                 term = args[1]
                 denominator = arguments(term)[2]
                 has_derivatives(denominator) && return nothing
                 args = arguments(term)
-                if istree(args[1]) && operation(args[1]) == *
+                if iscall(args[1]) && operation(args[1]) == *
                     term = args[1]
                     args = arguments(term)
                 end
             end
 
             is = findall(args) do arg
-                if istree(arg)
+                if iscall(arg)
                     op = operation(arg)
                     op isa Differential && isequal(op.x, differential.x)
                 else
@@ -131,7 +131,7 @@ Finds incompatible terms in the equations and returns them with the incompatible
 function descend_to_incompatible(term, v)
     S = Symbolics
     SU = SymbolicUtils
-    if S.istree(term)
+    if S.iscall(term)
         op = SU.operation(term)
         if op isa Differential
             if any(isequal(op.x), all_ivs(v))
@@ -199,7 +199,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, v, term)
     newbcs = []
 
     # create a new variable
-    if istree(term)
+    if iscall(term)
         op = operation(term)
         if op isa Differential
             newvar = diff2term(term)
@@ -262,7 +262,7 @@ function create_aux_variable!(eqs, bcs, boundarymap, v, term)
     append!(bcs, map(bc -> bc.eq, newbcs))
     # Add the new boundary conditions and initial conditions to the boundarymap
     update_boundarymap!(boundarymap, newbcs, newop, v)
-    # update pmap 
+    # update pmap
 end
 
 function generate_bc_rules(bcs, v)

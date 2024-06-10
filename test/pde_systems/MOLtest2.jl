@@ -1,5 +1,5 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
-using ModelingToolkit: operation, istree, arguments
+using ModelingToolkit: operation, iscall, arguments
 using DomainSets
 using NonlinearSolve
 using StableRNGs

@@ -52,7 +52,7 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T, N, S
         A.ivdomain[iiv]
     elseif symbolic_type(sym) != NotSymbolic() && dv !== nothing && isequal(sym, dv)
         A.u[sym]
-    elseif iscomplex(A) && istree(safe_unwrap(sym))
+    elseif iscomplex(A) && iscall(safe_unwrap(sym))
         symargs = arguments(safe_unwrap(sym))
         redv, imdv = A.disc_data.complexmap[operation(safe_unwrap(sym))]
         A.u[Num(redv(symargs...))] .+ im * A.u[Num(imdv(symargs...))]
@@ -78,7 +78,7 @@ Base.@propagate_inbounds function Base.getindex(A::SciMLBase.PDESolution{T, N, S
     elseif symbolic_type(sym) != NotSymbolic() && dv !== nothing && isequal(sym, dv)
         A.u[sym][args...]
     end
-    if iscomplex(A) && symbolic_type(sym) != NotSymbolic() && istree(safe_unwrap(sym))
+    if iscomplex(A) && symbolic_type(sym) != NotSymbolic() && iscall(safe_unwrap(sym))
         symargs = arguments(safe_unwrap(sym))
         redv, imdv = A.disc_data.complexmap[operation(safe_unwrap(sym))]
         A.u[Num(redv(symargs...))][args...] .+ im * A.u[Num(imdv(symargs...))][args...]
