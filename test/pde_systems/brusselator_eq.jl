@@ -111,9 +111,9 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
     @testset "." begin
         for k in div(length(t), 2):length(t)
             msolu = msol.u[k][:, :, 1]
-            @test solu[2:end, 2:end, k]≈msol[k][:, :, 1] rtol=0.1
+            @test solu[2:end, 2:end, k]≈msol.u[k][:, :, 1] rtol=0.1
             msolv = msol.u[k][:, :, 2]
-            @test solv[2:end, 2:end, k]≈msol[k][:, :, 2] rtol=0.1
+            @test solv[2:end, 2:end, k]≈msol.u[k][:, :, 2] rtol=0.1
         end
     end
 
