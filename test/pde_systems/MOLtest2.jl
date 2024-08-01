@@ -457,7 +457,7 @@ end
     bcs = [Tₛ(0, φ) ~ 12 - 40 * P₂(sin(φ)),
         Dφ(Tₛ(t, φmin)) ~ 0.0,
         Dφ(Tₛ(t, φmax)) ~ 0.0]
-    domains = [t in IntervalDomain(0, 19 * s_in_y), φ in IntervalDomain(φmin, φmax)]
+    domains = [t in Interval(0, 19 * s_in_y), φ in Interval(φmin, φmax)]
 
     @named sys = PDESystem(eq, bcs, domains, [t, φ], [Tₛ(t, φ)])
 
