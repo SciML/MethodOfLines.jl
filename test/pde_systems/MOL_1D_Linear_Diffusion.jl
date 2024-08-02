@@ -78,7 +78,7 @@ end
         x ∈ Interval(0.0, 1.0)]
 
     # PDE system
-    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [D => 10.0])
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [D]; defaults = Dict(D => 10.0))
 
     # Method of lines discretization
     dx = 1 / (5pi)
@@ -596,7 +596,7 @@ end
         x ∈ Interval(0.0, 1.0)]
 
     @named pdesys = PDESystem(
-        eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn => 0.5, Dp => 2])
+        eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2))
     discretization = MOLFiniteDifference([x => 0.1], t)
     prob = discretize(pdesys, discretization)
     # Make sure it can be solved

@@ -373,7 +373,7 @@ end
     Dt = Differential(t)
     Dx = Differential(x)
     Dxx = Differential(x)^2
-    params = Symbolics.scalarize(reduce(vcat, [p .=> [1.5, 2.0], q .=> [1.2, 1.8]]))
+    params = [p, q]
     # 1D PDE and boundary conditions
 
     eqs = [Dt(u(t, x)[i]) ~ p[i] * Dxx(u(t, x)[i]) for i in 1:n_comp]
@@ -391,7 +391,7 @@ end
     # PDE system
 
     @named pdesys = PDESystem(eqs, bcs_collected, domains, [t, x],
-        [u(t, x)[i] for i in 1:n_comp], Symbolics.scalarize(params))
+        [u(t, x)[i] for i in 1:n_comp], params; defaults = Dict(p => [1.5, 2.0], q => [1.2, 1.8]))
 
     # Method of lines discretization
     dx = 0.1
