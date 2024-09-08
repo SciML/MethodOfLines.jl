@@ -23,7 +23,8 @@ domains = [t ∈ Interval(0.0, 1.0),
     x ∈ Interval(0.0, 1.0)]
 
 @named pdesys = PDESystem(
-    eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn => 0.5, Dp => 2])
+    eqs, bcs, domains, [t, x], [u(t, x), v(t, x)],
+    [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2.0))
 
 discretization = MOLFiniteDifference([x => 0.1], t)
 
@@ -74,7 +75,8 @@ domains = [t ∈ Interval(0.0, 1.0),
     x ∈ Interval(0.0, 1.0)]
 
 @named pdesys = PDESystem(
-    eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn => 0.5, Dp => 2.0])
+    eqs, bcs, domains, [t, x], [u(t, x), v(t, x)],
+    [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2.0))
 
 discretization = MOLFiniteDifference([x => 0.1], t)
 
