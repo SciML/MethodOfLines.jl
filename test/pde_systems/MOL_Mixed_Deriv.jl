@@ -34,16 +34,15 @@ using ModelingToolkit: Differential
     dx = (xmax - xmin) / 20
     discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
-    @test_broken (discretize(pdesys, discretization) isa ODEProblem)
-    # prob = discretize(pdesys, discretization)
-    # sol = solve(prob, FBDF())
+    prob = discretize(pdesys, discretization)
+    sol = solve(prob, FBDF())
 
-    # xdisc = sol[x]
-    # tdisc = sol[t]
-    # usol = sol[u(t,x)]
+    xdisc = sol[x]
+    tdisc = sol[t]
+    usol = sol[u(t,x)]
 
-    # asol = [assf(t, x) for t in tdisc, x in xdisc]
-    # @test_broken usol ≈ asol atol = 1e-3
+    asol = [assf(t, x) for t in tdisc, x in xdisc]
+    @test_broken usol ≈ asol atol = 1e-3
 end
 
 @testset "Test 01: Dt(u) ~ Dxy(u)" begin
