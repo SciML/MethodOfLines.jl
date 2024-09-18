@@ -271,7 +271,7 @@ function generate_bc_rules(bcs, v)
         deriv = bc.order == 0 ? identity : (Differential(bc.x)^bc.order)
         bcrule_lhs = deriv(operation(bc.u)(v.args[operation(bc.u)]...))
         bcterm = deriv(bc.u)
-        rhs = solve_for(bc.eq, bcterm)
+        rhs = symbolic_linear_solve(bc.eq, bcterm)
         bcrule_lhs => rhs
     end
 end
