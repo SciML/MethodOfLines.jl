@@ -5,9 +5,9 @@ manifest_format = "2.0"
 project_hash = "a66c01d9671017405f5d18d127f7b4872e0bdc04"
 
 [[deps.ADTypes]]
-git-tree-sha1 = "5f205b5893c5bad5467365ec097249e9c26c2ca6"
+git-tree-sha1 = "5a5eafb8344b81b8c2237f8a6f6b3602b3f6180e"
 uuid = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
-version = "1.8.0"
+version = "1.8.1"
 weakdeps = ["ChainRulesCore", "EnzymeCore"]
 
     [deps.ADTypes.extensions]
@@ -1306,7 +1306,7 @@ version = "0.3.2"
 
 [[deps.MethodOfLines]]
 deps = ["Combinatorics", "DiffEqBase", "DomainSets", "IfElse", "Interpolations", "Latexify", "LinearAlgebra", "ModelingToolkit", "OrdinaryDiffEq", "PDEBase", "PrecompileTools", "RuntimeGeneratedFunctions", "SciMLBase", "StaticArrays", "SymbolicIndexingInterface", "SymbolicUtils", "Symbolics", "TermInterface"]
-path = "/cache/build/tester-amdci4-9/julialang/methodoflines-dot-jl"
+path = "/cache/build/tester-amdci4-14/julialang/methodoflines-dot-jl"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 version = "0.11.4"
 
