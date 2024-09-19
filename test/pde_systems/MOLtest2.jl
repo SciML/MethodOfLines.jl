@@ -40,7 +40,7 @@ using Test
         diff_eq = ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test_broken (discretize(pdesys, discretization) isa ODEProblem)
+        @test (discretize(pdesys, discretization) isa ODEProblem)
     end
 
     @testset "Test 02: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
@@ -63,7 +63,7 @@ using Test
         diff_eq = ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test_broken (discretize(pdesys, discretization) isa ODEProblem)
+        @test (discretize(pdesys, discretization) isa ODEProblem)
     end
 
     @testset "Test 05: ∂t(c(x, t)) ~ ∂x(1/x * ∂x(c(x, t)))" begin
