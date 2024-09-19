@@ -7,7 +7,7 @@ using ModelingToolkit: operation, iscall, arguments, variable, get_metadata, get
 parameters, defaults, varmap_to_vars
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
-using Symbolics: unwrap, solve_for, expand_derivatives, diff2term, setname, rename
+using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term, setname, rename
 using SymbolicUtils: operation, arguments
 using IfElse
 using StaticArrays
