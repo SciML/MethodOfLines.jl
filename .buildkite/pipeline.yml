@@ -11,7 +11,7 @@ steps:
             - "DOCUMENTER_KEY"
       - JuliaCI/julia#v1:
           version: "1"
-      - staticfloat/sandbox#v1:
+      - staticfloat/sandbox#v2:
           rootfs_url: "https://github.com/JuliaCI/rootfs-images/releases/download/v5.45/aws_uploader.x86_64.tar.gz"
           rootfs_treehash: "8f1a718279b12f889395723b856fc868a8890dfa"
           workspaces:
