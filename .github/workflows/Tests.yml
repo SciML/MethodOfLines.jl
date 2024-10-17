@@ -23,6 +23,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        version:
+          - "1"
+          - "lts"
+          - "pre"
         group:
           - "Components"
           - "Sol_Interface"
@@ -46,5 +50,6 @@ jobs:
           - "Complex"
     uses: "SciML/.github/.github/workflows/tests.yml@v1"
     with:
+      julia-version: "${{ matrix.version }}"
       group: "${{ matrix.group }}"
     secrets: "inherit"
