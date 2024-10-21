@@ -56,6 +56,7 @@ The system does not need to be re-discretized every time we want to plot with di
 
 ```@example ivs2
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
+using SciMLStructures: replace!, Tunable
 
 @parameters t x
 @parameters Dn, Dp
@@ -84,7 +85,8 @@ prob = discretize(pdesys, discretization) # This gives an ODEProblem since it's 
 
 sols = []
 for (Dnval, Dpval) in zip(rand(10), rand(10))
-    newprob = remake(prob, p = [Dnval, Dpval])
+    newprob = remake(prob)
+    replace!(Tunable(), newprob.p, [Dnval, Dpval])
     push!(sols, solve(newprob, Tsit5()))
 end
 
