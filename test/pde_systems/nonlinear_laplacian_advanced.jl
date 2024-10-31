@@ -80,7 +80,7 @@ end
     sol = solve(prob, FBDF())
 
     @test_broken SciMLBase.successful_retcode(sol)
-    fail
+
 
     solx = sol[x]
     soly = sol[y]
