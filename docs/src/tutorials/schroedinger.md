@@ -18,9 +18,9 @@ V(x) = 0.0
 
 eq = [im * Dt(ψ(t, x)) ~ Dxx(ψ(t, x)) + V(x) * ψ(t, x)] # You must enclose complex equations in a vector, even if there is only one equation
 
-ψ0 = x -> sin(2pi * x)
+ψ0 = x -> ((1 + im)/sqrt(2))*sinpi(2*x)
 
-bcs = [ψ(0, x) ~ ψ0(x),
+bcs = [ψ(0, x) => ψ0(x), # Initial condition must be marked with a => operator
     ψ(t, xmin) ~ 0,
     ψ(t, xmax) ~ 0]
 
@@ -45,5 +45,7 @@ anim = @animate for i in 1:length(disct)
 end
 gif(anim, "schroedinger.gif", fps = 10)
 ```
+
+Note that complex initial conditions are supported, but must be marked with a `=>` operator.
 
 This represents the second from ground state of a particle in an infinite quantum well, try changing the potential `V(x)`, initial conditions and BCs, it is extremely interesting to see how the wave function evolves even for nonphysical combinations. Be sure to post interesting results on the discourse!
