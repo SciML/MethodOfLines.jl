@@ -71,7 +71,7 @@ function g(x, y)
     end
 end
 
-@register g(x, y)
+@register_symbolic g(x, y)
 
 u(t, x, y_min) ~ f(t, x, y_min) + alpha / g(x, y_min)
 ```
