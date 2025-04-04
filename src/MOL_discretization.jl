@@ -162,7 +162,7 @@ function SciMLBase.discretize(pdesys::PDESystem,discretization::MethodOfLines.MO
         simpsys = structural_simplify(sys)
         if tspan === nothing
             add_metadata!(get_metadata(sys), sys)
-            return prob = NonlinearProblem(simpsys, ones(length(simpsys.states)); discretization.kwargs..., kwargs...)
+            return prob = NonlinearProblem(simpsys, ones(length(simpsys.unknowns)); discretization.kwargs..., kwargs...)
         else
             # Use ODAE if nessesary
             if getfield(sys, :metadata) isa MOLMetadata && getfield(sys, :metadata).use_ODAE
@@ -246,7 +246,7 @@ function SciMLBase.ODEFunction(pdesys::PDESystem, discretization::MethodOfLines.
             if analytic !== nothing
                 analytic = analytic isa Dict ? analytic : Dict(analytic)
                 s = getfield(sys, :metadata).discretespace
-                us = get_states(simpsys)
+                us = get_unknowns(simpsys)
                 gridlocs = get_gridloc.(us, (s,))
                 f_analytic = generate_function_from_gridlocs(analytic, gridlocs, s)
             end

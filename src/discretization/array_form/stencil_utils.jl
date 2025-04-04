@@ -141,20 +141,13 @@ function FillArrayOp(expr, output_idx, interior)
                    output_idx, expr, +, nothing, ranges)
 end
 
-NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)),
-                                                  vcat(Tuple(ranges) => 0, ops))
-Construct_ArrayMaker(ranges,
-                     ops) = ArrayMaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)), ops)
-Construct_ArrayMaker{T}(ranges,
-                        ops) = ArrayMaker{T}(Tuple(map(r -> r[end] - r[1] + 1, ranges)), ops)
+NullBG_ArrayMaker(ranges, ops) = ArrayMaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)), vcat(Tuple(ranges) => 0, ops))
+Construct_ArrayMaker(ranges, ops) = ArrayMaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)), ops)
+#Construct_ArrayMaker{T}(ranges, ops) where T = ArrayMaker{T}(Tuple(map(r -> r[end] - r[1] + 1, ranges)), ops)
 
+FillArrayMaker(expr, is, ranges, interior) = NullBG_ArrayMaker(ranges, [Tuple(interior) => FillArrayOp(expr, is, interior)])
 
-                     FillArrayMaker(expr, is,
-               ranges, interior) = NullBG_ArrayMaker(ranges,
-                                                     [Tuple(interior) => FillArrayOp(expr, is, interior)])
-
-ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)),
-                                                 [Tuple(ranges) => udisc])
+ArrayMakerWrap(udisc, ranges) = Arraymaker{Real}(Tuple(map(r -> r[end] - r[1] + 1, ranges)), [Tuple(ranges) => udisc])
 
 #####
 

@@ -3,7 +3,7 @@ using LinearAlgebra
 using SciMLBase
 using DiffEqBase
 using ModelingToolkit
-using ModelingToolkit: operation, istree, arguments, variable, get_metadata, get_states
+using ModelingToolkit: operation, istree, arguments, variable, get_metadata, get_unknowns
 using SymbolicUtils, Symbolics
 using Symbolics: wrap, unwrap, solve_for, expand_derivatives, diff2term, setname, rename,
     similarterm, symtype, ArrayOp, ArrayMaker, scalarize
