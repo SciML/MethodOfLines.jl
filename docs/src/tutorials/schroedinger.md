@@ -70,8 +70,8 @@ m = 1.0  # Mass term
 
 # Dirac equation in 1+1 dimensions (natural units: c = ħ = 1)
 eqs = [
-    Equation(Dt(u1(t, x)), -Dx(u2(t, x)) - m * u1(t, x)),
-    Equation(Dt(u2(t, x)), Dx(u1(t, x)) - m * u2(t, x))
+    Dt(u1(t, x)) ~ -Dx(u2(t, x)) - m * u1(t, x),
+    Dt(u2(t, x)) ~ Dx(u1(t, x)) - m * u2(t, x)
 ]
 
 # Initial conditions
@@ -80,12 +80,12 @@ u2_0(x) = 0.0
 
 xmin, xmax = 0, 1
 bcs = [
-    Equation(u1(0, x), u1_0(x)),
-    Equation(u2(0, x), u2_0(x)),
-    Equation(u1(t, xmin), 0),
-    Equation(u1(t, xmax), 0),
-    Equation(u2(t, xmin), 0),
-    Equation(u2(t, xmax), 0)
+    u1(0, x) ~ u1_0(x),
+    u2(0, x) ~ u2_0(x),
+    u1(t, xmin) ~ 0,
+    u1(t, xmax) ~ 0,
+    u2(t, xmin) ~ 0,
+    u2(t, xmax) ~ 0
 ]
 
 domains = [t ∈ Interval(0, 1), x ∈ Interval(xmin, xmax)]
