@@ -128,8 +128,8 @@ function generate_bc_op_pair(s, b::AbstractEquationBoundary, interior, iboundary
     Tuple(ranges) => broadcast_substitute(bc.lhs, rules)
 end
 
-function generate_bc_op_pair(s, b::InterfaceBoundary, interior, iboundary, derivweights)
-    u_, x_ = getvars(b)
+function generate_bc_op_pair(s, boundary::InterfaceBoundary, interior, iboundary, derivweights)
+    u_, x_ = getvars(boundary)
 
     isupper(boundary) && return nothing
     u_ = boundary.u
@@ -144,14 +144,15 @@ function generate_bc_op_pair(s, b::InterfaceBoundary, interior, iboundary, deriv
     disc2 = s.discvars[depvar(u__, s)]
 
     is = get_is(u_, s)
-    idxs = map(1:length(is))
-    if i == j
-        1
-    else
-        is[i]
+    idxs = map(1:length(is)) do i
+        if i == j
+            1
+        else
+            is[i]
+        end
     end
-    I = CartesianIndex(idxs)
-    ranges = map(depvar(u_, s)) do x
+    #I = CartesianIndex(idxs...)
+    ranges = map(PDEBase.ivs(s, depvar(u_, s))) do x
         if isequal(x, x_)
             1
         else
@@ -159,7 +160,7 @@ function generate_bc_op_pair(s, b::InterfaceBoundary, interior, iboundary, deriv
         end
     end
 
-    expr = disc1[I] - disc2[I+Ioffset]
+    expr = disc1[idxs...] - disc2[(idxs.+Ioffset.I)...]
     symindices = setdiff(1:ndims(u, s), [j])
 
     Tuple(ranges) => FillArrayOp(expr, filter(x -> x isa Sym, idxs), ranges[symindices])

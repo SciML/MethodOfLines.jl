@@ -168,6 +168,8 @@ end
 
 ordering(::LowerBoundary) = 1
 ordering(::UpperBoundary) = 1
+ordering(::InterfaceBoundary) = 1
+ordering(::HigherOrderInterfaceBoundary) = 1
 ordering(::LowerInterpolatingBoundary) = 2
 ordering(::UpperInterpolatingBoundary) = 2
 

@@ -2,6 +2,7 @@ module MethodOfLines
 using LinearAlgebra
 using SciMLBase
 using DiffEqBase
+using PDEBase
 using ModelingToolkit
 using ModelingToolkit: operation, istree, arguments, variable, get_metadata, get_unknowns
 using SymbolicUtils, Symbolics
