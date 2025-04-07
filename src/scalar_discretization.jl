@@ -1,4 +1,4 @@
-function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, pmap::PeriodicMap{hasperiodic}) where {hasperiodic}
+function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, depvars, s, derivweights, indexmap, ::ScalarizedDiscretization, verbose)
     # Handle boundary values appearing in the equation by creating functions that map each point on the interior to the correct replacement rule
     # Generate replacement rule gen closures for the boundary values like u(t, 1)
     boundaryvalfuncs = generate_boundary_val_funcs(s, depvars, bcmap, indexmap, derivweights)
@@ -9,29 +9,36 @@ function discretize_equation!(alleqs, bceqs, pde, interiormap, eqvar, bcmap, dep
         generate_bc_eqs!(bceqs, s, boundaryvalfuncs, interiormap, boundary)
     end
     # Generate extrapolation eqs
-    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, pmap)
+    generate_extrap_eqs!(bceqs, pde, eqvar, s, derivweights, interiormap, bcmap)
 
     # Set invalid corner points to zero
     generate_corner_eqs!(bceqs, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
     # Extract Interior
     interior = interiormap.I[pde]
     # Generate the discrete form ODEs for the interior
-    eqs = vec(map(interior) do II
-        boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
-        rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, pmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
-        try
-            substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
-        catch e
-            println("A scheme has been incorrectly applied to the following equation: $pde.\n")
-            println("The following rules were constructed at index $II:")
-            display(rules)
-            rethrow(e)
-        end
-
-    end)
+    eqs = if length(interior) == 0
+        II = CartesianIndex()
+        discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
+    else
+        vec(map(interior) do II
+            discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
+        end)
+    end
     push!(alleqs, eqs)
 end
 
+function discretize_equation_at_point(II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs)
+    boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs, init = [])
+    rules = vcat(generate_finite_difference_rules(II, s, depvars, pde, derivweights, bcmap, indexmap), boundaryrules, valmaps(s, eqvar, depvars, II, indexmap))
+    try
+        return substitute(pde.lhs, rules) ~ substitute(pde.rhs, rules)
+    catch e
+        println("A scheme has been incorrectly applied to the following equation: $pde.\n")
+        println("The following rules were constructed at index $II:")
+        display(rules)
+        rethrow(e)
+    end
+end
 function generate_system(alleqs, bceqs, ics, discvars, defaults, ps, tspan, metadata)
     t = metadata.discretespace.time
     name = metadata.pdesys.name

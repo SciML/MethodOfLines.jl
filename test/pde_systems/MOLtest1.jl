@@ -233,7 +233,7 @@ end
     end
 
     for i = 1:N
-        bcs[i+N] = u[i](x_max) ~ rand(StableRNG(0), )
+        bcs[i+N] = u[i](x_max) ~ rand(StableRNG(0),)
     end
 
     # Space and time domains
@@ -349,106 +349,4 @@ end
     prob = discretize(pdesys, discretization)
 
     sol = solve(prob, Tsit5())
-end
-
-
-
-
-@testset "Testing discretization of varied systems" begin
-    @parameters x t
-
-    @variables c(..)
-
-    ∂t = Differential(t)
-    ∂x = Differential(x)
-    ∂²x = Differential(x)^2
-
-    D₀ = 1.5
-    α = 0.15
-    χ = 1.2
-    R = 0.1
-    cₑ = 2.0
-    ℓ = 1.0
-    Δx = 0.1
-
-    bcs = [
-        # initial condition
-        c(x, 0) ~ 0.0,
-        # Robin BC
-        ∂x(c(0.0, t)) / (1 + exp(α * (c(0.0, t) - χ))) * R * D₀ + cₑ - c(0.0, t) ~ 0.0,
-        # no flux BC
-        ∂x(c(ℓ, t)) ~ 0.0]
-
-
-    # define space-time plane
-    domains = [x ∈ Interval(0.0, ℓ), t ∈ Interval(0.0, 5.0)]
-
-    @testset "Test 01: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
-        D = D₀ / (1.0 + exp(α * (c(x, t) - χ)))
-        diff_eq = ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 02: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
-        D = 1.0 / (1.0 + exp(α * (c(x, t) - χ)))
-        diff_eq = ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 03: ∂t(c(x, t)) ~ ∂x(1.0 / (1.0/D₀ + exp(α * (c(x, t) - χ))/D₀) * ∂x(c(x, t)))" begin
-        diff_eq = ∂t(c(x, t)) ~ ∂x(1.0 / (1.0 / D₀ + exp(α * (c(x, t) - χ)) / D₀) * ∂x(c(x, t)))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 04: ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))" begin
-        diff_eq = ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 05: ∂t(c(x, t)) ~ ∂x(1/x * ∂x(c(x, t)))" begin
-        diff_eq = ∂t(c(x, t)) ~ ∂x(1 / x * ∂x(c(x, t)))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 06: ∂t(c(x, t)) ~ ∂x(x*∂x(c(x, t)))/c(x,t)" begin
-        diff_eq = ∂t(c(x, t)) ~ ∂x(x * ∂x(c(x, t))) / c(x, t)
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 07: ∂t(c(x, t)) ~ ∂x(1/(1+c(x,t)) ∂x(c(x, t)))" begin
-        diff_eq = ∂t(c(x, t)) ~ ∂x(1 / (1 + c(x, t)) * ∂x(c(x, t)))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 08: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))" begin
-        diff_eq = ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x, t) * ∂x(c(x, t)))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 09: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
-        diff_eq = c(x, t) * ∂x(c(x, t) * ∂x(c(x, t))) / (1 + c(x, t))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 10: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
-        diff_eq = c(x, t) * ∂x(c(x, t)^(-1) * ∂x(c(x, t)))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
-    @testset "Test 11: ∂t(c(x, t)) ~ ∂x(1/(1+c(x,t)^2) ∂x(c(x, t)))" begin
-        diff_eq = ∂t(c(x, t)) ~ ∂x(1 / (1 + c(x, t)^2) * ∂x(c(x, t)))
-        @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
-        discretization = MOLFiniteDifference([x => Δx], t)
-    end
-
 end

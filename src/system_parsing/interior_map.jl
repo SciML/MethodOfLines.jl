@@ -15,7 +15,7 @@ end
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, pmap) where {N,M}
+function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization::MOLFiniteDifference{G, S}) where {N, M, G, S}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
@@ -31,7 +31,7 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, p
         n = ndims(u, s)
         lower = zeros(Int, n)
         upper = zeros(Int, n)
-        # Determine thec number of points to remove from each end of the domain for each dimension
+        # Determine the number of points to remove from each end of the domain for each dimension
         for b in boundaries
             #@show b
             clip_interior!!(lower, upper, s, b)
@@ -42,12 +42,21 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, p
         pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
 
         # Add ghost points to pad stencil extents
-        stencil_extents = calculate_stencil_extents(s, u, discretization, pdeorders, pmap)
-        push!(extents, pde => stencil_extents)
-        lower = [max(e, l) for (e, l) in zip(stencil_extents, lower)]
-        upper = [max(e, u) for (e, u) in zip(stencil_extents, upper)]
 
-        # Don't update this x2i, it is correct.
+        stencil_extents = (lower_extents, upper_extents) = calculate_stencil_extents(s, u, discretization, pdeorders, boundarymap)
+
+        # pad boundaries with interpolators
+        if S <: ArrayDiscretization
+            for (j, x) in enumerate(params(u, s))
+                lowerinterp = [LowerInterpolatingBoundary(u, x) for i in 1:(lower_extents[j] - lower[j])]
+                upperinterp = [UpperInterpolatingBoundary(u, x) for i in 1:(upper_extents[j] - upper[j])]
+                push!(boundarymap[operation(u)][x], vcat(lowerinterp, upperinterp)...)
+            end
+        end
+        push!(extents, pde => stencil_extents)
+        lower = [max(e, l) for (e, l) in zip(lower_extents, lower)]
+        upper = [max(e, u) for (e, u) in zip(upper_extents, upper)]
+
         pde => generate_interior(lower, upper, u, s, discretization)
     end
 
@@ -56,35 +65,39 @@ function InteriorMap(pdes, boundarymap, s::DiscreteSpace{N,M}, discretization, p
     return InteriorMap(varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(extents))
 end
 
-function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G,D}) where {G, D<:ScalarizedDiscretization}
+function generate_interior(lower, upper, u, s, ::MOLFiniteDifference{G, D}) where {G, D<:ScalarizedDiscretization}
     args = remove(arguments(u), s.time)
-    return s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
+
+    ret = s.Igrid[u][[(1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]...]
+    return ret
 end
 
-function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference{G, D}) where {G, D<:ArrayDiscretization}
+function generate_interior(lower, upper, u, s, ::MOLFiniteDifference{G, D}) where {G, D<:ArrayDiscretization}
     args = remove(arguments(u), s.time)
-    return [(1+lower[x2i(s, u, x)], length(s.grid[x])-upper[x2i(s, u, x)]) for x in args]
+    return Dict([x => 1+lower[x2i(s, u, x)]:length(s.grid[x])-upper[x2i(s, u, x)] for x in args])
 end
 
-function calculate_stencil_extents(s, u, discretization, orders, pmap)
+function calculate_stencil_extents(s, u, discretization, orders, bcmap)
     aorder = discretization.approx_order
     advection_scheme = discretization.advection_scheme
 
     args = remove(arguments(u), s.time)
-    extents = zeros(Int, length(args))
+    lowerextents = zeros(Int, length(args))
+    upperextents = zeros(Int, length(args))
+
     for (j,x) in enumerate(args)
         # Skip if periodic in x
-        pmap.map[operation(u)][x] isa Val{true} && continue
-        for dorder in orders[x]
-            if isodd(dorder)
-                extents[j] = max(extents[j], extent(advection_scheme, dorder))
-            else
-                #TODO: add scheme types for even order derivatives
-                extents[j] = max(extents[j], 0)
+        haslower, hasupper = haslowerupper(filter_interfaces(bcmap[operation(u)][x]), x)
+        for dorder in filter(isodd, orders[x])
+            if !haslower
+                lowerextents[j] = max(lowerextents[j], extent(advection_scheme, dorder))
+            end
+            if !hasupper
+                upperextents[j] = max(upperextents[j], extent(advection_scheme, dorder))
             end
         end
     end
-    return extents
+    return lowerextents, upperextents
 end
 
 function buildmatrix(pdes, s::DiscreteSpace{N,M}) where {N,M}
@@ -202,15 +215,14 @@ function getvars(pde, s)
         l = get_ranking!(varmap, pde.lhs, s.time, s)
         r = get_ranking!(varmap, pde.rhs, s.time, s)
         for u in s.ū
-            if varmap[u] > 0
-                varmap[u] += div(typemax(Int) + 1, 2) #Massively weight derivatives in time
+            if varmap[u] > 1
+                varmap[u] += div(typemax(Int), 2) #Massively weight derivatives in time
             end
         end
     end
     for x in s.x̄
         l = get_ranking!(varmap, pde.lhs, x, s)
         r = get_ranking!(varmap, pde.rhs, x, s)
-        split([l, r])
     end
     return varmap
 end

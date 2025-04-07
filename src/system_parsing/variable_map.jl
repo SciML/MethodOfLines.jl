@@ -42,6 +42,8 @@ end
 
 params(u, v::VariableMap) = remove(v.args[operation(u)], v.time)
 
+Base.ndims(u, v::VariableMap) = length(params(u, v))
+
 all_ivs(v::VariableMap) = v.time === nothing ? v.x̄ : v.x̄ ∪ [v.time]
 
 all_params(u, v::VariableMap) = v.args[operation(u)]

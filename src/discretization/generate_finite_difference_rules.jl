@@ -44,27 +44,81 @@ There are of course more specific schemes that are used to improve stability/spe
 
 Please submit an issue if you know of any special cases which impact stability or accuracy that are not implemented, with links to papers and/or code that demonstrates the special case.
 """
-function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, depvars, pde::Equation, derivweights::DifferentialDiscretizer, pmap, indexmap)
+function generate_finite_difference_rules(II::CartesianIndex, s::DiscreteSpace, depvars, pde::Equation, derivweights::DifferentialDiscretizer, bmap, indexmap)
 
     terms = split_terms(pde, s.x̄)
+    if length(II) != 0
+        # Standard cartesian centered difference scheme
+        central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
 
-    # Standard cartesian centered difference scheme
-    central_deriv_rules_cartesian = generate_cartesian_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+        # Advection rules
+        if derivweights.advection_scheme isa UpwindScheme
+            advection_rules = generate_winding_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
+        elseif derivweights.advection_scheme isa WENOScheme
+            advection_rules = generate_WENO_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
+            advection_rules = vcat(advection_rules,
+                                generate_winding_rules(II, s, depvars, derivweights, bmap, indexmap, terms; skip = [1]))
+        else
+            error("Unsupported advection scheme $(derivweights.advection_scheme) encountered.")
+        end
 
-    # Advection rules
-    if derivweights.advection_scheme isa UpwindScheme
-        advection_rules = generate_winding_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
-    elseif derivweights.advection_scheme isa WENOScheme
-        advection_rules = generate_WENO_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+        # Nonlinear laplacian scheme
+        nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
+
+        # Spherical diffusion scheme
+        spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, bmap, indexmap, split_additive_terms(pde))
+        integration_rules = vec(generate_euler_integration_rules(II, s, depvars, indexmap, terms))
     else
-        error("Unsupported advection scheme $(derivweights.advection_scheme) encountered.")
+        central_deriv_rules_cartesian = []
+        advection_rules = []
+        nonlinlap_rules = []
+        spherical_diffusion_rules = []
+        integration_rules = []
     end
 
-    # Nonlinear laplacian scheme
-    nonlinlap_rules = generate_nonlinlap_rules(II, s, depvars, derivweights, pmap, indexmap, terms)
+    integration_rules = vcat(integration_rules, vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)))
+    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules)
+end
 
-    # Spherical diffusion scheme
-    spherical_diffusion_rules = generate_spherical_diffusion_rules(II, s, depvars, derivweights, pmap, indexmap, split_additive_terms(pde))
+#######################################################################################
+# Stencil interface
+#######################################################################################
 
-    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules))
+function generate_finite_difference_rules(interior, s::DiscreteSpace, depvars,
+                                          pde::Equation, derivweights::DifferentialDiscretizer,
+                                          bmap, indexmap)
+
+
+    terms = split_terms(pde, s.x̄)
+    if length(values(interior)) != 0
+        # Standard cartesian centered difference scheme
+        central_deriv_rules_cartesian = generate_cartesian_rules(interior, s, depvars, derivweights, bmap, indexmap, terms)
+
+        # Advection rules
+        if derivweights.advection_scheme isa UpwindScheme
+            advection_rules = generate_winding_rules(interior, s, depvars, derivweights, bmap, indexmap, terms)
+        elseif derivweights.advection_scheme isa WENOScheme
+            advection_rules = generate_WENO_rules(interior, s, depvars, derivweights, bmap, indexmap, terms)
+            advection_rules = vcat(advection_rules,
+                generate_winding_rules(interior, s, depvars, derivweights, bmap, indexmap, terms; skip=[1]))
+        else
+            error("Unsupported advection scheme $(derivweights.advection_scheme) encountered.")
+        end
+
+        # Nonlinear laplacian scheme
+        nonlinlap_rules = generate_nonlinlap_rules(interior, s, depvars, derivweights, bmap, indexmap, terms)
+
+        # Spherical diffusion scheme
+        spherical_diffusion_rules = generate_spherical_diffusion_rules(interior, s, depvars, derivweights, bmap, indexmap, split_additive_terms(pde))
+        integration_rules = vec(generate_euler_integration_rules(interior, s, depvars, indexmap, terms))
+    else
+        central_deriv_rules_cartesian = []
+        advection_rules = []
+        nonlinlap_rules = []
+        spherical_diffusion_rules = []
+        integration_rules = []
+    end
+
+    integration_rules = vcat(integration_rules, vec(generate_whole_domain_integration_rules(interior, s, depvars, indexmap, terms)))
+    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules), vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules)
 end

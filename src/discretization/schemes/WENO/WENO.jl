@@ -6,7 +6,7 @@ Specified in https://repository.library.brown.edu/studio/item/bdr:297524/PDF/ (P
 
 Implementation *heavily* inspired by https://github.com/ranocha/HyperbolicDiffEq.jl/blob/84c2d882e0c8956457c7d662bf7f18e3c27cfa3d/src/finite_volumes/weno_jiang_shu.jl by H. Ranocha.
 """
-function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, b, jx, u, dx::Number)
+function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, bs, jx, u, dx::Number)
     j, x = jx
     ε = wenoscheme.epsilon
 
@@ -14,10 +14,10 @@ function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, b, j
 
     udisc = s.discvars[u]
 
-    Im2 = wrapperiodic(II - 2I1, s, b, u, jx)
-    Im1 = wrapperiodic(II - I1, s, b, u, jx)
-    Ip1 = wrapperiodic(II + I1, s, b, u, jx)
-    Ip2 = wrapperiodic(II + 2I1, s, b, u, jx)
+    Im2 = bwrap(II - 2I1, bs, s, jx)
+    Im1 = bwrap(II - I1, bs, s, jx)
+    Ip1 = bwrap(II + I1, bs, s, jx)
+    Ip2 = bwrap(II + 2I1, bs, s, jx)
     is = map(I -> I[j], [Im2, Im1, Ip1, Ip2])
     for i in is
         if i < 1
@@ -74,7 +74,7 @@ function weno(II::CartesianIndex, s::DiscreteSpace, wenoscheme::WENOScheme, b, j
     hp = wp1 * hp1 + wp2 * hp2 + wp3 * hp3
     hm = wm1 * hm1 + wm2 * hm2 + wm3 * hm3
 
-    return (hp - hm) / dx
+    return recursive_unwrap((hp - hm) / dx)
 end
 
 function weno(II::CartesianIndex, s::DiscreteSpace, b, jx, u, dx::AbstractVector)
@@ -84,6 +84,6 @@ end
 """
 This is a catch all ruleset, as such it does not use @rule.
 """
-@inline function generate_WENO_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, pmap, indexmap, terms)
-    return reduce(vcat, [[(Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, derivweights.advection_scheme, pmap.map[operation(u)][x], (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars])
+@inline function generate_WENO_rules(II::CartesianIndex, s::DiscreteSpace, depvars, derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
+    return reduce(safe_vcat, [[(Differential(x))(u) => weno(Idx(II, s, u, indexmap), s, derivweights.advection_scheme, filter_interfaces(bcmap[operation(u)][x]), (x2i(s, u, x), x), u, s.dxs[x]) for x in params(u, s)] for u in depvars], init = [])
 end

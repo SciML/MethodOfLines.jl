@@ -3,7 +3,7 @@ using DomainSets
 using StableRNGs
 #using Plots
 
-@test_broken begin #@testset "Inviscid Burgers equation, 1D, upwind, u(0, x) ~ x" begin
+@testset "Inviscid Burgers equation, 1D, upwind, u(0, x) ~ x" begin
     @parameters x t
     @variables u(..)
     Dx = Differential(x)
@@ -95,7 +95,7 @@ end
     end
 end
 
-@test_broken begin #@testset "Inviscid Burgers equation, 1D, u(0, x) ~ x, Non-Uniform" begin
+@testset "Inviscid Burgers equation, 1D, u(0, x) ~ x, Non-Uniform" begin
     @parameters x t
     @variables u(..)
     Dx = Differential(x)

@@ -50,5 +50,6 @@ local sol
        discretization = MOLFiniteDifference([x=>dx, y=>dy], t, approx_order=order)
 
        # Convert the PDE problem into an ODE problem
-       generate_code(pdesys,discretization, "brusselator_2D_ode.jl")
+       @time prob = discretize(pdesys,discretization)
+       #generate_code(pdesys,discretization, "brusselator_2D_ode.jl")
 end

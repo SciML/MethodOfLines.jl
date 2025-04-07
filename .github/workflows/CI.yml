@@ -13,7 +13,9 @@ jobs:
       matrix:
         group:
           - Components
-          - Interface
+          - Sol_Interface
+          - MOL_Interface1
+          - MOL_Interface2
           - Diffusion
           - Diffusion_NU
           - Nonlinear_Diffusion
@@ -24,6 +26,7 @@ jobs:
           - Higher_Order
           - Stationary
           - DAE
+          - Integrals
           - Burgers
           - Brusselator
           - Mixed_Derivatives

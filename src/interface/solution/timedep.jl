@@ -1,30 +1,29 @@
 
-function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.ODESolution{T}, metadata::MOLMetadata) where {T}
+function SciMLBase.PDETimeSeriesSolution(sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata) where {T}
     try
         odesys = sol.prob.f.sys
-
         pdesys = metadata.pdesys
         discretespace = metadata.discretespace
 
         ivs = [discretespace.time, discretespace.x̄...]
         ivgrid = ((isequal(discretespace.time, x) ? sol.t : discretespace.grid[x] for x in ivs)...,)
 
-        solved_states = if metadata.use_ODAE
-            deriv_states = metadata.metadata[]
-            states(odesys)[deriv_states]
+        solved_unknowns = if metadata.use_ODAE
+            deriv_unknowns = metadata.metadata[]
+            unknowns(odesys)[deriv_unknowns]
         else
-            states(odesys)
+            unknowns(odesys)
         end
         # Reshape the solution to flat arrays, faster to do this eagerly.
         umap = Dict(map(discretespace.ū) do u
             let discu = discretespace.discvars[u]
                 solu = map(CartesianIndices(discu)) do I
-                    i = sym_to_index(discu[I], solved_states)
+                    i = sym_to_index(discu[I], solved_unknowns)
                     # Handle Observed
                     if i !== nothing
                         sol[i, :]
                     else
-                        SciMLBase.observed(sol, discu[I], :)
+                        SciMLBase.observed(sol, safe_unwrap(discu[I]), :)
                     end
                 end
                 # Correct placement of time axis
