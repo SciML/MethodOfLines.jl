@@ -32,7 +32,8 @@ function asf(dt, dx, dy)
     halfar_dome(dt, dx, dy, R0, H0, 917)
 end
 
-@test_broken begin#@testset "Halfar ice dome glacier model." begin
+
+@testset "Halfar ice dome glacier model." begin
     rmax = 2 * 1000
     rmin = -rmax
 
@@ -78,11 +79,19 @@ end
 
     sol = solve(prob, FBDF())
 
-    @test SciMLBase.successful_retcode(sol)
+    @test_broken SciMLBase.successful_retcode(sol)
+
 
     solx = sol[x]
     soly = sol[y]
     solt = sol[t]
+    solH = sol[H(t, x, y)]
+
+    #anim = @animate for (i, t) in enumerate(t)
+    #    heatmap(solx, soly, solH[i, :, :])
+    #end
+    #gif(anim, "halfar.gif", fps = 10)
+    
 
     solexact = [asf(unwrap(dt), unwrap(dx), unwrap(dy))
                 for dt in solt, dx in solx, dy in soly]
