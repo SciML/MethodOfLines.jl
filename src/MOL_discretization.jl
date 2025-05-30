@@ -66,15 +66,15 @@ function get_discrete(pdesys, discretization)
         [Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]))
 end
 
-function ModelingToolkit.ODEFunctionExpr(
+function ODEFunctionExpr(
         pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference)
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
         if tspan === nothing
             @assert true "Codegen for NonlinearSystems is not yet implemented."
         else
-            simpsys = structural_simplify(sys)
-            return ODEFunctionExpr(simpsys)
+            simpsys = mtkcompile(sys)
+            return ODEFunction(simpsys; expression = Val{true})
         end
     catch e
         println("The system of equations is:")
@@ -94,7 +94,7 @@ function SciMLBase.ODEFunction(
         if tspan === nothing
             @assert true "Codegen for NonlinearSystems is not yet implemented."
         else
-            simpsys = structural_simplify(sys)
+            simpsys = mtkcompile(sys)
             if analytic !== nothing
                 analytic = analytic isa Dict ? analytic : Dict(analytic)
                 s = getfield(sys, :metadata).discretespace

@@ -14,7 +14,7 @@ using DomainSets
         0 ~ b + d - 2 * c,
         0 ~ d - 1]
     @named ns = NonlinearSystem(eqs, [a, b, c, d], [])
-    sns = structural_simplify(ns)
+    sns = mtkcompile(ns)
     prob = NonlinearProblem(sns, zeros(length(get_unknowns(sns))), [])
 
     sol = NonlinearSolve.solve(prob, NewtonRaphson())

@@ -3,7 +3,7 @@ function SciMLBase.discretize(pdesys::PDESystem,
         analytic = nothing, kwargs...) where {G <: StaggeredGrid}
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     try
-        simpsys = structural_simplify(sys)
+        simpsys = mtkcompile(sys)
         if tspan === nothing
             add_metadata!(get_metadata(sys), sys)
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.unknowns));
