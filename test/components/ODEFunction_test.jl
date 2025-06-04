@@ -31,7 +31,7 @@ domains = [t ∈ Interval(t_min, t_max),
 
 disc = MOLFiniteDifference([x => 30], t, advection_scheme = WENOScheme())
 
-prob = discretize(pdesys, disc; analytic = pdesys.analytic_func)
+prob = discretize(pdesys, disc; analytic = getfield(pdesys, :analytic_func))
 
 sol = solve(prob, FBDF())
 

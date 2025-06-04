@@ -27,7 +27,7 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
     @named pdesys = PDESystem(pde, bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)])
 
     disc = MOLFiniteDifference([x => dx, y => dy], t; approx_order = order)
-    depvar_ops = map(x -> operation(x.val), pdesys.depvars)
+    depvar_ops = map(x -> operation(x.val), getfield(pdesys, :depvars))
 
     v = MethodOfLines.VariableMap(pdesys, disc)
 

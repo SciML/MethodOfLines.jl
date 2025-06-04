@@ -40,9 +40,9 @@ function get_discrete(pdesys, discretization)
     # Extract tspan
     tspan = t !== nothing ? v.intervals[t] : nothing
     # Find the derivative orders in the bcs
-    bcorders = Dict(map(x -> x => d_orders(x, pdesys.bcs), all_ivs(v)))
+    bcorders = Dict(map(x -> x => d_orders(x, get_bcs(pdesys)), all_ivs(v)))
     # Create a map of each variable to their boundary conditions including initial conditions
-    boundarymap = PDEBase.parse_bcs(pdesys.bcs, v, bcorders)
+    boundarymap = PDEBase.parse_bcs(get_bcs(pdesys), v, bcorders)
     # Check that the boundary map is valid
     PDEBase.check_boundarymap(boundarymap, discretization)
 
@@ -51,8 +51,8 @@ function get_discrete(pdesys, discretization)
         pdesys = PDEBase.transform_pde_system!(v, boundarymap, pdesys, discretization)
     end
 
-    pdeeqs = pdesys.eqs
-    bcs = pdesys.bcs
+    pdeeqs = get_eqs(pdesys)
+    bcs = get_bcs(pdesys)
 
     ############################
     # Discretization of system

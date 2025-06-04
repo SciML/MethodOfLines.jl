@@ -36,11 +36,11 @@ function SciMLBase.PDENoTimeSolution(
     # Build Interpolations
     interp = build_interpolation(
         umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars)
-
+    pdedvs = get_dvs(pdesys)
     return SciMLBase.PDENoTimeSolution{
         T, length(discretespace.ū), typeof(umap), typeof(metadata),
-        typeof(sol), typeof(ivgrid), typeof(ivs), typeof(pdesys.dvs), typeof(sol.prob), typeof(sol.alg),
+        typeof(sol), typeof(ivgrid), typeof(ivs), typeof(pdedvs), typeof(sol.prob), typeof(sol.alg),
         typeof(interp), typeof(sol.stats)}(umap, sol, ivgrid, ivs,
-        pdesys.dvs, metadata, sol.prob, sol.alg,
+        pdedvs, metadata, sol.prob, sol.alg,
         interp, sol.retcode, sol.stats)
 end

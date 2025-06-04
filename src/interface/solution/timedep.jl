@@ -68,9 +68,9 @@ function SciMLBase.PDETimeSeriesSolution(
         return SciMLBase.PDETimeSeriesSolution{
             T, length(discretespace.ū), typeof(umap), typeof(metadata),
             typeof(sol), typeof(sol.errors), typeof(sol.t), typeof(ivgrid),
-            typeof(ivs), typeof(pdesys.dvs), typeof(sol.prob), typeof(sol.alg),
+            typeof(ivs), typeof(get_dvs(pdesys)), typeof(sol.prob), typeof(sol.alg),
             typeof(interp), typeof(sol.stats)}(umap, sol, sol.errors, sol.t, ivgrid, ivs,
-            pdesys.dvs, metadata, sol.prob, sol.alg,
+            get_dvs(pdesys), metadata, sol.prob, sol.alg,
             interp, sol.dense, sol.tslocation,
             sol.retcode, sol.stats)
     catch e
