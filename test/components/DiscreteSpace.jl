@@ -1,4 +1,5 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
+using ModelingToolkit: get_dvs
 
 @testset "Test 01: discretization of variables, center aligned grid" begin
     # Test centered order
@@ -27,7 +28,7 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
     @named pdesys = PDESystem(pde, bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)])
 
     disc = MOLFiniteDifference([x => dx, y => dy], t; approx_order = order)
-    depvar_ops = map(x -> operation(x.val), getfield(pdesys, :depvars))
+    depvar_ops = map(x -> operation(x.val), get_dvs(pdesys))
 
     v = MethodOfLines.VariableMap(pdesys, disc)
 
