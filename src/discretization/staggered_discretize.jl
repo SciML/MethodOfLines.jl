@@ -5,11 +5,11 @@ function SciMLBase.discretize(pdesys::PDESystem,
     try
         simpsys = mtkcompile(sys)
         if tspan === nothing
-            add_metadata!(get_metadata(sys), sys)
+            add_metadata!(getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
             return prob = NonlinearProblem(simpsys, ones(length(simpsys.unknowns));
                                            discretization.kwargs..., kwargs...)
         else
-            add_metadata!(get_metadata(simpsys), sys)
+            add_metadata!(getmetadata(simpsys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
             prob = ODEProblem(simpsys, Pair[], tspan; discretization.kwargs...,
                 kwargs...)
             return symbolic_trace(prob, simpsys)

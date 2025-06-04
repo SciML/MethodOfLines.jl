@@ -97,7 +97,7 @@ function SciMLBase.ODEFunction(
             simpsys = mtkcompile(sys)
             if analytic !== nothing
                 analytic = analytic isa Dict ? analytic : Dict(analytic)
-                s = getfield(sys, :metadata).discretespace
+                s = getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing).discretespace
                 us = get_unknowns(simpsys)
                 gridlocs = get_gridloc.(us, (s,))
                 f_analytic = generate_function_from_gridlocs(analytic, gridlocs, s)
