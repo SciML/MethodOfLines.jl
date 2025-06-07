@@ -1,5 +1,6 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils,
       LinearAlgebra
+using ModelingToolkit: get_dvs
 
 @parameters x, t
 @variables u(..)
@@ -33,7 +34,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
             # Test centered order
             disc = MOLFiniteDifference([x => dx], t; approx_order = a)
 
-            depvar_ops = map(x -> operation(x.val), pdesys.depvars)
+            depvar_ops = map(x -> operation(x.val), get_dvs(pdesys))
 
             depvars_lhs = MethodOfLines.get_depvars(pde.lhs, depvar_ops)
             depvars_rhs = MethodOfLines.get_depvars(pde.rhs, depvar_ops)
@@ -84,7 +85,7 @@ end
 
     # Test centered order
 
-    depvar_ops = map(x -> operation(x.val), pdesys.depvars)
+    depvar_ops = map(x -> operation(x.val), get_dvs(pdesys))
 
     depvars_lhs = MethodOfLines.get_depvars(pde.lhs, depvar_ops)
     depvars_rhs = MethodOfLines.get_depvars(pde.rhs, depvar_ops)
@@ -124,7 +125,7 @@ end
     # Test centered order
     disc = MOLFiniteDifference([x => dx], t; approx_order = 2)
 
-    depvar_ops = map(x -> operation(x.val), pdesys.depvars)
+    depvar_ops = map(x -> operation(x.val), get_dvs(pdesys))
 
     depvars_lhs = MethodOfLines.get_depvars(pde.lhs, depvar_ops)
     depvars_rhs = MethodOfLines.get_depvars(pde.rhs, depvar_ops)
