@@ -36,7 +36,7 @@ const bigint = div(typemax(Int), 2)
 
     s = MethodOfLines.construct_discrete_space(v, disc)
 
-    m = MethodOfLines.buildmatrix(pde, s)
+    m, _, _ = MethodOfLines.buildmatrix(pde, s)
     
     test = [1 2+bigint 0; 1 0 2+bigint; 2+bigint 1 1]
     perms = permutations([1, 2, 3])
@@ -77,7 +77,7 @@ end
     v = MethodOfLines.VariableMap(pdesys, disc)
 
     s = MethodOfLines.construct_discrete_space(v, disc)
-    m = MethodOfLines.buildmatrix(pde, s)
+    m, _, __ = MethodOfLines.buildmatrix(pde, s)
     test = [2 2 0; 3 0 3; 4 4 4]
     
     perms = permutations([1, 2, 3])
@@ -117,7 +117,7 @@ end
     v = MethodOfLines.VariableMap(pdesys, disc)
     s = MethodOfLines.construct_discrete_space(v, disc)
 
-    m = MethodOfLines.buildmatrix(pde, s)
+    m, _, __ = MethodOfLines.buildmatrix(pde, s)
     test = [1 2 0; 3 0 3; 4 5 5]
     perms = permutations([1, 2, 3])
     @test any(perms) do perm
@@ -157,7 +157,7 @@ end
     v = MethodOfLines.VariableMap(pdesys, disc)
 
     s = MethodOfLines.construct_discrete_space(v, disc)
-    m = MethodOfLines.buildmatrix(pde, s)
+    m, _, __ = MethodOfLines.buildmatrix(pde, s)
     test = [0 2 2; 1 1 0; 2 0 1]
     
     perms = permutations([1, 2, 3])
@@ -165,6 +165,50 @@ end
         m == test[:, perm]
     end
 
+end
+
+@testset "Test 00d: ignore time-only variables when higher-dimensional variables exist" begin
+    @parameters x, t
+    @variables u(..), v(..), w(..)
+
+    Dxx = Differential(x)^2
+    Dt = Differential(t)
+
+    t_min = 0.
+    t_max = 2.0
+    x_min = 0.
+    x_max = 20.0
+
+    dx = 1.0
+
+    domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
+
+    # u and w are functions of t and x, v is a function of t only
+    pde = [Dt(u(t,x)) ~ Dxx(u(t,x)) +  w(t,x),
+           Dt(v(t)) ~ u(t,x) + w(t,x),
+           Dt(w(t,x)) ~ Dxx(w(t,x)) + u(t,x)]
+
+    bcs = [u(0,x) ~ 0, u(t,0) ~ 0, u(t,x_max) ~ 0,
+           w(0,x) ~ 0, w(t,0) ~ 0, w(t,x_max) ~ 0]
+
+    @named pdesys = PDESystem(pde, bcs, domains, [t,x], [u(t,x), v(t), w(t,x)])
+
+    # Test centered order
+    disc = MOLFiniteDifference([x=>dx], t)
+
+    v = MethodOfLines.VariableMap(pdesys, disc)
+    s = MethodOfLines.construct_discrete_space(v, disc)
+
+    m, _, __ = MethodOfLines.buildmatrix(pde, s)
+    
+    # The expected result should ignore v(t) in the mapping process
+    expected = [-4611686018427387903 1 4611686018427387905; 2 1 1; -4611686018427387903 4611686018427387905 1]
+    
+    @test m == expected
+
+    varmap = Dict(MethodOfLines.build_variable_mapping(m, s.ū, pde))
+    
+    @test_broken prob = discretize(pdesys, disc)
 end
 
 @testset "Test 01a: Build variable mapping - one right choice simple" begin
@@ -241,3 +285,4 @@ end
         @test e isa AssertionError
     end
 end
+

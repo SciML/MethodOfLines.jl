@@ -31,8 +31,8 @@ function PDEBase.construct_var_equation_mapping(
         pdes::Vector{Equation}, boundarymap, s::DiscreteSpace{N, M},
         discretization::MOLFiniteDifference) where {N, M}
     @assert length(pdes)==M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
-    m = buildmatrix(pdes, s)
-    varmap = Dict(build_variable_mapping(m, s.ū, pdes))
+    m, var_dims, varpalsmap = buildmatrix(pdes, s)
+    varmap = Dict(build_variable_mapping(m, s.ū, pdes))              
 
     # Determine the interiors for each pde
     vlower = []
@@ -41,32 +41,41 @@ function PDEBase.construct_var_equation_mapping(
 
     interior = map(pdes) do pde
         u = varmap[pde]
-        boundaries = mapreduce(x -> boundarymap[operation(u)][x], vcat, s.x̄)
-        n = ndims(u, s)
-        lower = zeros(Int, n)
-        upper = zeros(Int, n)
-        # Determine thec number of points to remove from each end of the domain for each dimension
-        for b in boundaries
-            #@show b
-            clip_interior!!(lower, upper, s, b)
-        end
-        push!(vlower, pde => lower)
-        push!(vupper, pde => upper)
-        #TODO: Allow assymmetry
-        pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
+        f = v -> findmax(map(p -> p[2], varpalsmap[v]))[2]
+        if var_dims[u] == 0 && !isnothing(f(u))
+            i = f(u)
+            u = first(varpalsmap[u][i])
+            args = remove(arguments(u), s.time)
 
-        # Add ghost points to pad stencil extents
-        lowerextents, upperextents = calculate_stencil_extents(
-            s, u, discretization, pdeorders, boundarymap)
-        push!(extents, pde => (lowerextents, upperextents))
-        lower = [max(e, l) for (e, l) in zip(lowerextents, lower)]
-        upper = [max(e, u) for (e, u) in zip(upperextents, upper)]
-        mindomsize = lower .+ upper .+ 1
-        if any(tup -> mindomsize[tup[1]] > length(s, tup[2]), enumerate(ivs(u, s)))
-            error("The domain is too small to support the requested discretization, got domain size of $(size(s)).")
+            pde => s.Igrid[u][[1:length(s.grid[x]) for x in args]...]
+        else
+            boundaries = mapreduce(x -> boundarymap[operation(u)][x], vcat, s.x̄)
+            n = ndims(u, s)
+            lower = zeros(Int, n)
+            upper = zeros(Int, n)
+            # Determine thec number of points to remove from each end of the domain for each dimension
+            for b in boundaries
+                #@show b
+                clip_interior!!(lower, upper, s, b)
+            end
+            push!(vlower, pde => lower)
+            push!(vupper, pde => upper)
+            #TODO: Allow assymmetry
+            pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
+
+            # Add ghost points to pad stencil extents
+            lowerextents, upperextents = calculate_stencil_extents(
+                s, u, discretization, pdeorders, boundarymap)
+            push!(extents, pde => (lowerextents, upperextents))
+            lower = [max(e, l) for (e, l) in zip(lowerextents, lower)]
+            upper = [max(e, u) for (e, u) in zip(upperextents, upper)]
+            mindomsize = lower .+ upper .+ 1
+            if any(tup -> mindomsize[tup[1]] > length(s, tup[2]), enumerate(ivs(u, s)))
+                error("The domain is too small to support the requested discretization, got domain size of $(size(s)).")
+            end
+            # Don't update this x2i, it is correct.
+            pde => generate_interior(lower, upper, u, s, discretization)
         end
-        # Don't update this x2i, it is correct.
-        pde => generate_interior(lower, upper, u, s, discretization)
     end
 
     pdemap = [k.second => k.first for k in varmap]
@@ -117,26 +126,43 @@ end
 function buildmatrix(pdes, s::DiscreteSpace{N, M}) where {N, M}
     m = zeros(Int, M, M)
     elegiblevars = [getvarmap(pde, s) for pde in pdes]
-    u2i = Dict([u => k for (k, u) in enumerate(s.ū)])
-    #@show elegiblevars, s.ū
+    u2i = Dict([u => k for (k, u) in enumerate(s.ū)])
+    var_dims = Dict([var => variable_dimensionality(var, s) for var in s.ū])
+    
     for (i, varmap) in enumerate(elegiblevars)
-        for var in keys(varmap)
-            m[i, u2i[var]] = varmap[var]
+        for var in keys(varmap)            
+            m[i, u2i[var]] = var_dims[var] == 0 ? varmap[var] - div(typemax(Int), 2) : varmap[var]
         end
     end
-    return m
+    varpalmap = map(filter(x -> var_dims[x] == 0, s.ū)) do u
+        #find i where var_dims[u] shares a row with a non-zero var_dims[v]
+        varpals = []
+        for j in 1:M
+            if m[j, u2i[u]] != 0
+                for k in setdiff(1:M, [u2i[u]])
+                    if m[j, k] != 0 && var_dims[s.ū[k]] > 0
+                        push!(varpals, s.ū[k] => m[j, k])
+                    end
+                end
+            end
+        end
+        u => varpals
+    end |> Dict
+    return m, var_dims, varpalmap
 end
 
-function build_variable_mapping(m, vars, pdes)
+function build_variable_mapping(m::Matrix{Int}, vars::Vector, pdes::Vector)
     notzero(x) = x > 0 ? 1 : 0
     varpdemap = []
     N = length(pdes)
+    
     rows = sum(m, dims = 2)
     cols = sum(m, dims = 1)
     i = findfirst(isequal(0), rows)
     j = findfirst(isequal(0), cols)
     @assert i===nothing "Equation $(pdes[i[1]]) is not an equation for any of the dependent variables."
     @assert j===nothing "Variable $(vars[j[2]]) does not appear in any equation, therefore cannot be solved for"
+    
     for k in 1:N
         # Check if any of the pdes only have one valid variable
         m_ones = notzero.(m)
@@ -239,4 +265,9 @@ function getvarmap(pde, s)
         r = get_ranking!(varmap, pde.rhs, x, s)
     end
     return varmap
+end
+
+function variable_dimensionality(var, s::DiscreteSpace)
+    args = arguments(var)
+    return count(arg -> any(isequal(arg), s.x̄), args)
 end
