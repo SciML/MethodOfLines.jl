@@ -293,7 +293,7 @@ function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, 
     deriv = bc.order == 0 ? identity : (Differential(x)^bc.order)
 
     bclhs = deriv(bcdv)
-    # ! catch faliures to expand and throw a better error message
+    # ! catch failures to expand and throw a better error message
     bcrhs = expand_derivatives(substitute(deriv(term), rules))
     eq = bclhs ~ bcrhs
 

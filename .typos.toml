@@ -71,3 +71,24 @@ MTK = "MTK"
 ODE = "ODE"
 PDE = "PDE"
 SDE = "SDE"
+
+# MethodOfLines-specific terms
+dorder = "dorder"  # Derivative order (mathematical term used throughout MOL)
+dorders = "dorders"  # Plural of derivative order
+upwind = "upwind"  # Upwinding scheme (numerical methods term)
+downwind = "downwind"  # Downwinding scheme (numerical methods term)
+upwinding = "upwinding"  # Process of upwinding
+downwinding = "downwinding"  # Process of downwinding
+discretized = "discretized"  # Past tense of discretize
+discretization = "discretization"  # Process of discretizing
+stencil = "stencil"  # Finite difference stencil
+stencils = "stencils"  # Plural of stencil
+gridpoint = "gridpoint"  # Point on computational grid
+gridpoints = "gridpoints"  # Plural of gridpoint
+ivs = "ivs"  # Independent variables (common abbreviation)
+bcs = "bcs"  # Boundary conditions (common abbreviation)
+pdesys = "pdesys"  # PDE system (variable name pattern)
+ics = "ics"  # Initial conditions (common abbreviation)
+discretizers = "discretizers"  # Objects that discretize
+discretizer = "discretizer"  # Object that discretizes
+Strat = "Strat"  # Strategy (type parameter abbreviation)

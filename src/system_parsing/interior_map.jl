@@ -52,7 +52,7 @@ function PDEBase.construct_var_equation_mapping(
         end
         push!(vlower, pde => lower)
         push!(vupper, pde => upper)
-        #TODO: Allow assymmetry
+        #TODO: Allow asymmetry
         pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
 
         # Add ghost points to pad stencil extents

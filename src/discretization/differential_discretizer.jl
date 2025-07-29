@@ -29,7 +29,7 @@ function PDEBase.construct_differential_discretizer(
     windneg = []
     interp = []
     boundary = []
-    # TODO: Make sure that only nessecary orders are calculated, this is the lowest hanging performance fruit.
+    # TODO: Make sure that only necessary orders are calculated, this is the lowest hanging performance fruit.
     for x in s.x̄
         orders_ = orders[x]
         _orders = Set(vcat(orders_, [1, 2]))
