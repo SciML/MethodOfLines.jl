@@ -37,7 +37,7 @@ For example, the following is a simple rule and function that would discretize d
 #TODO: Add handling for cases where II is close to the boundaries
 #TODO: Handle periodic boundary conditions
 #TODO: Handle nonuniformly discretized `x`
-function second_dorder_central_difference(II::CartesianIndex, s::DiscreteSpace, u, x)
+function second_order_central_difference(II::CartesianIndex, s::DiscreteSpace, u, x)
     # Get which place `x` appears in `u`'s arguments
     j = x2i(s, u, x)
 
@@ -54,7 +54,7 @@ end
 # which may have a different number of dimensions to `II`
 function generate_central_difference_rules(
         II::CartesianIndex, s::DiscreteSpace, terms::Vector{<:Term}, indexmap::Dict)
-    rules = [[@rule Differential(x)(u) => second_dorder_central_difference(
+    rules = [[@rule Differential(x)(u) => second_order_central_difference(
                   Idx(II, s, u, indexmap), s, u, x) for x in ivs(u, s)] for u in depvars]
 
     rules = reduce(vcat, rules)

@@ -152,7 +152,7 @@ end
 
     # Method of lines discretization
     dx = 0.01
-    discretization = MOLFiniteDifference([x => dx], t, approx_dorder = 2)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = 2)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_original([x=>dx],t)
@@ -212,7 +212,7 @@ end
 
     # Method of lines discretization
     dx = 0.01
-    discretization = MOLFiniteDifference([x => dx], t, approx_dorder = 4)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_original([x=>dx],t)

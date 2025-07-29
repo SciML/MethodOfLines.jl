@@ -2,8 +2,8 @@ abstract type AbstractScheme end
 
 struct UpwindScheme <: AbstractScheme
     order::Any
-    function UpwindScheme(approx_dorder = 1)
-        return new(approx_dorder)
+    function UpwindScheme(approx_order = 1)
+        return new(approx_order)
     end
 end
 

@@ -164,7 +164,7 @@ end
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
                        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
-    discretization = MOLFiniteDifference([x => dx], t, approx_dorder = 2)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = 2)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_original([x=>dx],t)
@@ -228,7 +228,7 @@ end
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
                        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
-    discretization = MOLFiniteDifference([x => dx], t, approx_dorder = 4)
+    discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_original([x=>dx],t)

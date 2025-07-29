@@ -91,7 +91,7 @@ function generate_interior(lower, upper, u, s,
 end
 
 function calculate_stencil_extents(s, u, discretization, orders, bcmap)
-    aorder = discretization.approx_dorder
+    aorder = discretization.approx_order
     advection_scheme = discretization.advection_scheme
 
     args = remove(arguments(u), s.time)
