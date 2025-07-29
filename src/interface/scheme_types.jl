@@ -2,12 +2,12 @@ abstract type AbstractScheme end
 
 struct UpwindScheme <: AbstractScheme
     order::Any
-    function UpwindScheme(approx_order = 1)
-        return new(approx_order)
+    function UpwindScheme(approx_dorder = 1)
+        return new(approx_dorder)
     end
 end
 
-extent(scheme::UpwindScheme, order) = 0# dorder + scheme.dorder - 1
+extent(scheme::UpwindScheme, dorder) = 0# dorder + scheme.dorder - 1
 
 # Functional Schemes
 
@@ -83,20 +83,20 @@ function FunctionalScheme{ips, bps}(interior, lower, upper, is_nonuniform = fals
         ips, bps, is_nonuniform, ps, name)
 end
 
-function extent(scheme::FunctionalScheme, order)
-    @assert order==1 "Only first order spatial derivatives are implemented for functional schemes."
+function extent(scheme::FunctionalScheme, dorder)
+    @assert order==1 "Only first dorder spatial derivatives are implemented for functional schemes."
     lower = length(findall(isnothing, scheme.lower))
     upper = length(findall(isnothing, scheme.upper))
     @assert lower==upper "Scheme must have symmetric extent; same number of placeholders in lower and upper boundary functions."
     return lower
 end
 
-function lower_extent(scheme::FunctionalScheme, order)
-    @assert order==1 "Only first order spatial derivatives are implemented for functional schemes."
+function lower_extent(scheme::FunctionalScheme, dorder)
+    @assert order==1 "Only first dorder spatial derivatives are implemented for functional schemes."
     return length(findall(isnothing, scheme.lower))
 end
 
-function upper_extent(scheme::FunctionalScheme, order)
-    @assert order==1 "Only first order spatial derivatives are implemented for functional schemes."
+function upper_extent(scheme::FunctionalScheme, dorder)
+    @assert order==1 "Only first dorder spatial derivatives are implemented for functional schemes."
     return length(findall(isnothing, scheme.upper))
 end

@@ -91,7 +91,7 @@ function generate_interior(lower, upper, u, s,
 end
 
 function calculate_stencil_extents(s, u, discretization, orders, bcmap)
-    aorder = discretization.approx_order
+    aorder = discretization.approx_dorder
     advection_scheme = discretization.advection_scheme
 
     args = remove(arguments(u), s.time)
@@ -104,10 +104,10 @@ function calculate_stencil_extents(s, u, discretization, orders, bcmap)
         for dorder in filter(isodd, orders[x])
             ascheme = dorder == 1 ? advection_scheme : UpwindScheme()
             if !haslower
-                lowerextents[j] = max(lowerextents[j], extent(ascheme, order))
+                lowerextents[j] = max(lowerextents[j], extent(ascheme, dorder))
             end
             if !hasupper
-                upperextents[j] = max(upperextents[j], extent(ascheme, order))
+                upperextents[j] = max(upperextents[j], extent(ascheme, dorder))
             end
         end
     end

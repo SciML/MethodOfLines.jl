@@ -73,7 +73,7 @@ This is a catch all ruleset, as such it does not use @rule. Any even ordered der
                    s, filter_interfaces(bcmap[operation(u)][x]),
                    (x2i(s, u, x), x), u, central_ufunc)
                for d in (
-                  let orders = derivweights.orders[x]
+                  let orders = derivweights.dorders[x]
                   orders[iseven.(orders)]
               end
               )] for x in ivs(u, s)],
@@ -88,7 +88,7 @@ function generate_cartesian_rules(II::CartesianIndex, s::DiscreteSpace{N, M, G},
     ufunc = central_ufunc
     xs = unique(reduce(safe_vcat, [ivs(u, s) for u in depvars], init = []))
     odd_orders = unique(filter(
-        isodd, reduce(safe_vcat, [derivweights.orders[x] for x in xs], init = [])))
+        isodd, reduce(safe_vcat, [derivweights.dorders[x] for x in xs], init = [])))
     placeholder = []
     for u in depvars
         for x in xs

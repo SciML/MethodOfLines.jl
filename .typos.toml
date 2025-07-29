@@ -73,7 +73,3 @@ PDE = "PDE"
 SDE = "SDE"
 
 # MethodOfLines/numerical methods specific terms
-dorder = "dorder"      # derivative order - legitimate numerical methods terminology
-dorders = "dorders"    # derivative orders (plural) - legitimate numerical methods terminology
-oddorder = "oddorder"  # odd order - legitimate numerical methods terminology
-order = "order"        # order - fundamental term in numerical methods\napprox_order = "approx_order"  # approximation order - standard numerical methods term\noddorders = "oddorders"    # odd orders (plural) - legitimate numerical methods terminology

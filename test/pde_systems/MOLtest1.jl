@@ -112,7 +112,7 @@ end
     dx = 0.4
     dt = 0.2
 
-    discretization = MOLFiniteDifference([x => dx], t; approx_order = 4)
+    discretization = MOLFiniteDifference([x => dx], t; approx_dorder = 4)
     @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
     prob = discretize(pdesys, discretization)
 end
@@ -153,7 +153,7 @@ end
     # Method of lines discretization
     dx = 0.1
     dorder = 2
-    discretization = MOLFiniteDifference([x => dx, t => dt], approx_order = order)
+    discretization = MOLFiniteDifference([x => dx, t => dt], approx_dorder = dorder)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -191,7 +191,7 @@ end
     # Method of lines discretization
     dx = 0.1
     dorder = 2
-    discretization = MOLFiniteDifference([x => dx], t, approx_order = order)
+    discretization = MOLFiniteDifference([x => dx], t, approx_dorder = dorder)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -242,7 +242,7 @@ end
     @named pdesys = PDESystem(eqs, bcs, domains, [x], collect([u[i](x) for i in 1:N]))
 
     # Method of lines discretization
-    discretization = MOLFiniteDifference([x => dx], nothing, approx_order = order)
+    discretization = MOLFiniteDifference([x => dx], nothing, approx_dorder = dorder)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     # # Solution of the ODE system
@@ -309,7 +309,7 @@ end
 
     dorder = 2
 
-    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order = order)
+    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_dorder = dorder)
 
     prob = discretize(pdesys, discretization)
 
@@ -344,7 +344,7 @@ end
     dx = 0.1
     dr = 0.1
     dorder = 2
-    discretization = MOLFiniteDifference([x => dx, r => dr], t, approx_order = order)
+    discretization = MOLFiniteDifference([x => dx, r => dr], t, approx_dorder = dorder)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
