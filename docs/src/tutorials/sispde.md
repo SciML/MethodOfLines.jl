@@ -87,7 +87,7 @@ prob = discretize(pdesys, discretization);
 # Solving SIS reaction diffusion model
 sol = solve(prob, Tsit5(), saveat = 0.2);
 
-# Retriving the results
+# Retrieving the results
 discrete_x = sol[x]
 discrete_t = sol[t]
 S_solution = sol[S(t, x)]

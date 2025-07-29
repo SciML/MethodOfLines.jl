@@ -59,7 +59,7 @@ end
 """
 `WENOScheme` of Jiang and Shu
 ## Keyword Arguments
-- `epsilon`: A quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. More sensetive problems will benefit from a smaller value. It is defined as a functional scheme.
+- `epsilon`: A quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. More sensitive problems will benefit from a smaller value. It is defined as a functional scheme.
 """
 function WENOScheme(epsilon = 1e-6)
     boundary_f = [nothing, nothing]

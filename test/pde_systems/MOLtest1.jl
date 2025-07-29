@@ -147,7 +147,7 @@ end
         x ∈ Interval(0.0, L)]
 
     dt = 0.1   # dt related to saving the data.. not actual dt
-    # PDE sustem
+    # PDE system
     @named pdesys = PDESystem(eq, ic_bc, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization

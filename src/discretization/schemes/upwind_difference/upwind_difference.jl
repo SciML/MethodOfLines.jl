@@ -135,10 +135,10 @@ end
             mapreduce(safe_vcat, ivs(u, s), init = []) do x
                 j = x2i(s, u, x)
                 let orders = setdiff(derivweights.orders[x], skip)
-                    oddorders = orders[isodd.(orders)]
+                    oorders = orders[isodd.(orders)]
                     # for all odd orders
-                    if length(oddorders) > 0
-                        map(oddorders) do d
+                    if length(oorders) > 0
+                        map(oorders) do d
                             (Differential(x)^d)(u) => upwind_difference(
                                 d, Idx(II, s, u, indexmap), s,
                                 filter_interfaces(bcmap[operation(u)][x]),

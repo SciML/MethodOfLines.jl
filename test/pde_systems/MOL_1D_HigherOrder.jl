@@ -5,7 +5,7 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 using ModelingToolkit: Differential
 
 # Beam Equation
-#! Broken due to overlapping inner corner bc eqs - determine state sharing heuristic; sort by dorder and give precedence to higher
+#! Broken due to overlapping inner corner bc eqs - determine state sharing heuristic; sort by order and give precedence to higher
 @testset "Test 00: Beam Equation" begin
     @parameters x, t
     @variables u(..)

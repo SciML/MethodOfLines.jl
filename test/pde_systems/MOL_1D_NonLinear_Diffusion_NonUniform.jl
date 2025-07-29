@@ -167,7 +167,7 @@ end
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 2)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
-    #disco = MOLFiniteDifference_origial([x=>dx],t)
+    #disco = MOLFiniteDifference_original([x=>dx],t)
     #prob_orig = discretize_original(pdesys,disco)
 
     # Solution of the ODE system
@@ -231,7 +231,7 @@ end
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
-    #disco = MOLFiniteDifference_origial([x=>dx],t)
+    #disco = MOLFiniteDifference_original([x=>dx],t)
     #prob_orig = discretize_original(pdesys,disco)
 
     # Solution of the ODE system
