@@ -31,7 +31,7 @@ Identify a rule which will match your case, then write a function that will hand
 
 This should be a function of the current index `II::CartesianIndex`, an independent variable `x` which represents the direction of the derivative, and a dependent variable `u`, which is the variable of which the derivative will be taken. The discrete representation of `u` is found in `s.discvars[u]`, which is an array with the same number of spatial dimensions as `u`, each index a symbol representing the discretized `u` at that index. Using this, and cartesian index offsets from `II`, create a finite difference/volume symbolic expression for the approximation of the derivative form you are trying to discretize. This should be returned.
 
-For example, the following is a simple rule and function that would discretize derivatives of each dependent variable `u`in each dependent variable `x` with the second dorder central difference approximation:
+For example, the following is a simple rule and function that would discretize derivatives of each dependent variable `u`in each dependent variable `x` with the second order central difference approximation:
 
 ```julia
 #TODO: Add handling for cases where II is close to the boundaries

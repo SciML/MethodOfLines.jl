@@ -1,4 +1,4 @@
-# TODO: Check if the grid is uniform and use the supported higher dorder interpolations
+# TODO: Check if the grid is uniform and use the supported higher order interpolations
 
 function build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, replaced_vars)
     return mapreduce(vcat, Num.(dvs)) do k

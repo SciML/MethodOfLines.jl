@@ -84,7 +84,7 @@ function FunctionalScheme{ips, bps}(interior, lower, upper, is_nonuniform = fals
 end
 
 function extent(scheme::FunctionalScheme, order)
-    @assert order==1 "Only first dorder spatial derivatives are implemented for functional schemes."
+    @assert order==1 "Only first order spatial derivatives are implemented for functional schemes."
     lower = length(findall(isnothing, scheme.lower))
     upper = length(findall(isnothing, scheme.upper))
     @assert lower==upper "Scheme must have symmetric extent; same number of placeholders in lower and upper boundary functions."
@@ -92,11 +92,11 @@ function extent(scheme::FunctionalScheme, order)
 end
 
 function lower_extent(scheme::FunctionalScheme, order)
-    @assert order==1 "Only first dorder spatial derivatives are implemented for functional schemes."
+    @assert order==1 "Only first order spatial derivatives are implemented for functional schemes."
     return length(findall(isnothing, scheme.lower))
 end
 
 function upper_extent(scheme::FunctionalScheme, order)
-    @assert order==1 "Only first dorder spatial derivatives are implemented for functional schemes."
+    @assert order==1 "Only first order spatial derivatives are implemented for functional schemes."
     return length(findall(isnothing, scheme.upper))
 end
