@@ -74,4 +74,5 @@ SDE = "SDE"
 
 # MethodOfLines/numerical methods specific terms
 dorder = "dorder"      # derivative order - legitimate numerical methods terminology
+dorders = "dorders"    # derivative orders (plural) - legitimate numerical methods terminology
 oddorder = "oddorder"  # odd order - legitimate numerical methods terminology
