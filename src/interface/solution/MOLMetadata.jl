@@ -33,7 +33,7 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Start} <:
             allbcs = let v = discretespace.vars
                 mapreduce(x -> bcivmap[x], vcat, v.x̄)
             end
-            if all(bc -> bc.order > 0, allbcs)
+            if all(bc -> bc.dorder > 0, allbcs)
                 use_ODAE = false
             end
         end

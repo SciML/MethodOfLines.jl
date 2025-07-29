@@ -5,7 +5,7 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 using ModelingToolkit: Differential
 
 # Beam Equation
-#! Broken due to overlapping inner corner bc eqs - determine state sharing heuristic; sort by order and give precedence to higher
+#! Broken due to overlapping inner corner bc eqs - determine state sharing heuristic; sort by dorder and give precedence to higher
 @testset "Test 00: Beam Equation" begin
     @parameters x, t
     @variables u(..)
@@ -35,7 +35,7 @@ using ModelingToolkit: Differential
         x ∈ Interval(0.0, L)]
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-    discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
+    discretization = MOLFiniteDifference([x => dx], t, approx_dorder = 4)
     @test_broken discretize(pdesys, discretization) isa ODEProblem
 
     # prob = discretize(pdesys,discretization)
@@ -74,7 +74,7 @@ end
         x ∈ Interval(0.0, L)]
 
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
-    discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
+    discretization = MOLFiniteDifference([x => dx], t, approx_dorder = 4)
     prob = discretize(pdesys, discretization)
 
     sol = solve(prob, FBDF())
@@ -111,7 +111,7 @@ end
     dt = 0.2
 
     discretization = MOLFiniteDifference(
-        [x => dx], t; upwind_order = 1, grid_align = center_align)
+        [x => dx], t; upwind_dorder = 1, grid_align = center_align)
     @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
     prob = discretize(pdesys, discretization)
 
@@ -130,7 +130,7 @@ end
     #        plot!(xs, sol.u[i], label="Numeric solution")
     #        plot!(xs, log10.(abs.(u_real[i]-sol.u[i])), label="log10 Error at t = $(ts[i])")
     # end
-    # gif(anim, "plots/MOL_Higher_order_1D_KdV_single_soliton.gif", fps = 5)
+    # gif(anim, "plots/MOL_Higher_dorder_1D_KdV_single_soliton.gif", fps = 5)
 
     @test_broken all(isapprox.(u_predict, u_real, rtol = 0.03))
 end

@@ -112,7 +112,7 @@ end
     dx = 0.4
     dt = 0.2
 
-    discretization = MOLFiniteDifference([x => dx], t; approx_order = 4)
+    discretization = MOLFiniteDifference([x => dx], t; approx_dorder = 4)
     @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
     prob = discretize(pdesys, discretization)
 end
@@ -152,8 +152,8 @@ end
 
     # Method of lines discretization
     dx = 0.1
-    order = 2
-    discretization = MOLFiniteDifference([x => dx, t => dt], approx_order = order)
+    dorder = 2
+    discretization = MOLFiniteDifference([x => dx, t => dt], approx_dorder = order)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -190,8 +190,8 @@ end
 
     # Method of lines discretization
     dx = 0.1
-    order = 2
-    discretization = MOLFiniteDifference([x => dx], t, approx_order = order)
+    dorder = 2
+    discretization = MOLFiniteDifference([x => dx], t, approx_dorder = order)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -215,7 +215,7 @@ end
 
     # Discretization parameters
     dx = 0.1
-    order = 2
+    dorder = 2
 
     #u = collect(u)
 
@@ -242,7 +242,7 @@ end
     @named pdesys = PDESystem(eqs, bcs, domains, [x], collect([u[i](x) for i in 1:N]))
 
     # Method of lines discretization
-    discretization = MOLFiniteDifference([x => dx], nothing, approx_order = order)
+    discretization = MOLFiniteDifference([x => dx], nothing, approx_dorder = order)
     prob = ModelingToolkit.discretize(pdesys, discretization)
 
     # # Solution of the ODE system
@@ -307,9 +307,9 @@ end
         push!(dy, 1.0)
     end
 
-    order = 2
+    dorder = 2
 
-    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order = order)
+    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_dorder = order)
 
     prob = discretize(pdesys, discretization)
 
@@ -343,8 +343,8 @@ end
     # Method of lines discretization
     dx = 0.1
     dr = 0.1
-    order = 2
-    discretization = MOLFiniteDifference([x => dx, r => dr], t, approx_order = order)
+    dorder = 2
+    discretization = MOLFiniteDifference([x => dx, r => dr], t, approx_dorder = order)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)

@@ -266,9 +266,9 @@ function create_aux_variable!(eqs, bcs, boundarymap, v, term)
 end
 
 function generate_bc_rules(bcs, v)
-    bcs = reverse(sort(bcs, by = bc -> bc.order))
+    bcs = reverse(sort(bcs, by = bc -> bc.dorder))
     map(bcs) do bc
-        deriv = bc.order == 0 ? identity : (Differential(bc.x)^bc.order)
+        deriv = bc.dorder == 0 ? identity : (Differential(bc.x)^bc.dorder)
         bcrule_lhs = deriv(operation(bc.u)(v.args[operation(bc.u)]...))
         bcterm = deriv(bc.u)
         rhs = symbolic_linear_solve(bc.eq, bcterm)
@@ -290,7 +290,7 @@ function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, 
     args = arguments(newvar)
     args = substitute.(args, (x => val,))
     bcdv = newop(args...)
-    deriv = bc.order == 0 ? identity : (Differential(x)^bc.order)
+    deriv = bc.dorder == 0 ? identity : (Differential(x)^bc.dorder)
 
     bclhs = deriv(bcdv)
     # ! catch failures to expand and throw a better error message
@@ -298,9 +298,9 @@ function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, 
     eq = bclhs ~ bcrhs
 
     newbc = if isupper(bc)
-        UpperBoundary(bcdv, t, x, bc.order, eq, v)
+        UpperBoundary(bcdv, t, x, bc.dorder, eq, v)
     else
-        LowerBoundary(bcdv, t, x, bc.order, eq, v)
+        LowerBoundary(bcdv, t, x, bc.dorder, eq, v)
     end
     push!(newbcs, newbc)
 end

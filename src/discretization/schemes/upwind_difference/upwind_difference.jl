@@ -96,7 +96,7 @@ end
                        filter_interfaces(bcmap[operation(u)][x]), depvars,
                        derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap)
                    for d in (
-                      let orders = derivweights.orders[x]
+                      let orders = derivweights.dorders[x]
                       setdiff(orders[isodd.(orders)], skip)
                   end
                   )] for x in ivs(u, s)],
@@ -111,7 +111,7 @@ end
                        filter_interfaces(bcmap[operation(u)][x]), depvars,
                        derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap)
                    for d in (
-                      let orders = derivweights.orders[x]
+                      let orders = derivweights.dorders[x]
                       setdiff(orders[isodd.(orders)], skip)
                   end
                   )] for x in ivs(u, s)],
@@ -134,7 +134,7 @@ end
         vec(mapreduce(safe_vcat, depvars, init = []) do u
             mapreduce(safe_vcat, ivs(u, s), init = []) do x
                 j = x2i(s, u, x)
-                let orders = setdiff(derivweights.orders[x], skip)
+                let orders = setdiff(derivweights.dorders[x], skip)
                     oorders = orders[isodd.(orders)]
                     # for all odd orders
                     if length(oorders) > 0

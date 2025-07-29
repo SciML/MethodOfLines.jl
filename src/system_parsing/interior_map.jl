@@ -53,7 +53,7 @@ function PDEBase.construct_var_equation_mapping(
         push!(vlower, pde => lower)
         push!(vupper, pde => upper)
         #TODO: Allow asymmetry
-        pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
+        pdeorders = Dict(map(x -> x => d_dorders(x, [pde]), s.x̄))
 
         # Add ghost points to pad stencil extents
         lowerextents, upperextents = calculate_stencil_extents(
@@ -91,7 +91,7 @@ function generate_interior(lower, upper, u, s,
 end
 
 function calculate_stencil_extents(s, u, discretization, orders, bcmap)
-    aorder = discretization.approx_order
+    aorder = discretization.approx_dorder
     advection_scheme = discretization.advection_scheme
 
     args = remove(arguments(u), s.time)
@@ -101,8 +101,8 @@ function calculate_stencil_extents(s, u, discretization, orders, bcmap)
     for (j, x) in enumerate(args)
         # Skip if periodic in x
         haslower, hasupper = haslowerupper(filter_interfaces(bcmap[operation(u)][x]), x)
-        for order in filter(isodd, orders[x])
-            ascheme = order == 1 ? advection_scheme : UpwindScheme()
+        for dorder in filter(isodd, orders[x])
+            ascheme = dorder == 1 ? advection_scheme : UpwindScheme()
             if !haslower
                 lowerextents[j] = max(lowerextents[j], extent(ascheme, order))
             end

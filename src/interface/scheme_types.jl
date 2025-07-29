@@ -2,12 +2,12 @@ abstract type AbstractScheme end
 
 struct UpwindScheme <: AbstractScheme
     order::Any
-    function UpwindScheme(approx_order = 1)
-        return new(approx_order)
+    function UpwindScheme(approx_dorder = 1)
+        return new(approx_dorder)
     end
 end
 
-extent(scheme::UpwindScheme, order) = 0# order + scheme.order - 1
+extent(scheme::UpwindScheme, order) = 0# dorder + scheme.dorder - 1
 
 # Functional Schemes
 
@@ -18,7 +18,7 @@ F = FunctionalScheme{interior_points, boundary_points}(interior, lower, upper, i
 ```
 A user definable scheme that takes a set of functions as input. The functions define the derivative at the interior, lower boundary, and upper boundary.
 
-`lower` and `upper` should be vectors of functions. In general, `upper` and `lower` must be at least `floor(interior_points/2)` long. Where you have no good approximation for a derivative at the boundary, you can use `nothing` as a placeholder. MethodOfLines will then attempt to use an extrapolation here where nessesary. Be warned that this can lead to instability.
+`lower` and `upper` should be vectors of functions. In general, `upper` and `lower` must be at least `floor(interior_points/2)` long. Where you have no good approximation for a derivative at the boundary, you can use `nothing` as a placeholder. MethodOfLines will then attempt to use an extrapolation here where necessary. Be warned that this can lead to instability.
 
 The boundary functions define the derivative at their index in the function vector, numbering from the boundary. For example, if `boundary_points = 3`, the first function in the vector will define the derivative at the boundary, the second at the boundary plus one step, and the third at the boundary plus two steps.
 
@@ -32,7 +32,7 @@ For the interior, `u` takes a vector of dependent variable values in the directi
 of length `interior_points`. `interior_points` must be odd, as this function defines the derivative at the center of the input points.
 
 For the lower and upper boundaries, `u` takes a vector of dependent variable values of length `boundary_points`. This will be the `boundary_points` number of points closest to the lower and upper boundary respectively.
-`p` will take all parameter values in the order specified in the PDESystem, with the scheme's parameters prepended to the list.
+`p` will take all parameter values in the dorder specified in the PDESystem, with the scheme's parameters prepended to the list.
 
 `deriv_iv` takes a vector of independent variable values of the same support as for `u`, for the independent variable in the direction of the derivative.
 
@@ -84,7 +84,7 @@ function FunctionalScheme{ips, bps}(interior, lower, upper, is_nonuniform = fals
 end
 
 function extent(scheme::FunctionalScheme, order)
-    @assert order==1 "Only first order spatial derivatives are implemented for functional schemes."
+    @assert order==1 "Only first dorder spatial derivatives are implemented for functional schemes."
     lower = length(findall(isnothing, scheme.lower))
     upper = length(findall(isnothing, scheme.upper))
     @assert lower==upper "Scheme must have symmetric extent; same number of placeholders in lower and upper boundary functions."
@@ -92,11 +92,11 @@ function extent(scheme::FunctionalScheme, order)
 end
 
 function lower_extent(scheme::FunctionalScheme, order)
-    @assert order==1 "Only first order spatial derivatives are implemented for functional schemes."
+    @assert order==1 "Only first dorder spatial derivatives are implemented for functional schemes."
     return length(findall(isnothing, scheme.lower))
 end
 
 function upper_extent(scheme::FunctionalScheme, order)
-    @assert order==1 "Only first order spatial derivatives are implemented for functional schemes."
+    @assert order==1 "Only first dorder spatial derivatives are implemented for functional schemes."
     return length(findall(isnothing, scheme.upper))
 end
