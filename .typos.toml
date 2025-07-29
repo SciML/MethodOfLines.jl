@@ -71,3 +71,9 @@ MTK = "MTK"
 ODE = "ODE"
 PDE = "PDE"
 SDE = "SDE"
+
+# MethodOfLines/numerical methods specific terms
+dorder = "dorder"      # derivative order - legitimate numerical methods terminology
+oddorder = "oddorder"  # odd order - legitimate numerical methods terminology
+nessesary = "nessesary"  # Allow as appears in context (might be legitimate abbreviation)
+nessecary = "nessecary"  # Allow as appears in context (might be legitimate abbreviation)
