@@ -15,7 +15,7 @@ julia>] activate MethodOfLines
 
 MethodOfLines.jl makes heavy use of [`Symbolics.jl`](https://symbolics.juliasymbolics.org/dev/) and [`SymbolicUtils.jl`](https://symbolicutils.juliasymbolics.org), especially the replacement rules from the latter.
 
-Take a look at [`src/discretization/MOL_discretization.jl`](https://github.com/SciML/MethodOfLines.jl/blob/master/src/MOL_discretization.jl) to get a high level overview of how the discretization works. A more consise description can be found [here](@ref hiw). Feel free to post an issue if you would like help understanding anything, or want to know developer opinions on the best way to go about implementing something.
+Take a look at [`src/discretization/MOL_discretization.jl`](https://github.com/SciML/MethodOfLines.jl/blob/master/src/MOL_discretization.jl) to get a high level overview of how the discretization works. A more concise description can be found [here](@ref hiw). Feel free to post an issue if you would like help understanding anything, or want to know developer opinions on the best way to go about implementing something.
 
 ## Adding new finite difference schemes
 
@@ -27,7 +27,7 @@ Take a look at [`src/discretization/generate_finite_difference_rules.jl`](https:
 
 First terms are split, isolating particular cases. Then, rules are generated and applied.
 
-Identify a rule which will match your case, then write a function that will handle how to apply that scheme for each index in the interior, for each combination of independant and dependant variables.
+Identify a rule which will match your case, then write a function that will handle how to apply that scheme for each index in the interior, for each combination of independent and dependant variables.
 
 This should be a function of the current index `II::CartesianIndex`, an independent variable `x` which represents the direction of the derivative, and a dependent variable `u`, which is the variable of which the derivative will be taken. The discrete representation of `u` is found in `s.discvars[u]`, which is an array with the same number of spatial dimensions as `u`, each index a symbol representing the discretized `u` at that index. Using this, and cartesian index offsets from `II`, create a finite difference/volume symbolic expression for the approximation of the derivative form you are trying to discretize. This should be returned.
 
