@@ -56,7 +56,8 @@ function PDEBase.construct_var_equation_mapping(
         pdeorders = Dict(map(x -> x => d_orders(x, [pde]), s.x̄))
 
         # Add ghost points to pad stencil extents
-        lowerextents, upperextents = calculate_stencil_extents(
+        lowerextents,
+        upperextents = calculate_stencil_extents(
             s, u, discretization, pdeorders, boundarymap)
         push!(extents, pde => (lowerextents, upperextents))
         lower = [max(e, l) for (e, l) in zip(lowerextents, lower)]
@@ -79,7 +80,7 @@ function generate_interior(lower, upper, u, s,
     args = remove(arguments(u), s.time)
 
     ret = s.Igrid[u][[((1 + lower[x2i(s, u, x)]):(length(s.grid[x]) - upper[x2i(s, u, x)]))
-                      for x in args]...]
+                                 for x in args]...]
     return ret
 end
 

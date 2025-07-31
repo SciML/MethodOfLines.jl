@@ -43,7 +43,8 @@ function cartesian_nonlinear_laplacian(
     #* Need to see how to handle this with interface boundaries
 
     cliplen = length(s, x) - 1
-    outerweights, outerstencil = get_half_offset_weights_and_stencil(
+    outerweights,
+    outerstencil = get_half_offset_weights_and_stencil(
         D_outer, II - unitindex(N, j), s, bs, u, jx, cliplen)
 
     interface_wrap(stencil) = bwrap.(stencil, (bs,), (s,), (jx,))
@@ -54,7 +55,7 @@ function cartesian_nonlinear_laplacian(
                                   for I in outerstencil]
     function deriv_weights_and_stencil(u, i, order)
         get_half_offset_weights_and_stencil(
-            derivweights.halfoffsetmap[1][Differential(x)^order],
+            derivweights.halfoffsetmap[1][Differential(x) ^ order],
             outerstencil[i], s, bs, u, (x2i(s, u, x), x))
     end
 
@@ -130,7 +131,9 @@ end
 @inline function generate_nonlinlap_rules(II::CartesianIndex, s::DiscreteSpace, depvars,
         derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
     rules = reduce(safe_vcat,
-        [vec([@rule *(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => *(
+        [vec([@rule *(~~c,
+                  $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)),
+                  ~~d) => *(
                   ~c...,
                   cartesian_nonlinear_laplacian(*(~a..., ~b...), Idx(II, s, u, indexmap),
                       derivweights, s, indexmap, bcmap, depvars, x, u),
@@ -139,7 +142,9 @@ end
 
     rules = safe_vcat(rules,
         reduce(safe_vcat,
-            [vec([@rule $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => cartesian_nonlinear_laplacian(
+            [vec([@rule $(Differential(x))(*(~~a,
+                      $(Differential(x))(u),
+                      ~~b)) => cartesian_nonlinear_laplacian(
                       *(~a..., ~b...), Idx(II, s, u, indexmap),
                       derivweights, s, indexmap, bcmap, depvars, x, u) for x in ivs(u, s)])
              for u in depvars],
@@ -147,7 +152,8 @@ end
 
     rules = safe_vcat(rules,
         reduce(safe_vcat,
-            [vec([@rule ($(Differential(x))($(Differential(x))(u) / ~a)) => cartesian_nonlinear_laplacian(
+            [vec([@rule ($(Differential(x))($(Differential(x))(u) /
+                                            ~a)) => cartesian_nonlinear_laplacian(
                       1 / ~a, Idx(II, s, u, indexmap), derivweights,
                       s, indexmap, bcmap, depvars, x, u) for x in ivs(u, s)])
              for u in depvars],
@@ -155,7 +161,9 @@ end
 
     rules = safe_vcat(rules,
         reduce(safe_vcat,
-            [vec([@rule *(~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c) => *(
+            [vec([@rule *(~~b,
+                      ($(Differential(x))($(Differential(x))(u) / ~a)),
+                      ~~c) => *(
                       ~b...,
                       ~c...,
                       cartesian_nonlinear_laplacian(
@@ -166,7 +174,9 @@ end
 
     rules = safe_vcat(rules,
         reduce(safe_vcat,
-            [vec([@rule /(*(~~b, ($(Differential(x))(*(~~a, $(Differential(x))(u), ~~d))), ~~c), ~e) => /(
+            [vec([@rule /(
+                      *(~~b, ($(Differential(x))(*(~~a, $(Differential(x))(u), ~~d))), ~~c),
+                      ~e) => /(
                       *(~b...,
                           ~c...,
                           cartesian_nonlinear_laplacian(

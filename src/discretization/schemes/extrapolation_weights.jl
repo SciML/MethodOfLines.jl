@@ -26,7 +26,8 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int, dx::T) where
                                                                               x0)),
                                                                       i,
                                                                       zero(T)))
-                                                              for (i, x0) in enumerate(L_boundary_deriv_spots)]
+                                                              for (i, x0) in
+                                                                  enumerate(L_boundary_deriv_spots)]
     low_boundary_coefs = convert(SVector{boundary_point_count}, _low_boundary_coefs)
 
     # _high_boundary_coefs    = SVector{boundary_stencil_length, T}[convert(SVector{boundary_stencil_length, T}, (1/dx^derivative_order) * calculate_weights(derivative_order, oneunit(T)*x0, reverse(right_boundary_x))) for x0 in R_boundary_deriv_spots]
@@ -85,7 +86,8 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int,
                                                                              low_boundary_x[i + 1])),
                                                                      i + 1,
                                                                      zero(T)))
-                                                             for i in 0:(boundary_point_count - 1)]
+                                                             for i in
+                                                                 0:(boundary_point_count - 1)]
 
     high_boundary_coefs = SVector{boundary_stencil_length, T}[convert(
                                                                   SVector{
@@ -100,7 +102,8 @@ function BoundaryInterpolatorExtrapolator(approximation_order::Int,
                                                                       length(high_boundary_x) -
                                                                       i,
                                                                       zero(T)))
-                                                              for i in 0:(boundary_point_count - 1)]
+                                                              for i in
+                                                                  0:(boundary_point_count - 1)]
 
     offside = 0
     coefficients = nothing

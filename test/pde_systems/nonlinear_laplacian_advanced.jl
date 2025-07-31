@@ -57,8 +57,9 @@ end
 
     abs∇H = sqrt(Dx(H(t, x, y))^2 + Dy(H(t, x, y)^2))
 
-    eqs = [Dt(H(t, x, y)) ~ Dx(Γ * H(t, x, y)^(n + 2) * (abs∇H^(n - 1)) * Dx(H(t, x, y))) +
-                            Dy(Γ * H(t, x, y)^(n + 2) * (abs∇H^(n - 1)) * Dy(H(t, x, y)))]
+    eqs = [Dt(H(t, x, y)) ~
+           Dx(Γ * H(t, x, y)^(n + 2) * (abs∇H^(n - 1)) * Dx(H(t, x, y))) +
+           Dy(Γ * H(t, x, y)^(n + 2) * (abs∇H^(n - 1)) * Dy(H(t, x, y)))]
 
     bcs = [H(0.0, x, y) ~ asf(0.0, x, y),
         H(t, xmin, y) ~ 0.0,

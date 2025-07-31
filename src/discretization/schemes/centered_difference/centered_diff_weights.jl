@@ -30,7 +30,8 @@ function CompleteCenteredDifference(derivative_order::Int,
                                                                       oneunit(T) *
                                                                       x0,
                                                                       left_boundary_x))
-                                                              for x0 in L_boundary_deriv_spots]
+                                                              for x0 in
+                                                                  L_boundary_deriv_spots]
     low_boundary_coefs = convert(SVector{boundary_point_count}, _low_boundary_coefs)
 
     # _high_boundary_coefs    = SVector{boundary_stencil_length, T}[convert(SVector{boundary_stencil_length, T}, (1/dx^derivative_order) * calculate_weights(derivative_order, oneunit(T)*x0, reverse(right_boundary_x))) for x0 in R_boundary_deriv_spots]
@@ -81,7 +82,8 @@ function CompleteCenteredDifference(derivative_order::Int,
                                                                      derivative_order,
                                                                      low_boundary_x[i + 1],
                                                                      low_boundary_x))
-                                                             for i in 0:(boundary_point_count - 1)]
+                                                             for i in
+                                                                 0:(boundary_point_count - 1)]
 
     high_boundary_coefs = SVector{boundary_stencil_length, T}[convert(
                                                                   SVector{
@@ -91,7 +93,8 @@ function CompleteCenteredDifference(derivative_order::Int,
                                                                       derivative_order,
                                                                       high_boundary_x[end - i],
                                                                       high_boundary_x))
-                                                              for i in 0:(boundary_point_count - 1)]
+                                                              for i in
+                                                                  0:(boundary_point_count - 1)]
 
     offside = 0
     coefficients = nothing

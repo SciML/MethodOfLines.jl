@@ -39,7 +39,7 @@ using ModelingToolkit: Differential
 
     xdisc = sol[x]
     tdisc = sol[t]
-    usol = sol[u(t,x)]
+    usol = sol[u(t, x)]
 
     asol = [assf(t, x) for t in tdisc, x in xdisc]
     @test_broken usol ≈ asol atol = 1e-3

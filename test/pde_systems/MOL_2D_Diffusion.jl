@@ -87,10 +87,11 @@ end
     analytic_sol_func(t, x, y) = exp(x + y) * cos(x + y + 4t)
 
     # Equation
-    eq = Dt(u(t, x, y)) ~ Dx((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
-                             Dx(u(t, x, y))) +
-                          Dy((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
-                             Dy(u(t, x, y)))
+    eq = Dt(u(t, x, y)) ~
+         Dx((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
+            Dx(u(t, x, y))) +
+         Dy((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
+            Dy(u(t, x, y)))
 
     # Initial and boundary conditions
     bcs = [u(t_min, x, y) ~ analytic_sol_func(t_min, x, y),

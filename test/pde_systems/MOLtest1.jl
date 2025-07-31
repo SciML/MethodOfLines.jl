@@ -97,7 +97,8 @@ end
     α = 1
     β = 4
     γ = 1
-    eq = Dt(u(x, t)) + u(x, t) * Dx(u(x, t)) + α * Dx2(u(x, t)) + β * Dx3(u(x, t)) + γ * Dx4(u(x, t)) ~ 0
+    eq = Dt(u(x, t)) + u(x, t) * Dx(u(x, t)) + α * Dx2(u(x, t)) + β * Dx3(u(x, t)) +
+         γ * Dx4(u(x, t)) ~ 0
 
     du(x, t; z = -x / 2 + t) = 15 / 2 * (tanh(z) + 1) * (3 * tanh(z) - 1) * sech(z)^2
 
@@ -272,10 +273,12 @@ end
     v0(x, y, t) = 27(x * (1 - x))^(3 / 2)
 
     eq = [
-        Dt(u(x, y, t)) ~ 1.0 + Dy(v(x, y, t)) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
-                         α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
-        Dt(v(x, y, t)) ~ -3.4 * Dx(u(x, y, t)) - v(x, y, t) * u(x, y, t)^2 +
-                         α * ∇²(v(x, y, t))]
+        Dt(u(x, y, t)) ~
+        1.0 + Dy(v(x, y, t)) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
+        α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
+        Dt(v(x, y, t)) ~
+        -3.4 * Dx(u(x, y, t)) - v(x, y, t) * u(x, y, t)^2 +
+        α * ∇²(v(x, y, t))]
 
     domains = [x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),

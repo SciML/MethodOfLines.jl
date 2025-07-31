@@ -20,7 +20,7 @@ using DomainSets
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
 
     @test map(v -> sol[v], [a, b, c, d]) ≈ ones(4)
-end 
+end
 
 # Laplace's Equation, same as above but with MOL discretization
 @testset "1D Laplace - constant solution" begin
