@@ -31,7 +31,8 @@ function PDEBase.transform_pde_system!(
         end
     end
 
-    sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū), sys.ps, name = sys.name, defaults = sys.defaults)
+    sys = PDESystem(eqs, bcs, sys.domain, sys.ivs, Num.(v.ū),
+        sys.ps, name = sys.name, defaults = sys.defaults)
     return sys
 end
 
@@ -140,7 +141,8 @@ function descend_to_incompatible(term, v)
                 if nonlinlapterm !== nothing
                     badterm, shouldexpand = check_deriv_arg(nonlinlapterm, v)
                 else
-                    badterm, shouldexpand = filter_differentials(
+                    badterm,
+                    shouldexpand = filter_differentials(
                         arguments(term)[1], op, v, 1)
                 end
 

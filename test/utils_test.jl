@@ -69,7 +69,8 @@ end
     α = 1
     β = 4
     γ = 1
-    eq = Dt(u(x, t)) + u(x, t) * Dx(u(x, t)) + α * Dx2(u(x, t)) + β * Dx3(u(x, t)) + γ * Dx4(u(x, t)) ~ 0
+    eq = Dt(u(x, t)) + u(x, t) * Dx(u(x, t)) + α * Dx2(u(x, t)) + β * Dx3(u(x, t)) +
+         γ * Dx4(u(x, t)) ~ 0
     @test MethodOfLines.differential_order(eq.lhs, x.val) == Set([4, 3, 2, 1])
 end
 

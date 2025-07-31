@@ -3,7 +3,6 @@ using Combinatorics: permutations
 
 const bigint = div(typemax(Int), 2)
 
-
 @testset "Test 00: recognize relevant variable for equations, time defined" begin
     @parameters x, t
     @variables u(..), v(..), w(..)
@@ -12,22 +11,21 @@ const bigint = div(typemax(Int), 2)
 
     Dt = Differential(t)
 
-    t_min= 0.
+    t_min = 0.0
     t_max = 2.0
-    x_min = 0.
+    x_min = 0.0
     x_max = 20.0
 
     dx = 1.0
 
     domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 
+    pde = [Dt(u(t, x)) ~ +Dx(1)(u(t, x))+w(t, x),
+        Dt(v(t, x)) ~ -Dx(2)(v(t, x))+w(t, x),
+        Dt(w(t, x)) ~ -Dx(3)(w(t, x))+u(t, x)+v(t, x)]
+    bcs = [u(0, x) ~ 0, u(t, 0) ~ 0, u(t, Float64(π)) ~ 0]
 
-    pde = [Dt(u(t,x)) ~ +Dx(1)(u(t,x))+w(t,x),
-           Dt(v(t,x)) ~ -Dx(2)(v(t,x))+w(t,x),
-           Dt(w(t,x)) ~ -Dx(3)(w(t,x))+u(t,x)+v(t,x)]
-    bcs = [u(0,x) ~ 0, u(t,0) ~ 0, u(t,Float64(π)) ~ 0]
-
-    @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
+    @named pdesys = PDESystem(pde, bcs, domains, [t, x], [u(t, x), v(t, x), w(t, x)])
 
     # Test centered order
     disc = MOLFiniteDifference([x=>dx], t)
@@ -37,13 +35,12 @@ const bigint = div(typemax(Int), 2)
     s = MethodOfLines.construct_discrete_space(v, disc)
 
     m = MethodOfLines.buildmatrix(pde, s)
-    
+
     test = [1 2+bigint 0; 1 0 2+bigint; 2+bigint 1 1]
     perms = permutations([1, 2, 3])
     @test any(perms) do perm
         m == test[:, perm]
     end
-
 end
 
 @testset "Test 00a: recognize relevant variable for equations, time undefined, multiple choices" begin
@@ -54,22 +51,21 @@ end
 
     Dt = Differential(t)
 
-    t_min= 0.
+    t_min = 0.0
     t_max = 2.0
-    x_min = 0.
+    x_min = 0.0
     x_max = 20.0
 
     dx = 1.0
 
     domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 
+    pde = [Dt(u(t, x)) ~ +Dx(1)(u(t, x))+Dx(1)(w(t, x)),
+        Dt(v(t, x)) ~ -Dx(2)(v(t, x))+Dx(2)(w(t, x)),
+        Dt(w(t, x)) ~ -Dx(3)(w(t, x))+Dx(3)(u(t, x))+Dx(3)(v(t, x))]
+    bcs = [u(0, x) ~ 0, u(t, 0) ~ 0, u(t, Float64(π)) ~ 0]
 
-    pde = [Dt(u(t,x)) ~ +Dx(1)(u(t,x))+Dx(1)(w(t,x)),
-           Dt(v(t,x)) ~ -Dx(2)(v(t,x))+Dx(2)(w(t,x)),
-           Dt(w(t,x)) ~ -Dx(3)(w(t,x))+Dx(3)(u(t,x))+Dx(3)(v(t,x))]
-    bcs = [u(0,x) ~ 0, u(t,0) ~ 0, u(t,Float64(π)) ~ 0]
-
-    @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
+    @named pdesys = PDESystem(pde, bcs, domains, [t, x], [u(t, x), v(t, x), w(t, x)])
 
     # Test centered order
     disc = MOLFiniteDifference([x=>dx, t=>dx])
@@ -79,7 +75,7 @@ end
     s = MethodOfLines.construct_discrete_space(v, disc)
     m = MethodOfLines.buildmatrix(pde, s)
     test = [2 2 0; 3 0 3; 4 4 4]
-    
+
     perms = permutations([1, 2, 3])
     @test any(perms) do perm
         m == test[:, perm]
@@ -94,22 +90,21 @@ end
 
     Dt = Differential(t)
 
-    t_min= 0.
+    t_min = 0.0
     t_max = 2.0
-    x_min = 0.
+    x_min = 0.0
     x_max = 20.0
 
     dx = 1.0
 
     domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 
+    pde = [Dt(u(t, x)) ~ +Dx(1)(u(t, x))+w(t, x),
+        Dt(v(t, x)) ~ -Dx(2)(v(t, x))+Dx(2)(w(t, x)),
+        Dt(w(t, x)) ~ -Dx(3)(w(t, x))+Dx(3)(u(t, x)+v(t, x))]
+    bcs = [u(0, x) ~ 0, u(t, 0) ~ 0, u(t, Float64(π)) ~ 0]
 
-    pde = [Dt(u(t,x)) ~ +Dx(1)(u(t,x))+w(t,x),
-           Dt(v(t,x)) ~ -Dx(2)(v(t,x))+Dx(2)(w(t,x)),
-           Dt(w(t,x)) ~ -Dx(3)(w(t,x))+Dx(3)(u(t,x)+v(t,x))]
-    bcs = [u(0,x) ~ 0, u(t,0) ~ 0, u(t,Float64(π)) ~ 0]
-
-    @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
+    @named pdesys = PDESystem(pde, bcs, domains, [t, x], [u(t, x), v(t, x), w(t, x)])
 
     # Test centered order
     disc = MOLFiniteDifference([x=>dx, t=>1.0])
@@ -123,7 +118,6 @@ end
     @test any(perms) do perm
         m == test[:, perm]
     end
-
 end
 
 @testset "Test 00c: recognize relevant variable for equations, time undefined, ranking important" begin
@@ -134,22 +128,22 @@ end
 
     Dt = Differential(t)
 
-    t_min= 0.
+    t_min = 0.0
     t_max = 2.0
-    x_min = 0.
+    x_min = 0.0
     x_max = 20.0
 
     dx = 1.0
 
     domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
 
-    pde  = [Dt(u(t,x)) ~ Dx(v(t,x)),
-            u(t,x) ~ w(t,x)*w(t,x),
-            v(t,x) ~ w(t,x)*Dx(w(t,x))]
+    pde = [Dt(u(t, x)) ~ Dx(v(t, x)),
+        u(t, x) ~ w(t, x)*w(t, x),
+        v(t, x) ~ w(t, x)*Dx(w(t, x))]
 
-    bcs = [u(0,x) ~ 0, u(t,0) ~ 0, u(t,Float64(π)) ~ 0]
+    bcs = [u(0, x) ~ 0, u(t, 0) ~ 0, u(t, Float64(π)) ~ 0]
 
-    @named pdesys = PDESystem(pde,bcs,domains,[t,x],[u(t,x), v(t,x), w(t,x)])
+    @named pdesys = PDESystem(pde, bcs, domains, [t, x], [u(t, x), v(t, x), w(t, x)])
 
     # Test centered order
     disc = MOLFiniteDifference([x=>dx, t=>1.0])
@@ -159,18 +153,17 @@ end
     s = MethodOfLines.construct_discrete_space(v, disc)
     m = MethodOfLines.buildmatrix(pde, s)
     test = [0 2 2; 1 1 0; 2 0 1]
-    
+
     perms = permutations([1, 2, 3])
     @test any(perms) do perm
         m == test[:, perm]
     end
-
 end
 
 @testset "Test 01a: Build variable mapping - one right choice simple" begin
     m = hcat([0, 1, 0],
-             [0, 0, 1],
-             [1, 0, 0])
+        [0, 0, 1],
+        [1, 0, 0])
     pdes = ["a", "b", "c"]
     vars = ["x", "y", "z"]
 
@@ -183,8 +176,8 @@ end
 
 @testset "Test 01b: Build variable mapping - one right choice complex" begin
     m = hcat([0, 1, 1],
-             [1, 0, 1],
-             [0, 1, 0])
+        [1, 0, 1],
+        [0, 1, 0])
     pdes = ["a", "b", "c"]
     vars = ["x", "y", "z"]
 
@@ -197,8 +190,8 @@ end
 
 @testset "Test 01c: Build variable mapping - two right choices" begin
     m = hcat([0, 1, 1],
-             [1, 0, 1],
-             [1, 1, 0])
+        [1, 0, 1],
+        [1, 1, 0])
     pdes = ["a", "b", "c"]
     vars = ["x", "y", "z"]
     out = Dict(MethodOfLines.build_variable_mapping(m, vars, pdes))
@@ -215,22 +208,23 @@ end
 
 @testset "Test 01d: Build variable mapping - any choice correct" begin
     m = hcat([1, 1, 1],
-             [1, 1, 1],
-             [1, 1, 1])
+        [1, 1, 1],
+        [1, 1, 1])
     pdes = ["a", "b", "c"]
     vars = ["x", "y", "z"]
 
     perms = permutations(vars)
     dict = Dict(MethodOfLines.build_variable_mapping(m, vars, pdes))
-    @test any(map(perm -> dict == Dict(["a" => perm[1],
-                                        "b" => perm[2],
-                                        "c" => perm[3]]), perms))
+    @test any(map(
+        perm -> dict == Dict(["a" => perm[1],
+            "b" => perm[2],
+            "c" => perm[3]]), perms))
 end
 
 @testset "Test 01e: Build variable mapping - no correct mapping" begin
     m = hcat([1, 1, 0],
-             [1, 1, 0],
-             [1, 1, 0])
+        [1, 1, 0],
+        [1, 1, 0])
 
     pdes = ["a", "b", "c"]
     vars = ["x", "y", "z"]

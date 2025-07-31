@@ -92,7 +92,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N, M, G}, boundary, derivweigh
         othervars)
 
     depvarderivbcmaps = [(Differential(x_)^d)(u_) => half_offset_centered_difference(
-                             derivweights.halfoffsetmap[1][Differential(x_)^d],
+                             derivweights.halfoffsetmap[1][Differential(x_) ^ d],
                              II, s, [], (j, x_), u, ufunc) for d in derivweights.orders[x_]]
 
     depvarbcmaps = [v_ => half_offset_centered_difference(
@@ -118,7 +118,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N, M, G}, boundary, derivweigh
         II = CartesianIndex(is...)
 
         depvarderivbcmaps = [(Differential(x__)^d)(u__) => half_offset_centered_difference(
-                                 derivweights.halfoffsetmap[1][Differential(x__)^d],
+                                 derivweights.halfoffsetmap[1][Differential(x__) ^ d],
                                  II, s, [], (j, x__), otheru, ufunc)
                              for d in derivweights.orders[x_]]
 
@@ -182,7 +182,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N, M, G}, boundary, derivweigh
         II = CartesianIndex(is...)
 
         otherderivmaps = [(Differential(x__)^d)(u__) => central_difference(
-                              derivweights.map[Differential(x__)^d], II, s,
+                              derivweights.map[Differential(x__) ^ d], II, s,
                               [], (x2i(s, otheru, x__), x__), otheru, ufunc)
                           for d in derivweights.orders[x__]]
         otherbcmaps = [u__ => s.discvars[otheru][II]]
@@ -219,7 +219,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N, M, G}, boundary, derivweigh
         othervars)
 
     depvarderivbcmaps = [(Differential(x_)^d)(u_) => central_difference(
-                             derivweights.map[Differential(x_)^d], II,
+                             derivweights.map[Differential(x_) ^ d], II,
                              s, [], (x2i(s, u, x_), x_), u, ufunc)
                          for d in derivweights.orders[x_]]
     depvarbcmaps = [v_ => s.discvars[depvar(v_, s)][II] for v_ in [u_; othervars]]
@@ -244,7 +244,7 @@ function boundary_value_maps(II, s::DiscreteSpace{N, M, G}, boundary, derivweigh
         II = CartesianIndex(is...)
 
         otherderivmaps = [(Differential(x__)^d)(u__) => central_difference(
-                              derivweights.map[Differential(x__)^d], II, s,
+                              derivweights.map[Differential(x__) ^ d], II, s,
                               [], (x2i(s, otheru, x__), x__), otheru, ufunc)
                           for d in derivweights.orders[x__]]
         otherbcmaps = [u__ => s.discvars[otheru][II]]

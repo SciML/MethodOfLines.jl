@@ -25,10 +25,12 @@ local sol
     v0(x, y, t) = 27(x * (1 - x))^(3 / 2)
 
     eq = [
-        Dt(u(x, y, t)) ~ 1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
-                         α * (Dxx(u(x, y, t)) + Dyy(u(x, y, t))) + brusselator_f(x, y, t),
-        Dt(v(x, y, t)) ~ 3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
-                         α * (Dxx(v(x, y, t)) + Dyy(v(x, y, t)))]
+        Dt(u(x, y, t)) ~
+        1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
+        α * (Dxx(u(x, y, t)) + Dyy(u(x, y, t))) + brusselator_f(x, y, t),
+        Dt(v(x, y, t)) ~
+        3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
+        α * (Dxx(v(x, y, t)) + Dyy(v(x, y, t)))]
 
     domains = [x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),

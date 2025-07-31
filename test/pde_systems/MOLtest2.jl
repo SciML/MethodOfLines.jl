@@ -53,7 +53,7 @@ using Test
 
     @testset "Test 03: ∂t(c(x, t)) ~ ∂x(1.0 / (1.0/D₀ + exp(α * (c(x, t) - χ))/D₀) * ∂x(c(x, t)))" begin
         diff_eq = ∂t(c(x, t)) ~ ∂x(1.0 / (1.0 / D₀ + exp(α * (c(x, t) - χ)) / D₀) *
-                                   ∂x(c(x, t)))
+                     ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
         prob = discretize(pdesys, discretization)
@@ -391,7 +391,8 @@ end
     # PDE system
 
     @named pdesys = PDESystem(eqs, bcs_collected, domains, [t, x],
-        [u(t, x)[i] for i in 1:n_comp], params; defaults = Dict(p => [1.5, 2.0], q => [1.2, 1.8]))
+        [u(t, x)[i] for i in 1:n_comp], params; defaults = Dict(p => [1.5, 2.0], q => [
+            1.2, 1.8]))
 
     # Method of lines discretization
     dx = 0.1
@@ -451,8 +452,9 @@ end
     #Heat Cap of earth
     C = f * ρ * c_w * H
 
-    eq = Dt(Tₛ(t, φ)) ~ ((1 - α_func(φ)) * Q_func(t, φ) - A - B * Tₛ(t, φ) +
-                         D * Dφ(cos(φ) * Dφ(Tₛ(t, φ))) / cos(φ)) / C
+    eq = Dt(Tₛ(t, φ)) ~
+         ((1 - α_func(φ)) * Q_func(t, φ) - A - B * Tₛ(t, φ) +
+          D * Dφ(cos(φ) * Dφ(Tₛ(t, φ))) / cos(φ)) / C
 
     bcs = [Tₛ(0, φ) ~ 12 - 40 * P₂(sin(φ)),
         Dφ(Tₛ(t, φmin)) ~ 0.0,

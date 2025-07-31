@@ -26,7 +26,8 @@ end
     central_ufunc(u, I, x) = s.discvars[u][I]
     return reduce(safe_vcat,
         [reduce(safe_vcat,
-             [[(Differential(x) * Differential(y))(u) => mixed_central_difference(
+             [[(Differential(x) *
+                Differential(y))(u) => mixed_central_difference(
                    (derivweights.map[Differential(x)], derivweights.map[Differential(y)]),
                    Idx(II, s, u, indexmap),
                    s,
