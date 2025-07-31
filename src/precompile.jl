@@ -23,12 +23,14 @@
             u0(x, y, t) = 22(y * (1 - y))^(3 / 2)
             v0(x, y, t) = 27(x * (1 - x))^(3 / 2)
 
-            eq = [Dt(u(x, y, t)) ~ 1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
-                                   α * ∇²(u(x, y, t)) + brusselator_f(x, y, t) +
-                                   Dx(u(x, y, t)) + Dy(v(x, y, t))
-                  Dt(v(x, y, t)) ~ 3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
-                                   α * ∇²(v(x, y, t)) + Dx(v(x, y, t) * Dx(u(x, y, t))) +
-                                   Dy(v(x, y, t) * Dy(u(x, y, t)))]
+            eq = [Dt(u(x, y, t)) ~
+                  1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
+                  α * ∇²(u(x, y, t)) + brusselator_f(x, y, t) +
+                  Dx(u(x, y, t)) + Dy(v(x, y, t))
+                  Dt(v(x, y, t)) ~
+                  3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
+                  α * ∇²(v(x, y, t)) + Dx(v(x, y, t) * Dx(u(x, y, t))) +
+                  Dy(v(x, y, t) * Dy(u(x, y, t)))]
 
             domains = [x ∈ Interval(x_min, x_max),
                 y ∈ Interval(y_min, y_max),

@@ -105,9 +105,11 @@ function PDEBase.construct_discrete_space(
     grid = Dict(grid)
 
     # Build symbolic variables
-    Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,))
+    Iaxies = [u => CartesianIndices(((axes(axies[x])[1]
+              for x in remove(arguments(u), t))...,))
               for u in depvars]
-    Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,))
+    Igrid = [u => CartesianIndices(((axes(grid[x])[1]
+             for x in remove(arguments(u), t))...,))
              for u in depvars]
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars)
@@ -137,9 +139,11 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap,
     grid = Dict(grid)
 
     # Build symbolic variables
-    Iaxies = [u => CartesianIndices(((axes(axies[x])[1] for x in remove(arguments(u), t))...,))
+    Iaxies = [u => CartesianIndices(((axes(axies[x])[1]
+              for x in remove(arguments(u), t))...,))
               for u in depvars]
-    Igrid = [u => CartesianIndices(((axes(grid[x])[1] for x in remove(arguments(u), t))...,))
+    Igrid = [u => CartesianIndices(((axes(grid[x])[1]
+             for x in remove(arguments(u), t))...,))
              for u in depvars]
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars)

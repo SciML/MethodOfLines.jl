@@ -20,8 +20,9 @@ using ModelingToolkit: get_dvs
     domains = [
         t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]
 
-    pde = u(t, x, y) ~ v(t, x, y) + Differential(x)(u(t, x, y)) +
-                       Differential(y)(v(t, x, y))
+    pde = u(t, x, y) ~
+          v(t, x, y) + Differential(x)(u(t, x, y)) +
+          Differential(y)(v(t, x, y))
 
     bcs = [u(t_min, x, y) ~ 0, u(t_max, x, y) ~ 0, v(t_min, x, y) ~ 0, v(t_max, x, y) ~ 0]
 
@@ -65,8 +66,9 @@ end
     domains = [
         t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max), y ∈ Interval(y_min, y_max)]
 
-    pde = u(t, x, y) ~ v(t, x, y) + Differential(x)(u(t, x, y)) +
-                       Differential(y)(v(t, x, y))
+    pde = u(t, x, y) ~
+          v(t, x, y) + Differential(x)(u(t, x, y)) +
+          Differential(y)(v(t, x, y))
     bcs = [u(t_min, x, y) ~ 0, u(t_max, x, y) ~ 0, v(t_min, x, y) ~ 0, v(t_max, x, y) ~ 0]
 
     @named pdesys = PDESystem(pde, bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)])

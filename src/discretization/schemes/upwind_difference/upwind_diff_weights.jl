@@ -30,7 +30,8 @@ function CompleteUpwindDifference(derivative_order::Int,
                                                                       oneunit(T) *
                                                                       x0,
                                                                       low_boundary_x))
-                                                              for x0 in L_boundary_deriv_spots]
+                                                              for x0 in
+                                                                  L_boundary_deriv_spots]
     low_boundary_coefs = convert(SVector{low_boundary_point_count}, _low_boundary_coefs)
 
     high_boundary_x = 0.0:-1.0:(-(boundary_stencil_length - 1.0))
@@ -46,7 +47,8 @@ function CompleteUpwindDifference(derivative_order::Int,
                                                                        oneunit(T) *
                                                                        x0,
                                                                        high_boundary_x))
-                                                               for x0 in R_boundary_deriv_spots]
+                                                               for x0 in
+                                                                   R_boundary_deriv_spots]
     high_boundary_coefs = convert(SVector{high_boundary_point_count},
         reverse(_high_boundary_coefs))
 
@@ -88,7 +90,8 @@ function CompleteUpwindDifference(derivative_order::Int,
     stencil_coefs = [convert(SVector{stencil_length, eltype(x)},
                          calculate_weights(derivative_order, x[i],
                              @view(x[(i - offside):(i + stencil_length - 1 - offside)])))
-                     for i in (low_boundary_point_count + 1):(length(x) - high_boundary_point_count)]
+                     for i in
+                         (low_boundary_point_count + 1):(length(x) - high_boundary_point_count)]
     # For each boundary point, for each tappoint in the half offset central difference stencil, we need to calculate the coefficients for the stencil.
 
     low_boundary_coefs = [convert(SVector{boundary_stencil_length, eltype(x)},

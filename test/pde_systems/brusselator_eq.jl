@@ -27,10 +27,12 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
     v0(x, y, t) = 27(x * (1 - x))^(3 / 2)
 
     eq = [
-        Difft(u(x, y, t)) ~ 1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
-                            α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
-        Difft(v(x, y, t)) ~ 3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
-                            α * ∇²(v(x, y, t))]
+        Difft(u(x, y, t)) ~
+        1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
+        α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
+        Difft(v(x, y, t)) ~
+        3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
+        α * ∇²(v(x, y, t))]
 
     domains = [x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),
@@ -77,7 +79,8 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
         @inbounds for I in CartesianIndices((N, N))
             i, j = Tuple(I)
             x, y = xyd_brusselator[I[1]], xyd_brusselator[I[2]]
-            ip1, im1, jp1, jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
+            ip1, im1,
+            jp1, jm1 = limit(i + 1, N), limit(i - 1, N), limit(j + 1, N),
             limit(j - 1, N)
             du[i, j, 1] = alpha *
                           (u[im1, j, 1] + u[ip1, j, 1] + u[i, jp1, 1] + u[i, jm1, 1] -

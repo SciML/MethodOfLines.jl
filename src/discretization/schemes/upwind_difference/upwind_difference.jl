@@ -64,8 +64,8 @@ function upwind_difference(d::Int, II::CartesianIndex, s::DiscreteSpace,
     j, x = jx
     # return if this is an ODE
     ndims(u, s) == 0 && return 0
-    D = !ispositive ? derivweights.windmap[1][Differential(x)^d] :
-        derivweights.windmap[2][Differential(x)^d]
+    D = !ispositive ? derivweights.windmap[1][Differential(x) ^ d] :
+        derivweights.windmap[2][Differential(x) ^ d]
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative
     weights, Itap = _upwind_difference(D, II, s, bs, ispositive, u, jx)
@@ -91,7 +91,9 @@ end
     rules = safe_vcat(#Catch multiplication
         reduce(safe_vcat,
             [reduce(safe_vcat,
-                 [[@rule *(~~a, $(Differential(x)^d)(u), ~~b) => upwind_difference(
+                 [[@rule *(~~a,
+                       $(Differential(x)^d)(u),
+                       ~~b) => upwind_difference(
                        *(~a..., ~b...), d, Idx(II, s, u, indexmap), s,
                        filter_interfaces(bcmap[operation(u)][x]), depvars,
                        derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap)
@@ -106,7 +108,8 @@ end
         #Catch division and multiplication, see issue #1
         reduce(safe_vcat,
             [reduce(safe_vcat,
-                 [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b), ~c) => upwind_difference(
+                 [[@rule /(*(~~a, $(Differential(x)^d)(u), ~~b),
+                       ~c) => upwind_difference(
                        *(~a..., ~b...) / ~c, d, Idx(II, s, u, indexmap), s,
                        filter_interfaces(bcmap[operation(u)][x]), depvars,
                        derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap)

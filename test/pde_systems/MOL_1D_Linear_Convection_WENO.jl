@@ -422,8 +422,9 @@ end
     γ = 1.1
     δ = 3.1
 
-    eq = Dt(u(t, x)) + α * Dx(u(t, x)) ~ β * Dxx(u(t, x)) + γ * Dxxx(u(t, x)) -
-                                         δ * Dxxxx(u(t, x))
+    eq = Dt(u(t, x)) + α * Dx(u(t, x)) ~
+         β * Dxx(u(t, x)) + γ * Dxxx(u(t, x)) -
+         δ * Dxxxx(u(t, x))
     domain = [x ∈ Interval(0.0, 2π),
         t ∈ Interval(0.0, 3.0)]
 

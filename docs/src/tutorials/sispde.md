@@ -50,12 +50,14 @@ end
 
 # 1D PDE and boundary conditions
 eq = [
-    Dt(S(t, x)) ~ dS * Dxx(S(t, x)) -
-                  ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) +
-                  γ(x) * I(t, x),
-    Dt(I(t, x)) ~ dI * Dxx(I(t, x)) +
-                  ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) -
-                  γ(x) * I(t, x)]
+    Dt(S(t, x)) ~
+    dS * Dxx(S(t, x)) -
+    ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) +
+    γ(x) * I(t, x),
+    Dt(I(t, x)) ~
+    dI * Dxx(I(t, x)) +
+    ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) -
+    γ(x) * I(t, x)]
 bcs = [S(0, x) ~ 0.9 + 0.1 * sin(2 * pi * x),
     I(0, x) ~ 0.1 + 0.1 * cos(2 * pi * x),
     Dx(S(t, 0)) ~ 0.0,

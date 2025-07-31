@@ -69,7 +69,7 @@ domains = [t ∈ Interval(t_min, t_max), x ∈ Interval(x_min, x_max)]
                 else
                     @test isequal(substitute(pde.rhs, rules),
                         MethodOfLines.central_difference(
-                            derivweights.map[Differential(x)^d],
+                            derivweights.map[Differential(x) ^ d],
                             II, s, (1, x), depvars[1], ufunc))
                 end
             end
@@ -109,7 +109,7 @@ end
             expr = MethodOfLines.cartesian_nonlinear_laplacian(
                 (1 ~ 1).lhs, II, derivweights, s, depvars, x, u(t, x))
             expr2 = MethodOfLines.central_difference(
-                derivweights.map[Differential(x)^2], II, s, (1, x), u(t, x), ufunc)
+                derivweights.map[Differential(x) ^ 2], II, s, (1, x), u(t, x), ufunc)
             @test isequal(expr, expr2)
         end
     end

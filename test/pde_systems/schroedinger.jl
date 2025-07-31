@@ -35,7 +35,8 @@ using MethodOfLines, OrdinaryDiffEq, DomainSets, ModelingToolkit, Test
 
     discψ = sol[ψ(t, x)]
 
-    analytic(t, x) = sqrt(2) * sin(2 * pi * x) * exp(-im * 4 * pi^2 * t) * ((1 + im)/sqrt(2))
+    analytic(t, x) = sqrt(2) * sin(2 * pi * x) * exp(-im * 4 * pi^2 * t) *
+                     ((1 + im)/sqrt(2))
 
     analψ = [analytic(t, x) for t in disct, x in discx]
 
@@ -46,7 +47,7 @@ using MethodOfLines, OrdinaryDiffEq, DomainSets, ModelingToolkit, Test
         @test u ./ maximum(u)≈u2 ./ maximum(u2) atol=1e-2
     end
     #using Plots
-    
+
     # anim = @animate for i in 1:length(disct)
     #     u = analψ[i, :]
     #     u2 = discψ[i, :]
@@ -58,33 +59,33 @@ end
 @testset "Schroedinger with complex bcs" begin
     @parameters t, x
     @variables ψ(..)
-    
+
     Dt = Differential(t)
     Dxx = Differential(x)^2
-    
+
     xmin = 0
     xmax = 1
     ϵ = 1e-2
-    
+
     V(x) = 0.0
-    
-    eq = [(im*ϵ)*Dt(ψ(t,x)) ~ (-0.5*ϵ^2)Dxx(ψ(t,x)) + V(x)*ψ(t,x)] # You must enclose complex equations in a vector, even if there is only one equation
-    
+
+    eq = [(im*ϵ)*Dt(ψ(t, x)) ~ (-0.5*ϵ^2)Dxx(ψ(t, x)) + V(x)*ψ(t, x)] # You must enclose complex equations in a vector, even if there is only one equation
+
     ψ0 = x -> exp((im/ϵ)*1e-1*sum(x))
-    
-    bcs = [ψ(0,x) => ψ0(x),
-        ψ(t,xmin) ~ exp((im/ϵ)*(1e-1*sum(xmin) - 0.5e-2*t)),
-        ψ(t,xmax) ~ exp((im/ϵ)*(1e-1*sum(xmax) - 0.5e-2*t))]
-    
+
+    bcs = [ψ(0, x) => ψ0(x),
+        ψ(t, xmin) ~ exp((im/ϵ)*(1e-1*sum(xmin) - 0.5e-2*t)),
+        ψ(t, xmax) ~ exp((im/ϵ)*(1e-1*sum(xmax) - 0.5e-2*t))]
+
     domains = [t ∈ Interval(0, 1), x ∈ Interval(xmin, xmax)]
-    
-    @named sys = PDESystem(eq, bcs, domains, [t, x], [ψ(t,x)])
-    
+
+    @named sys = PDESystem(eq, bcs, domains, [t, x], [ψ(t, x)])
+
     disc = MOLFiniteDifference([x => 300], t)
-    
+
     prob = discretize(sys, disc)
-    
+
     sol = solve(prob, TRBDF2(), saveat = 0.01)
 
     @test SciMLBase.successful_retcode(sol)
-end 
+end
