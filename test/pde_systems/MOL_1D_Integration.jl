@@ -219,8 +219,7 @@ end
     #           label="Analytical", 
     #           linewidth=2, 
     #           linestyle=:dash)
-        
-    #     #legend!(:topright)
+
     # end
     # gif(anim, "integro_diff_solution.gif", fps=10) # Save the animation
 end
@@ -289,4 +288,150 @@ end
     #           linestyle=:dash)
     # end
     # gif(anim, "integro_diff_solution.gif", fps=10) # Save the animation
+end
+
+@testset "Test 04: PIDE with spatial derivative and source term - domain [0, 4π]" begin
+    # Equation: ∂u/∂t = ∂u/∂x - u(t,x) - ∫₀ˣ u(t,ξ) dξ + h(x,t)
+    # where h(x,t) = -sin(x)sin(t) + sin(x)cos(t) - cos(x)cos(t) + cos(t)(1 - cos(x))
+    # On domain: x ∈ [0,L]=[0,2π] and t ∈ [0,T]=[0,1]
+    # Initial condition: u(0,x) = sin(x)
+    # Boundary conditions: u(t,0) = 0, u(t,2π) = sin(2π)cos(t) = 0
+    # Analytical solution: u(t,x) = sin(x)cos(t)
+    
+    @parameters t, x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    xmin = 0.0
+    xmax = 4π
+
+    I0_to_x = Integral(x in DomainSets.ClosedInterval(xmin, x)) # integral from 0 to x
+
+    # Source term h(x,t) that admits the analytical solution
+    h(x, t) = -sin(x)*sin(t) + sin(x)*cos(t) - cos(x)*cos(t) + cos(t)*(1 - cos(x))
+
+    # PIDE: ∂u/∂t = ∂u/∂x - u(t,x) - ∫₀ˣ u(t,ξ) dξ + h(x,t)
+    eqs = [Dt(u(t,x)) ~ Dx(u(t,x)) - u(t,x) - I0_to_x(u(t,x)) + h(x, t)]
+    bcs = [
+        u(0, x) ~ sin(x),              # Initial condition
+        u(t, 0) ~ 0.0,                 # Boundary condition at x = 0
+        u(t, xmax) ~ sin(xmax)*cos(t)  # Boundary condition at x = 4π (sin(4π) = 0)
+        ]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(xmin, xmax)]
+    @named pde_system = PDESystem(eqs, bcs, domains, [t, x], [u(t, x)])
+
+    # Discretize and compute numerical solution
+    disc = MOLFiniteDifference([x => 200], t)
+    prob = discretize(pde_system, disc)
+    sol = solve(prob, Tsit5(), saveat=0.1)
+
+    # Extract numerical solution at grid points
+    xdisc = sol[x]
+    tdisc = sol[t]
+    usol  = sol[u(t,x)]
+
+    # Calculate analytical solution at grid points
+    analytical_solution(t, x) = sin(x) * cos(t)
+    exact = [analytical_solution(t_, x_) for t_ in tdisc, x_ in xdisc]
+
+    # Compare numerical and analytical solutions
+    @test usol ≈ exact atol=0.36
+
+    # # Create animated plot
+    # using Plots  # Add this import
+    # anim = @animate for (i, t_val) in enumerate(tdisc)
+    #     plot(xdisc, usol[i, :], 
+    #          label="Numerical", 
+    #          linewidth=2,
+    #          xlabel="x", 
+    #          ylabel="u(t,x)", 
+    #          title="PIDE Solution [0,4π] at t = $(round(t_val, digits=3))",
+    #          ylim=(-1.1, 1.1),
+    #          xlim=(xmin, xmax))
+        
+    #     plot!(xdisc, exact[i, :], 
+    #           label="Analytical", 
+    #           linewidth=2, 
+    #           linestyle=:dash)
+        
+    # end
+    # gif(anim, "pide_solution_4pi.gif", fps=10) # Save the animation
+end
+
+
+@testset "Test 04b: PIDE with spatial derivative and source term - mirrored domain [-4π, 0]" begin
+    # Mirrored version with transformation y = -x, so x = -y
+    # Original equation:    ∂u/∂t =  ∂u/∂x - u(t,x) - ∫₀ˣ u(t,ξ) dξ + h(x,t)
+    # Transformed equation: ∂u/∂t = -∂u/∂y - u(t,y) - ∫ₓ⁰ u(t,η) dη + h(-y,t)
+    # where h(-y,t) = -sin(-y)sin(t) + sin(-y)cos(t) - cos(-y)cos(t) + cos(t)(1 - cos(-y))
+    #               = sin(y)sin(t) - sin(y)cos(t) - cos(y)cos(t) + cos(t)(1 - cos(y))
+    # On domain: y ∈ [-4π, 0] and t ∈ [0,1]
+    # Initial condition: u(0,y) = sin(-y) = -sin(y)
+    # Boundary conditions: u(t,0) = 0, u(t,-4π) = sin(-(-4π))cos(t) = sin(4π)cos(t) = 0
+    # Analytical solution: u(t,y) = sin(-y)cos(t) = -sin(y)cos(t)
+    
+    @parameters t, y
+    @variables u(..)
+    Dt = Differential(t)
+    Dy = Differential(y)
+    ymin = -4π
+    ymax = 0.0
+
+    # Integral from y to 0 (note the reversed limits)
+    Iy_to_0 = Integral(y in DomainSets.ClosedInterval(y, ymax))
+
+    # Source term h(-y,t) transformed for y coordinate
+    h_transformed(y, t) = sin(y)*sin(t) - sin(y)*cos(t) - cos(y)*cos(t) + cos(t)*(1 - cos(y))
+
+    # PIDE: ∂u/∂t = -∂u/∂y - u(t,y) - ∫ʸ⁰ u(t,η) dη + h(-y,t)
+    eqs = [Dt(u(t,y)) ~ -Dy(u(t,y)) - u(t,y) - Iy_to_0(u(t,y)) + h_transformed(y, t)]
+    bcs = [
+        u(0, y) ~ -sin(y),             # Initial condition: u(0,y) = sin(-y) = -sin(y)
+        u(t, 0) ~ 0.0,                 # Boundary condition at y = 0
+        u(t, ymin) ~ -sin(ymin)*cos(t) # Boundary condition at y = -4π (sin(-4π) = 0)
+        ]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        y ∈ Interval(ymin, ymax)]
+    @named pde_system = PDESystem(eqs, bcs, domains, [t, y], [u(t, y)])
+
+    # Discretize and compute numerical solution
+    disc = MOLFiniteDifference([y => 200], t)
+    prob = discretize(pde_system, disc)
+    sol = solve(prob, Tsit5(), saveat=0.1)
+
+    # Extract numerical solution at grid points
+    ydisc = sol[y]
+    tdisc = sol[t]
+    usol  = sol[u(t,y)]
+
+    # Calculate analytical solution at grid points
+    # Analytical solution: u(t,y) = sin(-y)cos(t) = -sin(y)cos(t)
+    analytical_solution(t, y) = -sin(y) * cos(t)
+    exact = [analytical_solution(t_, y_) for t_ in tdisc, y_ in ydisc]
+
+    # Compare numerical and analytical solutions
+    @test usol ≈ exact atol=0.36
+
+    # # Create animated plot
+    # using Plots  # Add this import
+    # anim = @animate for (i, t_val) in enumerate(tdisc)
+    #     plot(ydisc, usol[i, :], 
+    #          label="Numerical", 
+    #          linewidth=2,
+    #          xlabel="y", 
+    #          ylabel="u(t,y)", 
+    #          title="PIDE Solution [-4π,0] at t = $(round(t_val, digits=3))",
+    #          ylim=(-1.1, 1.1),
+    #          xlim=(ymin, ymax))
+        
+    #     plot!(ydisc, exact[i, :], 
+    #           label="Analytical", 
+    #           linewidth=2, 
+    #           linestyle=:dash)
+        
+    # end
+    # gif(anim, "pide_solution_mirrored_4pi.gif", fps=10) # Save the animation
 end
