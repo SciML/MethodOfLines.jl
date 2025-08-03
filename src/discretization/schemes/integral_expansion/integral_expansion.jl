@@ -1,31 +1,24 @@
 # use the trapezoid rule
-function _euler_integral(II, s, jx, u, ufunc, dx::Number) #where {T,N,Wind,DX<:Number}
+function _euler_integral(II, s, jx, u, ufunc, dx) #where {T,N,Wind,DX<:Number}
     j, x = jx
-    if II[j] == 1
+    if II[j] == 1 # recursively arrived at lower end of the domain
         return Num(0)
     end
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
     # dx for multiplication
     Itap = [II - I1, II]
-    weights = [dx / 2, dx / 2]
 
-    return sym_dot(weights, ufunc(u, Itap, x)) +
-           _euler_integral(II - I1, s, jx, u, ufunc, dx)
-end
-
-# Nonuniform dx
-function _euler_integral(II, s, jx, u, ufunc, dx::AbstractVector) #where {T,N,Wind,DX<:Number}
-    j, x = jx
-    if II[j] == 1
-        return Num(0)
+    if dx isa Number # Uniform dx
+        weights = [dx / 2, dx / 2]
+    elseif dx isa AbstractVector # Nonuniform dx
+        weights = fill(dx[II[j] - 1] / 2, 2)
+    else
+        error("Unsupported type of dx: $(type(dx))")
     end
-    # unit index in direction of the derivative
-    I1 = unitindex(ndims(u, s), j)
-    # dx for multiplication
-    Itap = [II - I1, II]
-    weights = fill(dx[II[j] - 1] / 2, 2)
-
+    
+    # sym_do computes from II to II - I1, 
+    # and recursive call computes from II - I1 to lower end of domain
     return sym_dot(weights, ufunc(u, Itap, x)) +
            _euler_integral(II - I1, s, jx, u, ufunc, dx)
 end
