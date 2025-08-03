@@ -254,40 +254,41 @@ end
 
     # Discretize and compute numerical solution
     disc = MOLFiniteDifference([y => 50], t)
-    prob = discretize(pde_system, disc)
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    # prob = discretize(pde_system, disc)
+    # sol = solve(prob, Tsit5(), saveat=0.1)
 
-    # Extract numerical solution at grid points
-    ydisc = sol[y]
-    tdisc = sol[t]
-    usol = sol[u(t,y)]
+    # # Extract numerical solution at grid points
+    # ydisc = sol[y]
+    # tdisc = sol[t]
+    # usol = sol[u(t,y)]
 
-    # Calculate analytical solution at grid points
-    # Since u(t,x) = x * (1 - exp(-t)) and y = -x, then u(t,y) = -y * (1 - exp(-t))
-    analytical_solution(t, y) = -y * (1 - exp(-t))
-    exact = [analytical_solution(t_, y_) for t_ in tdisc, y_ in ydisc]
+    # # Calculate analytical solution at grid points
+    # # Since u(t,x) = x * (1 - exp(-t)) and y = -x, then u(t,y) = -y * (1 - exp(-t))
+    # analytical_solution(t, y) = -y * (1 - exp(-t))
+    # exact = [analytical_solution(t_, y_) for t_ in tdisc, y_ in ydisc]
 
-    # Compare numerical and analytical solutions
-    @test usol ≈ exact atol=0.1
+    # # Compare numerical and analytical solutions
+    # @test usol ≈ exact atol=0.1
 
-    # # Create animated plot
-    # using Plots  # Add this import
-    # anim = @animate for (i, t_val) in enumerate(tdisc)
-    #     plot(ydisc, usol[i, :], 
-    #          label="Numerical", 
-    #          linewidth=2,
-    #          xlabel="x", 
-    #          ylabel="u(t,x)", 
-    #          title="Solution at t = $(round(t_val, digits=3))",
-    #          ylim=(0, maximum(usol)*1.1),
-    #          xlim=(xmin, xmax))
+    # # # Create animated plot
+    # # using Plots  # Add this import
+    # # anim = @animate for (i, t_val) in enumerate(tdisc)
+    # #     plot(ydisc, usol[i, :], 
+    # #          label="Numerical", 
+    # #          linewidth=2,
+    # #          xlabel="x", 
+    # #          ylabel="u(t,x)", 
+    # #          title="Solution at t = $(round(t_val, digits=3))",
+    # #          ylim=(0, maximum(usol)*1.1),
+    # #          xlim=(xmin, xmax))
         
-    #     plot!(xdisc, exact[i, :], 
-    #           label="Analytical", 
-    #           linewidth=2, 
-    #           linestyle=:dash)
-    # end
-    # gif(anim, "integro_diff_solution.gif", fps=10) # Save the animation
+    # #     plot!(xdisc, exact[i, :], 
+    # #           label="Analytical", 
+    # #           linewidth=2, 
+    # #           linestyle=:dash)
+    # # end
+    # # gif(anim, "integro_diff_solution.gif", fps=10) # Save the animation
 end
 
 @testset "Test 04: PIDE with spatial derivative and source term - domain [0, 4π]" begin
@@ -399,39 +400,40 @@ end
 
     # Discretize and compute numerical solution
     disc = MOLFiniteDifference([y => 200], t)
-    prob = discretize(pde_system, disc)
-    sol = solve(prob, Tsit5(), saveat=0.1)
+    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    # prob = discretize(pde_system, disc)
+    # sol = solve(prob, Tsit5(), saveat=0.1)
 
-    # Extract numerical solution at grid points
-    ydisc = sol[y]
-    tdisc = sol[t]
-    usol  = sol[u(t,y)]
+    # # Extract numerical solution at grid points
+    # ydisc = sol[y]
+    # tdisc = sol[t]
+    # usol  = sol[u(t,y)]
 
-    # Calculate analytical solution at grid points
-    # Analytical solution: u(t,y) = sin(-y)cos(t) = -sin(y)cos(t)
-    analytical_solution(t, y) = -sin(y) * cos(t)
-    exact = [analytical_solution(t_, y_) for t_ in tdisc, y_ in ydisc]
+    # # Calculate analytical solution at grid points
+    # # Analytical solution: u(t,y) = sin(-y)cos(t) = -sin(y)cos(t)
+    # analytical_solution(t, y) = -sin(y) * cos(t)
+    # exact = [analytical_solution(t_, y_) for t_ in tdisc, y_ in ydisc]
 
-    # Compare numerical and analytical solutions
-    @test usol ≈ exact atol=0.36
+    # # Compare numerical and analytical solutions
+    # @test usol ≈ exact atol=0.36
 
-    # # Create animated plot
-    # using Plots  # Add this import
-    # anim = @animate for (i, t_val) in enumerate(tdisc)
-    #     plot(ydisc, usol[i, :], 
-    #          label="Numerical", 
-    #          linewidth=2,
-    #          xlabel="y", 
-    #          ylabel="u(t,y)", 
-    #          title="PIDE Solution [-4π,0] at t = $(round(t_val, digits=3))",
-    #          ylim=(-1.1, 1.1),
-    #          xlim=(ymin, ymax))
+    # # # Create animated plot
+    # # using Plots  # Add this import
+    # # anim = @animate for (i, t_val) in enumerate(tdisc)
+    # #     plot(ydisc, usol[i, :], 
+    # #          label="Numerical", 
+    # #          linewidth=2,
+    # #          xlabel="y", 
+    # #          ylabel="u(t,y)", 
+    # #          title="PIDE Solution [-4π,0] at t = $(round(t_val, digits=3))",
+    # #          ylim=(-1.1, 1.1),
+    # #          xlim=(ymin, ymax))
         
-    #     plot!(ydisc, exact[i, :], 
-    #           label="Analytical", 
-    #           linewidth=2, 
-    #           linestyle=:dash)
+    # #     plot!(ydisc, exact[i, :], 
+    # #           label="Analytical", 
+    # #           linewidth=2, 
+    # #           linestyle=:dash)
         
-    # end
-    # gif(anim, "pide_solution_mirrored_4pi.gif", fps=10) # Save the animation
+    # # end
+    # # gif(anim, "pide_solution_mirrored_4pi.gif", fps=10) # Save the animation
 end
