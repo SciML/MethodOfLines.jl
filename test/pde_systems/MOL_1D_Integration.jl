@@ -227,7 +227,7 @@ end
 @testset "Test 03b: Mirrored version of: Partial integro-differential equation with time derivative, with sys transformation" begin
     # Original equation: ∂u/∂t + u(t,x) + ∫₀ˣ u(t,ξ) dξ = x + x²/2 * (1 - exp(-t))
     #   Mirrored version with transformation y = -x, x = -y:
-    # Equation:          ∂u/∂t + u(t,y) + ∫₀ˣ u(t,ξ) dξ = -x + x²/2 * (1 - exp(-t))
+    # Equation:          ∂u/∂t + u(t,y) + ∫_y ^⁰ u(t,ξ) dξ = -y + y²/2 * (1 - exp(-t))
     # Initial condition: u(0,y) = 0
     # Boundary condition: u(t,0) = 0
     # Analytical solution: u(t,y) = -y * (1 - exp(-t))
@@ -242,8 +242,7 @@ end
     # Integral from y to 0 (note the reversed limits)
     Iy_to_0 = Integral(y in DomainSets.ClosedInterval(y, ymax))
 
-    #eqs = [Dt(u(t,x)) + u(t,x) + Ix_0_to_x(u(t,x)) ~ x + x^2/2*(1-exp(-t))]
-    eqs = [Dt(u(t,y)) + u(t,y) - Iy_to_0(u(t,y)) ~ -y + y^2/2*(1-exp(-t))]
+    eqs = [Dt(u(t,y)) + u(t,y) + Iy_to_0(u(t,y)) ~ -y + y^2/2*(1-exp(-t))]
     bcs = [
         u(0,y) ~ 0.0,   # Initial condition
         u(t,0) ~ 0.0]   # Boundary condition (at y = 0, which corresponds to x = 0)
@@ -276,13 +275,13 @@ end
     #     plot(ydisc, usol[i, :], 
     #          label="Numerical", 
     #          linewidth=2,
-    #          xlabel="x", 
-    #          ylabel="u(t,x)", 
+    #          xlabel="y", 
+    #          ylabel="u(t,y)", 
     #          title="Solution at t = $(round(t_val, digits=3))",
     #          ylim=(0, maximum(usol)*1.1),
-    #          xlim=(xmin, xmax))
+    #          xlim=(ymin, ymax))
         
-    #     plot!(xdisc, exact[i, :], 
+    #     plot!(ydisc, exact[i, :], 
     #           label="Analytical", 
     #           linewidth=2, 
     #           linestyle=:dash)
