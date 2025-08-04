@@ -161,10 +161,11 @@ end
 end
 
 @testset "Test 03: Partial integro-differential equation with time derivative, with sys transformation" begin
-    # Equation: ∂u/∂t + u(t,x) + ∫₀ˣ u(t,ξ) dξ = x + x²/2 * (1 - exp(-t))
-    # Initial condition: u(0,x) = 0
+    # Equation: ∂u/∂t + u(t,x) + ∫₀ˣ u(t,ξ) dξ = x + x²/2 * (1 - exp(-t - τ))   with τ = 0.2 (alternatively τ = 0)
+    # On domain: x ∈ [0,2] and t ∈ [0,1]
+    # Initial condition: u(0,x) = x * (1 - exp(-τ))
     # Boundary condition: u(t,0) = 0
-    # Analytical solution: u(t,x) = x * (1 - exp(-t))
+    # Analytical solution: u(t,x) = x * (1 - exp(-t - τ))
     
     @parameters t, x
     @variables u(..)
@@ -175,10 +176,8 @@ end
 
     Ix_0_to_x = Integral(x in DomainSets.ClosedInterval(xmin, x)) # basically cumulative sum from 0 to x
 
-    #eqs = [Dt(u(t,x)) + u(t,x) + Ix_0_to_x(u(t,x)) ~ x + x^2/2*(1-exp(-t))]
     eqs = [Dt(u(t,x)) + u(t,x) + Ix_0_to_x(u(t,x)) ~ x + x^2/2*(1-exp(-t - 0.2))]
     bcs = [
-        # u(0,x) ~ 0.0,   # Initial condition
         u(0,x) ~ x * (1 - exp(-0.2)),   # Initial condition
         u(t,0) ~ 0.0]                   # Boundary condition
     domains = [
@@ -197,7 +196,7 @@ end
     usol = sol[u(t,x)]
 
     # Calculate analytical solution at grid points
-    analytical_solution(t, x) = x * (1 - exp(-(t+0.2)) )
+    analytical_solution(t, x) = x * (1 - exp(-t - 0.2) )
     exact = [analytical_solution(t_, x_) for t_ in tdisc, x_ in xdisc]
 
     # Compare numerical and analytical solutions
@@ -225,9 +224,10 @@ end
 end
 
 @testset "Test 03b: Mirrored version of: Partial integro-differential equation with time derivative, with sys transformation" begin
-    # Original equation: ∂u/∂t + u(t,x) + ∫₀ˣ u(t,ξ) dξ = x + x²/2 * (1 - exp(-t))
+    # Original equation: ∂u/∂t + u(t,x) + ∫₀ˣ u(t,ξ) dξ = x + x²/2 * (1 - exp(-t - τ))   with τ = 0
     #   Mirrored version with transformation y = -x, x = -y:
     # Equation:          ∂u/∂t + u(t,y) + ∫_y ^⁰ u(t,ξ) dξ = -y + y²/2 * (1 - exp(-t))
+    # On domain:         y ∈ [-2, 0] and t ∈ [0,1]
     # Initial condition: u(0,y) = 0
     # Boundary condition: u(t,0) = 0
     # Analytical solution: u(t,y) = -y * (1 - exp(-t))
@@ -290,13 +290,13 @@ end
 end
 
 @testset "Test 04: PIDE with spatial derivative and source term - domain [0, 4π]" begin
-    # Equation: ∂u/∂t = ∂u/∂x - u(t,x) - ∫₀ˣ u(t,ξ) dξ + h(x,t)
-    # where h(x,t) = -sin(x)sin(t) + sin(x)cos(t) - cos(x)cos(t) + cos(t)(1 - cos(x))
+    # Equation:  ∂u/∂t = ∂u/∂x - u(t,x) - ∫₀ˣ u(t,ξ) dξ + h(x,t)
+    #      where h(x,t) = -sin(x)sin(t) + sin(x)cos(t) - cos(x)cos(t) + cos(t)(1 - cos(x))
     # On domain: x ∈ [0,L]=[0,2π] and t ∈ [0,T]=[0,1]
     # Initial condition: u(0,x) = sin(x)
     # Boundary conditions: u(t,0) = 0, u(t,2π) = sin(2π)cos(t) = 0
     # Analytical solution: u(t,x) = sin(x)cos(t)
-    
+
     @parameters t, x
     @variables u(..)
     Dt = Differential(t)
