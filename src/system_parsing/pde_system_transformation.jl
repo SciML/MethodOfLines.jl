@@ -156,11 +156,13 @@ function descend_to_incompatible(term, v)
             end
         elseif op isa Integral
             if any(isequal(op.domain.variables), v.x̄)
-                euler = isequal(
-                    op.domain.domain.left, v.intervals[op.domain.variables][1]) &&
-                        isequal(op.domain.domain.right, Num(op.domain.variables))
-                whole = isequal(
-                    op.domain.domain.left, v.intervals[op.domain.variables][1]) &&
+                euler = ( # from lower domain boundary to x:
+                        isequal(op.domain.domain.left, v.intervals[op.domain.variables][1]) &&
+                        isequal(op.domain.domain.right, Num(op.domain.variables))) ||
+                        (# from x to upper domain boundary:
+                        isequal(op.domain.domain.left, Num(op.domain.variables)) &&
+                        isequal(op.domain.domain.right, v.intervals[op.domain.variables][2]))
+                whole = isequal(op.domain.domain.left, v.intervals[op.domain.variables][1]) &&
                         isequal(op.domain.domain.right, v.intervals[op.domain.variables][2])
                 if any([euler, whole])
                     u = arguments(term)[1]
@@ -168,10 +170,10 @@ function descend_to_incompatible(term, v)
                     @assert out==(nothing, false) "Integral $term must be purely of a variable, got $u. Try wrapping the integral argument with an auxiliary variable."
                     return (nothing, nothing, false)
                 else
-                    throw(ArgumentError("Integration Domain only supported for integrals from start of iterval to the variable, got $(op.domain.domain) in $(term)"))
+                    throw(ArgumentError("Integration Domain only supported for integrals across whole interval, or from an interval boundary (upper or lower) to the independent variable, got $(op.domain.domain) in $(term)"))
                 end
             else
-                throw(ArgumentError("Integral must be with respect to the independent variable in its upper-bound, got $(op.domain.variables) in $(term)"))
+                throw(ArgumentError("Integral must be with respect to the independent variable in its upper- or lower-bound, got $(op.domain.variables) in $(term)"))
             end
         end
         for arg in SU.arguments(term)
