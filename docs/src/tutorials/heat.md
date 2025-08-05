@@ -31,7 +31,7 @@ domains = [t ∈ Interval(0.0, 1.0),
 # Method of lines discretization
 dx = 0.1
 order = 2
-discretization = MOLFiniteDifference([x => dx], t)
+discretization = MOLFiniteDifference([x => dx], t, approx_order = order)
 
 # Convert the PDE problem into an ODE problem
 prob = discretize(pdesys, discretization)
@@ -87,7 +87,7 @@ domains = [t ∈ Interval(0.0, 1.0),
 # Need a small dx here for accuracy
 dx = 0.01
 order = 2
-discretization = MOLFiniteDifference([x => dx], t)
+discretization = MOLFiniteDifference([x => dx], t, approx_order = order)
 
 # Convert the PDE problem into an ODE problem
 prob = discretize(pdesys, discretization)
@@ -144,7 +144,7 @@ domains = [t ∈ Interval(0.0, 1.0),
 # Need a small dx here for accuracy
 dx = 0.05
 order = 2
-discretization = MOLFiniteDifference([x => dx], t)
+discretization = MOLFiniteDifference([x => dx], t, approx_order = order)
 
 # Convert the PDE problem into an ODE problem
 prob = discretize(pdesys, discretization)
