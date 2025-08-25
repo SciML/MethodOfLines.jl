@@ -2,7 +2,7 @@
 
 While the default ModelingTolkit backend is highly capable, it doesn't scale well to very large systems of ODEs, present iun high resolution and/or higher dimensional PDE semidiscretizations that MethodOfLines.jl is capable of generating.
 
-To overcome this limitation, and scale MOL to realistic physics simulations, JuliaHub Inc. has released [JuliaSimCompiler.jl (installation instructions here)](https://help.juliahub.com/juliasimcompiler/dev/).
+To overcome this limitation, and scale MOL to realistic physics simulations, JuliaHub Inc. has released [JuliaSimCompiler.jl](https://juliahub.com/products/juliasim/) (available through JuliaHub).
 
 Whenever this package and MethodOfLines are loaded together, MOL will also load `MethodOfLinesJuliaSimCompilerExt.jl`, an extension that takes advantage of this backend to speed up your compilation and solves automatically, with the same interface you are used to.
 
