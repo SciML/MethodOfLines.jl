@@ -17,7 +17,7 @@ A discretization algorithm.
 
 - `approx_order`: The order of the derivative approximation.
 - `advection_scheme`: The scheme to be used to discretize advection terms, i.e. first order spatial derivatives and associated coefficients. Defaults to `UpwindScheme()`. WENOScheme() is also available, and is more stable and accurate at the cost of complexity.
-- `grid_align`: The grid alignment types. See [`CenterAlignedGrid()`](@ref) and [`EdgeAlignedGrid()`](@ref).
+- `grid_align`: The grid alignment types. See [`CenterAlignedGrid`](@ref) and [`EdgeAlignedGrid`](@ref).
 - `use_ODAE`: If `true`, the discretization will use the `ODAEproblem` constructor.
     Defaults to `false`.
 - `kwargs`: Any other keyword arguments you want to pass to the `ODEProblem`.
