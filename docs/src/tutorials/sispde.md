@@ -119,8 +119,8 @@ $$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$$
 function episize!(dS, dI)
     newprob = remake(prob, p = [dS, dI, 3, 0.1])
     steadystateprob = SteadyStateProblem(newprob)
-    state = solve(steadystateprob, DynamicSS(Tsit5()))
-    y = sum(state[100:end]) / 99
+    steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
+    y = sum(steadystate[100:end]) / 99
     return y
 end
 episize!(exp(1.0), exp(0.5))
