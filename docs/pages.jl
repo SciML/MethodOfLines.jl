@@ -10,7 +10,6 @@ pages = [
         "tutorials/PIDE.md",
         "tutorials/schroedinger.md"
     ],
-    "Performance Tips" => "performance.md",
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
     "Solution Interface - PDESolutions" => "solutions.md",
     "Grid and Solution Retrieval - Deprecated" => "get_grid.md",
