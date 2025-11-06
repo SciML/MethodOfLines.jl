@@ -1,7 +1,7 @@
 name = "MethodOfLines"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
-authors = ["Alex Jones, <alex.jones@juliahub.com>"]
 version = "0.11.9"
+authors = ["Alex Jones, <alex.jones@juliahub.com>"]
 
 [deps]
 Combinatorics = "861a8166-3701-5b0c-9a16-15d98fcdc6aa"
@@ -40,7 +40,7 @@ SciMLBase = "2"
 StaticArrays = "1"
 SymbolicIndexingInterface = "0.3.0"
 SymbolicUtils = "2, 3"
-Symbolics = "6"
+Symbolics = "6, 7"
 TermInterface = "0.4, 2"
 julia = "1.10"
 
