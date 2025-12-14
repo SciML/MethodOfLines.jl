@@ -77,24 +77,29 @@ function generate_finite_difference_rules(
         # Spherical diffusion scheme
         spherical_diffusion_rules = generate_spherical_diffusion_rules(
             II, s, depvars, derivweights, bmap, indexmap, split_additive_terms(pde))
-        integration_rules = vec(generate_euler_integration_rules(
-            II, s, depvars, indexmap, terms))
+
+        # Integration schemes for boundaries: [lower-bound, x] and [x, upper-bound]
+        integration_rules_from_boundary_to_x = generate_euler_integration_rules(
+            II, s, depvars, indexmap, terms)
     else
         central_deriv_rules_cartesian = []
         advection_rules = []
         nonlinlap_rules = []
         spherical_diffusion_rules = []
         mixed_deriv_rules_cartesian = []
-        integration_rules = []
+        integration_rules_from_boundary_to_x = []
     end
 
     cb_rules = generate_cb_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
 
-    integration_rules = vcat(integration_rules,
-        vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)))
+    # Integration schemes for boundaries: [lower-bound, upper-bound]
+    whole_domain_integration_rules = generate_whole_domain_integration_rules(
+        II, s, depvars, indexmap, terms)
+
     return vcat(cb_rules, vec(spherical_diffusion_rules), vec(nonlinlap_rules),
         vec(mixed_deriv_rules_cartesian), vec(central_deriv_rules_cartesian),
-        vec(advection_rules), integration_rules)
+        vec(advection_rules), 
+        vec(integration_rules_from_boundary_to_x), vec(whole_domain_integration_rules))
 end
 
 function generate_finite_difference_rules(
@@ -112,10 +117,12 @@ function generate_finite_difference_rules(
     advection_rules = []
     nonlinlap_rules = []
     spherical_diffusion_rules = []
-    integration_rules = []
+    integration_rules_from_boundary_to_x = []
 
-    integration_rules = vcat(integration_rules,
-        vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)))
+    whole_domain_integration_rules = generate_whole_domain_integration_rules(
+        II, s, depvars, indexmap, terms)
+
     return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules),
-        vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules)
+        vec(central_deriv_rules_cartesian), vec(advection_rules), 
+        vec(integration_rules_from_boundary_to_x), vec(whole_domain_integration_rules))
 end
