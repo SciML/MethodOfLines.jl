@@ -1,4 +1,54 @@
 """
+Find all function-like calls in an expression that are not in the known depvar_ops list.
+This helps detect when a user has forgotten to include a variable in the PDESystem.
+"""
+function find_unknown_variables(expr, v)
+    S = Symbolics
+    SU = SymbolicUtils
+    unknown_vars = Set()
+
+    # Common operators to ignore
+    builtin_ops = Set([+, -, *, /, ^, sqrt, sin, cos, tan, exp, log, abs])
+
+    function traverse(ex)
+        ex = safe_unwrap(ex)
+        if S.iscall(ex)
+            op = SU.operation(ex)
+            args = SU.arguments(ex)
+
+            # Skip Differential, Integral, and built-in mathematical operators
+            if !(op isa Differential || op isa Integral || op in builtin_ops)
+                # Check if this is a function call with arguments that could be a dependent variable
+                # Look for function-like operations (BasicSymbolic with FnType)
+                if op isa SymbolicUtils.BasicSymbolic && !isempty(args) &&
+                   !any(isequal(op), v.depvar_ops)
+                    # Check if any argument is an independent variable
+                    has_iv = false
+                    for arg in args
+                        arg_unwrap = safe_unwrap(arg)
+                        if any(iv -> isequal(arg_unwrap, iv), all_ivs(v))
+                            has_iv = true
+                            break
+                        end
+                    end
+                    if has_iv
+                        push!(unknown_vars, op)
+                    end
+                end
+            end
+
+            # Recursively traverse arguments
+            for arg in args
+                traverse(arg)
+            end
+        end
+    end
+
+    traverse(expr)
+    return unknown_vars
+end
+
+"""
 Replace the PDESystem with an equivalent PDESystem which is compatible with MethodOfLines, mutates boundarymap and v
 
 Modified copilot explanation:
@@ -8,14 +58,57 @@ function PDEBase.transform_pde_system!(
         v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLFiniteDifference)
     eqs = copy(sys.eqs)
     bcs = copy(sys.bcs)
+
+    # Pre-validate: check for unknown variables in equations before transformation
+    all_unknown_vars = Set()
+    for eq in eqs
+        unknown_lhs = find_unknown_variables(eq.lhs, v)
+        unknown_rhs = find_unknown_variables(eq.rhs, v)
+        union!(all_unknown_vars, unknown_lhs, unknown_rhs)
+    end
+    for bc in bcs
+        unknown_lhs = find_unknown_variables(bc.lhs, v)
+        unknown_rhs = find_unknown_variables(bc.rhs, v)
+        union!(all_unknown_vars, unknown_lhs, unknown_rhs)
+    end
+
+    if !isempty(all_unknown_vars)
+        unknown_vars_str = join(string.(collect(all_unknown_vars)), ", ")
+        throw(ArgumentError("Found unknown symbolic variable(s): $unknown_vars_str. These variables appear in the equations or boundary conditions but were not included in the dependent variables list of the PDESystem. Please add them to the dependent variables, e.g.: PDESystem(eqs, bcs, domains, ivs, [existing_vars..., $unknown_vars_str])"))
+    end
+
     done = false
     # Replace bad terms with a greedy strategy until the system comes up clean.
+    # Track previous terms to detect infinite loops
+    seen_terms = Set()
+    max_iterations = 1000
+    iteration_count = 0
+
     while !done
         done = true
+        iteration_count += 1
+
+        if iteration_count > max_iterations
+            throw(ArgumentError("Maximum iterations exceeded in system transformation. This likely indicates an infinite loop due to unhandled symbolic variables. Please ensure all variables appearing in equations are included in the dependent variables list of the PDESystem."))
+        end
+
         for eq in eqs
             term, badterm, shouldexpand = descend_to_incompatible(eq.lhs, v)
             # Expand derivatives where possible
             if shouldexpand
+                # Check if we've seen this term before - indicates we're stuck
+                if term in seen_terms
+                    # Detect unknown variables in the term
+                    unknown_vars = find_unknown_variables(term, v)
+                    if !isempty(unknown_vars)
+                        unknown_vars_str = join(string.(unknown_vars), ", ")
+                        throw(ArgumentError("Found unknown symbolic variable(s) $unknown_vars_str in equation $(eq). These variables appear in the equations but were not included in the dependent variables list of the PDESystem. Please add them to the dependent variables: PDESystem(eqs, bcs, domains, ivs, [existing_vars..., $unknown_vars_str])"))
+                    else
+                        throw(ArgumentError("Infinite loop detected while expanding derivatives in term $term. The term cannot be expanded or transformed properly. This may indicate a problem with the equation structure."))
+                    end
+                end
+                push!(seen_terms, term)
+
                 @warn "Expanding derivatives in term $term."
                 rule = term => expand_derivatives(term)
                 subs_alleqs!(eqs, bcs, rule)
