@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          submodules: false
       - uses: julia-actions/setup-julia@latest
         with:
           version: 'lts'
