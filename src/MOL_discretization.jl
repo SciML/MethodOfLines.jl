@@ -95,6 +95,7 @@ function SciMLBase.ODEFunction(
             @assert true "Codegen for NonlinearSystems is not yet implemented."
         else
             simpsys = mtkcompile(sys)
+            f_analytic = nothing
             if analytic !== nothing
                 analytic = analytic isa Dict ? analytic : Dict(analytic)
                 s = getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing).discretespace
