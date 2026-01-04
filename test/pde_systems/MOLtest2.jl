@@ -30,7 +30,8 @@ using Test
         # Robin BC
         ∂x(c(0.0, t)) / (1 + exp(α * (c(0.0, t) - χ))) * R * D₀ + cₑ - c(0.0, t) ~ 0.0,
         # no flux BC
-        ∂x(c(ℓ, t)) ~ 0.0]
+        ∂x(c(ℓ, t)) ~ 0.0,
+    ]
 
     # define space-time plane
     domains = [x ∈ Interval(0.0, ℓ), t ∈ Interval(0.0, 5.0)]
@@ -52,8 +53,10 @@ using Test
     end
 
     @testset "Test 03: ∂t(c(x, t)) ~ ∂x(1.0 / (1.0/D₀ + exp(α * (c(x, t) - χ))/D₀) * ∂x(c(x, t)))" begin
-        diff_eq = ∂t(c(x, t)) ~ ∂x(1.0 / (1.0 / D₀ + exp(α * (c(x, t) - χ)) / D₀) *
-                     ∂x(c(x, t)))
+        diff_eq = ∂t(c(x, t)) ~ ∂x(
+            1.0 / (1.0 / D₀ + exp(α * (c(x, t) - χ)) / D₀) *
+                ∂x(c(x, t))
+        )
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
         prob = discretize(pdesys, discretization)
@@ -131,22 +134,30 @@ end
     D1(c) = 1 + c / 10
     D2(c) = 1 / 10 + c / 10
 
-    eqs = [Dt(c1(t, x1)) ~ Dx1(D1(c1(t, x1)) * Dx1(c1(t, x1))),
-        Dt(c2(t, x2)) ~ Dx2(D2(c2(t, x2)) * Dx2(c2(t, x2)))]
+    eqs = [
+        Dt(c1(t, x1)) ~ Dx1(D1(c1(t, x1)) * Dx1(c1(t, x1))),
+        Dt(c2(t, x2)) ~ Dx2(D2(c2(t, x2)) * Dx2(c2(t, x2))),
+    ]
 
-    bcs = [c1(0, x1) ~ 1 + cospi(2 * x1),
+    bcs = [
+        c1(0, x1) ~ 1 + cospi(2 * x1),
         c2(0, x2) ~ 1 + cospi(2 * x2),
         Dx1(c1(t, 0)) ~ 0,
         c1(t, 0.5) ~ c2(t, 0.5),
         -D1(c1(t, 0.5)) * Dx1(c1(t, 0.5)) ~ -D2(c2(t, 0.5)) * Dx2(c2(t, 0.5)),
-        Dx2(c2(t, 1)) ~ 0]
+        Dx2(c2(t, 1)) ~ 0,
+    ]
 
-    domains = [t ∈ Interval(0.0, 0.15),
+    domains = [
+        t ∈ Interval(0.0, 0.15),
         x1 ∈ Interval(0.0, 0.5),
-        x2 ∈ Interval(0.5, 1.0)]
+        x2 ∈ Interval(0.5, 1.0),
+    ]
 
-    @named pdesys = PDESystem(eqs, bcs, domains,
-        [t, x1, x2], [c1(t, x1), c2(t, x2)])
+    @named pdesys = PDESystem(
+        eqs, bcs, domains,
+        [t, x1, x2], [c1(t, x1), c2(t, x2)]
+    )
 
     l = 40
 
@@ -179,9 +190,10 @@ end
     Dxx = Differential(x)^2
     Dzz = Differential(z)^2
 
-    eqs = [Dxx(φ(t, x, z)) + Dzz(φ(t, x, z)) ~ 0,
+    eqs = [
+        Dxx(φ(t, x, z)) + Dzz(φ(t, x, z)) ~ 0,
         Dt(φ̃(t, x)) ~ -g * η(t, x),
-        Dt(η(t, x)) ~ Dz(φ(t, x, 1.0))
+        Dt(η(t, x)) ~ Dz(φ(t, x, 1.0)),
     ]
 
     bcs = [
@@ -195,23 +207,29 @@ end
         Dx(φ̃(t, 0.0)) ~ 0.0,
         Dx(φ̃(t, 1.0)) ~ 0.0,
         Dx(η(t, 0.0)) ~ 0.0,
-        Dx(η(t, 1.0)) ~ 0.0
+        Dx(η(t, 1.0)) ~ 0.0,
     ]
 
-    domains = [x ∈ Interval(0.0, 1.0),
+    domains = [
+        x ∈ Interval(0.0, 1.0),
         z ∈ Interval(0.0, 1.0),
-        t ∈ Interval(0.0, 10.0)]
+        t ∈ Interval(0.0, 10.0),
+    ]
 
-    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, z],
-        [φ(t, x, z), φ̃(t, x), η(t, x)])
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x, z],
+        [φ(t, x, z), φ̃(t, x), η(t, x)]
+    )
 
     dx = 0.1
     dz = 0.1
     order = 2
 
-    discretization = MOLFiniteDifference([x => dx, z => dz], t,
+    discretization = MOLFiniteDifference(
+        [x => dx, z => dz], t,
         approx_order = order,
-        grid_align = center_align)
+        grid_align = center_align
+    )
 
     println("Discretization:")
     prob = discretize(pdesys, discretization)
@@ -229,15 +247,17 @@ end
     Da = Differential(a)
     Ia = Integral(a in DomainSets.ClosedInterval(amin, amax))
 
-    eqs = [Dt(S(t)) ~ -β * S(t) * Ia(I(a, t)),
+    eqs = [
+        Dt(S(t)) ~ -β * S(t) * Ia(I(a, t)),
         Dt(I(a, t)) + Da(I(a, t)) ~ -γ * I(a, t),
-        Dt(R(t)) ~ γ * Ia(I(a, t))]
+        Dt(R(t)) ~ γ * Ia(I(a, t)),
+    ]
 
     bcs = [
         S(0) ~ 990.0,
         I(0, t) ~ β * S(t) * Ia(I(a, t)),
         I(a, 0) ~ 10.0 / 40.0,
-        R(0) ~ 0.0
+        R(0) ~ 0.0,
     ]
 
     domains = [t ∈ (0.0, 40.0), a ∈ (0.0, 40.0)]
@@ -261,13 +281,17 @@ end
 
     # 1D PDE and boundary conditions
     eq = Dt(u(t, x)) ~ Dxx(u(t, x))
-    bcs = [u(0, x) ~ 20,
+    bcs = [
+        u(0, x) ~ 20,
         Dt(u(t, 0)) ~ 100, # Heat source
-        Dt(u(t, 1)) ~ 0] # Zero flux
+        Dt(u(t, 1)) ~ 0,
+    ] # Zero flux
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
@@ -304,20 +328,24 @@ end
     v0 = 0.1
     w0 = 0.2
 
-    eq = [Dt(u(r, t)) ~ α * Drr(u(r, t)),
+    eq = [
+        Dt(u(r, t)) ~ α * Drr(u(r, t)),
         Dt(v(t)) ~ -k₁ * u(R, t) * v(t) + k₂ * w(t),
-        Dt(w(t)) ~ k₁ * u(R, t) * v(t) - k₂ * w(t)
+        Dt(w(t)) ~ k₁ * u(R, t) * v(t) - k₂ * w(t),
     ]
 
-    bcs = [Dr(u(0, t)) ~ 0.0,
+    bcs = [
+        Dr(u(0, t)) ~ 0.0,
         Dr(u(R, t)) ~ (-k₁ * u(R, t) * v(t) + k₂ * w(t)) / α,
         u(r, 0) ~ u0,
         v(0) ~ v0,
-        w(0) ~ w0
+        w(0) ~ w0,
     ]
 
-    domains = [t ∈ Interval(0.0, 10.0),
-        r ∈ Interval(0.0, R)]
+    domains = [
+        t ∈ Interval(0.0, 10.0),
+        r ∈ Interval(0.0, R),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [r, t], [u(r, t), v(t), w(t)])
 
@@ -344,15 +372,21 @@ end
     Dxx = Dx^2
 
     # 1D PDE and boundary conditions
-    eqs = [Dt(u(t, x)) ~ Dxx(u(t, x)) + v(t), # This is the only line that is significantly changed from the test.
-        Dt(v(t)) ~ -v(t)]
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + v(t), # This is the only line that is significantly changed from the test.
+        Dt(v(t)) ~ -v(t),
+    ]
 
-    bcs = [u(0, x) ~ sin(x),
+    bcs = [
+        u(0, x) ~ sin(x),
         v(0) ~ 1,
         u(t, 0) ~ 0,
-        Dx(u(t, 1)) ~ exp(-t) * cos(1)]
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+        Dx(u(t, 1)) ~ exp(-t) * cos(1),
+    ]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t)])
     discretization = MOLFiniteDifference([x => 0.01], t)
     prob = discretize(pdesys, discretization)
@@ -378,21 +412,32 @@ end
 
     eqs = [Dt(u(t, x)[i]) ~ p[i] * Dxx(u(t, x)[i]) for i in 1:n_comp]
 
-    bcs = [[u(0, x)[i] ~ q[i] * cos(x),
-               u(t, 0)[i] ~ sin(t),
-               u(t, 1)[i] ~ exp(-t) * cos(1),
-               Dx(u(t, 0)[i]) ~ 0.0] for i in 1:n_comp]
+    bcs = [
+        [
+                u(0, x)[i] ~ q[i] * cos(x),
+                u(t, 0)[i] ~ sin(t),
+                u(t, 1)[i] ~ exp(-t) * cos(1),
+                Dx(u(t, 0)[i]) ~ 0.0,
+            ] for i in 1:n_comp
+    ]
     bcs_collected = reduce(vcat, bcs)
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     # PDE system
 
-    @named pdesys = PDESystem(eqs, bcs_collected, domains, [t, x],
-        [u(t, x)[i] for i in 1:n_comp], params; defaults = Dict(p => [1.5, 2.0], q => [
-            1.2, 1.8]))
+    @named pdesys = PDESystem(
+        eqs, bcs_collected, domains, [t, x],
+        [u(t, x)[i] for i in 1:n_comp], params; defaults = Dict(
+            p => [1.5, 2.0], q => [
+                1.2, 1.8,
+            ]
+        )
+    )
 
     # Method of lines discretization
     dx = 0.1
@@ -453,12 +498,16 @@ end
     C = f * ρ * c_w * H
 
     eq = Dt(Tₛ(t, φ)) ~
-         ((1 - α_func(φ)) * Q_func(t, φ) - A - B * Tₛ(t, φ) +
-          D * Dφ(cos(φ) * Dφ(Tₛ(t, φ))) / cos(φ)) / C
+        (
+        (1 - α_func(φ)) * Q_func(t, φ) - A - B * Tₛ(t, φ) +
+            D * Dφ(cos(φ) * Dφ(Tₛ(t, φ))) / cos(φ)
+    ) / C
 
-    bcs = [Tₛ(0, φ) ~ 12 - 40 * P₂(sin(φ)),
+    bcs = [
+        Tₛ(0, φ) ~ 12 - 40 * P₂(sin(φ)),
         Dφ(Tₛ(t, φmin)) ~ 0.0,
-        Dφ(Tₛ(t, φmax)) ~ 0.0]
+        Dφ(Tₛ(t, φmax)) ~ 0.0,
+    ]
     domains = [t in Interval(0, 19 * s_in_y), φ in Interval(φmin, φmax)]
 
     @named sys = PDESystem(eq, bcs, domains, [t, φ], [Tₛ(t, φ)])
@@ -478,7 +527,7 @@ end
     Dzz = Differential(z)^2
 
     xmin = 0.0
-    xmax = 1e-1
+    xmax = 1.0e-1
     zmax = 10.0
     zmin = -zmax
 
@@ -488,9 +537,11 @@ end
     domains = [x ∈ Interval(xmin, xmax), z ∈ Interval(zmin, zmax)]
 
     eq = [im * Dx(A(x, z)) + Dzz(A(x, z)) ~ -abs2(A(x, z)) * A(x, z)]
-    bcs = [A(xmin, z) ~ A0(xmin, z),
+    bcs = [
+        A(xmin, z) ~ A0(xmin, z),
         A(x, zmin) ~ 0,
-        A(x, zmax) ~ 0]
+        A(x, zmax) ~ 0,
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [x, z], [A(x, z)])
 

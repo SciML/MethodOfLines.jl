@@ -70,7 +70,7 @@ end
     β = 4
     γ = 1
     eq = Dt(u(x, t)) + u(x, t) * Dx(u(x, t)) + α * Dx2(u(x, t)) + β * Dx3(u(x, t)) +
-         γ * Dx4(u(x, t)) ~ 0
+        γ * Dx4(u(x, t)) ~ 0
     @test MethodOfLines.differential_order(eq.lhs, x.val) == Set([4, 3, 2, 1])
 end
 
@@ -82,9 +82,11 @@ end
     @test_broken isequal(operation(MethodOfLines.flatten_division((x / z ~ 0).lhs)), *)
     @test_broken isequal(operation(MethodOfLines.flatten_division((x * y / z ~ 0).lhs)), *)
     @test_broken isequal(
-        operation(MethodOfLines.flatten_division((x / (y * z) ~ 0).lhs)), *)
+        operation(MethodOfLines.flatten_division((x / (y * z) ~ 0).lhs)), *
+    )
     @test_broken isequal(
-        operation(MethodOfLines.flatten_division((x * y / (z * t) ~ 0).lhs)), *)
+        operation(MethodOfLines.flatten_division((x * y / (z * t) ~ 0).lhs)), *
+    )
 end
 
 @testset "Split terms" begin
@@ -104,7 +106,8 @@ end
 
     analytic_sol_func(t, x, y) = exp(x + y) * cos(x + y + 4t)
 
-    bcs = [u(0, x) ~ -x * (x - 1) * sin(x),
+    bcs = [
+        u(0, x) ~ -x * (x - 1) * sin(x),
         v(0, x) ~ -x * (x - 1) * sin(x),
         u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
         v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
@@ -114,7 +117,8 @@ end
         u(t, x, y_min) ~ analytic_sol_func(t, x, y_min),
         u(t, x, y_max) ~ analytic_sol_func(t, x, y_max),
         u(0, r) ~ -r * (r - 1) * sin(r),
-        Dr(u(t, 0)) ~ 0.0, u(t, 1) ~ sin(1)]
+        Dr(u(t, 0)) ~ 0.0, u(t, 1) ~ sin(1),
+    ]
 
     for bc in bcs
         terms = MethodOfLines.split_terms(bc)

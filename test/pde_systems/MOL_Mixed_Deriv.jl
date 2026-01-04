@@ -1,5 +1,5 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets,
-      NonlinearSolve
+    NonlinearSolve
 using ModelingToolkit: Differential
 
 # Broken in MTK
@@ -12,22 +12,26 @@ using ModelingToolkit: Differential
     Dtx = Differential(t) * Differential(x)
 
     assf(t, x) = sinpi(2 * (t + (1 + sqrt(5)) * x / 2)) +
-                 cospi(2 * (t + (1 - sqrt(5)) * x / 2))
+        cospi(2 * (t + (1 - sqrt(5)) * x / 2))
     aDtf(t, x) = 2pi * cospi(2 * (t + (1 + sqrt(5)) * x / 2)) -
-                 2pi * sinpi(2 * (t + (1 - sqrt(5)) * x / 2))
+        2pi * sinpi(2 * (t + (1 - sqrt(5)) * x / 2))
     # Where asf(t, x) ~ 0, NonlinearSolved
     xmin = -0.1118033987645
     xmax = 0.33541019624
 
     eq = [Dtt(u(t, x)) + Dtx(u(t, x)) - Dxx(u(t, x)) ~ Dxx(x)]
 
-    bcs = [u(1e-9, x) ~ assf(1e-9, x),
-        Dt(u(1e-9, x)) ~ aDtf(1e-9, x),
+    bcs = [
+        u(1.0e-9, x) ~ assf(1.0e-9, x),
+        Dt(u(1.0e-9, x)) ~ aDtf(1.0e-9, x),
         u(t, xmin) ~ 0,
-        u(t, xmax) ~ 0]
+        u(t, xmax) ~ 0,
+    ]
 
-    domain = [t ∈ Interval(1e-9, 1.0),
-        x ∈ Interval(xmin, xmax)]
+    domain = [
+        t ∈ Interval(1.0e-9, 1.0),
+        x ∈ Interval(xmin, xmax),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domain, [t, x], [u(t, x)])
 
@@ -42,7 +46,7 @@ using ModelingToolkit: Differential
     usol = sol[u(t, x)]
 
     asol = [assf(t, x) for t in tdisc, x in xdisc]
-    @test_broken usol ≈ asol atol = 1e-3
+    @test_broken usol ≈ asol atol = 1.0e-3
 end
 
 @testset "Test 01: Dt(u) ~ Dxy(u)" begin
@@ -53,13 +57,17 @@ end
 
     eq = [Dt(u(t, x, y)) ~ Dxxy(u(t, x, y))]
 
-    bcs = [u(0, x, y) ~ sinpi(x + y),
+    bcs = [
+        u(0, x, y) ~ sinpi(x + y),
         u(t, 0, y) ~ sinpi(y),
-        u(t, x, 0) ~ sinpi(x)]
+        u(t, x, 0) ~ sinpi(x),
+    ]
 
-    domain = [t ∈ Interval(0.0, 1.0),
+    domain = [
+        t ∈ Interval(0.0, 1.0),
         x ∈ Interval(0.0, 1.0),
-        y ∈ Interval(0.0, 1.0)]
+        y ∈ Interval(0.0, 1.0),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domain, [t, x, y], [u(t, x, y)])
 
@@ -83,17 +91,20 @@ end
 
     eq = [Dxx(u(x, y)) + Dyy(u(x, y)) + Dxy(u(x, y)) ~ 0]
 
-    bcs = [u(0, y) ~ 0,
+    bcs = [
+        u(0, y) ~ 0,
         #Dx(u(0, y)) ~ y,
         u(1, y) ~ y,
         #Dx(u(1, y)) ~ y,
         u(x, 0) ~ 0,
         #Dy(u(x, 0)) ~ x,
-        u(x, 1) ~ x        #Dy(u(x, 1)) ~ x
+        u(x, 1) ~ x,        #Dy(u(x, 1)) ~ x
     ]
 
-    domain = [x ∈ Interval(0.0, 1.0),
-        y ∈ Interval(0.0, 1.0)]
+    domain = [
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
 
     analytic_u(x, y) = x * y
 
@@ -116,7 +127,7 @@ end
 
     asol = [analytic_u(x, y) for x in solx[1:(end - 1)], y in soly[1:(end - 1)]]
 
-    @test_broken solu[1:(end - 1), 1:(end - 1)]≈asol atol=1e-3
+    @test_broken solu[1:(end - 1), 1:(end - 1)] ≈ asol atol = 1.0e-3
 end
 
 @testset "Wave Equation u_tt ~ u_xx" begin
@@ -128,13 +139,17 @@ end
 
     eq = [Dtt(u(t, x)) ~ Dxx(u(t, x))]
 
-    bcs = [u(0, x) ~ sinpi(x),
+    bcs = [
+        u(0, x) ~ sinpi(x),
         Dt(u(0, x)) ~ 0,
         u(t, 0) ~ 0,
-        u(t, 1) ~ 0]
+        u(t, 1) ~ 0,
+    ]
 
-    domain = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+    domain = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     analytic_u(t, x) = sinpi(x) * cospi(t)
 
@@ -154,5 +169,5 @@ end
 
     asol = [analytic_u(t, x) for t in tdisc, x in xdisc]
 
-    @test usol≈asol atol=1e-2
+    @test usol ≈ asol atol = 1.0e-2
 end

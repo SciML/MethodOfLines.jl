@@ -12,15 +12,21 @@ using Test
     Dt = Differential(t)
     Dx = Differential(x)
     Dxx = Differential(x)^2
-    eqs = [Dt(u(t, x)) ~ Dxx(u(t, x)),
-        Dt(v(t, x)) ~ Dxx(v(t, x))]
-    bcs = [u(0, x) ~ -x * (x - 1) * sin(x),
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)),
+        Dt(v(t, x)) ~ Dxx(v(t, x)),
+    ]
+    bcs = [
+        u(0, x) ~ -x * (x - 1) * sin(x),
         v(0, x) ~ -x * (x - 1) * sin(x),
         u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
-        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0]
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
 
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
     discretization = MOLFiniteDifference([x => 0.1], t; grid_align = edge_align)
@@ -46,16 +52,20 @@ end
 
     analytic_sol_func(t, x, y) = exp(x + y) * cos(x + y + 4t)
     # Initial and boundary conditions
-    bcs = [u(t_min, x, y) ~ analytic_sol_func(t_min, x, y),
+    bcs = [
+        u(t_min, x, y) ~ analytic_sol_func(t_min, x, y),
         u(t, x_min, y) ~ analytic_sol_func(t, x_min, y),
         u(t, x_max, y) ~ analytic_sol_func(t, x_max, y),
         u(t, x, y_min) ~ analytic_sol_func(t, x, y_min),
-        u(t, x, y_max) ~ analytic_sol_func(t, x, y_max)]
+        u(t, x, y_max) ~ analytic_sol_func(t, x, y_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
+    domains = [
+        t ∈ Interval(t_min, t_max),
         x ∈ Interval(x_min, x_max),
-        y ∈ Interval(y_min, y_max)]
+        y ∈ Interval(y_min, y_max),
+    ]
     @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
     # Method of lines discretization
     dx = 0.1
@@ -73,11 +83,15 @@ end
     Dr = Differential(r)
     Drr = Dr^2
     eq = Dt(u(t, r)) ~ 1 / r^2 * Dr(r^2 * Dr(u(t, r)))
-    bcs = [u(0, r) ~ -r * (r - 1) * sin(r),
-        Dr(u(t, 0)) ~ 0.0, u(t, 1) ~ sin(1)]
+    bcs = [
+        u(0, r) ~ -r * (r - 1) * sin(r),
+        Dr(u(t, 0)) ~ 0.0, u(t, 1) ~ sin(1),
+    ]
 
-    domains = [t ∈ Interval(0.0, 1.0),
-        r ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        r ∈ Interval(0.0, 1.0),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
     discretization = MOLFiniteDifference([r => 0.1], t)
@@ -98,17 +112,21 @@ end
     β = 4
     γ = 1
     eq = Dt(u(x, t)) + u(x, t) * Dx(u(x, t)) + α * Dx2(u(x, t)) + β * Dx3(u(x, t)) +
-         γ * Dx4(u(x, t)) ~ 0
+        γ * Dx4(u(x, t)) ~ 0
 
     du(x, t; z = -x / 2 + t) = 15 / 2 * (tanh(z) + 1) * (3 * tanh(z) - 1) * sech(z)^2
 
-    bcs = [u(x, 0) ~ x^2,
+    bcs = [
+        u(x, 0) ~ x^2,
         Dx(u(-10, t)) ~ du(-10, t),
-        Dx(u(10, t)) ~ du(10, t)]
+        Dx(u(10, t)) ~ du(10, t),
+    ]
 
     # Space and time domains
-    domains = [x ∈ Interval(-10.0, 10.0),
-        t ∈ Interval(0.0, 0.5)]
+    domains = [
+        x ∈ Interval(-10.0, 10.0),
+        t ∈ Interval(0.0, 0.5),
+    ]
     # Discretization
     dx = 0.4
     dt = 0.2
@@ -128,7 +146,7 @@ end
     Dxx = Differential(x)^2         # required in BCs
     # some parameters
     EI = 291.6667
-    m = 1.3850
+    m = 1.385
     c = 1.0
     p = 0.01
     L = 2.0
@@ -136,16 +154,20 @@ end
     # 1D PDE and boundaru conditions
     eq = m * Dtt(u(t, x)) + c * Dt(u(t, x)) + EI * Dxxxx(u(t, x)) ~ 0
 
-    ic_bc = [u(0, x) ~ (p * x * (x^3 + L^3 - 2 * L * x^2) / (24 * EI)), #for all 0 < u < L
+    ic_bc = [
+        u(0, x) ~ (p * x * (x^3 + L^3 - 2 * L * x^2) / (24 * EI)), #for all 0 < u < L
         Dt(u(0, x)) ~ 0.0,        # for all 0 < u < L
         u(t, 0) ~ 0.0,            # for all t > 0,, displacement zero at u=0
         u(t, 2) ~ 0.0,            # for all t > 0,, displacement zero at u=L
         Dxx(u(t, 0)) ~ 0.0,       # for all t > 0,, curvature zero at u=0
-        Dxx(u(t, 2)) ~ 0.0]       # for all t > 0,, curvature zero at u=L
+        Dxx(u(t, 2)) ~ 0.0,
+    ]       # for all t > 0,, curvature zero at u=L
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 2.0),
-        x ∈ Interval(0.0, L)]
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, L),
+    ]
 
     dt = 0.1   # dt related to saving the data.. not actual dt
     # PDE system
@@ -180,12 +202,16 @@ end
 
     diff_eq = ∂t(c(x, t)) ~ ∂x((D₀ + α * c(x, t)) * ∂x(c(x, t)))
 
-    bcs = [c(x, 0) ~ 0.0,         # initial condition
+    bcs = [
+        c(x, 0) ~ 0.0,         # initial condition
         R * (D₀ + α * c(0, t)) * ∂x(c(0, t)) ~ c(0, t) - cₑ, # Robin
-        ∂x(c(ℓ, t)) ~ 0.0]   # no flux
+        ∂x(c(ℓ, t)) ~ 0.0,
+    ]   # no flux
 
-    domains = [t ∈ Interval(0.0, 10.0),
-        x ∈ Interval(0.0, ℓ)]
+    domains = [
+        t ∈ Interval(0.0, 10.0),
+        x ∈ Interval(0.0, ℓ),
+    ]
 
     @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
 
@@ -233,7 +259,7 @@ end
     end
 
     for i in 1:N
-        bcs[i + N] = u[i](x_max) ~ rand(StableRNG(0),)
+        bcs[i + N] = u[i](x_max) ~ rand(StableRNG(0))
     end
 
     # Space and time domains
@@ -274,17 +300,21 @@ end
 
     eq = [
         Dt(u(x, y, t)) ~
-        1.0 + Dy(v(x, y, t)) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
-        α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
+            1.0 + Dy(v(x, y, t)) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
+            α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
         Dt(v(x, y, t)) ~
-        -3.4 * Dx(u(x, y, t)) - v(x, y, t) * u(x, y, t)^2 +
-        α * ∇²(v(x, y, t))]
+            -3.4 * Dx(u(x, y, t)) - v(x, y, t) * u(x, y, t)^2 +
+            α * ∇²(v(x, y, t)),
+    ]
 
-    domains = [x ∈ Interval(x_min, x_max),
+    domains = [
+        x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),
-        t ∈ Interval(t_min, t_max)]
+        t ∈ Interval(t_min, t_max),
+    ]
 
-    bcs = [u(x, y, 0) ~ u0(x, y, 0),
+    bcs = [
+        u(x, y, 0) ~ u0(x, y, 0),
         u(0, y, t) ~ 0.0,
         u(1, y, t) ~ 0.0,
         u(x, 0, t) ~ 0.0,
@@ -293,7 +323,8 @@ end
         v(0, y, t) ~ 0.0,
         v(1, y, t) ~ 0.0,
         v(x, 0, t) ~ 0.0,
-        v(x, 1, t) ~ 0.0]
+        v(x, 1, t) ~ 0.0,
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [x, y, t], [u(x, y, t), v(x, y, t)])
 
@@ -330,16 +361,22 @@ end
 
     s = u(t, x) + v(t, x, 1)
 
-    eqs = [Dt(u(t, x)) ~ Dxx(u(t, x)) + s,
-        Dt(v(t, x, r)) ~ Drr(v(t, x, r))]
-    bcs = [u(0, x) ~ 1,
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + s,
+        Dt(v(t, x, r)) ~ Drr(v(t, x, r)),
+    ]
+    bcs = [
+        u(0, x) ~ 1,
         v(0, x, r) ~ 1,
         Dx(u(t, 0)) ~ 0.0, Dx(u(t, 1)) ~ 0.0,
-        Dr(v(t, x, 0)) ~ 0.0, Dr(v(t, x, 1)) ~ s]
+        Dr(v(t, x, 0)) ~ 0.0, Dr(v(t, x, 1)) ~ s,
+    ]
 
-    domains = [t ∈ Interval(0.0, 1.0),
+    domains = [
+        t ∈ Interval(0.0, 1.0),
         x ∈ Interval(0.0, 1.0),
-        r ∈ Interval(0.0, 1.0)]
+        r ∈ Interval(0.0, 1.0),
+    ]
 
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x, r], [u(t, x), v(t, x, r)])
 

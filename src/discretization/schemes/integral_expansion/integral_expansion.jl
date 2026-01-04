@@ -11,7 +11,7 @@ function _euler_integral(II, s, jx, u, ufunc, dx::Number) #where {T,N,Wind,DX<:N
     weights = [dx / 2, dx / 2]
 
     return sym_dot(weights, ufunc(u, Itap, x)) +
-           _euler_integral(II - I1, s, jx, u, ufunc, dx)
+        _euler_integral(II - I1, s, jx, u, ufunc, dx)
 end
 
 # Nonuniform dx
@@ -27,7 +27,7 @@ function _euler_integral(II, s, jx, u, ufunc, dx::AbstractVector) #where {T,N,Wi
     weights = fill(dx[II[j] - 1] / 2, 2)
 
     return sym_dot(weights, ufunc(u, Itap, x)) +
-           _euler_integral(II - I1, s, jx, u, ufunc, dx)
+        _euler_integral(II - I1, s, jx, u, ufunc, dx)
 end
 
 function euler_integral(II, s, jx, u, ufunc)
@@ -51,16 +51,28 @@ function whole_domain_integral(II, s, jx, u, ufunc)
 end
 
 @inline function generate_euler_integration_rules(
-        II::CartesianIndex, s::DiscreteSpace, depvars, indexmap, terms)
+        II::CartesianIndex, s::DiscreteSpace, depvars, indexmap, terms
+    )
     ufunc(u, I, x) = s.discvars[u][I]
 
-    eulerrules = reduce(safe_vcat,
-        [[Integral(x in DomainSets.ClosedInterval(s.vars.intervals[x][1],
-              Num(x)))(u) => euler_integral(
-              Idx(II, s, u, indexmap), s, (x2i(s, u, x), x), u, ufunc)
-          for x in ivs(u, s)]
-         for u in depvars],
-        init = [])
+    eulerrules = reduce(
+        safe_vcat,
+        [
+            [
+                    Integral(
+                        x in DomainSets.ClosedInterval(
+                            s.vars.intervals[x][1],
+                            Num(x)
+                        )
+                    )(u) => euler_integral(
+                        Idx(II, s, u, indexmap), s, (x2i(s, u, x), x), u, ufunc
+                    )
+                    for x in ivs(u, s)
+                ]
+                for u in depvars
+        ],
+        init = []
+    )
     return eulerrules
 end
 
@@ -74,14 +86,26 @@ function wd_integral_Idx(II::CartesianIndex, s::DiscreteSpace, u, x, indexmap)
 end
 
 @inline function generate_whole_domain_integration_rules(
-        II::CartesianIndex, s::DiscreteSpace, depvars, indexmap, terms, bvar = nothing)
+        II::CartesianIndex, s::DiscreteSpace, depvars, indexmap, terms, bvar = nothing
+    )
     ufunc(u, I, x) = s.discvars[u][I]
-    wholedomainrules = reduce(safe_vcat,
-        [[Integral(x in DomainSets.ClosedInterval(s.vars.intervals[x][1],
-              s.vars.intervals[x][2]))(u) => whole_domain_integral(
-              wd_integral_Idx(II, s, u, x, indexmap), s, (x2i(s, u, x), x), u, ufunc)
-          for x in filter(x -> (!haskey(indexmap, x) | isequal(x, bvar)), ivs(u, s))]
-         for u in depvars],
-        init = [])
+    wholedomainrules = reduce(
+        safe_vcat,
+        [
+            [
+                    Integral(
+                        x in DomainSets.ClosedInterval(
+                            s.vars.intervals[x][1],
+                            s.vars.intervals[x][2]
+                        )
+                    )(u) => whole_domain_integral(
+                        wd_integral_Idx(II, s, u, x, indexmap), s, (x2i(s, u, x), x), u, ufunc
+                    )
+                    for x in filter(x -> (!haskey(indexmap, x) | isequal(x, bvar)), ivs(u, s))
+                ]
+                for u in depvars
+        ],
+        init = []
+    )
     return wholedomainrules
 end

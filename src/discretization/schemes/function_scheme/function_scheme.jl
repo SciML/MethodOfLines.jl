@@ -52,15 +52,24 @@ end
 
 @inline function generate_advection_rules(
         F::FunctionalScheme, II::CartesianIndex, s::DiscreteSpace, depvars,
-        derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
+        derivweights::DifferentialDiscretizer, bcmap, indexmap, terms
+    )
     central_ufunc(u, I, x) = s.discvars[u][I]
-    return reduce(safe_vcat,
-        [[(Differential(x))(u) => function_scheme(F,
-              Idx(II, s, u, indexmap), s,
-              filter_interfaces(bcmap[operation(u)][x]),
-              (x2i(s, u, x), x), u,
-              central_ufunc)
-          for x in ivs(u, s)]
-         for u in depvars],
-        init = [])
+    return reduce(
+        safe_vcat,
+        [
+            [
+                    (Differential(x))(u) => function_scheme(
+                        F,
+                        Idx(II, s, u, indexmap), s,
+                        filter_interfaces(bcmap[operation(u)][x]),
+                        (x2i(s, u, x), x), u,
+                        central_ufunc
+                    )
+                    for x in ivs(u, s)
+                ]
+                for u in depvars
+        ],
+        init = []
+    )
 end

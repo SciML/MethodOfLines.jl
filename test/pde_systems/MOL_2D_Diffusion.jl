@@ -30,16 +30,20 @@ using ModelingToolkit: Differential
     eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
 
     # Initial and boundary conditions
-    bcs = [u(t_min, x, y) ~ analytic_sol_func(t_min, x, y),
+    bcs = [
+        u(t_min, x, y) ~ analytic_sol_func(t_min, x, y),
         u(t, x_min, y) ~ analytic_sol_func(t, x_min, y),
         u(t, x_max, y) ~ analytic_sol_func(t, x_max, y),
         u(t, x, y_min) ~ analytic_sol_func(t, x, y_min),
-        u(t, x, y_max) ~ analytic_sol_func(t, x, y_max)]
+        u(t, x, y_max) ~ analytic_sol_func(t, x, y_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
+    domains = [
+        t ∈ Interval(t_min, t_max),
         x ∈ Interval(x_min, x_max),
-        y ∈ Interval(y_min, y_max)]
+        y ∈ Interval(y_min, y_max),
+    ]
 
     # Space and time domains
     @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
@@ -60,7 +64,7 @@ using ModelingToolkit: Differential
 
     # Test against exact solution
     sol′ = sol[u(t, x, y)]
-    @test asf≈sol′[end, :, :] atol=0.4
+    @test asf ≈ sol′[end, :, :] atol = 0.4
 
     #Plot
     #using Plots
@@ -88,22 +92,30 @@ end
 
     # Equation
     eq = Dt(u(t, x, y)) ~
-         Dx((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
-            Dx(u(t, x, y))) +
-         Dy((u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
-            Dy(u(t, x, y)))
+        Dx(
+        (u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
+            Dx(u(t, x, y))
+    ) +
+        Dy(
+        (u(t, x, y)^2 / exp(x + y)^2 + sin(x + y + 4t)^2)^0.5 *
+            Dy(u(t, x, y))
+    )
 
     # Initial and boundary conditions
-    bcs = [u(t_min, x, y) ~ analytic_sol_func(t_min, x, y),
+    bcs = [
+        u(t_min, x, y) ~ analytic_sol_func(t_min, x, y),
         u(t, x_min, y) ~ analytic_sol_func(t, x_min, y),
         u(t, x_max, y) ~ analytic_sol_func(t, x_max, y),
         u(t, x, y_min) ~ analytic_sol_func(t, x, y_min),
-        u(t, x, y_max) ~ analytic_sol_func(t, x, y_max)]
+        u(t, x, y_max) ~ analytic_sol_func(t, x, y_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
+    domains = [
+        t ∈ Interval(t_min, t_max),
         x ∈ Interval(x_min, x_max),
-        y ∈ Interval(y_min, y_max)]
+        y ∈ Interval(y_min, y_max),
+    ]
 
     # Space and time domains
     @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
@@ -127,7 +139,7 @@ end
     m = max(asf...)
     sol′ = sol[u(t, x, y)]
 
-    @test asf / m≈sol′[end, :, :] / m atol=0.4 # TODO: use lower atol when g(x) is improved in MOL_discretize.jl
+    @test asf / m ≈ sol′[end, :, :] / m atol = 0.4 # TODO: use lower atol when g(x) is improved in MOL_discretize.jl
 
     #Plot
     #using Plots

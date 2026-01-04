@@ -85,7 +85,8 @@ end
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
 
 function PDEBase.construct_discrete_space(
-        vars::PDEBase.VariableMap, discretization::MOLFiniteDifference{G}) where {G}
+        vars::PDEBase.VariableMap, discretization::MOLFiniteDifference{G}
+    ) where {G}
     x̄ = vars.x̄
     t = vars.time
     depvars = vars.ū
@@ -105,21 +106,40 @@ function PDEBase.construct_discrete_space(
     grid = Dict(grid)
 
     # Build symbolic variables
-    Iaxies = [u => CartesianIndices(((axes(axies[x])[1]
-              for x in remove(arguments(u), t))...,))
-              for u in depvars]
-    Igrid = [u => CartesianIndices(((axes(grid[x])[1]
-             for x in remove(arguments(u), t))...,))
-             for u in depvars]
+    Iaxies = [
+        u => CartesianIndices(
+                (
+                    (
+                        axes(axies[x])[1]
+                        for x in remove(arguments(u), t)
+                    )...,
+                )
+            )
+            for u in depvars
+    ]
+    Igrid = [
+        u => CartesianIndices(
+                (
+                    (
+                        axes(grid[x])[1]
+                        for x in remove(arguments(u), t)
+                    )...,
+                )
+            )
+            for u in depvars
+    ]
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars)
 
     return DiscreteSpace{nspace, length(depvars), G}(
-        vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), nothing)
+        vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), nothing
+    )
 end
 
-function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap,
-        discretization::MOLFiniteDifference{G}) where {G <: StaggeredGrid}
+function PDEBase.construct_discrete_space(
+        vars::PDEBase.VariableMap,
+        discretization::MOLFiniteDifference{G}
+    ) where {G <: StaggeredGrid}
     x̄ = vars.x̄
     t = vars.time
     depvars = vars.ū
@@ -139,29 +159,54 @@ function PDEBase.construct_discrete_space(vars::PDEBase.VariableMap,
     grid = Dict(grid)
 
     # Build symbolic variables
-    Iaxies = [u => CartesianIndices(((axes(axies[x])[1]
-              for x in remove(arguments(u), t))...,))
-              for u in depvars]
-    Igrid = [u => CartesianIndices(((axes(grid[x])[1]
-             for x in remove(arguments(u), t))...,))
-             for u in depvars]
+    Iaxies = [
+        u => CartesianIndices(
+                (
+                    (
+                        axes(axies[x])[1]
+                        for x in remove(arguments(u), t)
+                    )...,
+                )
+            )
+            for u in depvars
+    ]
+    Igrid = [
+        u => CartesianIndices(
+                (
+                    (
+                        axes(grid[x])[1]
+                        for x in remove(arguments(u), t)
+                    )...,
+                )
+            )
+            for u in depvars
+    ]
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars)
 
     # determine which variables are grid/stagger aligned
     edge_aligned_var = operation(unwrap(discretization.kwargs[:edge_aligned_var]))
-    center_aligned_var = operation(unwrap(depvars[findfirst(
-        u -> operation(unwrap(u)) !== edge_aligned_var, depvars)]))
+    center_aligned_var = operation(
+        unwrap(
+            depvars[
+                findfirst(
+                    u -> operation(unwrap(u)) !== edge_aligned_var, depvars
+                ),
+            ]
+        )
+    )
     staggered_dict = Dict(
-        edge_aligned_var => EdgeAlignedVar, center_aligned_var => CenterAlignedVar)
+        edge_aligned_var => EdgeAlignedVar, center_aligned_var => CenterAlignedVar
+    )
 
     return DiscreteSpace{nspace, length(depvars), G}(
         vars, Dict(depvarsdisc), axies, grid, Dict(dxs),
-        Dict(Iaxies), Dict(Igrid), staggered_dict)
+        Dict(Iaxies), Dict(Igrid), staggered_dict
+    )
 end
 
 function Base.getproperty(s::DiscreteSpace, p::Symbol)
-    if p in [:ū, :x̄, :ps, :time, :args, :x2i, :i2x]
+    return if p in [:ū, :x̄, :ps, :time, :args, :x2i, :i2x]
         getfield(s.vars, p)
     else
         getfield(s, p)
@@ -279,7 +324,7 @@ A function that returns what to replace independent variables with in boundary e
 """
 @inline function axiesvals(s::DiscreteSpace{N, M, G}, u_, x_, I) where {N, M, G}
     u = depvar(u_, s)
-    map(ivs(u, s)) do x
+    return map(ivs(u, s)) do x
         if isequal(x, x_)
             x => (I[x2i(s, u, x)] == 1 ? first(s.axies[x]) : last(s.axies[x]))
         else
@@ -289,42 +334,50 @@ A function that returns what to replace independent variables with in boundary e
 end
 
 function gridvals(s::DiscreteSpace{N}, u) where {N}
-    ndims(u, s) == 0 ? [] :
-    map(y -> [x => s.grid[x][y.I[x2i(s, u, x)]] for x in ivs(u, s)], s.Igrid[u])
+    return ndims(u, s) == 0 ? [] :
+        map(y -> [x => s.grid[x][y.I[x2i(s, u, x)]] for x in ivs(u, s)], s.Igrid[u])
 end
 function gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where {N}
-    ndims(u, s) == 0 ? [] : [x => s.grid[x][I[x2i(s, u, x)]] for x in ivs(u, s)]
+    return ndims(u, s) == 0 ? [] : [x => s.grid[x][I[x2i(s, u, x)]] for x in ivs(u, s)]
 end
 
 function varmaps(s::DiscreteSpace, depvars, II, indexmap)
-    [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
+    return [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
 end
 
 function valmaps(s::DiscreteSpace, u, depvars, II, indexmap)
-    length(II) == 0 ? [] : vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
+    return length(II) == 0 ? [] : vcat(varmaps(s, depvars, II, indexmap), gridvals(s, u, II))
 end
 
 valmaps(s, u, depvars, indexmap) = valmaps.([s], [u], [depvars], s.Igrid[u], [indexmap])
 
 function map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N, M}) where {N, M}
-    vcat([s.ū[k] => s.discvars[k][II] for k in 1:M],
-        [s.x̄[j] => s.grid[j][II[j]] for j in 1:N])
+    return vcat(
+        [s.ū[k] => s.discvars[k][II] for k in 1:M],
+        [s.x̄[j] => s.grid[j][II[j]] for j in 1:N]
+    )
 end
 
 # TODO: Allow other grids
 
-@inline function generate_grid(x̄, axies, intervals,
-        discretization::MOLFiniteDifference{G}) where {G <: CenterAlignedGrid}
+@inline function generate_grid(
+        x̄, axies, intervals,
+        discretization::MOLFiniteDifference{G}
+    ) where {G <: CenterAlignedGrid}
     return axies
 end
 
-@inline function generate_grid(x̄, axies, intervals,
-        discretization::MOLFiniteDifference{G}) where {G <: StaggeredGrid}
+@inline function generate_grid(
+        x̄, axies, intervals,
+        discretization::MOLFiniteDifference{G}
+    ) where {G <: StaggeredGrid}
     return axies
 end
 
-@inline function generate_grid(x̄, axies, intervals,
-        discretization::MOLFiniteDifference{G}) where {G <: EdgeAlignedGrid}
+@inline function generate_grid(
+        x̄, axies, intervals,
+        discretization::MOLFiniteDifference{G}
+    ) where {G <: EdgeAlignedGrid}
     dict = Dict(axies)
     return map(x̄) do x
         xdomain = intervals[x]

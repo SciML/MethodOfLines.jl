@@ -8,7 +8,8 @@ Each index corresponds to the weights and index for the derivative at index i+1/
 """
 function get_half_offset_weights_and_stencil(
         D::DerivativeOperator{T, N, Wind, DX}, II::Base.AbstractCartesianIndex,
-        s::DiscreteSpace, bs, u, jx, len = 0) where {T, N, Wind, DX <: Number}
+        s::DiscreteSpace, bs, u, jx, len = 0
+    ) where {T, N, Wind, DX <: Number}
     j, x = jx
     len = len == 0 ? length(s, x) : len
     haslower, hasupper = haslowerupper(bs, x)
@@ -26,8 +27,10 @@ function get_half_offset_weights_and_stencil(
         Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):0]
     else
         weights = D.stencil_coefs
-        Itap = [II + i * I1
-                for i in (1 - div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
+        Itap = [
+            II + i * I1
+                for i in (1 - div(D.stencil_length, 2)):(div(D.stencil_length, 2))
+        ]
     end
 
     return (weights, Itap)
@@ -35,9 +38,10 @@ end
 
 function get_half_offset_weights_and_stencil(
         D::DerivativeOperator{T, N, Wind, DX}, II::Base.AbstractCartesianIndex,
-        s::DiscreteSpace, bs, u, jx, len = 0) where {T, N, Wind, DX <: AbstractVector}
+        s::DiscreteSpace, bs, u, jx, len = 0
+    ) where {T, N, Wind, DX <: AbstractVector}
     j, x = jx
-    @assert length(bs)==0 "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
+    @assert length(bs) == 0 "Periodic boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     len = len == 0 ? length(s, x) : len
     @assert II[j] != length(s, x)
 
@@ -55,8 +59,10 @@ function get_half_offset_weights_and_stencil(
         Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):0]
     else
         weights = D.stencil_coefs[II[j] - D.boundary_point_count]
-        Itap = [II + i * I1
-                for i in (1 - div(D.stencil_length, 2)):(div(D.stencil_length, 2))]
+        Itap = [
+            II + i * I1
+                for i in (1 - div(D.stencil_length, 2)):(div(D.stencil_length, 2))
+        ]
     end
 
     return (weights, Itap)

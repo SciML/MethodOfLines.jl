@@ -24,15 +24,19 @@ using ModelingToolkit: Differential
 
     eq = Dtt(u(t, x)) ~ -mu * EI * Dx4(u(t, x)) + mu * g
 
-    bcs = [u(0, x) ~ 0,
+    bcs = [
+        u(0, x) ~ 0,
         u(t, 0) ~ 0,
         Dx(u(t, 0)) ~ 0,
         Dxx(u(t, L)) ~ 0,
-        Dx3(u(t, L)) ~ 0]
+        Dx3(u(t, L)) ~ 0,
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, L)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, L),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
@@ -59,19 +63,25 @@ end
     L = 10.0
     dx = 0.4
 
-    eqs = [v(t, x) ~ Dt(u(t, x)),
-        Dt(v(t, x)) ~ -mu * EI * Dx4(u(t, x)) + mu * g]
+    eqs = [
+        v(t, x) ~ Dt(u(t, x)),
+        Dt(v(t, x)) ~ -mu * EI * Dx4(u(t, x)) + mu * g,
+    ]
 
-    bcs = [u(0, x) ~ 0,
+    bcs = [
+        u(0, x) ~ 0,
         v(0, x) ~ 0,
         u(t, 0) ~ 0,
         v(t, 0) ~ 0,
         Dxx(u(t, L)) ~ 0,
-        Dx3(u(t, L)) ~ 0]
+        Dx3(u(t, L)) ~ 0,
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, L)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, L),
+    ]
 
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
@@ -95,23 +105,28 @@ end
     u_analytic(x, t; z = (x - t) / 2) = 1 / 2 * sech(z)^2
     du(x, t; z = (x - t) / 2) = 1 / 2 * tanh(z) * sech(z)^2
     ddu(x, t; z = (x - t) / 2) = 1 / 4 * (2 * tanh(z)^2 + sech(z)^2) * sech(z)^2
-    bcs = [u(x, 0) ~ u_analytic(x, 0),
+    bcs = [
+        u(x, 0) ~ u_analytic(x, 0),
         u(-10, t) ~ u_analytic(-10, t),
         u(10, t) ~ u_analytic(10, t),
         Dx(u(-10, t)) ~ du(-10, t),
         Dx(u(10, t)) ~ du(10, t),
         Dx2(u(-10, t)) ~ ddu(-10, t),
-        Dx2(u(10, t)) ~ ddu(10, t)]
+        Dx2(u(10, t)) ~ ddu(10, t),
+    ]
 
     # Space and time domains
-    domains = [x ∈ Interval(-10.0, 10.0),
-        t ∈ Interval(0.0, 1.0)]
+    domains = [
+        x ∈ Interval(-10.0, 10.0),
+        t ∈ Interval(0.0, 1.0),
+    ]
     # Discretization
     dx = 0.4
     dt = 0.2
 
     discretization = MOLFiniteDifference(
-        [x => dx], t; upwind_order = 1, grid_align = center_align)
+        [x => dx], t; upwind_order = 1, grid_align = center_align
+    )
     @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
     prob = discretize(pdesys, discretization)
 

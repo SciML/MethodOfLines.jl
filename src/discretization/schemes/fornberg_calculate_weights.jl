@@ -18,9 +18,10 @@ Inputs:
 =#
 
 function calculate_weights(
-        order::Int, x0::T, x::AbstractVector; dfdx::Bool = false) where {T <: Real}
+        order::Int, x0::T, x::AbstractVector; dfdx::Bool = false
+    ) where {T <: Real}
     N = length(x)
-    @assert order<N "Not enough points for the requested order."
+    @assert order < N "Not enough points for the requested order."
     M = order
     c1 = one(T)
     c4 = x[1] - x0

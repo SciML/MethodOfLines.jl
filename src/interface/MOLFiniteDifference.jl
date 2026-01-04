@@ -38,23 +38,27 @@ struct MOLFiniteDifference{G, D} <: AbstractEquationSystemDiscretization
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
-function MOLFiniteDifference(dxs, time = nothing; approx_order = 2,
+function MOLFiniteDifference(
+        dxs, time = nothing; approx_order = 2,
         advection_scheme = UpwindScheme(), grid_align = CenterAlignedGrid(),
         discretization_strategy = ScalarizedDiscretization(),
         upwind_order = nothing, should_transform = true,
-        use_ODAE = false, useIR = true, callbacks = [], kwargs...)
+        use_ODAE = false, useIR = true, callbacks = [], kwargs...
+    )
     if upwind_order !== nothing
         @warn "`upwind_order` no longer does anything, and will be removed in a future release. See the docs for the current interface."
     end
     if approx_order % 2 != 0
-        @warn "Discretization approx_order must be even, rounding up to $(approx_order+1)"
+        @warn "Discretization approx_order must be even, rounding up to $(approx_order + 1)"
     end
-    @assert approx_order>=1 "approx_order must be at least 1"
+    @assert approx_order >= 1 "approx_order must be at least 1"
 
-    @assert (time isa Num)|(time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
+    @assert (time isa Num) | (time isa Nothing) "time must be a Num, or Nothing - got $(typeof(time)). See docs for MOLFiniteDifference."
 
-    if (grid_align == StaggeredGrid() &&
-        !(:edge_aligned_var in keys(kwargs)))
+    if (
+            grid_align == StaggeredGrid() &&
+                !(:edge_aligned_var in keys(kwargs))
+        )
         @warn "when using StaggeredGrid(), you must set 'edge_aligned_var' keyword arg"
     end
 
@@ -62,7 +66,8 @@ function MOLFiniteDifference(dxs, time = nothing; approx_order = 2,
 
     return MOLFiniteDifference{typeof(grid_align), typeof(discretization_strategy)}(
         dxs, time, approx_order, advection_scheme, grid_align, should_transform,
-        use_ODAE, discretization_strategy, useIR, callbacks, kwargs)
+        use_ODAE, discretization_strategy, useIR, callbacks, kwargs
+    )
 end
 
 PDEBase.get_time(disc::MOLFiniteDifference) = disc.time

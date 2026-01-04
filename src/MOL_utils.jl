@@ -2,12 +2,14 @@
 # Utils for DerivativeOperator generation in schemes
 ####
 @inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindices(M)[j] :
-                                                      II
+    II
 half_range(x) = (-div(x, 2)):div(x, 2)
 index(i::Int, N::Int) = i + div(N, 2) + 1
 
-function generate_coordinates(i::Int, stencil_x, dummy_x,
-        dx::AbstractVector{T}) where {T <: Real}
+function generate_coordinates(
+        i::Int, stencil_x, dummy_x,
+        dx::AbstractVector{T}
+    ) where {T <: Real}
     len = length(stencil_x)
     stencil_x .= stencil_x .* zero(T)
     for idx in 1:div(len, 2)
@@ -39,13 +41,17 @@ function get_gridloc(u, s)
 end
 
 function generate_function_from_gridlocs(analyticmap, gridlocs, s)
-    is_t_first_map = Dict(map(s.ū) do u
-        operation(u) => (findfirst(x -> isequal(s.time, x), arguments(u)) == 1)
-    end)
+    is_t_first_map = Dict(
+        map(s.ū) do u
+            operation(u) => (findfirst(x -> isequal(s.time, x), arguments(u)) == 1)
+        end
+    )
 
-    opsmap = Dict(map(s.ū) do u
-        operation(u) => u
-    end)
+    opsmap = Dict(
+        map(s.ū) do u
+            operation(u) => u
+        end
+    )
 
     fs_ = map(gridlocs) do (uop, x̄)
         is_t_first = is_t_first_map[uop]

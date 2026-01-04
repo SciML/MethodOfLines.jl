@@ -29,13 +29,17 @@ using StableRNGs
     eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
 
     # Initial and boundary conditions
-    bcs = [u(t_min, x) ~ analytic_sol_func(t_min, x),
+    bcs = [
+        u(t_min, x) ~ analytic_sol_func(t_min, x),
         u(t, x_min) ~ analytic_sol_func(t, x_min),
-        u(t, x_max) ~ analytic_sol_func(t, x_max)]
+        u(t, x_max) ~ analytic_sol_func(t, x_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     # PDE system
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
@@ -44,7 +48,7 @@ using StableRNGs
     dx = 0:0.01:2
     dx = collect(dx)
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
-                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -60,7 +64,7 @@ using StableRNGs
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf≈sol′[end, :] atol=0.1
+    @test asf ≈ sol′[end, :] atol = 0.1
 
     # Plots
     #using Plots
@@ -138,7 +142,7 @@ end
     x_min = 0.0
     x_max = 2.0
     c = 50.0
-    h = 0.50
+    h = 0.5
 
     # Analytic solution
     analytic_sol_func(t, x) = 0.5 * (x + h) / sqrt(c - t)
@@ -147,13 +151,17 @@ end
     eq = Dt(u(t, x)) ~ Dx(u(t, x)^2 * Dx(u(t, x)))
 
     # Initial and boundary conditions
-    bcs = [u(t_min, x) ~ analytic_sol_func(t_min, x),
+    bcs = [
+        u(t_min, x) ~ analytic_sol_func(t_min, x),
         u(t, x_min) ~ analytic_sol_func(t, x_min),
-        u(t, x_max) ~ analytic_sol_func(t, x_max)]
+        u(t, x_max) ~ analytic_sol_func(t, x_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     # PDE system
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
@@ -162,7 +170,7 @@ end
     dx = 0:0.01:2
     dx = collect(dx)
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
-                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 2)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -181,7 +189,7 @@ end
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf≈sol′[end, :] atol=0.1
+    @test asf ≈ sol′[end, :] atol = 0.1
     # Plots
     #using Plots
     #plot(r_space, asf, seriestype = :scatter,label="analytic solution")
@@ -202,7 +210,7 @@ end
     x_min = 0.0
     x_max = 2.0
     c = 50.0
-    h = 0.50
+    h = 0.5
 
     # Analytic solution
     analytic_sol_func(t, x) = 0.5 * (x + h) / sqrt(c - t)
@@ -211,13 +219,17 @@ end
     eq = Dt(u(t, x)) ~ Dx(u(t, x)^2 * Dx(u(t, x)))
 
     # Initial and boundary conditions
-    bcs = [u(t_min, x) ~ analytic_sol_func(t_min, x),
+    bcs = [
+        u(t_min, x) ~ analytic_sol_func(t_min, x),
         u(t, x_min) ~ analytic_sol_func(t, x_min),
-        u(t, x_max) ~ analytic_sol_func(t, x_max)]
+        u(t, x_max) ~ analytic_sol_func(t, x_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     # PDE system
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
@@ -226,7 +238,7 @@ end
     dx = 0:0.01:2
     dx = collect(dx)
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
-                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -245,7 +257,7 @@ end
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf≈sol′[end, :] atol=0.1
+    @test asf ≈ sol′[end, :] atol = 0.1
     # Plots
     #using Plots
     #plot(r_space, asf, seriestype = :scatter,label="analytic solution")
@@ -331,13 +343,17 @@ end
     eq = Dt(u(t, x)) ~ Dx(1.0 / (1.0 + u(t, x)^2) * Dx(u(t, x)))
 
     # Initial and boundary conditions
-    bcs = [u(t_min, x) ~ analytic_sol_func(t_min, x),
+    bcs = [
+        u(t_min, x) ~ analytic_sol_func(t_min, x),
         Dx(u(t, x_min)) ~ analytic_deriv_func(t, x_min),
-        Dx(u(t, x_max)) ~ analytic_deriv_func(t, x_max)]
+        Dx(u(t, x_max)) ~ analytic_deriv_func(t, x_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     # PDE system
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
@@ -346,7 +362,7 @@ end
     dx = 0:0.01:0.8
     dx = collect(dx)
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
-                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -363,7 +379,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -392,13 +408,17 @@ end
     eq = Dt(u(t, x)) ~ Dx(1.0 / (u(t, x)^2 + 1.0) * Dx(u(t, x)))
 
     # Initial and boundary conditions
-    bcs = [u(t_min, x) ~ analytic_sol_func(t_min, x),
+    bcs = [
+        u(t_min, x) ~ analytic_sol_func(t_min, x),
         u(t, x_min) ~ analytic_sol_func(t, x_min),
-        u(t, x_max) ~ analytic_sol_func(t, x_max)]
+        u(t, x_max) ~ analytic_sol_func(t, x_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     # PDE system
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
@@ -407,7 +427,7 @@ end
     dx = 0:0.01:0.8
     dx = collect(dx)
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
-                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -425,7 +445,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -448,20 +468,24 @@ end
     x_max = 2.0
 
     # Analytic solution
-    analytic_sol_func(t, x) = -coth(x)#
+    analytic_sol_func(t, x) = -coth(x) #
     #analytic_deriv_func(t,x) = csch(x)^2
 
     # Equation
     eq = Dt(u(t, x)) ~ Dx(1.0 / (u(t, x)^2 - 1.0) * Dx(u(t, x)))
 
     # Initial and boundary conditions
-    bcs = [u(t_min, x) ~ analytic_sol_func(t_min, x),
+    bcs = [
+        u(t_min, x) ~ analytic_sol_func(t_min, x),
         u(t, x_min) ~ analytic_sol_func(t, x_min),
-        u(t, x_max) ~ analytic_sol_func(t, x_max)]
+        u(t, x_max) ~ analytic_sol_func(t, x_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     # PDE system
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
@@ -470,7 +494,7 @@ end
     dx = 0:0.01:2
     dx = collect(dx)
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
-                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -486,10 +510,10 @@ end
     t_disc = sol[t]
     asf = [analytic_sol_func(t_disc[end], x) for x in x_disc]
     sol′ = sol[u(t, x)]
-    @test asf≈sol′[end, :] atol=0.1
+    @test asf ≈ sol′[end, :] atol = 0.1
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots
@@ -517,13 +541,17 @@ end
     eq = Dt(u(t, x)) ~ Dx(1.0 / (-1.0 + u(t, x)^2) * Dx(u(t, x)))
 
     # Initial and boundary conditions
-    bcs = [u(t_min, x) ~ analytic_sol_func(t_min, x),
+    bcs = [
+        u(t_min, x) ~ analytic_sol_func(t_min, x),
         u(t, x_min) ~ analytic_sol_func(t, x_min),
-        u(t, x_max) ~ analytic_sol_func(t, x_max)]
+        u(t, x_max) ~ analytic_sol_func(t, x_max),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     # PDE system
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
@@ -532,7 +560,7 @@ end
     dx = 0:0.01:2
     dx = collect(dx)
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
-                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     discretization = MOLFiniteDifference([x => dx], t)
     prob = ModelingToolkit.discretize(pdesys, discretization)
@@ -550,7 +578,7 @@ end
     sol′ = sol[u(t, x)]
 
     m = max(asf..., sol′[end, :]...)
-    @test asf / m≈sol′[end, :] / m atol=0.16 # the difference occurs when tan(x) goes to infinite
+    @test asf / m ≈ sol′[end, :] / m atol = 0.16 # the difference occurs when tan(x) goes to infinite
 
     # Plots
     #using Plots

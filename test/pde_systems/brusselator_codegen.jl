@@ -26,21 +26,26 @@ local sol
 
     eq = [
         Dt(u(x, y, t)) ~
-        1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
-        α * (Dxx(u(x, y, t)) + Dyy(u(x, y, t))) + brusselator_f(x, y, t),
+            1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
+            α * (Dxx(u(x, y, t)) + Dyy(u(x, y, t))) + brusselator_f(x, y, t),
         Dt(v(x, y, t)) ~
-        3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
-        α * (Dxx(v(x, y, t)) + Dyy(v(x, y, t)))]
+            3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
+            α * (Dxx(v(x, y, t)) + Dyy(v(x, y, t))),
+    ]
 
-    domains = [x ∈ Interval(x_min, x_max),
+    domains = [
+        x ∈ Interval(x_min, x_max),
         y ∈ Interval(y_min, y_max),
-        t ∈ Interval(t_min, t_max)]
+        t ∈ Interval(t_min, t_max),
+    ]
 
-    bcs = [u(x, y, 0) ~ u0(x, y, 0),
+    bcs = [
+        u(x, y, 0) ~ u0(x, y, 0),
         u(0, y, t) ~ u(1, y, t),
         u(x, 0, t) ~ u(x, 1, t), v(x, y, 0) ~ v0(x, y, 0),
         v(0, y, t) ~ v(1, y, t),
-        v(x, 0, t) ~ v(x, 1, t)]
+        v(x, 0, t) ~ v(x, 1, t),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [x, y, t], [u(x, y, t), v(x, y, t)])
 

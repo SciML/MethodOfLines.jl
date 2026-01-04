@@ -1,6 +1,6 @@
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, NonlinearSolve,
-      DomainSets
+    DomainSets
 using ModelingToolkit: Differential
 
 @testset "Test 00a: Test solution interface, time dependent" begin
@@ -15,14 +15,18 @@ using ModelingToolkit: Differential
     eq = Dt(u(t, x, y)) ~ -Dx(u(t, x, y)) + Dy(u(t, x, y))
 
     asf(x, y) = (0.5 / (0.2 * sqrt(2.0 * 3.1415))) * exp(-(x + y - 1.0)^2 / (2.0 * 0.2^2))
-    bcs = [u(0, x, y) ~ asf(x, y),
+    bcs = [
+        u(0, x, y) ~ asf(x, y),
         u(t, 0, y) ~ u(t, 2, y),
-        u(t, x, 0) ~ u(t, x, 2)]
+        u(t, x, 0) ~ u(t, x, 2),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 2.0),
+    domains = [
+        t ∈ Interval(0.0, 2.0),
         x ∈ Interval(0.0, 2.0),
-        y ∈ Interval(0.0, 2.0)]
+        y ∈ Interval(0.0, 2.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
@@ -31,7 +35,8 @@ using ModelingToolkit: Differential
     dx = dy = 2 / 8
     order = 1
     discretization = MOLFiniteDifference(
-        [x => dx, y => dy], t; advection_scheme = WENOScheme())
+        [x => dx, y => dy], t; advection_scheme = WENOScheme()
+    )
     # explicitly specify upwind order
 
     # Convert the PDE problem into an ODE problem
@@ -81,14 +86,18 @@ end
     dx = 1 / 8
     dy = 1 / 8
 
-    bcs = [u(0, y) ~ x * y,
+    bcs = [
+        u(0, y) ~ x * y,
         u(1, y) ~ x * y,
         u(x, 0) ~ x * y,
-        u(x, 1) ~ x * y]
+        u(x, 1) ~ x * y,
+    ]
 
     # Space and time domains
-    domains = [x ∈ Interval(0.0, 1.0),
-        y ∈ Interval(0.0, 1.0)]
+    domains = [
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
 
     @named pdesys = PDESystem([eq], bcs, domains, [x, y], [u(x, y)])
 

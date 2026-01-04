@@ -17,13 +17,17 @@ using ModelingToolkit: Differential
 
     # 1D PDE and boundary conditions
     eq = Dt(u(t, x)) ~ Dxx(u(t, x))
-    bcs = [u(0, x) ~ cos(x),
+    bcs = [
+        u(0, x) ~ cos(x),
         u(t, 0) ~ exp(-t),
-        u(t, Float64(π)) ~ -exp(-t)]
+        u(t, Float64(π)) ~ -exp(-t),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, Float64(π))]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(π)),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
@@ -40,8 +44,10 @@ using ModelingToolkit: Differential
     # Higher order centered difference
     discretization_approx_order4 = MOLFiniteDifference([x => dx_], t; approx_order = 4)
 
-    for disc in [discretization, discretization_edge,
-        discretization_centered, discretization_approx_order4]
+    for disc in [
+            discretization, discretization_edge,
+            discretization_centered, discretization_approx_order4,
+        ]
         # Convert the PDE problem into an ODE problem
         prob = discretize(pdesys, disc)
 
@@ -69,17 +75,22 @@ end
 
     # 1D PDE and boundary conditions
     eq = Dt(u(t, x)) ~ D * Dxx(u(t, x))
-    bcs = [u(0, x) ~ -x * (x - 1) * sin(x),
+    bcs = [
+        u(0, x) ~ -x * (x - 1) * sin(x),
         u(t, 0) ~ 0.0,
-        u(t, 1) ~ 0.0]
+        u(t, 1) ~ 0.0,
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(
-        eq, bcs, domains, [t, x], [u(t, x)], [D]; defaults = Dict(D => 10.0))
+        eq, bcs, domains, [t, x], [u(t, x)], [D]; defaults = Dict(D => 10.0)
+    )
 
     # Method of lines discretization
     dx = 1 / (5pi)
@@ -96,7 +107,7 @@ end
     # Test
     n = size(solu, 2)
 
-    @test solu[end, :]≈zeros(n) atol=0.001
+    @test solu[end, :] ≈ zeros(n) atol = 0.001
 end
 
 @testset "Test 02: Dt(u(t,x)) ~ Dx(D(t,x))*Dx(u(t,x))+D(t,x)*Dxx(u(t,x))" begin
@@ -114,13 +125,17 @@ end
 
     eq = [Dt(u(t, x)) ~ DxD * Dx(u(t, x)) + D(t, x) * Dxx(u(t, x))]
 
-    bcs = [u(0, x) ~ -x * (x - 1) * sin(x),
+    bcs = [
+        u(0, x) ~ -x * (x - 1) * sin(x),
         u(t, 0) ~ 0.0,
-        u(t, 1) ~ 0.0]
+        u(t, 1) ~ 0.0,
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
@@ -140,7 +155,7 @@ end
     # Test
     n = size(solu, 2)
 
-    @test solu[end, :]≈zeros(n) atol=0.001
+    @test solu[end, :] ≈ zeros(n) atol = 0.001
 end
 
 @testset "Test 03: Dt(u(t,x)) ~ Dxx(u(t,x)), homogeneous Neumann BCs, order 8" begin
@@ -156,20 +171,24 @@ end
 
     # 1D PDE and boundary conditions
     eq = Dt(u(t, x)) ~ Dxx(u(t, x))
-    bcs = [u(0, x) ~ cos(x),
+    bcs = [
+        u(0, x) ~ cos(x),
         Dx(u(t, 0)) ~ 0,
-        Dx(u(t, Float64(pi))) ~ 0]
+        Dx(u(t, Float64(pi))) ~ 0,
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, Float64(pi))]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(pi)),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     # Method of lines discretization
     dx = range(0.0, Float64(π), length = 300)
-    dx_ = dx[2] - dx[1]#range(0.0,Float64(π),length=300)
+    dx_ = dx[2] - dx[1] #range(0.0,Float64(π),length=300)
     order = 8
     discretization = MOLFiniteDifference([x => dx_], t)
     discretization_edge = MOLFiniteDifference([x => dx_], t; grid_align = edge_align)
@@ -199,7 +218,7 @@ end
         for i in 1:length(sol)
             exact = u_exact(x_sol, t_sol[i])
             @test all(isapprox.(u_approx[i, :], exact, atol = 0.01))
-            @test sum(u_approx[i, :])≈0 atol=1e-10
+            @test sum(u_approx[i, :]) ≈ 0 atol = 1.0e-10
         end
     end
 end
@@ -217,13 +236,17 @@ end
 
     # 1D PDE and boundary conditions
     eq = Dt(u(t, x)) ~ Dxx(u(t, x))
-    bcs = [u(0, x) ~ sin(x),
+    bcs = [
+        u(0, x) ~ sin(x),
         Dx(u(t, 0)) ~ exp(-t),
-        Dx(u(t, Float64(pi))) ~ -exp(-t)]
+        Dx(u(t, Float64(pi))) ~ -exp(-t),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, Float64(pi))]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(pi)),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
@@ -234,7 +257,8 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx_], t, approx_order = 2)
     discretization_edge = MOLFiniteDifference(
-        [x => dx_], t; grid_align = edge_align, approx_order = 2)
+        [x => dx_], t; grid_align = edge_align, approx_order = 2
+    )
 
     # Convert the PDE problem into an ODE problem
     for (j, disc) in enumerate([discretization, discretization_edge])
@@ -265,7 +289,7 @@ end
             @test all(isapprox.(u_approx[i, :], exact, atol = 0.01))
             # test mass conservation
             integral_u_approx = sum(u_approx[i, :] * dx_)
-            @test integral_u_exact(solt[i])≈integral_u_approx atol=0.01
+            @test integral_u_exact(solt[i]) ≈ integral_u_approx atol = 0.01
         end
     end
 end
@@ -283,13 +307,17 @@ end
 
     # 1D PDE and boundary conditions
     eq = Dt(u(t, x)) ~ Dxx(u(t, x))
-    bcs = [u(0, x) ~ sin(x),
+    bcs = [
+        u(0, x) ~ sin(x),
         u(t, 0) ~ 0.0,
-        Dx(u(t, Float64(pi))) ~ -exp(-t)]
+        Dx(u(t, Float64(pi))) ~ -exp(-t),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, Float64(pi))]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(pi)),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
@@ -329,13 +357,17 @@ end
 
     # 1D PDE and boundary conditions
     eq = Dt(u(t, x)) ~ Dxx(u(t, x))
-    bcs = [u(0, x) ~ sin(x),
+    bcs = [
+        u(0, x) ~ sin(x),
         u(t, -1.0) + 3Dx(u(t, -1.0)) ~ exp(-t) * (sin(-1.0) + 3cos(-1.0)),
-        4u(t, 1.0) + Dx(u(t, 1.0)) ~ exp(-t) * (4sin(1.0) + cos(1.0))]
+        4u(t, 1.0) + Dx(u(t, 1.0)) ~ exp(-t) * (4sin(1.0) + cos(1.0)),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(-1.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(-1.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
@@ -346,7 +378,8 @@ end
     order = 4
     discretization = MOLFiniteDifference([x => dx], t; approx_order = order)
     discretization_edge = MOLFiniteDifference(
-        [x => dx], t; approx_order = order, grid_align = edge_align)
+        [x => dx], t; approx_order = order, grid_align = edge_align
+    )
 
     for disc in [discretization, discretization_edge]
         # Convert the PDE problem into an ODE problem
@@ -379,13 +412,17 @@ end
 
     # 1D PDE and boundary conditions
     eq = Dt(u(t, x)) ~ Dxx(u(t, x))
-    bcs = [u(0, x) ~ sin(x),
+    bcs = [
+        u(0, x) ~ sin(x),
         t^2 * u(t, -1.0) + 3Dx(u(t, -1.0)) ~ exp(-t) * (t^2 * sin(-1.0) + 3cos(-1.0)),
-        4u(t, 1.0) + t * Dx(u(t, 1.0)) ~ exp(-t) * (4sin(1.0) + t * cos(1.0))]
+        4u(t, 1.0) + t * Dx(u(t, 1.0)) ~ exp(-t) * (4sin(1.0) + t * cos(1.0)),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(-1.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(-1.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
@@ -399,7 +436,7 @@ end
     prob = discretize(pdesys, discretization)
 
     # Solve ODE problem
-    sol = solve(prob, Rodas4(), reltol = 1e-6, saveat = 0.1)
+    sol = solve(prob, Rodas4(), reltol = 1.0e-6, saveat = 0.1)
 
     u_approx = sol[u(t, x)]
     discx = sol[x]
@@ -427,14 +464,18 @@ end
     # 1D PDE and boundary conditions
 
     eq = Dt(u(t, r)) ~ 1 / r^2 * Dr(r^2 * Dr(u(t, r)))
-    bcs = [u(0, r) ~ sin(r) / r,
+    bcs = [
+        u(0, r) ~ sin(r) / r,
         Dr(u(t, 0)) ~ 0,
-        u(t, 1) ~ exp(-t) * sin(1)]
+        u(t, 1) ~ exp(-t) * sin(1),
+    ]
     #    Dr(u(t,1)) ~ -exp(-t) * sin(1)]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        r ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        r ∈ Interval(0.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
@@ -483,13 +524,17 @@ end
     # 1D PDE and boundary conditions
 
     eq = Dt(u(t, r)) ~ 4 / r^2 * Dr(r^2 * Dr(u(t, r)))
-    bcs = [u(0, r) ~ sin(r) / r,
+    bcs = [
+        u(0, r) ~ sin(r) / r,
         Dr(u(t, 0)) ~ 0,
-        u(t, 1) ~ exp(-4t) * sin(1)]
+        u(t, 1) ~ exp(-4t) * sin(1),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        r ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        r ∈ Interval(0.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
@@ -537,18 +582,24 @@ end
     Dxx = Dx^2
 
     # 1D PDE and boundary conditions
-    eqs = [Dt(u(t, x)) ~ Dxx(u(t, x)),
-        Dt(v(t, x)) ~ Dxx(v(t, x))]
-    bcs = [u(0, x) ~ cos(x),
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)),
+        Dt(v(t, x)) ~ Dxx(v(t, x)),
+    ]
+    bcs = [
+        u(0, x) ~ cos(x),
         v(0, x) ~ sin(x),
         u(t, 0) ~ exp(-t),
         Dx(u(t, 1)) ~ -exp(-t) * sin(1),
         Dx(v(t, 0)) ~ exp(-t),
-        v(t, 1) ~ exp(-t) * sin(1)]
+        v(t, 1) ~ exp(-t) * sin(1),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
@@ -586,19 +637,26 @@ end
     Dx = Differential(x)
     Dxx = Differential(x)^2
 
-    eqs = [Dt(u(t, x)) ~ Dn * Dxx(u(t, x)) + u(t, x) * v(t, x),
-        Dt(v(t, x)) ~ Dp * Dxx(v(t, x)) - u(t, x) * v(t, x)]
-    bcs = [u(0, x) ~ sin(pi * x / 2),
+    eqs = [
+        Dt(u(t, x)) ~ Dn * Dxx(u(t, x)) + u(t, x) * v(t, x),
+        Dt(v(t, x)) ~ Dp * Dxx(v(t, x)) - u(t, x) * v(t, x),
+    ]
+    bcs = [
+        u(0, x) ~ sin(pi * x / 2),
         v(0, x) ~ sin(pi * x / 2),
         u(t, 0) ~ 0.0, Dx(u(t, 1)) ~ 0.0,
-        v(t, 0) ~ 0.0, Dx(v(t, 1)) ~ 0.0]
+        v(t, 0) ~ 0.0, Dx(v(t, 1)) ~ 0.0,
+    ]
 
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     @named pdesys = PDESystem(
         eqs, bcs, domains, [t, x], [u(t, x), v(t, x)],
-        [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2))
+        [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2)
+    )
     discretization = MOLFiniteDifference([x => 0.1], t)
     prob = discretize(pdesys, discretization)
     # Make sure it can be solved
@@ -620,19 +678,25 @@ end
     Dyy = Dy^2
 
     # 1D PDE and boundary conditions
-    eqs = [Dt(u(t, x)) ~ Dxx(u(t, x)),
-        Dt(v(t, y)) ~ Dyy(v(t, y))]
-    bcs = [u(0, x) ~ cos(x),
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)),
+        Dt(v(t, y)) ~ Dyy(v(t, y)),
+    ]
+    bcs = [
+        u(0, x) ~ cos(x),
         v(0, y) ~ sin(y),
         u(t, 0) ~ exp(-t),
         Dx(u(t, 1)) ~ -exp(-t) * sin(1),
         Dy(v(t, 0)) ~ exp(-t),
-        v(t, 2) ~ exp(-t) * sin(2)]
+        v(t, 2) ~ exp(-t) * sin(2),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
+    domains = [
+        t ∈ Interval(0.0, 1.0),
         x ∈ Interval(0.0, 1.0),
-        y ∈ Interval(0.0, 2.0)]
+        y ∈ Interval(0.0, 2.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x), v(t, y)])
@@ -680,19 +744,25 @@ end
     Dyy = Dy^2
 
     # 1D PDE and boundary conditions
-    eqs = [Dt(u[1](t, x)) ~ Dxx(u[1](t, x)),
-        Dt(u[2](t, y)) ~ Dyy(u[2](t, y))]
-    bcs = [u[1](0, x) ~ cos(x),
+    eqs = [
+        Dt(u[1](t, x)) ~ Dxx(u[1](t, x)),
+        Dt(u[2](t, y)) ~ Dyy(u[2](t, y)),
+    ]
+    bcs = [
+        u[1](0, x) ~ cos(x),
         u[2](0, y) ~ sin(y),
         u[1](t, 0) ~ exp(-t),
         Dx(u[1](t, 1)) ~ -exp(-t) * sin(1),
         Dy(u[2](t, 0)) ~ exp(-t),
-        u[2](t, 2) ~ exp(-t) * sin(2)]
+        u[2](t, 2) ~ exp(-t) * sin(2),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
+    domains = [
+        t ∈ Interval(0.0, 1.0),
         x ∈ Interval(0.0, 1.0),
-        y ∈ Interval(0.0, 2.0)]
+        y ∈ Interval(0.0, 2.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u[1](t, x), u[2](t, y)])
@@ -738,16 +808,22 @@ end
     Dxx = Dx^2
 
     # 1D PDE and boundary conditions
-    eqs = [Dt(u(t, x)) ~ Dxx(u(t, x)),
-        Dt(v(t)) ~ -v(t)]
-    bcs = [u(0, x) ~ sin(x),
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)),
+        Dt(v(t)) ~ -v(t),
+    ]
+    bcs = [
+        u(0, x) ~ sin(x),
         v(0) ~ 1,
         u(t, 0) ~ 0,
-        Dx(u(t, 1)) ~ exp(-t) * cos(1)]
+        Dx(u(t, 1)) ~ exp(-t) * cos(1),
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t)])
@@ -773,7 +849,7 @@ end
     # Test against exact solution
     for i in 1:length(sol)
         @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :], atol = 0.01))
-        @test v_exact(t_sol[i])≈solv[i] atol=0.01
+        @test v_exact(t_sol[i]) ≈ solv[i] atol = 0.01
     end
 end
 
@@ -789,18 +865,24 @@ end
     Dx2 = Differential(x2)
     Dxx2 = Dx2^2
 
-    eqs = [Dt(c1(t, x1)) ~ Dxx1(c1(t, x1)),
-        Dt(c2(t, x2)) ~ Dxx2(c2(t, x2))]
+    eqs = [
+        Dt(c1(t, x1)) ~ Dxx1(c1(t, x1)),
+        Dt(c2(t, x2)) ~ Dxx2(c2(t, x2)),
+    ]
 
-    bcs = [c1(0, x1) ~ -x1 * (x1 - 1) * sin(x1),
+    bcs = [
+        c1(0, x1) ~ -x1 * (x1 - 1) * sin(x1),
         c2(0, x2) ~ x2 * (x2 - 1) * sin(x2),
         c1(t, 0) ~ 0,
         c1(t, 0.5) ~ c2(t, 0.5),
-        c2(t, 1) ~ 0]
+        c2(t, 1) ~ 0,
+    ]
 
-    domains = [t ∈ Interval(0.0, 1.0),
+    domains = [
+        t ∈ Interval(0.0, 1.0),
         x1 ∈ Interval(0.0, 0.5),
-        x2 ∈ Interval(0.5, 1.0)]
+        x2 ∈ Interval(0.5, 1.0),
+    ]
 
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
 
@@ -819,5 +901,5 @@ end
     solc2 = sol[c2(t, x2)]
 
     solc = vcat(solc1[end, :], solc2[end, 2:end])
-    @test solc≈zeros(length(solc)) atol=0.001
+    @test solc ≈ zeros(length(solc)) atol = 0.001
 end

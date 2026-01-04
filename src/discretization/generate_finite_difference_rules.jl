@@ -46,39 +46,53 @@ Please submit an issue if you know of any special cases which impact stability o
 """
 function generate_finite_difference_rules(
         II::CartesianIndex, s::DiscreteSpace, depvars, pde::Equation,
-        derivweights::DifferentialDiscretizer, bmap, indexmap)
+        derivweights::DifferentialDiscretizer, bmap, indexmap
+    )
     terms = split_terms(pde, s.x̄)
     if length(II) != 0
         # Standard cartesian centered difference scheme
         central_deriv_rules_cartesian = generate_cartesian_rules(
-            II, s, depvars, derivweights, bmap, indexmap, terms)
+            II, s, depvars, derivweights, bmap, indexmap, terms
+        )
         # Mixed derivative rules
         mixed_deriv_rules_cartesian = generate_mixed_rules(
-            II, s, depvars, derivweights, bmap, indexmap, terms)
+            II, s, depvars, derivweights, bmap, indexmap, terms
+        )
         # Advection rules
         if derivweights.advection_scheme isa UpwindScheme
             advection_rules = generate_winding_rules(
-                II, s, depvars, derivweights, bmap, indexmap, terms)
+                II, s, depvars, derivweights, bmap, indexmap, terms
+            )
         elseif derivweights.advection_scheme isa FunctionalScheme
             advection_rules = generate_advection_rules(
                 derivweights.advection_scheme, II, s,
-                depvars, derivweights, bmap, indexmap, terms)
-            advection_rules = vcat(advection_rules,
-                generate_winding_rules(II, s, depvars, derivweights, bmap,
-                    indexmap, terms; skip = [1]))
+                depvars, derivweights, bmap, indexmap, terms
+            )
+            advection_rules = vcat(
+                advection_rules,
+                generate_winding_rules(
+                    II, s, depvars, derivweights, bmap,
+                    indexmap, terms; skip = [1]
+                )
+            )
         else
             error("Unsupported advection scheme $(derivweights.advection_scheme) encountered.")
         end
 
         # Nonlinear laplacian scheme
         nonlinlap_rules = generate_nonlinlap_rules(
-            II, s, depvars, derivweights, bmap, indexmap, terms)
+            II, s, depvars, derivweights, bmap, indexmap, terms
+        )
 
         # Spherical diffusion scheme
         spherical_diffusion_rules = generate_spherical_diffusion_rules(
-            II, s, depvars, derivweights, bmap, indexmap, split_additive_terms(pde))
-        integration_rules = vec(generate_euler_integration_rules(
-            II, s, depvars, indexmap, terms))
+            II, s, depvars, derivweights, bmap, indexmap, split_additive_terms(pde)
+        )
+        integration_rules = vec(
+            generate_euler_integration_rules(
+                II, s, depvars, indexmap, terms
+            )
+        )
     else
         central_deriv_rules_cartesian = []
         advection_rules = []
@@ -90,22 +104,28 @@ function generate_finite_difference_rules(
 
     cb_rules = generate_cb_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
 
-    integration_rules = vcat(integration_rules,
-        vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)))
-    return vcat(cb_rules, vec(spherical_diffusion_rules), vec(nonlinlap_rules),
+    integration_rules = vcat(
+        integration_rules,
+        vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms))
+    )
+    return vcat(
+        cb_rules, vec(spherical_diffusion_rules), vec(nonlinlap_rules),
         vec(mixed_deriv_rules_cartesian), vec(central_deriv_rules_cartesian),
-        vec(advection_rules), integration_rules)
+        vec(advection_rules), integration_rules
+    )
 end
 
 function generate_finite_difference_rules(
         II::CartesianIndex, s::DiscreteSpace{W, M, G}, depvars,
         pde::Equation, derivweights::DifferentialDiscretizer,
-        bmap, indexmap) where {W, M, G <: StaggeredGrid}
+        bmap, indexmap
+    ) where {W, M, G <: StaggeredGrid}
     terms = split_terms(pde, s.x̄)
     if length(II) != 0
         # Standard cartesian centered difference scheme
         central_deriv_rules_cartesian = generate_cartesian_rules(
-            II, s, depvars, derivweights, bmap, indexmap, terms)
+            II, s, depvars, derivweights, bmap, indexmap, terms
+        )
     else
         central_deriv_rules_cartesian = []
     end
@@ -114,8 +134,12 @@ function generate_finite_difference_rules(
     spherical_diffusion_rules = []
     integration_rules = []
 
-    integration_rules = vcat(integration_rules,
-        vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)))
-    return vcat(vec(spherical_diffusion_rules), vec(nonlinlap_rules),
-        vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules)
+    integration_rules = vcat(
+        integration_rules,
+        vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms))
+    )
+    return vcat(
+        vec(spherical_diffusion_rules), vec(nonlinlap_rules),
+        vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules
+    )
 end
