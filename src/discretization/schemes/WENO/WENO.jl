@@ -61,8 +61,9 @@ end
 ## Keyword Arguments
 - `epsilon`: A quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. More sensitive problems will benefit from a smaller value. It is defined as a functional scheme.
 """
-function WENOScheme(; epsilon = 1e-6)
+function WENOScheme(; epsilon = 1.0e-6)
     boundary_f = [nothing, nothing]
     return FunctionalScheme{5, 0}(
-        weno_f, boundary_f, boundary_f, false, [epsilon], name = "WENO")
+        weno_f, boundary_f, boundary_f, false, [epsilon], name = "WENO"
+    )
 end

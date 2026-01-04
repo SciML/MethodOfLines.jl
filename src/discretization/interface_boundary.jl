@@ -8,7 +8,7 @@ Base.getindex(A::Array, IR::RefCartesianIndex) = IR.A === nothing ? A[IR.I] : IR
 Base.getindex(I::RefCartesianIndex, i::Int) = I.I[i]
 
 function Base.getindex(A::Array, Is::Vector{<:RefCartesianIndex})
-    map(Is) do I
+    return map(Is) do I
         A[I]
     end
 end
@@ -45,14 +45,17 @@ end
 Allow stencils indexing over periodic boundaries. Index through this function.
 """
 
-function wrapinterface(I::RefCartesianIndex{N, Nothing}, s::DiscreteSpace,
-        b::InterfaceBoundary, jx) where {N}
+function wrapinterface(
+        I::RefCartesianIndex{N, Nothing}, s::DiscreteSpace,
+        b::InterfaceBoundary, jx
+    ) where {N}
     j, x = jx
     return _wrapinterface(I.I, s, b, j)
 end
 
 @inline function wrapinterface(
-        I::RefCartesianIndex, s::DiscreteSpace, ::InterfaceBoundary, jx)
+        I::RefCartesianIndex, s::DiscreteSpace, ::InterfaceBoundary, jx
+    )
     return I
 end
 

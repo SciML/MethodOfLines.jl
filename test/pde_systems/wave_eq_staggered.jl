@@ -1,5 +1,5 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils,
-      LinearAlgebra
+    LinearAlgebra
 using OrdinaryDiffEq
 
 @testset "1D wave equation, staggered grid, Mixed BC" begin
@@ -15,21 +15,28 @@ using OrdinaryDiffEq
     tmax = 10.0
 
     initialFunction(x) = exp(-(x)^2)
-    eq = [Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
-        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0]
-    bcs = [ρ(0, x) ~ initialFunction(x),
+    eq = [
+        Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0,
+    ]
+    bcs = [
+        ρ(0, x) ~ initialFunction(x),
         ϕ(0.0, x) ~ 0.0,
         Dx(ρ(t, L)) ~ 0.0,
-        ϕ(t, -L) ~ 0.0]#-a^2*Dx(ρ(t,L))];
+        ϕ(t, -L) ~ 0.0,
+    ] #-a^2*Dx(ρ(t,L))];
 
-    domains = [t in Interval(0.0, tmax),
-        x in Interval(-L, L)]
+    domains = [
+        t in Interval(0.0, tmax),
+        x in Interval(-L, L),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
 
     discretization = MOLFiniteDifference(
         [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
-        edge_aligned_var = ϕ(t, x))
+        edge_aligned_var = ϕ(t, x)
+    )
     prob = discretize(pdesys, discretization)
 
     sol = solve(prob, SplitEuler(), dt = dt)
@@ -52,24 +59,31 @@ end
     tmax = 10.0
 
     initialFunction(x) = exp(-(x)^2)
-    eq = [Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
-        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0]
-    bcs = [ρ(0, x) ~ initialFunction(x),
+    eq = [
+        Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0,
+    ]
+    bcs = [
+        ρ(0, x) ~ initialFunction(x),
         ϕ(0.0, x) ~ 0.0,
         Dt(ρ(t, L)) - (1 / a) * Dt(ϕ(t, L)) ~ 0.0,
-        Dt(ρ(t, -L)) + (1 / a) * Dt(ϕ(t, -L)) ~ 0.0]
+        Dt(ρ(t, -L)) + (1 / a) * Dt(ϕ(t, -L)) ~ 0.0,
+    ]
 
-    domains = [t in Interval(0.0, tmax),
-        x in Interval(-L, L)]
+    domains = [
+        t in Interval(0.0, tmax),
+        x in Interval(-L, L),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
 
     discretization = MOLFiniteDifference(
         [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
-        edge_aligned_var = ϕ(t, x))
+        edge_aligned_var = ϕ(t, x)
+    )
     prob = discretize(pdesys, discretization)
     sol = solve(prob, SplitEuler(), dt = (dx / a)^2)
-    @test maximum(sol[:, end]) < 1e-3
+    @test maximum(sol[:, end]) < 1.0e-3
 end
 
 @testset "1D wave equation, staggered grid, Periodic BC" begin
@@ -85,21 +99,28 @@ end
     tmax = 10.0
 
     initialFunction(x) = exp(-(x - L / 2)^2)
-    eq = [Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
-        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0]
-    bcs = [ρ(0, x) ~ initialFunction(x),
+    eq = [
+        Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0,
+    ]
+    bcs = [
+        ρ(0, x) ~ initialFunction(x),
         ϕ(0.0, x) ~ 0.0,
         ρ(t, L) ~ ρ(t, -L),
-        ϕ(t, -L) ~ ϕ(t, L)]
+        ϕ(t, -L) ~ ϕ(t, L),
+    ]
 
-    domains = [t in Interval(0.0, tmax),
-        x in Interval(-L, L)]
+    domains = [
+        t in Interval(0.0, tmax),
+        x in Interval(-L, L),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
 
     discretization = MOLFiniteDifference(
         [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
-        edge_aligned_var = ϕ(t, x))
+        edge_aligned_var = ϕ(t, x)
+    )
     prob = discretize(pdesys, discretization)
 
     sol = solve(prob, SplitEuler(), dt = dt)

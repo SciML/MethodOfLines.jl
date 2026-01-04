@@ -9,10 +9,12 @@ using DomainSets
 # Handrolled discrete laplace problem
 @testset "Hand rolled 1D Laplace" begin
     @variables a b c d
-    eqs = [0 ~ a - 1,
+    eqs = [
+        0 ~ a - 1,
         0 ~ a + c - 2 * b,
         0 ~ b + d - 2 * c,
-        0 ~ d - 1]
+        0 ~ d - 1,
+    ]
     @named ns = NonlinearSystem(eqs, [a, b, c, d], [])
     sns = mtkcompile(ns)
     prob = NonlinearProblem(sns, zeros(length(get_unknowns(sns))), [])
@@ -31,8 +33,10 @@ end
     eq = Dxx(u(x)) ~ 0
     dx = 1 / 3
 
-    bcs = [u(0) ~ 1,
-        u(1) ~ 1]
+    bcs = [
+        u(0) ~ 1,
+        u(1) ~ 1,
+    ]
 
     # Space and time domains
     domains = [x ∈ Interval(0.0, 1.0)]
@@ -55,8 +59,10 @@ end
     eq = Dxx(u(x)) ~ 0
     dx = 0.1
 
-    bcs = [u(0) ~ 1,
-        u(1) ~ 2]
+    bcs = [
+        u(0) ~ 1,
+        u(1) ~ 2,
+    ]
 
     # Space and time domains
     domains = [x ∈ Interval(0.0, 1.0)]
@@ -82,14 +88,18 @@ end
     dx = 0.1
     dy = 0.1
 
-    bcs = [u(0, y) ~ x * y,
+    bcs = [
+        u(0, y) ~ x * y,
         u(1, y) ~ x * y,
         u(x, 0) ~ x * y,
-        u(x, 1) ~ x * y]
+        u(x, 1) ~ x * y,
+    ]
 
     # Space and time domains
-    domains = [x ∈ Interval(0.0, 1.0),
-        y ∈ Interval(0.0, 1.0)]
+    domains = [
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
 
     @named pdesys = PDESystem([eq], bcs, domains, [x, y], [u(x, y)])
 
@@ -113,8 +123,10 @@ end
     # test interior with finite differences
     interior = CartesianIndices((axes(xs)[1], axes(ys)[1]))[2:(end - 1), 2:(end - 1)]
     fd = map(interior) do I
-        abs(u_sol[(I - CartesianIndex(1, 0))] + u_sol[(I + CartesianIndex(1, 0))] -
-            2 * u_sol[I]) < 0.01
-    end#
+        abs(
+            u_sol[(I - CartesianIndex(1, 0))] + u_sol[(I + CartesianIndex(1, 0))] -
+                2 * u_sol[I]
+        ) < 0.01
+    end #
     @test all(fd)
 end

@@ -1,5 +1,5 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils,
-      OrdinaryDiffEq
+    OrdinaryDiffEq
 
 @testset "Discrete callback" begin
     @parameters x, t

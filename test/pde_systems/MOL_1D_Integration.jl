@@ -11,17 +11,24 @@ using MethodOfLines, ModelingToolkit, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 
     Ix = Integral(x in DomainSets.ClosedInterval(xmin, x)) # basically cumulative sum from 0 to x
 
-    eqs = [cumuSum(t, x) ~ Ix(integrand(t, x))
-           integrand(t, x) ~ t * cos(x)]
+    eqs = [
+        cumuSum(t, x) ~ Ix(integrand(t, x))
+        integrand(t, x) ~ t * cos(x)
+    ]
 
-    bcs = [cumuSum(0, x) ~ 0.0,
-        integrand(0, x) ~ 0.0]
+    bcs = [
+        cumuSum(0, x) ~ 0.0,
+        integrand(0, x) ~ 0.0,
+    ]
 
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(xmin, xmax)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(xmin, xmax),
+    ]
 
     @named pde_system = PDESystem(
-        eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t, x)])
+        eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t, x)]
+    )
 
     asf(t, x) = t * sin(x)
 
@@ -38,7 +45,7 @@ using MethodOfLines, ModelingToolkit, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 
     exact = [asf(t_, x_) for t_ in tdisc, x_ in xdisc]
 
-    @test cumuSumsol≈exact atol=0.36
+    @test cumuSumsol ≈ exact atol = 0.36
 end
 
 @testset "Test 00: Test simple integration case (0 .. x), with sys transformation" begin
@@ -56,11 +63,14 @@ end
 
     bcs = [cumuSum(0, x) ~ 0.0]
 
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(xmin, xmax)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(xmin, xmax),
+    ]
 
     @named pde_system = PDESystem(
-        eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t, x)])
+        eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t, x)]
+    )
 
     asf(t, x) = t * sin(x)
 
@@ -91,14 +101,20 @@ end
 
     Ix = Integral(x in DomainSets.ClosedInterval(xmin, xmax)) # integral over domain
 
-    eqs = [cumuSum(t) ~ Ix(integrand(t, x))
-           integrand(t, x) ~ t * cos(x)]
+    eqs = [
+        cumuSum(t) ~ Ix(integrand(t, x))
+        integrand(t, x) ~ t * cos(x)
+    ]
 
-    bcs = [cumuSum(0) ~ 0.0,
-        integrand(0, x) ~ 0.0]
+    bcs = [
+        cumuSum(0) ~ 0.0,
+        integrand(0, x) ~ 0.0,
+    ]
 
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(xmin, xmax)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(xmin, xmax),
+    ]
 
     @named pde_system = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t)])
 
@@ -117,7 +133,7 @@ end
 
     exact = [asf(t_) for t_ in tdisc]
 
-    @test cumuSumsol≈exact atol=0.3
+    @test cumuSumsol ≈ exact atol = 0.3
 end
 
 @testset "Test 02: Test integration with arbitrary limits, (a .. b)" begin
@@ -131,14 +147,20 @@ end
 
     Ix = Integral(x in DomainSets.ClosedInterval(0.5, 3.0)) # integral over interval
 
-    eqs = [cumuSum(t) ~ Ix(integrand(t, x))
-           integrand(t, x) ~ t * cos(x)]
+    eqs = [
+        cumuSum(t) ~ Ix(integrand(t, x))
+        integrand(t, x) ~ t * cos(x)
+    ]
 
-    bcs = [cumuSum(0) ~ 0.0,
-        integrand(0, x) ~ 0.0]
+    bcs = [
+        cumuSum(0) ~ 0.0,
+        integrand(0, x) ~ 0.0,
+    ]
 
-    domains = [t ∈ Interval(0.0, 1.0),
-        x ∈ Interval(xmin, xmax)]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(xmin, xmax),
+    ]
 
     @named pde_system = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t)])
 

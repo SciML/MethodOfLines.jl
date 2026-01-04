@@ -2,7 +2,7 @@ function quick_animate(sol::SciMLBase.PDETimeseriesSolution, u)
     solu = sol[u]
     s = sol.disc_data.discretespace
 
-    @assert ndims(solu)==2 "Only 2D (1 space, 1 time) solutions are supported for animation."
+    @assert ndims(solu) == 2 "Only 2D (1 space, 1 time) solutions are supported for animation."
 
     t = s.time
     discx̄ = map(remove(arguments(u), t)) do x

@@ -15,22 +15,30 @@ Dxx2 = Dx2^2
 D1(c) = 1 + c / 10
 D2(c) = 1 / 10 + c / 10
 
-eqs = [Dt(c1(t, x1)) ~ Dx1(D1(c1(t, x1)) * Dx1(c1(t, x1))),
-    Dt(c2(t, x2)) ~ Dx2(D2(c2(t, x2)) * Dx2(c2(t, x2)))]
+eqs = [
+    Dt(c1(t, x1)) ~ Dx1(D1(c1(t, x1)) * Dx1(c1(t, x1))),
+    Dt(c2(t, x2)) ~ Dx2(D2(c2(t, x2)) * Dx2(c2(t, x2))),
+]
 
-bcs = [c1(0, x1) ~ -x1 * (x1 - 1) * sin(x1),
+bcs = [
+    c1(0, x1) ~ -x1 * (x1 - 1) * sin(x1),
     c2(0, x2) ~ -x2 * (x2 - 1) * sin(x2),
     c1(t, 0) ~ 0,
     c1(t, 0.5) ~ c2(t, 0.5),
     -D1(c1(t, 0.5)) * Dx1(c1(t, 0.5)) ~ -D2(c2(t, 0.5)) * Dx2(c2(t, 0.5)),
-    c2(t, 1) ~ 0]
+    c2(t, 1) ~ 0,
+]
 
-domains = [t ∈ Interval(0.0, 1.0),
+domains = [
+    t ∈ Interval(0.0, 1.0),
     x1 ∈ Interval(0.0, 0.5),
-    x2 ∈ Interval(0.5, 1.0)]
+    x2 ∈ Interval(0.5, 1.0),
+]
 
-@named pdesys = PDESystem(eqs, bcs, domains,
-    [t, x1, x2], [c1(t, x1), c2(t, x2)])
+@named pdesys = PDESystem(
+    eqs, bcs, domains,
+    [t, x1, x2], [c1(t, x1), c2(t, x2)]
+)
 
 l = 10
 

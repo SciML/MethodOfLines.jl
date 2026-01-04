@@ -1,7 +1,8 @@
 # Method of lines discretization scheme
 
 function PDEBase.interface_errors(
-        pdesys::PDESystem, v::PDEBase.VariableMap, discretization::MOLFiniteDifference)
+        pdesys::PDESystem, v::PDEBase.VariableMap, discretization::MOLFiniteDifference
+    )
     depvars = v.ū
     indvars = v.x̄
     for x in indvars
@@ -10,7 +11,7 @@ function PDEBase.interface_errors(
     if !any(s -> discretization.advection_scheme isa s, [UpwindScheme, FunctionalScheme])
         throw(ArgumentError("Only `UpwindScheme()` and `FunctionalScheme()` are supported advection schemes. Got $(typeof(discretization.advection_scheme))."))
     end
-    if !(typeof(discretization.disc_strategy) ∈ [ScalarizedDiscretization])
+    return if !(typeof(discretization.disc_strategy) ∈ [ScalarizedDiscretization])
         throw(ArgumentError("Only `ScalarizedDiscretization()` are supported discretization strategies."))
     end
 end
@@ -24,6 +25,7 @@ function PDEBase.check_boundarymap(boundarymap, discretization::MOLFiniteDiffere
             throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
         end
     end
+    return
 end
 
 function get_discrete(pdesys, discretization)
@@ -62,14 +64,18 @@ function get_discrete(pdesys, discretization)
     # Create discretized space and variables, this is called `s` throughout
     s = PDEBase.construct_discrete_space(v, discretization)
 
-    return Dict(vcat(
-        [Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]))
+    return Dict(
+        vcat(
+            [Num(x) => s.grid[x] for x in s.x̄], [Num(u) => s.discvars[u] for u in s.ū]
+        )
+    )
 end
 
 function ODEFunctionExpr(
-        pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference)
+        pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference
+    )
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
-    try
+    return try
         if tspan === nothing
             @assert true "Codegen for NonlinearSystems is not yet implemented."
         else
@@ -88,9 +94,10 @@ end
 
 function SciMLBase.ODEFunction(
         pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference;
-        analytic = nothing, kwargs...)
+        analytic = nothing, kwargs...
+    )
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
-    try
+    return try
         if tspan === nothing
             @assert true "Codegen for NonlinearSystems is not yet implemented."
         else
@@ -102,8 +109,10 @@ function SciMLBase.ODEFunction(
                 gridlocs = get_gridloc.(us, (s,))
                 f_analytic = generate_function_from_gridlocs(analytic, gridlocs, s)
             end
-            return ODEFunction(simpsys; analytic = f_analytic, eval_module = @__MODULE__,
-                discretization.kwargs..., kwargs...)
+            return ODEFunction(
+                simpsys; analytic = f_analytic, eval_module = @__MODULE__,
+                discretization.kwargs..., kwargs...
+            )
         end
     catch e
         println("The system of equations is:")
@@ -117,10 +126,11 @@ end
 
 function generate_code(
         pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference,
-        filename = "generated_code_of_pdesys.jl")
+        filename = "generated_code_of_pdesys.jl"
+    )
     code = ODEFunctionExpr(pdesys, discretization)
     rm(filename; force = true)
-    open(filename, "a") do io
+    return open(filename, "a") do io
         println(io, code)
     end
 end

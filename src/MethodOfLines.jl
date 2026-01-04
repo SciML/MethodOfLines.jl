@@ -4,12 +4,12 @@ using SciMLBase
 using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: operation, iscall, arguments, variable, get_unknowns,
-                       parameters, defaults, varmap_to_vars, get_eqs, get_bcs, get_dvs,
-                       get_ivs
+    parameters, defaults, varmap_to_vars, get_eqs, get_bcs, get_dvs,
+    get_ivs
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term, setname,
-                 rename
+    rename
 using SymbolicUtils: operation, arguments, getmetadata
 using IfElse
 using StaticArrays
@@ -23,11 +23,11 @@ RuntimeGeneratedFunctions.init(@__MODULE__)
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
 using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i,
-               d_orders, vcat!, update_varmap!, get_ops
+    d_orders, vcat!, update_varmap!, get_ops
 
 # staggered changes
 using PDEBase: cardinalize_eqs!, make_pdesys_compatible, parse_bcs, generate_system,
-               Interval
+    Interval
 using PDEBase: error_analysis, add_metadata!
 
 # To Extend
@@ -119,7 +119,7 @@ include("precompile.jl")
 
 # Export
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
-       grid_align, edge_align, center_align, get_discrete, chebyspace
+    grid_align, edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme, MOLDiscCallback
 
 end

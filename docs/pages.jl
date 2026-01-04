@@ -8,7 +8,7 @@ pages = [
         "tutorials/sispde.md",
         "tutorials/icbc_sampled.md",
         "tutorials/PIDE.md",
-        "tutorials/schroedinger.md"
+        "tutorials/schroedinger.md",
     ],
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
     "Solution Interface - PDESolutions" => "solutions.md",
@@ -21,5 +21,5 @@ pages = [
     "How it Works" => "howitworks.md",
     "Notes for Developers: Implement a Scheme" => "devnotes.md",
     "Generated Examples" => ["generated/bruss_code.md", "generated/bruss_ode_eqs.md"],
-    "API Reference" => ["api/discretization.md", "api/utils.md"]
+    "API Reference" => ["api/discretization.md", "api/utils.md"],
 ]

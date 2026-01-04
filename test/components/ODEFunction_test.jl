@@ -15,19 +15,25 @@ function analytic_u(p, t, x)
     else
         p = p[1][1]
     end
-    x / (t + p[1])
+    return x / (t + p[1])
 end
 eq = Dt(u(t, x)) ~ -a * u(t, x) * Dx(u(t, x))
 
-bcs = [u(0, x) ~ x,
+bcs = [
+    u(0, x) ~ x,
     u(t, x_min) ~ analytic_u([1], t, x_min),
-    u(t, x_max) ~ analytic_u([1], t, x_max)]
+    u(t, x_max) ~ analytic_u([1], t, x_max),
+]
 
-domains = [t ∈ Interval(t_min, t_max),
-    x ∈ Interval(x_min, x_max)]
+domains = [
+    t ∈ Interval(t_min, t_max),
+    x ∈ Interval(x_min, x_max),
+]
 
-@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [a],
-    analytic_func = [u(t, x) => analytic_u], defaults = Dict(a => 1.0))
+@named pdesys = PDESystem(
+    eq, bcs, domains, [t, x], [u(t, x)], [a],
+    analytic_func = [u(t, x) => analytic_u], defaults = Dict(a => 1.0)
+)
 
 disc = MOLFiniteDifference([x => 30], t, advection_scheme = WENOScheme())
 

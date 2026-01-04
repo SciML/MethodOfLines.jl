@@ -21,21 +21,38 @@ function mixed_central_difference((Dx, Dy), II, s, (xbs, ybs), (jx, ky), u, ufun
     return out
 end
 
-@inline function generate_mixed_rules(II::CartesianIndex, s::DiscreteSpace, depvars,
-        derivweights::DifferentialDiscretizer, bcmap, indexmap, terms)
+@inline function generate_mixed_rules(
+        II::CartesianIndex, s::DiscreteSpace, depvars,
+        derivweights::DifferentialDiscretizer, bcmap, indexmap, terms
+    )
     central_ufunc(u, I, x) = s.discvars[u][I]
-    return reduce(safe_vcat,
-        [reduce(safe_vcat,
-             [[(Differential(x) *
-                Differential(y))(u) => mixed_central_difference(
-                   (derivweights.map[Differential(x)], derivweights.map[Differential(y)]),
-                   Idx(II, s, u, indexmap),
-                   s,
-                   (filter_interfaces(bcmap[operation(u)][x]),
-                       filter_interfaces(bcmap[operation(u)][y])),
-                   ((x2i(s, u, x), x), (x2i(s, u, y), y)),
-                   u,
-                   central_ufunc) for y in remove(ivs(u, s), unwrap(x))] for x in ivs(u, s)],
-             init = []) for u in depvars],
-        init = [])
+    return reduce(
+        safe_vcat,
+        [
+            reduce(
+                    safe_vcat,
+                    [
+                        [
+                            (
+                                Differential(x) *
+                                Differential(y)
+                            )(u) => mixed_central_difference(
+                                (derivweights.map[Differential(x)], derivweights.map[Differential(y)]),
+                                Idx(II, s, u, indexmap),
+                                s,
+                                (
+                                    filter_interfaces(bcmap[operation(u)][x]),
+                                    filter_interfaces(bcmap[operation(u)][y]),
+                                ),
+                                ((x2i(s, u, x), x), (x2i(s, u, y), y)),
+                                u,
+                                central_ufunc
+                            ) for y in remove(ivs(u, s), unwrap(x))
+                        ] for x in ivs(u, s)
+                    ],
+                    init = []
+                ) for u in depvars
+        ],
+        init = []
+    )
 end

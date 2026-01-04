@@ -1,5 +1,7 @@
-function PDEBase.generate_ic_defaults(tconds, s::DiscreteSpace,
-        ::MOLFiniteDifference{G, DS}) where {G, DS <: ScalarizedDiscretization}
+function PDEBase.generate_ic_defaults(
+        tconds, s::DiscreteSpace,
+        ::MOLFiniteDifference{G, DS}
+    ) where {G, DS <: ScalarizedDiscretization}
     t = s.time
     if s.time !== nothing
         u0 = mapreduce(vcat, tconds) do ic
@@ -13,9 +15,13 @@ function PDEBase.generate_ic_defaults(tconds, s::DiscreteSpace,
             defaultvars = D.(s.discvars[depvar(ic.u, s)])
             broadcastable_rhs = [symbolic_linear_solve(ic.eq, D(ic.u))]
             out = substitute.(
-                broadcastable_rhs, valmaps(s, depvar(ic.u, s), ic.depvars, indexmap))
-            vec(defaultvars .=> substitute.(
-                broadcastable_rhs, valmaps(s, depvar(ic.u, s), ic.depvars, indexmap)))
+                broadcastable_rhs, valmaps(s, depvar(ic.u, s), ic.depvars, indexmap)
+            )
+            vec(
+                defaultvars .=> substitute.(
+                    broadcastable_rhs, valmaps(s, depvar(ic.u, s), ic.depvars, indexmap)
+                )
+            )
         end
     else
         u0 = []

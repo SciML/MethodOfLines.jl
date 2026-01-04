@@ -17,12 +17,16 @@ using StableRNGs
 
     eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
 
-    bcs = [u(0, x) ~ x,
+    bcs = [
+        u(0, x) ~ x,
         u(t, x_min) ~ analytic_u(t, x_min),
-        u(t, x_max) ~ analytic_u(t, x_max)]
+        u(t, x_max) ~ analytic_u(t, x_max),
+    ]
 
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     dx = 0.05
 
@@ -45,7 +49,7 @@ using StableRNGs
     for (i, t) in enumerate(sol.t)
         u_analytic = analytic_u.([t], x_disc)
         u_disc = solu[i, :]
-        @test all(isapprox.(u_analytic, u_disc, atol = 1e-3))
+        @test all(isapprox.(u_analytic, u_disc, atol = 1.0e-3))
     end
 end
 
@@ -63,12 +67,16 @@ end
 
     eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
 
-    bcs = [u(0, x) ~ x,
+    bcs = [
+        u(0, x) ~ x,
         u(t, x_min) ~ analytic_u(t, x_min),
-        u(t, x_max) ~ analytic_u(t, x_max)]
+        u(t, x_max) ~ analytic_u(t, x_max),
+    ]
 
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     dx = 0.05
 
@@ -91,7 +99,7 @@ end
     for (i, t) in enumerate(sol.t)
         u_analytic = analytic_u.([t], x_disc)
         u_disc = solu[i, :]
-        @test all(isapprox.(u_analytic, u_disc, atol = 1e-3))
+        @test all(isapprox.(u_analytic, u_disc, atol = 1.0e-3))
     end
 end
 
@@ -109,19 +117,23 @@ end
 
     eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
 
-    bcs = [u(0, x) ~ x,
+    bcs = [
+        u(0, x) ~ x,
         u(t, x_min) ~ analytic_u(t, x_min),
-        u(t, x_max) ~ analytic_u(t, x_max)]
+        u(t, x_max) ~ analytic_u(t, x_max),
+    ]
 
-    domains = [t ∈ Interval(t_min, t_max),
-        x ∈ Interval(x_min, x_max)]
+    domains = [
+        t ∈ Interval(t_min, t_max),
+        x ∈ Interval(x_min, x_max),
+    ]
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     dx = 0:0.05:1
     dx = collect(dx)
     dx[2:(end - 1)] .= dx[2:(end - 1)] .+
-                       rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
 
     disc = MOLFiniteDifference([x => dx], t, upwind_order = 1)
 
