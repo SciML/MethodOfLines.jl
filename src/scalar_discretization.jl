@@ -44,14 +44,29 @@ end
 function discretize_equation_at_point(
         II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs
     )
-    boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs, init = [])
-    rules = vcat(
-        generate_finite_difference_rules(
-            II, s, depvars, pde, derivweights, bcmap, indexmap
-        ),
-        boundaryrules,
-        valmaps(s, eqvar, depvars, II, indexmap)
+    # Collect boundary rules without mapreduce/vcat
+    boundaryrules = Pair[]
+    for f in boundaryvalfuncs
+        brules = f(II)
+        if brules isa AbstractVector
+            append!(boundaryrules, brules)
+        elseif !isempty(brules)
+            push!(boundaryrules, brules)
+        end
+    end
+
+    fd_rules = generate_finite_difference_rules(
+        II, s, depvars, pde, derivweights, bcmap, indexmap
     )
+    val_rules = valmaps(s, eqvar, depvars, II, indexmap)
+
+    # Pre-allocate and use append! instead of vcat
+    rules = Pair[]
+    sizehint!(rules, length(fd_rules) + length(boundaryrules) + length(val_rules))
+    append!(rules, fd_rules)
+    append!(rules, boundaryrules)
+    append!(rules, val_rules)
+
     try
         return expand_derivatives(substitute(pde.lhs, rules)) ~ substitute(pde.rhs, rules)
     catch e

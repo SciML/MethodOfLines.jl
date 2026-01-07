@@ -148,4 +148,11 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/wave_eq_staggered.jl")
         end
     end
+
+    # Allocation tests - run separately from precompilation to avoid interference
+    if GROUP == "All" || GROUP == "nopre" || GROUP == "AllocCheck"
+        @time @safetestset "Allocation Tests" begin
+            include("alloc_tests.jl")
+        end
+    end
 end

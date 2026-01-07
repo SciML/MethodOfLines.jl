@@ -68,13 +68,12 @@ function generate_finite_difference_rules(
                 derivweights.advection_scheme, II, s,
                 depvars, derivweights, bmap, indexmap, terms
             )
-            advection_rules = vcat(
-                advection_rules,
-                generate_winding_rules(
-                    II, s, depvars, derivweights, bmap,
-                    indexmap, terms; skip = [1]
-                )
+            winding_rules = generate_winding_rules(
+                II, s, depvars, derivweights, bmap,
+                indexmap, terms; skip = [1]
             )
+            # Use append! instead of vcat to avoid allocation
+            append!(advection_rules, winding_rules)
         else
             error("Unsupported advection scheme $(derivweights.advection_scheme) encountered.")
         end
@@ -88,31 +87,54 @@ function generate_finite_difference_rules(
         spherical_diffusion_rules = generate_spherical_diffusion_rules(
             II, s, depvars, derivweights, bmap, indexmap, split_additive_terms(pde)
         )
-        integration_rules = vec(
-            generate_euler_integration_rules(
-                II, s, depvars, indexmap, terms
-            )
+        integration_rules = generate_euler_integration_rules(
+            II, s, depvars, indexmap, terms
         )
+        # Flatten if needed
+        integration_rules isa AbstractMatrix && (integration_rules = vec(integration_rules))
     else
-        central_deriv_rules_cartesian = []
-        advection_rules = []
-        nonlinlap_rules = []
-        spherical_diffusion_rules = []
-        mixed_deriv_rules_cartesian = []
-        integration_rules = []
+        central_deriv_rules_cartesian = Pair[]
+        advection_rules = Pair[]
+        nonlinlap_rules = Pair[]
+        spherical_diffusion_rules = Pair[]
+        mixed_deriv_rules_cartesian = Pair[]
+        integration_rules = Pair[]
     end
 
     cb_rules = generate_cb_rules(II, s, depvars, derivweights, bmap, indexmap, terms)
 
-    integration_rules = vcat(
-        integration_rules,
-        vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms))
+    whole_domain_rules = generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)
+    whole_domain_rules isa AbstractMatrix && (whole_domain_rules = vec(whole_domain_rules))
+
+    # Pre-allocate result array with estimated size to avoid repeated resizing
+    result = Pair[]
+    sizehint!(result,
+        length(cb_rules) + length(spherical_diffusion_rules) + length(nonlinlap_rules) +
+        length(mixed_deriv_rules_cartesian) + length(central_deriv_rules_cartesian) +
+        length(advection_rules) + length(integration_rules) + length(whole_domain_rules)
     )
-    return vcat(
-        cb_rules, vec(spherical_diffusion_rules), vec(nonlinlap_rules),
-        vec(mixed_deriv_rules_cartesian), vec(central_deriv_rules_cartesian),
-        vec(advection_rules), integration_rules
-    )
+
+    # Use append! instead of vcat to avoid allocations
+    _append_vec!(result, cb_rules)
+    _append_vec!(result, spherical_diffusion_rules)
+    _append_vec!(result, nonlinlap_rules)
+    _append_vec!(result, mixed_deriv_rules_cartesian)
+    _append_vec!(result, central_deriv_rules_cartesian)
+    _append_vec!(result, advection_rules)
+    _append_vec!(result, integration_rules)
+    _append_vec!(result, whole_domain_rules)
+
+    return result
+end
+
+# Helper to append vectors or matrices efficiently
+@inline function _append_vec!(result, x)
+    if x isa AbstractMatrix
+        append!(result, vec(x))
+    else
+        append!(result, x)
+    end
+    return result
 end
 
 function generate_finite_difference_rules(
@@ -127,19 +149,17 @@ function generate_finite_difference_rules(
             II, s, depvars, derivweights, bmap, indexmap, terms
         )
     else
-        central_deriv_rules_cartesian = []
+        central_deriv_rules_cartesian = Pair[]
     end
-    advection_rules = []
-    nonlinlap_rules = []
-    spherical_diffusion_rules = []
-    integration_rules = []
 
-    integration_rules = vcat(
-        integration_rules,
-        vec(generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms))
-    )
-    return vcat(
-        vec(spherical_diffusion_rules), vec(nonlinlap_rules),
-        vec(central_deriv_rules_cartesian), vec(advection_rules), integration_rules
-    )
+    whole_domain_rules = generate_whole_domain_integration_rules(II, s, depvars, indexmap, terms)
+    whole_domain_rules isa AbstractMatrix && (whole_domain_rules = vec(whole_domain_rules))
+
+    # Pre-allocate and use append! instead of vcat
+    result = Pair[]
+    sizehint!(result, length(central_deriv_rules_cartesian) + length(whole_domain_rules))
+    _append_vec!(result, central_deriv_rules_cartesian)
+    _append_vec!(result, whole_domain_rules)
+
+    return result
 end
