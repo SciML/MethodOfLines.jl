@@ -34,3 +34,5 @@ Boundary conditions include, but are not limited to:
   - Robin (can also include time derivative)
   - Periodic
   - Any equation, which can include arbitrary Julia functions defined on that boundary, with the only symbolic parameters being those appearing in the referenced boundary.
+
+
