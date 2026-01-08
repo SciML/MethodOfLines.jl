@@ -1,5 +1,60 @@
 @setup_workload begin
     @compile_workload begin
+        # Workload 1: Simple 1D diffusion with Dirichlet BCs (most common use case)
+        # This covers centered difference discretization
+        begin
+            @parameters t x
+            @variables u(..)
+            Dt = Differential(t)
+            Dxx = Differential(x)^2
+
+            eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+
+            bcs = [
+                u(0, x) ~ sin(pi * x),
+                u(t, 0.0) ~ 0.0,
+                u(t, 1.0) ~ 0.0,
+            ]
+
+            domains = [
+                t ∈ Interval(0.0, 1.0),
+                x ∈ Interval(0.0, 1.0),
+            ]
+
+            @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+            discretization = MOLFiniteDifference([x => 10], t)
+            prob = discretize(pdesys, discretization)
+        end
+
+        # Workload 2: 1D diffusion with Neumann BCs
+        begin
+            @parameters t x
+            @variables u(..)
+            Dt = Differential(t)
+            Dx = Differential(x)
+            Dxx = Differential(x)^2
+
+            eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+
+            bcs = [
+                u(0, x) ~ cos(x),
+                Dx(u(t, 0.0)) ~ 0.0,
+                Dx(u(t, 1.0)) ~ 0.0,
+            ]
+
+            domains = [
+                t ∈ Interval(0.0, 1.0),
+                x ∈ Interval(0.0, 1.0),
+            ]
+
+            @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+            discretization = MOLFiniteDifference([x => 10], t)
+            prob = discretize(pdesys, discretization)
+        end
+
+        # Workload 3: 2D Brusselator with periodic BCs (complex 2D system)
         begin
             @parameters x y t
             @variables u(..) v(..)
@@ -62,6 +117,8 @@
             # Convert the PDE problem into an ODE problem
             prob = discretize(pdesys, discretization)
         end
+
+        # Workload 4: 1D advection with WENO scheme
         begin
             @parameters x t
             @variables u(..)
