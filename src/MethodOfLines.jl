@@ -4,7 +4,7 @@ using SciMLBase
 using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: operation, iscall, arguments, variable, get_unknowns,
-    parameters, defaults, varmap_to_vars, get_eqs, get_bcs, get_dvs,
+    parameters, varmap_to_vars, get_eqs, get_bcs, get_dvs,
     get_ivs
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
@@ -42,6 +42,7 @@ import PDEBase.construct_differential_discretizer
 import PDEBase.discretize_equation!
 import PDEBase.generate_ic_defaults
 import PDEBase.generate_metadata
+import PDEBase.pde_substitute
 import PDEBase.symbolic_discretize
 
 import PDEBase.get_time
@@ -114,8 +115,8 @@ include("discretization/staggered_discretize.jl")
 include("scalar_discretization.jl")
 include("MOL_discretization.jl")
 
-## PrecompileTools
-include("precompile.jl")
+## PrecompileTools - temporarily disabled for MTK v11 compatibility debugging
+# include("precompile.jl")
 
 # Export
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,

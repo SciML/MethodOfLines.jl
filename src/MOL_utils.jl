@@ -22,11 +22,15 @@ function generate_coordinates(
 end
 
 function _get_gridloc(s, ut, is...)
-    u = Sym{SymbolicUtils.FnType{Tuple, Real}}(nameof(operation(ut)))
-    u = operation(s.ū[findfirst(isequal(u), operation.(s.ū))])
+    # In SymbolicUtils v4, compare by name instead of creating Sym{FnType}
+    target_name = nameof(operation(ut))
+    u = operation(s.ū[findfirst(op -> nameof(op) == target_name, operation.(s.ū))])
     args = remove(s.args[u], s.time)
     gridloc = map(enumerate(args)) do (i, x)
-        s.grid[x][is[i]]
+        # In SymbolicUtils v4, indices may be symbolic - unwrap to get integer value
+        idx = is[i]
+        idx_int = idx isa SymbolicUtils.BasicSymbolic ? SymbolicUtils.unwrap_const(idx) : idx
+        s.grid[x][idx_int]
     end
     return (u, gridloc)
 end
@@ -77,10 +81,12 @@ function newindex(u_, II, s, indexmap; shift = false)
     is = map(enumerate(args_)) do (j, x)
         if haskey(indexmap, x)
             II[indexmap[x]]
-        elseif safe_unwrap(x) isa Number
-            if isequal(x, s.axies[args[j]][1])
+        elseif _is_numeric_value(x)
+            # Extract numeric value for comparison (handles Symbolics v7 symbolic constants)
+            x_val = _get_numeric_value(x)
+            if x_val ≈ s.axies[args[j]][1]
                 1
-            elseif isequal(x, s.axies[args[j]][end])
+            elseif x_val ≈ s.axies[args[j]][end]
                 length(s, args[j]) - (shift ? 1 : 0)
             else
                 error("Boundary value $u_ is not defined at the boundary of the domain, or problem with index adaptation, please post an issue.")
@@ -91,6 +97,32 @@ function newindex(u_, II, s, indexmap; shift = false)
     end
     II = CartesianIndex(is...)
     return II
+end
+
+# Helper to check if x is a numeric constant
+# In Symbolics v7, unwrap of Num(0) may give BasicSymbolic{SymReal}, not Julia Number
+@inline function _is_numeric_value(x)
+    x_uw = safe_unwrap(x)
+    if x_uw isa Number
+        return true
+    end
+    # Try to extract numeric value from symbolic constant
+    try
+        v = Symbolics.value(x_uw)
+        return v isa Number
+    catch
+        return false
+    end
+end
+
+# Helper to extract numeric value from symbolic or regular number
+@inline function _get_numeric_value(x)
+    x_uw = safe_unwrap(x)
+    if x_uw isa Number
+        return x_uw
+    end
+    # Extract value from symbolic constant
+    return Symbolics.value(x_uw)
 end
 
 @inline function safe_vcat(a, b)

@@ -64,13 +64,39 @@ function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivwei
             if b isa InterfaceBoundary
                 II -> []
                 # Only make a map if it is actually possible to substitute in the boundary value given the indexmap
-            elseif all(
-                    x -> haskey(indexmap, x),
-                    filter(x -> !(safe_unwrap(x) isa Number), b.indvars)
-                )
-                II -> boundary_value_maps(II, s, b, derivweights, indexmap)
             else
-                II -> []
+                # Helper to check if x is a numeric constant
+                # In Symbolics v7, unwrap of Num(0) gives BasicSymbolic, not Number
+                # Use Symbolics.value to extract the actual value
+                function is_numeric_constant(x)
+                    x_uw = safe_unwrap(x)
+                    if x_uw isa Number
+                        return true
+                    end
+                    # Try to extract numeric value from symbolic constant
+                    try
+                        v = Symbolics.value(x_uw)
+                        return v isa Number
+                    catch
+                        return false
+                    end
+                end
+
+                # Check the condition for generating rules
+                indvars_non_numeric = filter(x -> !is_numeric_constant(x), b.indvars)
+                has_all_in_indexmap = all(x -> haskey(indexmap, x), indvars_non_numeric)
+                if PDEBase._PDE_SUB_DEBUG[]
+                    println("DEBUG generate_boundary_val_funcs:")
+                    println("  b.indvars: ", b.indvars)
+                    println("  indvars_non_numeric: ", indvars_non_numeric)
+                    println("  indexmap keys: ", collect(keys(indexmap)))
+                    println("  has_all_in_indexmap: ", has_all_in_indexmap)
+                end
+                if has_all_in_indexmap
+                    II -> boundary_value_maps(II, s, b, derivweights, indexmap)
+                else
+                    II -> []
+                end
             end
         end
     end
@@ -95,7 +121,7 @@ function boundary_value_maps(
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap, shift = true)
 
-    val = filter(z -> z isa Number, arguments(u_))[1]
+    val = _get_numeric_value(filter(z -> _is_numeric_value(z), arguments(u_))[1])
     r = x_ => val
     othervars = map(boundary.depvars) do v
         substitute(v, r)
@@ -122,7 +148,7 @@ function boundary_value_maps(
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = filter(
-        v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars
+        v -> !any(x -> _is_numeric_value(x), arguments(v)), boundary.depvars
     )
 
     integralbcmaps = generate_whole_domain_integration_rules(
@@ -177,7 +203,7 @@ function boundary_value_maps(
     IIold = II
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap)
-    val = filter(z -> z isa Number, arguments(u_))[1]
+    val = _get_numeric_value(filter(z -> _is_numeric_value(z), arguments(u_))[1])
     r = x_ => val
     othervars = map(boundary.depvars) do v
         substitute(v, r)
@@ -199,7 +225,7 @@ function boundary_value_maps(
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = unwrap.(
         filter(
-            v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars
+            v -> !any(x -> _is_numeric_value(x), arguments(v)), boundary.depvars
         )
     )
 
@@ -252,7 +278,7 @@ function boundary_value_maps(
     IIold = II
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap)
-    val = filter(z -> z isa Number, arguments(u_))[1]
+    val = _get_numeric_value(filter(z -> _is_numeric_value(z), arguments(u_))[1])
     r = x_ => val
     othervars = map(boundary.depvars) do v
         substitute(v, r)
@@ -274,7 +300,7 @@ function boundary_value_maps(
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = unwrap.(
         filter(
-            v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars
+            v -> !any(x -> _is_numeric_value(x), arguments(v)), boundary.depvars
         )
     )
 
@@ -320,9 +346,24 @@ function generate_bc_eqs(
             boundaryvalrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
             vmaps = varmaps(s, boundary.depvars, II, indexmap)
             varrules = axiesvals(s, depvar(boundary.u, s), boundary.x, II)
-            rules = vcat(boundaryvalrules, vmaps, varrules)
-
-            substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
+            # In SymbolicUtils v4, substitution is strict and won't match u(t, 0) with u(t, x)
+            # We need to add a direct mapping from the boundary term (e.g., u(t, 0)) to the discrete var
+            u = depvar(boundary.u, s)
+            boundary_direct_map = [boundary.u => s.discvars[u][II]]
+            rules = vcat(boundaryvalrules, vmaps, varrules, boundary_direct_map)
+            # In SymbolicUtils v4, substitute expects a Dict
+            # Use pde_substitute to allow substitution inside complex expressions
+            rules_dict = Dict(rules)
+            # Debug: Print rules for Neumann BCs
+            if PDEBase._PDE_SUB_DEBUG[] && iscall(safe_unwrap(bc.lhs)) && operation(safe_unwrap(bc.lhs)) isa Differential
+                println("\nDEBUG generate_bc_eqs: Processing Neumann BC")
+                println("  BC lhs: ", bc.lhs)
+                println("  Rules ($(length(rules)) total):")
+                for (k, v) in rules
+                    println("    ", k, " => ", typeof(v) == Float64 ? v : "$(typeof(v))")
+                end
+            end
+            pde_substitute(bc.lhs, rules_dict) ~ pde_substitute(bc.rhs, rules_dict)
         end
     )
 end

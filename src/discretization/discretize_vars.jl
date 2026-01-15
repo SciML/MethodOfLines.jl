@@ -258,7 +258,8 @@ map dependent variables
     t = vars.time
     depvarsdisc = map(depvars) do u
         op = SymbolicUtils.operation(u)
-        if op isa SymbolicUtils.BasicSymbolic{SymbolicUtils.FnType{Tuple, Real}}
+        # In SymbolicUtils v4, check symtype for FnType instead of BasicSymbolic type parameter
+        if op isa SymbolicUtils.BasicSymbolic && SymbolicUtils.symtype(op) <: SymbolicUtils.FnType
             sym = Symbol(string(op))
         else
             sym = nameof(op)

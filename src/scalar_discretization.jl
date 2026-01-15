@@ -53,7 +53,10 @@ function discretize_equation_at_point(
         valmaps(s, eqvar, depvars, II, indexmap)
     )
     try
-        return expand_derivatives(substitute(pde.lhs, rules)) ~ substitute(pde.rhs, rules)
+        # In SymbolicUtils v4, substitute expects a Dict, not a Vector of Pairs
+        # Use pde_substitute which allows substitution inside Differential operators
+        rules_dict = Dict(rules)
+        return expand_derivatives(pde_substitute(pde.lhs, rules_dict)) ~ pde_substitute(pde.rhs, rules_dict)
     catch e
         println("A scheme has been incorrectly applied to the following equation: $pde.\n")
         println("The following rules were constructed at index $II:")

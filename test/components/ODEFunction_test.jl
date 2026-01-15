@@ -32,7 +32,7 @@ domains = [
 
 @named pdesys = PDESystem(
     eq, bcs, domains, [t, x], [u(t, x)], [a],
-    analytic_func = [u(t, x) => analytic_u], defaults = Dict(a => 1.0)
+    analytic_func = [u(t, x) => analytic_u], initial_conditions = Dict(a => 1.0)
 )
 
 disc = MOLFiniteDifference([x => 30], t, advection_scheme = WENOScheme())

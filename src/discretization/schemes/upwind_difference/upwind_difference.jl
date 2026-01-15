@@ -83,8 +83,9 @@ function upwind_difference(
         depvars, derivweights, (j, x), u, central_ufunc, indexmap
     )
     # TODO: Allow derivatives in expr
+    # In SymbolicUtils v4, substitute expects a Dict
     expr = substitute(
-        expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap)
+        expr, Dict(valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
     )
     return IfElse.ifelse(
         expr > 0,
