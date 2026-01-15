@@ -223,12 +223,15 @@ function get_ranking!(varmap, term, x, s)
         children = map(arg -> get_ranking!(varmap, arg, x, s), SU.arguments(term))
         count, vars = split(children)
         if op isa Differential && isequal(op.x, x)
+            # In Symbolics v7, higher-order derivatives use op.order field
+            # e.g., Differential(x)^2 creates Differential(x, 2) with order=2
+            order = op.order
             for var in vars
-                if varmap[var] < count + 1
-                    varmap[var] = count + 1
+                if varmap[var] < count + order
+                    varmap[var] = count + order
                 end
             end
-            return (1 + count, vars)
+            return (order + count, vars)
         end
         return (count, vars)
     end

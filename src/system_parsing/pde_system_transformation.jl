@@ -34,7 +34,7 @@ function PDEBase.transform_pde_system!(
 
     sys = PDESystem(
         eqs, bcs, sys.domain, sys.ivs, Num.(v.ū),
-        sys.ps, name = sys.name, defaults = sys.defaults
+        sys.ps, name = sys.name, initial_conditions = sys.initial_conditions
     )
     return sys
 end
@@ -307,7 +307,9 @@ function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, 
 
     bclhs = deriv(bcdv)
     # ! catch failures to expand and throw a better error message
-    bcrhs = expand_derivatives(substitute(deriv(term), rules))
+    # In SymbolicUtils v4, substitute expects a Dict
+    rules_dict = rules isa AbstractDict ? rules : Dict(rules)
+    bcrhs = expand_derivatives(substitute(deriv(term), rules_dict))
     eq = bclhs ~ bcrhs
 
     newbc = if isupper(bc)

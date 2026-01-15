@@ -95,7 +95,7 @@ end
 
     # PDE system
     @named pdesys = PDESystem(
-        eq, bcs, domains, [t, x], [u(t, x)], [D]; defaults = Dict(D => 10.0)
+        eq, bcs, domains, [t, x], [u(t, x)], [D]; initial_conditions = Dict(D => 10.0)
     )
 
     # Method of lines discretization
@@ -682,7 +682,7 @@ end
 
     @named pdesys = PDESystem(
         eqs, bcs, domains, [t, x], [u(t, x), v(t, x)],
-        [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2)
+        [Dn, Dp]; initial_conditions = Dict(Dn => 0.5, Dp => 2)
     )
     discretization = MOLFiniteDifference([x => dx], t)
     prob = discretize(pdesys, discretization)

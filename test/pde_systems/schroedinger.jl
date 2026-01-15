@@ -30,7 +30,8 @@ using MethodOfLines, OrdinaryDiffEq, DomainSets, ModelingToolkit, Test
 
     prob = discretize(sys, disc)
 
-    sol = solve(prob, TRBDF2(), saveat = 0.01)
+    # Use Rodas5P which supports mass matrices (required for complex PDEs in MTK v11)
+    sol = solve(prob, Rodas5P(), saveat = 0.01)
 
     discx = sol[x]
     disct = sol[t]
@@ -89,7 +90,8 @@ end
 
     prob = discretize(sys, disc)
 
-    sol = solve(prob, TRBDF2(), saveat = 0.01)
+    # Use Rodas5P which supports mass matrices (required for complex PDEs in MTK v11)
+    sol = solve(prob, Rodas5P(), saveat = 0.01)
 
     @test SciMLBase.successful_retcode(sol)
 end

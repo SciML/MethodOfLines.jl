@@ -84,7 +84,7 @@ function ODEFunctionExpr(
         end
     catch e
         println("The system of equations is:")
-        println(sys.eqs)
+        println(get_eqs(sys))
         println()
         println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
         println()
@@ -116,7 +116,7 @@ function SciMLBase.ODEFunction(
         end
     catch e
         println("The system of equations is:")
-        println(sys.eqs)
+        println(get_eqs(sys))
         println()
         println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
         println()

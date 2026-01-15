@@ -432,7 +432,7 @@ end
 
     @named pdesys = PDESystem(
         eqs, bcs_collected, domains, [t, x],
-        [u(t, x)[i] for i in 1:n_comp], params; defaults = Dict(
+        [u(t, x)[i] for i in 1:n_comp], params; initial_conditions = Dict(
             p => [1.5, 2.0], q => [
                 1.2, 1.8,
             ]

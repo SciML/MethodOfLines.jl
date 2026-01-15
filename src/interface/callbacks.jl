@@ -6,7 +6,7 @@ end
 
 function MOLDiscCallback(f, disc_ps)
     symh = hash(f)
-    sym = unwrap(first(@parameters(Symbol("MOLDiscCallback_$symh"))))
+    sym = unwrap(Symbolics.variable(Symbol("MOLDiscCallback_$symh"), T=Real))
     return MOLDiscCallback(f, disc_ps, sym)
 end
 

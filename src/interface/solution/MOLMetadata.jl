@@ -8,8 +8,9 @@ Used to unpack the solution.
 - `disc`: a Discretization object, used in the discretization. Usually a
           MOLFiniteDifference object.
 - `pdesys`: a PDESystem object, used in the discretization.
+- `u0`: initial conditions for the discretized system (stored separately for MTK v11 compatibility).
 """
-struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
+struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat, U0} <:
     SciMLBase.AbstractDiscretizationMetadata{hasTime}
     discretespace::Ds
     disc::Disc
@@ -17,8 +18,9 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
     use_ODAE::Bool
     metadata::M
     complexmap::C
+    u0::U0
     function MOLMetadata(
-            discretespace, disc, pdesys, boundarymap, complexmap, metadata = nothing
+            discretespace, disc, pdesys, boundarymap, complexmap, u0 = [], metadata = nothing
         )
         metaref = Ref{Any}()
         metaref[] = metadata
@@ -43,19 +45,20 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
             hasTime, typeof(discretespace),
             typeof(disc), typeof(pdesys),
             typeof(metaref), typeof(complexmap), typeof(disc.disc_strategy),
+            typeof(u0),
         }(
             discretespace,
             disc, pdesys, use_ODAE,
-            metaref, complexmap
+            metaref, complexmap, u0
         )
     end
 end
 
 function PDEBase.generate_metadata(
         s::DiscreteSpace, disc::MOLFiniteDifference, pdesys::PDESystem,
-        boundarymap, complexmap, metadata = nothing
+        boundarymap, complexmap, u0 = [], metadata = nothing
     )
-    return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, metadata)
+    return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, u0, metadata)
 end
 
 # function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference{G,D}, pdesys::PDESystem, boundarymap, metadata=nothing) where {G<:StaggeredGrid}
