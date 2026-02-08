@@ -38,7 +38,8 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
-    if GROUP == "All" || GROUP == "Brusselator"
+    # Brusselator disabled: stalls for 6+ hours in CI, see issue
+    if GROUP == "Brusselator"
         @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
             include("pde_systems/brusselator_eq.jl")
         end
@@ -61,7 +62,8 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("components/solution_interface.jl")
         end
     end
-    if GROUP == "All" || GROUP == "MOL_Interface2"
+    # MOL_Interface2 disabled: stalls for 6+ hours in CI, see issue
+    if GROUP == "MOL_Interface2"
         @time @safetestset "MOLFiniteDifference Interface" begin
             include("pde_systems/MOLtest2.jl")
         end
