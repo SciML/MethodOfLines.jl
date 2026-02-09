@@ -31,7 +31,7 @@ jobs:
           - "Components"
           - "Sol_Interface"
           - "MOL_Interface1"
-          - "MOL_Interface2"
+          # "MOL_Interface2" - disabled: stalls for 6+ hours on lts/pre, see issue
           - "Diffusion"
           - "Diffusion_NU"
           - "Nonlinear_Diffusion"
