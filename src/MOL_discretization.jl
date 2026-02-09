@@ -150,8 +150,18 @@ function PDEBase.generate_system(
     alldepvarsdisc = vec(reduce(vcat, vec(unique(reduce(vcat, vec.(values(discvars)))))))
 
     defaults = merge(ModelingToolkit.defaults(pdesys), Dict(u0))
-    ps = ModelingToolkit.get_ps(pdesys)
-    ps = ps === nothing || ps === SciMLBase.NullParameters() ? Num[] : ps
+    ps_raw = ModelingToolkit.get_ps(pdesys)
+    ps_raw = ps_raw === nothing || ps_raw === SciMLBase.NullParameters() ? Num[] : ps_raw
+    # Separate Pair objects (parameter => value) from plain symbolic parameters
+    ps = Num[]
+    for p in ps_raw
+        if p isa Pair
+            push!(ps, p.first)
+            defaults[p.first] = p.second
+        else
+            push!(ps, p)
+        end
+    end
 
     # Add unit correction constants for spatial variables with units
     for x in s.x̄
