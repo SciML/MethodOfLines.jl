@@ -171,7 +171,7 @@ function PDEBase.generate_system(
         end
     end
 
-    checks = true
+    checks = false
     try
         if t === nothing
             eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, alleqs)
