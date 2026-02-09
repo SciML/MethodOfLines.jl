@@ -75,7 +75,7 @@ function upwind_difference(
     #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
     # unit index in direction of the derivative
     weights, Itap = _upwind_difference(D, II, s, bs, ispositive, u, jx)
-    return sym_dot(weights, ufunc(u, Itap, x))
+    return sym_dot(weights, ufunc(u, Itap, x))  # unit correction applied at rule generation level
 end
 
 function upwind_difference(
@@ -113,10 +113,13 @@ end
                                     ~~a,
                                     $(Differential(x)^d)(u),
                                     ~~b
-                                ) => upwind_difference(
-                                    *(~a..., ~b...), d, Idx(II, s, u, indexmap), s,
-                                    filter_interfaces(bcmap[operation(u)][x]), depvars,
-                                    derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap
+                                ) => unit_correct(
+                                    upwind_difference(
+                                        *(~a..., ~b...), d, Idx(II, s, u, indexmap), s,
+                                        filter_interfaces(bcmap[operation(u)][x]), depvars,
+                                        derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap
+                                    ),
+                                    x, d, derivweights.unit_map
                                 )
                                 for d in (
                                     let orders = derivweights.orders[x]
@@ -142,10 +145,13 @@ end
                                 @rule /(
                                     *(~~a, $(Differential(x)^d)(u), ~~b),
                                     ~c
-                                ) => upwind_difference(
-                                    *(~a..., ~b...) / ~c, d, Idx(II, s, u, indexmap), s,
-                                    filter_interfaces(bcmap[operation(u)][x]), depvars,
-                                    derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap
+                                ) => unit_correct(
+                                    upwind_difference(
+                                        *(~a..., ~b...) / ~c, d, Idx(II, s, u, indexmap), s,
+                                        filter_interfaces(bcmap[operation(u)][x]), depvars,
+                                        derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap
+                                    ),
+                                    x, d, derivweights.unit_map
                                 )
                                 for d in (
                                     let orders = derivweights.orders[x]
@@ -183,10 +189,13 @@ end
                         # for all odd orders
                         if length(oddorders) > 0
                             map(oddorders) do d
-                                (Differential(x)^d)(u) => upwind_difference(
-                                    d, Idx(II, s, u, indexmap), s,
-                                    filter_interfaces(bcmap[operation(u)][x]),
-                                    derivweights, (j, x), u, wind_ufunc, true
+                                (Differential(x)^d)(u) => unit_correct(
+                                    upwind_difference(
+                                        d, Idx(II, s, u, indexmap), s,
+                                        filter_interfaces(bcmap[operation(u)][x]),
+                                        derivweights, (j, x), u, wind_ufunc, true
+                                    ),
+                                    x, d, derivweights.unit_map
                                 )
                             end
                         else

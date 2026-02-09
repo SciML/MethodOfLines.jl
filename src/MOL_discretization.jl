@@ -134,3 +134,54 @@ function generate_code(
         println(io, code)
     end
 end
+
+# Override generate_system to include unit correction parameters for spatial variables
+# with units. These are symbolic constants (value 1.0 with spatial unit) needed to
+# give finite difference stencil coefficients the correct dimensional units.
+function PDEBase.generate_system(
+        disc_state::PDEBase.EquationState, s::DiscreteSpace, u0, tspan,
+        metadata::MOLMetadata, disc::MOLFiniteDifference
+    )
+    discvars = PDEBase.get_discvars(s)
+    t = PDEBase.get_time(disc)
+    name = getfield(metadata.pdesys, :name)
+    pdesys = metadata.pdesys
+    alleqs = vcat(disc_state.eqs, unique(disc_state.bceqs))
+    alldepvarsdisc = vec(reduce(vcat, vec(unique(reduce(vcat, vec.(values(discvars)))))))
+
+    defaults = merge(ModelingToolkit.defaults(pdesys), Dict(u0))
+    ps = ModelingToolkit.get_ps(pdesys)
+    ps = ps === nothing || ps === SciMLBase.NullParameters() ? Num[] : ps
+
+    # Add unit correction constants for spatial variables with units
+    for x in s.x̄
+        uc = make_unit_constant(x)
+        if uc !== nothing
+            ps = vcat(ps, [uc])
+        end
+    end
+
+    checks = true
+    try
+        if t === nothing
+            eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, alleqs)
+            sys = System(
+                eqs, alldepvarsdisc, ps, defaults = defaults, name = name,
+                metadata = [PDEBase.ProblemTypeCtx => metadata], checks = checks
+            )
+            return sys, nothing
+        else
+            sys = System(
+                alleqs, t, alldepvarsdisc, ps, defaults = defaults, name = name,
+                metadata = [PDEBase.ProblemTypeCtx => metadata], checks = checks
+            )
+            return sys, tspan
+        end
+    catch e
+        println("The system of equations is:")
+        println()
+        println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
+        println()
+        rethrow(e)
+    end
+end

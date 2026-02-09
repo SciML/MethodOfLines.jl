@@ -36,18 +36,21 @@ end
                             (
                                 Differential(x) *
                                 Differential(y)
-                            )(u) => mixed_central_difference(
-                                (derivweights.map[Differential(x)], derivweights.map[Differential(y)]),
-                                Idx(II, s, u, indexmap),
-                                s,
-                                (
-                                    filter_interfaces(bcmap[operation(u)][x]),
-                                    filter_interfaces(bcmap[operation(u)][y]),
+                            )(u) => unit_correct(unit_correct(
+                                mixed_central_difference(
+                                    (derivweights.map[Differential(x)], derivweights.map[Differential(y)]),
+                                    Idx(II, s, u, indexmap),
+                                    s,
+                                    (
+                                        filter_interfaces(bcmap[operation(u)][x]),
+                                        filter_interfaces(bcmap[operation(u)][y]),
+                                    ),
+                                    ((x2i(s, u, x), x), (x2i(s, u, y), y)),
+                                    u,
+                                    central_ufunc
                                 ),
-                                ((x2i(s, u, x), x), (x2i(s, u, y), y)),
-                                u,
-                                central_ufunc
-                            ) for y in remove(ivs(u, s), unwrap(x))
+                                x, 1, derivweights.unit_map
+                            ), y, 1, derivweights.unit_map) for y in remove(ivs(u, s), unwrap(x))
                         ] for x in ivs(u, s)
                     ],
                     init = []

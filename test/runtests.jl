@@ -148,4 +148,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/wave_eq_staggered.jl")
         end
     end
+    if GROUP == "All" || GROUP == "Units"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion with Units" begin
+            include("pde_systems/MOL_1D_Linear_Diffusion_Units.jl")
+        end
+    end
 end

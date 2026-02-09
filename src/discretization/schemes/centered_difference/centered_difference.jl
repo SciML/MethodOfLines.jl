@@ -77,10 +77,13 @@ This is a catch all ruleset, as such it does not use @rule. Any even ordered der
                     safe_vcat,
                     [
                         [
-                            (Differential(x)^d)(u) => central_difference(
-                                derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap),
-                                s, filter_interfaces(bcmap[operation(u)][x]),
-                                (x2i(s, u, x), x), u, central_ufunc
+                            (Differential(x)^d)(u) => unit_correct(
+                                central_difference(
+                                    derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap),
+                                    s, filter_interfaces(bcmap[operation(u)][x]),
+                                    (x2i(s, u, x), x), u, central_ufunc
+                                ),
+                                x, d, derivweights.unit_map
                             )
                             for d in (
                                 let orders = derivweights.orders[x]
@@ -165,7 +168,9 @@ function generate_cartesian_rules(
                 end
                 append!(
                     placeholder,
-                    [(Differential(x)^d)(u) => sym_dot(weights, ufunc(u, Itap, x))]
+                    [(Differential(x)^d)(u) => unit_correct(
+                        sym_dot(weights, ufunc(u, Itap, x)), x, d, derivweights.unit_map
+                    )]
                 )
             end
         end

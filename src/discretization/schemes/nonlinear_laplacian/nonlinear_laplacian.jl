@@ -161,10 +161,10 @@ end
                             ~~d
                         ) => *(
                             ~c...,
-                            cartesian_nonlinear_laplacian(
+                            unit_correct(cartesian_nonlinear_laplacian(
                                 *(~a..., ~b...), Idx(II, s, u, indexmap),
                                 derivweights, s, indexmap, bcmap, depvars, x, u
-                            ),
+                            ), x, 2, derivweights.unit_map),
                             ~d...
                         ) for x in ivs(u, s)
                     ]
@@ -186,10 +186,10 @@ end
                                     $(Differential(x))(u),
                                     ~~b
                                 )
-                            ) => cartesian_nonlinear_laplacian(
+                            ) => unit_correct(cartesian_nonlinear_laplacian(
                                 *(~a..., ~b...), Idx(II, s, u, indexmap),
                                 derivweights, s, indexmap, bcmap, depvars, x, u
-                            ) for x in ivs(u, s)
+                            ), x, 2, derivweights.unit_map) for x in ivs(u, s)
                         ]
                     )
                     for u in depvars
@@ -210,10 +210,10 @@ end
                                     $(Differential(x))(u) /
                                     ~a
                                 )
-                            ) => cartesian_nonlinear_laplacian(
+                            ) => unit_correct(cartesian_nonlinear_laplacian(
                                 1 / ~a, Idx(II, s, u, indexmap), derivweights,
                                 s, indexmap, bcmap, depvars, x, u
-                            ) for x in ivs(u, s)
+                            ), x, 2, derivweights.unit_map) for x in ivs(u, s)
                         ]
                     )
                     for u in depvars
@@ -236,10 +236,10 @@ end
                             ) => *(
                                 ~b...,
                                 ~c...,
-                                cartesian_nonlinear_laplacian(
+                                unit_correct(cartesian_nonlinear_laplacian(
                                     1 / ~a, Idx(II, s, u, indexmap), derivweights,
                                     s, indexmap, bcmap, depvars, x, u
-                                )
+                                ), x, 2, derivweights.unit_map)
                             ) for x in ivs(u, s)
                         ]
                     )
@@ -263,10 +263,10 @@ end
                                 *(
                                     ~b...,
                                     ~c...,
-                                    cartesian_nonlinear_laplacian(
+                                    unit_correct(cartesian_nonlinear_laplacian(
                                         *(~a..., ~d...), Idx(II, s, u, indexmap),
                                         derivweights, s, indexmap, bcmap, depvars, x, u
-                                    )
+                                    ), x, 2, derivweights.unit_map)
                                 ),
                                 replacevals(~e, s, u, depvars, II, indexmap)
                             ) for x in ivs(u, s)

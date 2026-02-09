@@ -263,14 +263,16 @@ map dependent variables
         else
             sym = nameof(op)
         end
+        # Propagate unit metadata from the original variable to the discretized variable
+        unit_val = ModelingToolkit.get_unit(Num(u))
         if t === nothing
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
-            u => unwrap.(collect(first(@variables $sym[uaxes...])))
+            u => unwrap.(collect(first(@variables $sym[uaxes...] [unit = unit_val])))
         elseif isequal(SymbolicUtils.arguments(u), [t])
             u => fill(safe_unwrap(u), ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            u => unwrap.(collect(first(@variables $sym(t)[uaxes...])))
+            u => unwrap.(collect(first(@variables $sym(t)[uaxes...] [unit = unit_val])))
         end
     end
     return depvarsdisc

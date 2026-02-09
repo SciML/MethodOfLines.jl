@@ -1,6 +1,43 @@
 ####
 # Utils for DerivativeOperator generation in schemes
 ####
+
+"""
+    make_unit_constant(x)
+
+Create a symbolic constant with value 1.0 carrying the unit of spatial variable `x`.
+Returns `nothing` if `x` has no units (is unitless).
+
+This is used to correct the units of finite difference stencil coefficients, which are
+computed numerically and lose the spatial variable's unit information.
+"""
+function make_unit_constant(x)
+    unit_val = ModelingToolkit.get_unit(Num(x))
+    if unit_val === nothing || unit_val == ModelingToolkit.unitless
+        return nothing
+    end
+    name = Symbol("__MOL_unit_", x)
+    sym = SymbolicUtils.Sym{Real}(name)
+    sym = Symbolics.setdefaultval(sym, 1.0)
+    sym = SymbolicUtils.setmetadata(sym, Symbolics.VariableSource, (:constants, name))
+    sym = Symbolics.set_scalar_metadata(sym, ModelingToolkit.VariableUnit, unit_val)
+    sym = Symbolics.wrap(sym)
+    sym = ModelingToolkit.toconstant(sym)
+    return sym
+end
+
+"""
+    unit_correct(expr, x, d, unit_map)
+
+Apply unit correction to a discretized derivative expression. Divides `expr` by
+`unit_ref^d` where `unit_ref` is the symbolic unit constant for spatial variable `x`
+and `d` is the derivative order. Returns `expr` unchanged if `x` has no units.
+"""
+function unit_correct(expr, x, d, unit_map)
+    ref = get(unit_map, x, nothing)
+    ref === nothing && return expr
+    return expr / ref^d
+end
 @inline clip(II::CartesianIndex{M}, j, N) where {M} = II[j] > N ? II - unitindices(M)[j] :
     II
 half_range(x) = (-div(x, 2)):div(x, 2)
