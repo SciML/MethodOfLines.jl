@@ -116,11 +116,14 @@ Set the endemic size
 $$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$$
 
 ```@example sispde
-function episize!(dS, dI)
-    newprob = remake(prob, p = [dS, dI, 3, 0.1])
+# Get the discretized I variables from the system
+I_vars = filter(s -> contains(string(s), "I("), unknowns(prob.f.sys))
+
+function episize!(dS_val, dI_val)
+    newprob = remake(prob, p = [dS => dS_val, dI => dI_val, brn => 3, ϵ => 0.1])
     steadystateprob = SteadyStateProblem(newprob)
     steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
-    y = sum(steadystate[100:end]) / 99
+    y = sum(steadystate[v] for v in I_vars) * dx
     return y
 end
 episize!(exp(1.0), exp(0.5))

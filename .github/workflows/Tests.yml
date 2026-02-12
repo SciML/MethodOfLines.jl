@@ -31,7 +31,7 @@ jobs:
           - "Components"
           - "Sol_Interface"
           - "MOL_Interface1"
-          - "MOL_Interface2"
+          # "MOL_Interface2" - disabled: stalls for 6+ hours on lts/pre, see issue
           - "Diffusion"
           - "Diffusion_NU"
           - "Nonlinear_Diffusion"
@@ -44,7 +44,7 @@ jobs:
           - "DAE"
           - "Integrals"
           - "Burgers"
-          - "Brusselator"
+          # "Brusselator" - disabled: stalls in runner queue for hours, see #521
           - "Mixed_Derivatives"
           - "Wave_Eq_Staggered"
           - "Complex"

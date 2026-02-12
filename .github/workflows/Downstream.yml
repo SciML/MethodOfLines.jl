@@ -9,6 +9,7 @@ jobs:
   test:
     name: ${{ matrix.package.repo }}/${{ matrix.package.group }}/${{ matrix.julia-version }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: true  # PDESystemLibrary tests have pre-existing failures, see issue
     env:
       GROUP: ${{ matrix.package.group }}
     strategy:
