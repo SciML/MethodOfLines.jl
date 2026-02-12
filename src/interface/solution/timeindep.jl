@@ -1,7 +1,8 @@
 # If the solution is already a PDENoTimeSolution, just return it unchanged.
 # This handles cases where wrap_sol is called multiple times (e.g., during error handling).
 function SciMLBase.PDENoTimeSolution(
-        sol::SciMLBase.PDENoTimeSolution, metadata::MOLMetadata)
+        sol::SciMLBase.PDENoTimeSolution, metadata::MOLMetadata
+    )
     return sol
 end
 

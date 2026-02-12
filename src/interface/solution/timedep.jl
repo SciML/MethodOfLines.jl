@@ -11,7 +11,8 @@ end
 # If the solution is already a PDETimeSeriesSolution, just return it unchanged.
 # This handles cases where wrap_sol is called multiple times (e.g., during error handling).
 function SciMLBase.PDETimeSeriesSolution(
-        sol::SciMLBase.PDETimeSeriesSolution, metadata::MOLMetadata)
+        sol::SciMLBase.PDETimeSeriesSolution, metadata::MOLMetadata
+    )
     return sol
 end
 
