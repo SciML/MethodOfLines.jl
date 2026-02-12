@@ -115,7 +115,9 @@ steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
 Set the endemic size
 $$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$$
 
-```@example sispde
+```julia
+# NOTE: This example is not executed during docs build due to a bug in
+# solution indexing. See https://github.com/SciML/MethodOfLines.jl/issues/519
 function episize!(dS, dI)
     newprob = remake(prob, p = [dS, dI, 3, 0.1])
     steadystateprob = SteadyStateProblem(newprob)
