@@ -34,7 +34,7 @@ function PDEBase.transform_pde_system!(
 
     sys = PDESystem(
         eqs, bcs, sys.domain, sys.ivs, Num.(v.ū),
-        sys.ps, name = sys.name, defaults = sys.defaults
+        sys.ps, name = sys.name, defaults = sys.defaults, checks = false
     )
     return sys
 end

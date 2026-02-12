@@ -43,6 +43,7 @@ import PDEBase.discretize_equation!
 import PDEBase.generate_ic_defaults
 import PDEBase.generate_metadata
 import PDEBase.symbolic_discretize
+import PDEBase.generate_system
 
 import PDEBase.get_time
 import PDEBase.get_eqvar

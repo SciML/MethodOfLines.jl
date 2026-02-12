@@ -57,10 +57,10 @@ end
                             ~~b
                         ) => *(
                             ~a...,
-                            spherical_diffusion(
+                            unit_correct(spherical_diffusion(
                                 *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
                                 derivweights, s, indexmap, bcmap, depvars, r, u
-                            ),
+                            ), r, 2, derivweights.unit_map),
                             ~b...
                         )
                         for r in ivs(u, s)
@@ -89,10 +89,10 @@ end
                             ) => *(
                                 ~a...,
                                 ~b...,
-                                spherical_diffusion(
+                                unit_correct(spherical_diffusion(
                                     *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
                                     derivweights, s, indexmap, bcmap, depvars, r, u
-                                )
+                                ), r, 2, derivweights.unit_map)
                             )
                             for r in ivs(u, s)
                         ]
@@ -112,10 +112,10 @@ end
                             @rule /(
                                 ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))),
                                 (r^2)
-                            ) => spherical_diffusion(
+                            ) => unit_correct(spherical_diffusion(
                                 *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
                                 derivweights, s, indexmap, bcmap, depvars, r, u
-                            )
+                            ), r, 2, derivweights.unit_map)
                             for r in ivs(u, s)
                         ]
                     ) for u in depvars

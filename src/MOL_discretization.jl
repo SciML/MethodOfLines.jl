@@ -134,3 +134,64 @@ function generate_code(
         println(io, code)
     end
 end
+
+# Override generate_system to include unit correction parameters for spatial variables
+# with units. These are symbolic constants (value 1.0 with spatial unit) needed to
+# give finite difference stencil coefficients the correct dimensional units.
+function PDEBase.generate_system(
+        disc_state::PDEBase.EquationState, s::DiscreteSpace, u0, tspan,
+        metadata::MOLMetadata, disc::MOLFiniteDifference
+    )
+    discvars = PDEBase.get_discvars(s)
+    t = PDEBase.get_time(disc)
+    name = getfield(metadata.pdesys, :name)
+    pdesys = metadata.pdesys
+    alleqs = vcat(disc_state.eqs, unique(disc_state.bceqs))
+    alldepvarsdisc = vec(reduce(vcat, vec(unique(reduce(vcat, vec.(values(discvars)))))))
+
+    defaults = merge(ModelingToolkit.defaults(pdesys), Dict(u0))
+    ps_raw = ModelingToolkit.get_ps(pdesys)
+    ps_raw = ps_raw === nothing || ps_raw === SciMLBase.NullParameters() ? Num[] : ps_raw
+    # Separate Pair objects (parameter => value) from plain symbolic parameters
+    ps = Num[]
+    for p in ps_raw
+        if p isa Pair
+            push!(ps, p.first)
+            defaults[p.first] = p.second
+        else
+            push!(ps, p)
+        end
+    end
+
+    # Add unit correction constants for spatial variables with units
+    for x in s.x̄
+        uc = make_unit_constant(x)
+        if uc !== nothing
+            ps = vcat(ps, [uc])
+        end
+    end
+
+    checks = false
+    try
+        if t === nothing
+            eqs = map(eq -> 0 ~ eq.rhs - eq.lhs, alleqs)
+            sys = System(
+                eqs, alldepvarsdisc, ps, defaults = defaults, name = name,
+                metadata = [PDEBase.ProblemTypeCtx => metadata], checks = checks
+            )
+            return sys, nothing
+        else
+            sys = System(
+                alleqs, t, alldepvarsdisc, ps, defaults = defaults, name = name,
+                metadata = [PDEBase.ProblemTypeCtx => metadata], checks = checks
+            )
+            return sys, tspan
+        end
+    catch e
+        println("The system of equations is:")
+        println()
+        println("Discretization failed, please post an issue on https://github.com/SciML/MethodOfLines.jl with the failing code and system at low point count.")
+        println()
+        rethrow(e)
+    end
+end

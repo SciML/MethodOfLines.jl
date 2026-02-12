@@ -9,6 +9,7 @@ struct DifferentialDiscretizer{T, D1, S} <: AbstractDifferentialDiscretizer
     orders::Dict{Num, Vector{Int}}
     boundary::Dict{Num, DerivativeOperator}
     callbacks::Any
+    unit_map::Dict{Any, Any}
 end
 
 function PDEBase.construct_differential_discretizer(
@@ -99,11 +100,20 @@ function PDEBase.construct_differential_discretizer(
         push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), dx))
     end
 
+    # Build unit correction map for spatial variables with units
+    unit_map = Dict{Any, Any}()
+    for x in s.x̄
+        uc = make_unit_constant(x)
+        if uc !== nothing
+            unit_map[x] = uc
+        end
+    end
+
     return DifferentialDiscretizer{
         eltype(orders), typeof(Dict(differentialmap)), typeof(advection_scheme),
     }(
         approx_order, advection_scheme, Dict(differentialmap),
         (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)),
-        Dict(interp), Dict(orders), Dict(boundary), callbacks
+        Dict(interp), Dict(orders), Dict(boundary), callbacks, unit_map
     )
 end
