@@ -8,6 +8,14 @@ function generate_ivgrid(
     return #TODO ((isequal(discretespace.time, x) ? t : discretespace.grid[x] for x in ivs)...,)
 end
 
+# If the solution is already a PDETimeSeriesSolution, just return it unchanged.
+# This handles cases where wrap_sol is called multiple times (e.g., during error handling).
+function SciMLBase.PDETimeSeriesSolution(
+        sol::SciMLBase.PDETimeSeriesSolution, metadata::MOLMetadata
+    )
+    return sol
+end
+
 function SciMLBase.PDETimeSeriesSolution(
         sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata
     ) where {T}
