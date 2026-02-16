@@ -89,7 +89,7 @@ end
 
     # PDE system
     @named pdesys = PDESystem(
-        eq, bcs, domains, [t, x], [u(t, x)], [D]; defaults = Dict(D => 10.0)
+        eq, bcs, domains, [t, x], [u(t, x)], [D]; initial_conditions = Dict(D => 10.0)
     )
 
     # Method of lines discretization
@@ -655,7 +655,7 @@ end
 
     @named pdesys = PDESystem(
         eqs, bcs, domains, [t, x], [u(t, x), v(t, x)],
-        [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2)
+        [Dn, Dp]; initial_conditions = Dict(Dn => 0.5, Dp => 2)
     )
     discretization = MOLFiniteDifference([x => 0.1], t)
     prob = discretize(pdesys, discretization)
@@ -735,8 +735,10 @@ end
     v_exact = (y, t) -> exp.(-t) * sin.(y)
 
     # Parameters, variables, and derivatives
+    # Note: u[1:2](..) vector callable syntax is not supported in MTK v11+.
+    # Using separate variables instead.
     @parameters t x y
-    @variables u[1:2](..)
+    @variables u1(..) u2(..)
     Dt = Differential(t)
     Dx = Differential(x)
     Dxx = Dx^2
@@ -745,16 +747,16 @@ end
 
     # 1D PDE and boundary conditions
     eqs = [
-        Dt(u[1](t, x)) ~ Dxx(u[1](t, x)),
-        Dt(u[2](t, y)) ~ Dyy(u[2](t, y)),
+        Dt(u1(t, x)) ~ Dxx(u1(t, x)),
+        Dt(u2(t, y)) ~ Dyy(u2(t, y)),
     ]
     bcs = [
-        u[1](0, x) ~ cos(x),
-        u[2](0, y) ~ sin(y),
-        u[1](t, 0) ~ exp(-t),
-        Dx(u[1](t, 1)) ~ -exp(-t) * sin(1),
-        Dy(u[2](t, 0)) ~ exp(-t),
-        u[2](t, 2) ~ exp(-t) * sin(2),
+        u1(0, x) ~ cos(x),
+        u2(0, y) ~ sin(y),
+        u1(t, 0) ~ exp(-t),
+        Dx(u1(t, 1)) ~ -exp(-t) * sin(1),
+        Dy(u2(t, 0)) ~ exp(-t),
+        u2(t, 2) ~ exp(-t) * sin(2),
     ]
 
     # Space and time domains
@@ -765,7 +767,7 @@ end
     ]
 
     # PDE system
-    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u[1](t, x), u[2](t, y)])
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u1(t, x), u2(t, y)])
 
     # Method of lines discretization
     l = 100
@@ -782,8 +784,8 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat = 0.1)
 
-    solu1 = sol[u[1](t, x)]
-    solu2 = sol[u[2](t, y)]
+    solu1 = sol[u1(t, x)]
+    solu2 = sol[u2(t, y)]
 
     x_sol = sol[x]
     y_sol = sol[y]

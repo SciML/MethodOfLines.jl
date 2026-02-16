@@ -77,10 +77,11 @@ function newindex(u_, II, s, indexmap; shift = false)
     is = map(enumerate(args_)) do (j, x)
         if haskey(indexmap, x)
             II[indexmap[x]]
-        elseif safe_unwrap(x) isa Number
-            if isequal(x, s.axies[args[j]][1])
+        elseif unwrap_const(safe_unwrap(x)) isa Number
+            xval = unwrap_const(safe_unwrap(x))
+            if isequal(xval, s.axies[args[j]][1])
                 1
-            elseif isequal(x, s.axies[args[j]][end])
+            elseif isequal(xval, s.axies[args[j]][end])
                 length(s, args[j]) - (shift ? 1 : 0)
             else
                 error("Boundary value $u_ is not defined at the boundary of the domain, or problem with index adaptation, please post an issue.")

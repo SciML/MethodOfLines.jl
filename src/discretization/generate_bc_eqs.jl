@@ -66,7 +66,7 @@ function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivwei
                 # Only make a map if it is actually possible to substitute in the boundary value given the indexmap
             elseif all(
                     x -> haskey(indexmap, x),
-                    filter(x -> !(safe_unwrap(x) isa Number), b.indvars)
+                    filter(x -> !(unwrap_const(safe_unwrap(x)) isa Number), b.indvars)
                 )
                 II -> boundary_value_maps(II, s, b, derivweights, indexmap)
             else
@@ -95,10 +95,10 @@ function boundary_value_maps(
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap, shift = true)
 
-    val = filter(z -> z isa Number, arguments(u_))[1]
+    val = filter(z -> unwrap_const(safe_unwrap(z)) isa Number, arguments(u_))[1]
     r = x_ => val
     othervars = map(boundary.depvars) do v
-        mol_substitute(v, r)
+        substitute(v, _to_subs_dict(r))
     end
     othervars = filter(
         v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
@@ -122,7 +122,7 @@ function boundary_value_maps(
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = filter(
-        v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars
+        v -> !any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(v)), boundary.depvars
     )
 
     integralbcmaps = generate_whole_domain_integration_rules(
@@ -177,10 +177,10 @@ function boundary_value_maps(
     IIold = II
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap)
-    val = filter(z -> z isa Number, arguments(u_))[1]
+    val = filter(z -> unwrap_const(safe_unwrap(z)) isa Number, arguments(u_))[1]
     r = x_ => val
     othervars = map(boundary.depvars) do v
-        mol_substitute(v, r)
+        substitute(v, _to_subs_dict(r))
     end
     othervars = filter(
         v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
@@ -199,7 +199,7 @@ function boundary_value_maps(
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = unwrap.(
         filter(
-            v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars
+            v -> !any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(v)), boundary.depvars
         )
     )
 
@@ -252,10 +252,10 @@ function boundary_value_maps(
     IIold = II
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap)
-    val = filter(z -> z isa Number, arguments(u_))[1]
+    val = filter(z -> unwrap_const(safe_unwrap(z)) isa Number, arguments(u_))[1]
     r = x_ => val
     othervars = map(boundary.depvars) do v
-        mol_substitute(v, r)
+        substitute(v, _to_subs_dict(r))
     end
     othervars = filter(
         v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
@@ -274,7 +274,7 @@ function boundary_value_maps(
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = unwrap.(
         filter(
-            v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars
+            v -> !any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(v)), boundary.depvars
         )
     )
 
@@ -326,9 +326,16 @@ function generate_bc_eqs(
             bc_vmaps = map(vmaps) do rule
                 mol_substitute(rule.first, varrules) => rule.second
             end
-            rules = vcat(boundaryvalrules, vmaps, bc_vmaps, varrules)
-
-            mol_substitute(bc.lhs, rules) ~ mol_substitute(bc.rhs, rules)
+            # Apply variable and derivative maps (safe for operator recursion since
+            # these rules don't map raw spatial coordinates).
+            var_rules = vcat(boundaryvalrules, vmaps, bc_vmaps)
+            lhs = mol_substitute(bc.lhs, var_rules)
+            rhs = mol_substitute(bc.rhs, var_rules)
+            # Apply coordinate value substitutions (e.g. x => 0.0) with DEFAULT
+            # filterer to avoid Differential(x) becoming Differential(0.0).
+            lhs = substitute(lhs, _to_subs_dict(varrules))
+            rhs = substitute(rhs, _to_subs_dict(varrules))
+            lhs ~ rhs
         end
     )
 end

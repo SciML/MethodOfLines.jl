@@ -10,7 +10,7 @@ using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term, setname,
     rename
-using SymbolicUtils: operation, arguments, getmetadata
+using SymbolicUtils: operation, arguments, getmetadata, unwrap_const
 using IfElse
 using StaticArrays
 using Interpolations

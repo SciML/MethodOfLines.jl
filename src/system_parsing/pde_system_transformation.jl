@@ -301,7 +301,7 @@ function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, 
     val = isupper(bc) ? v.intervals[x][2] : v.intervals[x][1]
     newop = operation(newvar)
     args = arguments(newvar)
-    args = mol_substitute.(args, (x => val,))
+    args = substitute.(args, (_to_subs_dict(x => val),))
     bcdv = newop(args...)
     deriv = bc.order == 0 ? identity : (Differential(x)^bc.order)
 
