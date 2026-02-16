@@ -34,7 +34,7 @@ function PDEBase.transform_pde_system!(
 
     sys = PDESystem(
         eqs, bcs, sys.domain, sys.ivs, Num.(v.ū),
-        sys.ps, name = sys.name, defaults = sys.defaults
+        sys.ps, name = sys.name, initial_conditions = sys.initial_conditions
     )
     return sys
 end
@@ -301,13 +301,13 @@ function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, 
     val = isupper(bc) ? v.intervals[x][2] : v.intervals[x][1]
     newop = operation(newvar)
     args = arguments(newvar)
-    args = substitute.(args, (x => val,))
+    args = mol_substitute.(args, (x => val,))
     bcdv = newop(args...)
     deriv = bc.order == 0 ? identity : (Differential(x)^bc.order)
 
     bclhs = deriv(bcdv)
     # ! catch failures to expand and throw a better error message
-    bcrhs = expand_derivatives(substitute(deriv(term), rules))
+    bcrhs = expand_derivatives(mol_substitute(deriv(term), rules))
     eq = bclhs ~ bcrhs
 
     newbc = if isupper(bc)

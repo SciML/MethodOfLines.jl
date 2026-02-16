@@ -98,7 +98,7 @@ function boundary_value_maps(
     val = filter(z -> z isa Number, arguments(u_))[1]
     r = x_ => val
     othervars = map(boundary.depvars) do v
-        substitute(v, r)
+        mol_substitute(v, r)
     end
     othervars = filter(
         v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
@@ -180,7 +180,7 @@ function boundary_value_maps(
     val = filter(z -> z isa Number, arguments(u_))[1]
     r = x_ => val
     othervars = map(boundary.depvars) do v
-        substitute(v, r)
+        mol_substitute(v, r)
     end
     othervars = filter(
         v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
@@ -255,7 +255,7 @@ function boundary_value_maps(
     val = filter(z -> z isa Number, arguments(u_))[1]
     r = x_ => val
     othervars = map(boundary.depvars) do v
-        substitute(v, r)
+        mol_substitute(v, r)
     end
     othervars = filter(
         v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
@@ -320,9 +320,15 @@ function generate_bc_eqs(
             boundaryvalrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
             vmaps = varmaps(s, boundary.depvars, II, indexmap)
             varrules = axiesvals(s, depvar(boundary.u, s), boundary.x, II)
-            rules = vcat(boundaryvalrules, vmaps, varrules)
+            # Create boundary-specific variable mappings by substituting boundary
+            # values into vmaps LHS. This ensures rules like u(t,x) => (u(t))[1]
+            # become u(t,0) => (u(t))[1] which can match the BC expression u(t,0).
+            bc_vmaps = map(vmaps) do rule
+                mol_substitute(rule.first, varrules) => rule.second
+            end
+            rules = vcat(boundaryvalrules, vmaps, bc_vmaps, varrules)
 
-            substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
+            mol_substitute(bc.lhs, rules) ~ mol_substitute(bc.rhs, rules)
         end
     )
 end

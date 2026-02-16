@@ -22,8 +22,8 @@ function generate_coordinates(
 end
 
 function _get_gridloc(s, ut, is...)
-    u = Sym{SymbolicUtils.FnType{Tuple, Real}}(nameof(operation(ut)))
-    u = operation(s.ū[findfirst(isequal(u), operation.(s.ū))])
+    uname = nameof(operation(ut))
+    u = operation(s.ū[findfirst(u -> nameof(operation(u)) == uname, s.ū)])
     args = remove(s.args[u], s.time)
     gridloc = map(enumerate(args)) do (i, x)
         s.grid[x][is[i]]

@@ -25,9 +25,9 @@ function spherical_diffusion(innerexpr, II, derivweights, s, indexmap, bcmap, de
     ufunc_u(v, I, x) = s.discvars[v][I]
 
     # 2nd order finite difference in u
-    exprhere = Num(substitute(innerexpr, rsubs(II)))
+    exprhere = Num(mol_substitute(innerexpr, rsubs(II)))
     # Catch the r ≈ 0 case
-    if isapprox(Symbolics.unwrap(substitute(r, _rsubs(r, II))), 0, atol = 1.0e-6)
+    if isapprox(Symbolics.unwrap(mol_substitute(r, _rsubs(r, II))), 0, atol = 1.0e-6)
         D_2_u = central_difference(D_2, II, s, bs, (s.x2i[r], r), u, ufunc_u)
         return 6exprhere * D_2_u # See appendix B of the paper
     end
@@ -35,7 +35,7 @@ function spherical_diffusion(innerexpr, II, derivweights, s, indexmap, bcmap, de
     # See scheme 1 in appendix A of the paper
 
     return exprhere * (
-        D_1_u / substitute(r, _rsubs(r, II)) + cartesian_nonlinear_laplacian(
+        D_1_u / mol_substitute(r, _rsubs(r, II)) + cartesian_nonlinear_laplacian(
             innerexpr, II, derivweights, s, indexmap, bcmap, depvars, r, u
         )
     )

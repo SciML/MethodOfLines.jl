@@ -83,7 +83,7 @@ function upwind_difference(
         depvars, derivweights, (j, x), u, central_ufunc, indexmap
     )
     # TODO: Allow derivatives in expr
-    expr = substitute(
+    expr = mol_substitute(
         expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap)
     )
     return IfElse.ifelse(

@@ -53,7 +53,7 @@ function discretize_equation_at_point(
         valmaps(s, eqvar, depvars, II, indexmap)
     )
     try
-        return expand_derivatives(substitute(pde.lhs, rules)) ~ substitute(pde.rhs, rules)
+        return expand_derivatives(mol_substitute(pde.lhs, rules)) ~ mol_substitute(pde.rhs, rules)
     catch e
         println("A scheme has been incorrectly applied to the following equation: $pde.\n")
         println("The following rules were constructed at index $II:")

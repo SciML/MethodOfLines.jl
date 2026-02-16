@@ -4,7 +4,7 @@ using SciMLBase
 using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: operation, iscall, arguments, variable, get_unknowns,
-    parameters, defaults, varmap_to_vars, get_eqs, get_bcs, get_dvs,
+    parameters, varmap_to_vars, get_eqs, get_bcs, get_dvs,
     get_ivs
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
@@ -18,7 +18,22 @@ using Latexify
 using PrecompileTools
 using DomainSets
 using RuntimeGeneratedFunctions
+using SparseArrays
 RuntimeGeneratedFunctions.init(@__MODULE__)
+
+# Compatibility: SymbolicUtils v4+ requires AbstractDict or AbstractArray{<:Pair} for substitute,
+# and by default does NOT recurse into Operator (Differential, Integral) arguments.
+# MethodOfLines needs substitution inside Differential/Integral args, so we provide a custom
+# substitute wrapper.
+@inline _to_subs_dict(rules::AbstractDict) = rules
+@inline _to_subs_dict(rules::AbstractArray{<:Pair}) = rules
+@inline _to_subs_dict(rules::AbstractVector) = Dict(rules...)
+@inline _to_subs_dict(rules::Pair) = Dict(rules)
+
+# Custom substitute that recurses into Operator arguments (Differential, Integral, etc.)
+@inline function mol_substitute(expr, rules; kwargs...)
+    substitute(expr, _to_subs_dict(rules); filterer = _ -> true, kwargs...)
+end
 
 # See here for the main `symbolic_discretize` and `generate_system` functions
 using PDEBase
@@ -55,6 +70,7 @@ import Base.getindex
 import Base.checkindex
 import Base.checkbounds
 import Base.getproperty
+import Base.hasproperty
 import Base.ndims
 
 import SciMLBase.discretize

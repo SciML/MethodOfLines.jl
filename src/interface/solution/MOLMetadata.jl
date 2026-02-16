@@ -9,7 +9,7 @@ Used to unpack the solution.
           MOLFiniteDifference object.
 - `pdesys`: a PDESystem object, used in the discretization.
 """
-struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
+struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat, U0} <:
     SciMLBase.AbstractDiscretizationMetadata{hasTime}
     discretespace::Ds
     disc::Disc
@@ -17,11 +17,12 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
     use_ODAE::Bool
     metadata::M
     complexmap::C
+    u0::U0
     function MOLMetadata(
-            discretespace, disc, pdesys, boundarymap, complexmap, metadata = nothing
+            discretespace, disc, pdesys, boundarymap, complexmap, u0 = nothing
         )
         metaref = Ref{Any}()
-        metaref[] = metadata
+        metaref[] = nothing
         if discretespace.time isa Nothing
             hasTime = Val(false)
         else
@@ -43,19 +44,31 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
             hasTime, typeof(discretespace),
             typeof(disc), typeof(pdesys),
             typeof(metaref), typeof(complexmap), typeof(disc.disc_strategy),
+            typeof(u0),
         }(
             discretespace,
             disc, pdesys, use_ODAE,
-            metaref, complexmap
+            metaref, complexmap, u0
         )
     end
 end
 
 function PDEBase.generate_metadata(
         s::DiscreteSpace, disc::MOLFiniteDifference, pdesys::PDESystem,
-        boundarymap, complexmap, metadata = nothing
+        boundarymap, complexmap, u0 = nothing
     )
-    return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, metadata)
+    return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, u0)
+end
+
+# PDEBase's discretize function checks hasproperty(metadata, :u0) to retrieve IC defaults.
+# The u0 data is stored in a dedicated field, separate from the generic `metadata` Ref
+# (which gets overwritten by add_metadata! before u0 is accessed).
+function Base.hasproperty(m::MOLMetadata, s::Symbol)
+    if s === :u0
+        return getfield(m, :u0) !== nothing
+    else
+        return hasfield(typeof(m), s)
+    end
 end
 
 # function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference{G,D}, pdesys::PDESystem, boundarymap, metadata=nothing) where {G<:StaggeredGrid}

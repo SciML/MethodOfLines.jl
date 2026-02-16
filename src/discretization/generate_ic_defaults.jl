@@ -14,11 +14,11 @@ function PDEBase.generate_ic_defaults(
             D = ic.order == 0 ? identity : (Differential(t)^ic.order)
             defaultvars = D.(s.discvars[depvar(ic.u, s)])
             broadcastable_rhs = [symbolic_linear_solve(ic.eq, D(ic.u))]
-            out = substitute.(
+            out = mol_substitute.(
                 broadcastable_rhs, valmaps(s, depvar(ic.u, s), ic.depvars, indexmap)
             )
             vec(
-                defaultvars .=> substitute.(
+                defaultvars .=> mol_substitute.(
                     broadcastable_rhs, valmaps(s, depvar(ic.u, s), ic.depvars, indexmap)
                 )
             )
