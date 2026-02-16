@@ -80,6 +80,7 @@ struct DiscreteSpace{N, M, G} <: AbstractCartesianDiscreteSpace
     Iaxies::Any
     Igrid::Any
     staggeredvars::Any
+    disc_arrays::Any  # Dict of u => Symbolics.Arr for array-level @arrayop operations
 end
 
 # * The move to DiscretizedVariable with a smart recursive getindex and custom dict based index type (?) will allow for sampling whole expressions at once, leading to much greater flexibility. Both Sym and Array interfaces will be implemented. Derivatives become the demarcation between different types of sampling => Derivatives are a custom subtype of DiscretizedVariable, with special subtypes for Nonlinear laplacian/spherical/ other types of derivatives with special handling. There is a pre discretized equation step that recognizes and replaces these with rules, and then the resulting equation is simply indexed into to generate the interior/BCs.
@@ -130,9 +131,11 @@ function PDEBase.construct_discrete_space(
     ]
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars)
+    disc_arrays = discretize_dep_vars_arrays(depvars, grid, vars)
 
     return DiscreteSpace{nspace, length(depvars), G}(
-        vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), nothing
+        vars, Dict(depvarsdisc), axies, grid, Dict(dxs), Dict(Iaxies), Dict(Igrid), nothing,
+        Dict(disc_arrays)
     )
 end
 
@@ -199,9 +202,11 @@ function PDEBase.construct_discrete_space(
         edge_aligned_var => EdgeAlignedVar, center_aligned_var => CenterAlignedVar
     )
 
+    disc_arrays = discretize_dep_vars_arrays(depvars, grid, vars)
+
     return DiscreteSpace{nspace, length(depvars), G}(
         vars, Dict(depvarsdisc), axies, grid, Dict(dxs),
-        Dict(Iaxies), Dict(Igrid), staggered_dict
+        Dict(Iaxies), Dict(Igrid), staggered_dict, Dict(disc_arrays)
     )
 end
 
@@ -270,6 +275,32 @@ map dependent variables
         end
     end
     return depvarsdisc
+end
+
+"""
+    discretize_dep_vars_arrays(depvars, grid, vars)
+
+Create symbolic array representations (Symbolics.Arr) for dependent variables.
+These are used by the array-level @arrayop discretization path, while the
+scalarized `discretize_dep_vars` continues to be used by the scalar path.
+"""
+@inline function discretize_dep_vars_arrays(depvars, grid, vars)
+    x̄ = vars.x̄
+    t = vars.time
+    disc_arrays = map(depvars) do u
+        op = SymbolicUtils.operation(u)
+        sym = nameof(op)
+        if t === nothing
+            uaxes = collect(axes(grid[x])[1] for x in arguments(u))
+            u => first(@variables $sym[uaxes...])
+        elseif isequal(SymbolicUtils.arguments(u), [t])
+            u => nothing  # ODE-only variables have no spatial array
+        else
+            uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
+            u => first(@variables $sym(t)[uaxes...])
+        end
+    end
+    return disc_arrays
 end
 
 """
