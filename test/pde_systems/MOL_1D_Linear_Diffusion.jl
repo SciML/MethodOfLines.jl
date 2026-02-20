@@ -731,12 +731,14 @@ end
 
 @testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables in a vector Order 2" begin
     # Method of Manufactured Solutions
+    # Note: In Symbolics v7, array variables with different independent variable sets
+    # (u(t,x)[1] vs u(t,y)[2]) are not supported. Use separate named variables instead.
     u_exact = (x, t) -> exp.(-t) * cos.(x)
     v_exact = (y, t) -> exp.(-t) * sin.(y)
 
     # Parameters, variables, and derivatives
     @parameters t x y
-    @variables (u(..))[1:2]
+    @variables u(..) v(..)
     Dt = Differential(t)
     Dx = Differential(x)
     Dxx = Dx^2
@@ -745,16 +747,16 @@ end
 
     # 1D PDE and boundary conditions
     eqs = [
-        Dt(u(t, x)[1]) ~ Dxx(u(t, x)[1]),
-        Dt(u(t, y)[2]) ~ Dyy(u(t, y)[2]),
+        Dt(u(t, x)) ~ Dxx(u(t, x)),
+        Dt(v(t, y)) ~ Dyy(v(t, y)),
     ]
     bcs = [
-        u(0, x)[1] ~ cos(x),
-        u(0, y)[2] ~ sin(y),
-        u(t, 0)[1] ~ exp(-t),
-        Dx(u(t, 1)[1]) ~ -exp(-t) * sin(1),
-        Dy(u(t, 0)[2]) ~ exp(-t),
-        u(t, 2)[2] ~ exp(-t) * sin(2),
+        u(0, x) ~ cos(x),
+        v(0, y) ~ sin(y),
+        u(t, 0) ~ exp(-t),
+        Dx(u(t, 1)) ~ -exp(-t) * sin(1),
+        Dy(v(t, 0)) ~ exp(-t),
+        v(t, 2) ~ exp(-t) * sin(2),
     ]
 
     # Space and time domains
@@ -766,7 +768,7 @@ end
 
     # PDE system
     @named pdesys = PDESystem(
-        eqs, bcs, domains, [t, x, y], [u(t, x)[1], u(t, y)[2]]
+        eqs, bcs, domains, [t, x, y], [u(t, x), v(t, y)]
     )
 
     # Method of lines discretization
@@ -784,8 +786,8 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat = 0.1)
 
-    solu1 = sol[u(t, x)[1]]
-    solu2 = sol[u(t, y)[2]]
+    solu1 = sol[u(t, x)]
+    solu2 = sol[v(t, y)]
 
     x_sol = sol[x]
     y_sol = sol[y]
