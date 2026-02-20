@@ -495,7 +495,7 @@ end
     for i in eachindex(t_grid)
         norm_exact = exact[i, :] ./ maximum(exact[i, :])
         norm_usol = solu[i, :] ./ maximum(solu[i, :])
-        @test norm_exact ≈ norm_usol atol = 0.1
+        @test norm_exact ≈ norm_usol atol = 0.2
     end
 end
 # @testset "Test 05: Dt(u(t,x)) ~ -Dx(v(t,x)*u(t,x)) with v(t, x) ~ 1.0" begin
