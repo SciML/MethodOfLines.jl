@@ -31,7 +31,7 @@ using DifferentialEquations, ModelingToolkit, MethodOfLines, DomainSets, Plots
 
 # Parameters, variables, and derivatives
 @parameters t x
-@parameters dS dI brn ϵ
+@parameters dS=0.5 dI=0.1 brn=3 ϵ=0.1
 @variables S(..) I(..)
 Dt = Differential(t)
 Dx = Differential(x)
@@ -70,8 +70,7 @@ domains = [t ∈ Interval(0.0, 10.0),
     x ∈ Interval(0.0, 1.0)]
 
 # PDE system
-@named pdesys = PDESystem(eq, bcs, domains, [t, x], [S(t, x), I(t, x)], [dS, dI, brn, ϵ];
-    defaults = Dict(dS => 0.5, dI => 0.1, brn => 3, ϵ => 0.1))
+@named pdesys = PDESystem(eq, bcs, domains, [t, x], [S(t, x), I(t, x)], [dS, dI, brn, ϵ])
 
 # Method of lines discretization
 # Need a small dx here for accuracy

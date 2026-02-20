@@ -1,6 +1,6 @@
 # Schrödinger Equation
 
-MethodOfLines can solve linear complex PDEs like the Scrödinger equation:
+MethodOfLines can solve linear complex PDEs like the Schrödinger equation:
 
 ```@example schro
 using MethodOfLines, OrdinaryDiffEq, Plots, DomainSets, ModelingToolkit
@@ -32,7 +32,7 @@ disc = MOLFiniteDifference([x => 100], t)
 
 prob = discretize(sys, disc)
 
-sol = solve(prob, TRBDF2(), saveat = 0.01)
+sol = solve(prob, FBDF(), saveat = 0.01)
 
 discx = sol[x]
 disct = sol[t]

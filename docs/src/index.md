@@ -2,7 +2,7 @@
 
 [MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl)
 is a Julia package for automated finite difference discretization
-of symbolicaly-defined PDEs in N dimensions.
+of symbolically-defined PDEs in N dimensions.
 
 It uses symbolic expressions for systems of partial differential equations as defined with `ModelingToolkit.jl`, and `Interval` from `DomainSets.jl` to define the space(time) over which the simulation runs.
 
@@ -74,8 +74,8 @@ Currently, the package can discretize almost any system, with some assumptions l
 
   - That the grid is Cartesian.
   - Boundary conditions in time are supplied as initial conditions, not at the end of the simulation interval. If your system requires a final condition, please use a change of variables to rectify this. This is unlikely to change due to upstream constraints.
-  - Integral equations are not supported.
-  - That dependant variables always have the same argument signature, except in BCs.
+  - Integral equations are partially supported. See the [PIDE tutorial](@ref integral) for details.
+  - That dependent variables always have the same argument signature, except in BCs.
   - That higher order interface bcs are accompanied by a simple interface of the form `u1(t, x_int) ~ u2(t, x_int)`
   - That boundary conditions do not contain references to derivatives which are not in the direction of the boundary, except in time.
   - That odd order derivatives do not multiply or divide each other, unless the WENO Scheme is used.

@@ -6,7 +6,7 @@ We can also build up more complicated systems with multiple dependent variables 
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
 
 @parameters t x
-@parameters Dn, Dp
+@parameters Dn=0.5 Dp=2.0
 @variables u(..) v(..)
 Dt = Differential(t)
 Dx = Differential(x)
@@ -23,8 +23,7 @@ domains = [t ∈ Interval(0.0, 1.0),
     x ∈ Interval(0.0, 1.0)]
 
 @named pdesys = PDESystem(
-    eqs, bcs, domains, [t, x], [u(t, x), v(t, x)],
-    [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2.0))
+    eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn, Dp])
 
 discretization = MOLFiniteDifference([x => 0.1], t)
 
@@ -40,8 +39,8 @@ solv = sol[v(t, x)]
 
 using Plots
 
-anim = @animate for i in 1:length(t)
-    p1 = plot(discrete_x, solu[i, :], label = "u, t=$(discrete_t[i])[1:9] ";
+anim = @animate for i in 1:length(discrete_t)
+    p1 = plot(discrete_x, solu[i, :], label = "u, t=$(discrete_t[i])";
         legend = false, xlabel = "x", ylabel = "u", ylim = [0, 1])
     p2 = plot(discrete_x, solv[i, :], label = "v, t=$(discrete_t[i])";
         legend = false, xlabel = "x", ylabel = "v", ylim = [0, 1])
@@ -56,10 +55,9 @@ The system does not need to be re-discretized every time we want to plot with di
 
 ```@example ivs2
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
-using SciMLStructures: replace!, Tunable
 
 @parameters t x
-@parameters Dn, Dp
+@parameters Dn=0.5 Dp=2.0
 @variables u(..) v(..)
 Dt = Differential(t)
 Dx = Differential(x)
@@ -76,8 +74,7 @@ domains = [t ∈ Interval(0.0, 1.0),
     x ∈ Interval(0.0, 1.0)]
 
 @named pdesys = PDESystem(
-    eqs, bcs, domains, [t, x], [u(t, x), v(t, x)],
-    [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2.0))
+    eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], [Dn, Dp])
 
 discretization = MOLFiniteDifference([x => 0.1], t)
 
@@ -85,8 +82,7 @@ prob = discretize(pdesys, discretization) # This gives an ODEProblem since it's 
 
 sols = []
 for (Dnval, Dpval) in zip(rand(10), rand(10))
-    newprob = remake(prob)
-    replace!(Tunable(), newprob.p, [Dnval, Dpval])
+    newprob = remake(prob, p = [Dn => Dnval, Dp => Dpval])
     push!(sols, solve(newprob, Tsit5()))
 end
 
