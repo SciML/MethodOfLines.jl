@@ -224,11 +224,11 @@ function get_ranking!(varmap, term, x, s)
         count, vars = split(children)
         if op isa Differential && isequal(op.x, x)
             for var in vars
-                if varmap[var] < count + 1
-                    varmap[var] = count + 1
+                if varmap[var] < count + op.order
+                    varmap[var] = count + op.order
                 end
             end
-            return (1 + count, vars)
+            return (op.order + count, vars)
         end
         return (count, vars)
     end

@@ -7,8 +7,8 @@ Modified copilot explanation:
 function PDEBase.transform_pde_system!(
         v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLFiniteDifference
     )
-    eqs = copy(sys.eqs)
-    bcs = copy(sys.bcs)
+    eqs = copy(get_eqs(sys))
+    bcs = copy(get_bcs(sys))
     done = false
     # Replace bad terms with a greedy strategy until the system comes up clean.
     while !done
@@ -34,7 +34,7 @@ function PDEBase.transform_pde_system!(
 
     sys = PDESystem(
         eqs, bcs, sys.domain, sys.ivs, Num.(v.ū),
-        sys.ps, name = sys.name, defaults = sys.defaults
+        sys.ps; name = sys.name, initial_conditions = sys.initial_conditions
     )
     return sys
 end
@@ -59,7 +59,7 @@ function filter_differentials(term, differential, v, depth = 0)
     if S.iscall(term)
         op = SU.operation(term)
         if op isa Differential && isequal(op.x, differential.x)
-            return filter_differentials(SU.arguments(term)[1], differential, v, depth + 1)
+            return filter_differentials(SU.arguments(term)[1], differential, v, depth + op.order)
         elseif op isa Differential && !isequal(op.x, differential.x) && depth <= 1
             return check_deriv_arg(arguments(term)[1], v)
         else
@@ -307,7 +307,7 @@ function generate_aux_bc!(newbcs, newvar, term, bc::AbstractTruncatingBoundary, 
 
     bclhs = deriv(bcdv)
     # ! catch failures to expand and throw a better error message
-    bcrhs = expand_derivatives(substitute(deriv(term), rules))
+    bcrhs = expand_derivatives(pde_substitute(deriv(term), Dict(rules)))
     eq = bclhs ~ bcrhs
 
     newbc = if isupper(bc)
