@@ -736,7 +736,7 @@ end
 
     # Parameters, variables, and derivatives
     @parameters t x y
-    @variables u(..)
+    @variables (u(..))[1:2]
     Dt = Differential(t)
     Dx = Differential(x)
     Dxx = Dx^2

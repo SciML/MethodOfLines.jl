@@ -2,7 +2,9 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, Domai
     NonlinearSolve
 using ModelingToolkit: Differential
 
-# Broken in MTK
+# Broken in MTK - second-order time derivatives cause order lowering in mtkcompile,
+# creating uˍt variables without initial conditions in the u0 map.
+# This is a PDEBase issue that needs to be fixed upstream.
 @testset "Test 00: Dtt(u) + Dtx(u(t,x)) - Dxx(u(t,x)) ~ Dxx(x)" begin
     @parameters t x
     @variables u(..)
@@ -38,15 +40,17 @@ using ModelingToolkit: Differential
     dx = (xmax - xmin) / 20
     discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
 
-    prob = discretize(pdesys, discretization)
-    sol = solve(prob, FBDF())
+    @test_broken begin
+        prob = discretize(pdesys, discretization)
+        sol = solve(prob, FBDF())
 
-    xdisc = sol[x]
-    tdisc = sol[t]
-    usol = sol[u(t, x)]
+        xdisc = sol[x]
+        tdisc = sol[t]
+        usol = sol[u(t, x)]
 
-    asol = [assf(t, x) for t in tdisc, x in xdisc]
-    @test_broken usol ≈ asol atol = 1.0e-3
+        asol = [assf(t, x) for t in tdisc, x in xdisc]
+        usol ≈ asol
+    end
 end
 
 @testset "Test 01: Dt(u) ~ Dxy(u)" begin
@@ -77,7 +81,7 @@ end
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
     sol = solve(prob, FBDF(), saveat = 0.1)
-    @test_broken SciMLBase.successful_retcode(sol)
+    @test SciMLBase.successful_retcode(sol)
 end
 
 @testset "Mixed steady state problem" begin

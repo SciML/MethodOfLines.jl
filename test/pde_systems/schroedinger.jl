@@ -30,7 +30,7 @@ using MethodOfLines, OrdinaryDiffEq, DomainSets, ModelingToolkit, Test
 
     prob = discretize(sys, disc)
 
-    sol = solve(prob, TRBDF2(), saveat = 0.01)
+    sol = solve(prob, FBDF(), saveat = 0.01)
 
     discx = sol[x]
     disct = sol[t]
@@ -89,7 +89,7 @@ end
 
     prob = discretize(sys, disc)
 
-    sol = solve(prob, TRBDF2(), saveat = 0.01)
+    sol = solve(prob, FBDF(), saveat = 0.01)
 
     @test SciMLBase.successful_retcode(sol)
 end

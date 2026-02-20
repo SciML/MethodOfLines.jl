@@ -26,7 +26,9 @@ function _get_gridloc(s, ut, is...)
     u = operation(s.ū[findfirst(u -> nameof(operation(u)) == target_name, s.ū)])
     args = remove(s.args[u], s.time)
     gridloc = map(enumerate(args)) do (i, x)
-        s.grid[x][is[i]]
+        idx = is[i]
+        idx = idx isa Integer ? idx : Int(unwrap_const(Symbolics.unwrap(idx)))
+        s.grid[x][idx]
     end
     return (u, gridloc)
 end

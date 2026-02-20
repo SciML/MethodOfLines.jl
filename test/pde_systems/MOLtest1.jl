@@ -232,7 +232,7 @@ end
 
     # Variables, parameters, and derivatives
     @parameters x
-    @variables u(..)
+    @variables (u(..))[1:N]
     Dx = Differential(x)
     Dxx = Differential(x)^2
 

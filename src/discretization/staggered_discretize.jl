@@ -14,9 +14,13 @@ function SciMLBase.discretize(
                 discretization.kwargs..., kwargs...
             )
         else
-            add_metadata!(getmetadata(simpsys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
+            mol_metadata = getmetadata(simpsys, ModelingToolkit.ProblemTypeCtx, nothing)
+            add_metadata!(mol_metadata, sys)
+            # Get u0 from metadata (stored there for MTK v11 compatibility)
+            u0 = hasproperty(mol_metadata, :u0) ? mol_metadata.u0 : []
             prob = ODEProblem(
-                simpsys, Pair[], tspan; discretization.kwargs...,
+                simpsys, u0, tspan; build_initializeprob = false,
+                discretization.kwargs...,
                 kwargs...
             )
             return symbolic_trace(prob, simpsys)
@@ -30,9 +34,9 @@ function symbolic_trace(prob, sys)
     get_var_from_state(state) = operation(arguments(state)[1])
     unknowns = get_unknowns(sys)
     u1_var = get_var_from_state(unknowns[1])
-    u2_var = get_var_from_state(unknowns[findfirst(x -> get_var_from_state(x) != u1_var, unknowns)])
-    u1inds = findall(x -> get_var_from_state(x) === u1_var, unknowns)
-    u2inds = findall(x -> get_var_from_state(x) === u2_var, unknowns)
+    u2_var = get_var_from_state(unknowns[findfirst(x -> !isequal(get_var_from_state(x), u1_var), unknowns)])
+    u1inds = findall(x -> isequal(get_var_from_state(x), u1_var), unknowns)
+    u2inds = findall(x -> isequal(get_var_from_state(x), u2_var), unknowns)
     u1 = unknowns[u1inds]
     u2 = unknowns[u2inds]
     tracevec_1 = [i in u2inds ? unknowns[i] : Num(0.0) for i in 1:length(unknowns)] # maybe just 0.0
