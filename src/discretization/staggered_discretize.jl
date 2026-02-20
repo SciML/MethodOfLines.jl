@@ -8,8 +8,9 @@ function SciMLBase.discretize(
         simpsys = mtkcompile(sys)
         if tspan === nothing
             add_metadata!(getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
+            unkns = get_unknowns(simpsys)
             return prob = NonlinearProblem(
-                simpsys, ones(length(get_unknowns(simpsys)));
+                simpsys, unkns .=> ones(length(unkns));
                 discretization.kwargs..., kwargs...
             )
         else

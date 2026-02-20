@@ -232,7 +232,7 @@ end
 
     # Variables, parameters, and derivatives
     @parameters x
-    @variables u[1:N](..)
+    @variables u(..)
     Dx = Differential(x)
     Dxx = Differential(x)^2
 
@@ -244,29 +244,27 @@ end
     dx = 0.1
     order = 2
 
-    #u = collect(u)
-
     # Equations
     eqs = Vector{ModelingToolkit.Equation}(undef, N)
     for i in 1:N
-        eqs[i] = Dxx(u[i](x)) ~ u[i](x)
+        eqs[i] = Dxx(u(x)[i]) ~ u(x)[i]
     end
 
     # Initial and boundary conditions
     bcs = Vector{ModelingToolkit.Equation}(undef, 2 * N)
     for i in 1:N
-        bcs[i] = Dx(u[i](x_min)) ~ 0.0
+        bcs[i] = Dx(u(x_min)[i]) ~ 0.0
     end
 
     for i in 1:N
-        bcs[i + N] = u[i](x_max) ~ rand(StableRNG(0))
+        bcs[i + N] = u(x_max)[i] ~ rand(StableRNG(0))
     end
 
     # Space and time domains
     domains = [x ∈ Interval(x_min, x_max)]
 
     # PDE system
-    @named pdesys = PDESystem(eqs, bcs, domains, [x], collect([u[i](x) for i in 1:N]))
+    @named pdesys = PDESystem(eqs, bcs, domains, [x], collect([u(x)[i] for i in 1:N]))
 
     # Method of lines discretization
     discretization = MOLFiniteDifference([x => dx], nothing, approx_order = order)

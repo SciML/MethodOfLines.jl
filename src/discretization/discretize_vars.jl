@@ -258,11 +258,7 @@ map dependent variables
     t = vars.time
     depvarsdisc = map(depvars) do u
         op = SymbolicUtils.operation(u)
-        if op isa SymbolicUtils.BasicSymbolic{SymbolicUtils.FnType{Tuple, Real}}
-            sym = Symbol(string(op))
-        else
-            sym = nameof(op)
-        end
+        sym = nameof(op)
         if t === nothing
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
             u => unwrap.(collect(first(@variables $sym[uaxes...])))

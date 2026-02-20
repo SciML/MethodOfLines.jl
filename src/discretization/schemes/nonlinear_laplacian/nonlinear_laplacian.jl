@@ -95,7 +95,7 @@ function cartesian_nonlinear_laplacian(
             mapreduce(d -> d(i), vcat, drules), map_vars_to_interpolated(stencil, weights),
             map_ivs_to_interpolated(stencil, weights)
         )
-        substitute(expr * Differential(x)(u), rules)
+        substitute(expr * Differential(x)(u), Dict(rules))
     end
 
     # multiply the inner finite difference by the interpolated expression, and finally take the outer finite difference
@@ -143,7 +143,7 @@ end
 
 function replacevals(ex, s, u, depvars, II, indexmap)
     rules = valmaps(s, u, depvars, II, indexmap)
-    return substitute(ex, rules)
+    return substitute(ex, Dict(rules))
 end
 
 @inline function generate_nonlinlap_rules(

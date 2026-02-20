@@ -66,7 +66,7 @@ function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivwei
                 # Only make a map if it is actually possible to substitute in the boundary value given the indexmap
             elseif all(
                     x -> haskey(indexmap, x),
-                    filter(x -> !(safe_unwrap(x) isa Number), b.indvars)
+                    filter(x -> !(unwrap_const(safe_unwrap(x)) isa Number), b.indvars)
                 )
                 II -> boundary_value_maps(II, s, b, derivweights, indexmap)
             else
@@ -95,7 +95,7 @@ function boundary_value_maps(
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap, shift = true)
 
-    val = filter(z -> z isa Number, arguments(u_))[1]
+    val = unwrap_const(first(filter(z -> unwrap_const(z) isa Number, arguments(u_))))
     r = x_ => val
     othervars = map(boundary.depvars) do v
         substitute(v, r)
@@ -122,7 +122,7 @@ function boundary_value_maps(
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = filter(
-        v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars
+        v -> !any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(v)), boundary.depvars
     )
 
     integralbcmaps = generate_whole_domain_integration_rules(
@@ -177,7 +177,7 @@ function boundary_value_maps(
     IIold = II
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap)
-    val = filter(z -> z isa Number, arguments(u_))[1]
+    val = unwrap_const(first(filter(z -> unwrap_const(z) isa Number, arguments(u_))))
     r = x_ => val
     othervars = map(boundary.depvars) do v
         substitute(v, r)
@@ -199,7 +199,7 @@ function boundary_value_maps(
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = unwrap.(
         filter(
-            v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars
+            v -> !any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(v)), boundary.depvars
         )
     )
 
@@ -252,7 +252,7 @@ function boundary_value_maps(
     IIold = II
     # We need to construct a new index in case the value at the boundary appears in an equation one dimension lower
     II = newindex(u_, II, s, indexmap)
-    val = filter(z -> z isa Number, arguments(u_))[1]
+    val = unwrap_const(first(filter(z -> unwrap_const(z) isa Number, arguments(u_))))
     r = x_ => val
     othervars = map(boundary.depvars) do v
         substitute(v, r)
@@ -274,7 +274,7 @@ function boundary_value_maps(
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value
     integralvs = unwrap.(
         filter(
-            v -> !any(x -> safe_unwrap(x) isa Number, arguments(v)), boundary.depvars
+            v -> !any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(v)), boundary.depvars
         )
     )
 
@@ -320,9 +320,9 @@ function generate_bc_eqs(
             boundaryvalrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs)
             vmaps = varmaps(s, boundary.depvars, II, indexmap)
             varrules = axiesvals(s, depvar(boundary.u, s), boundary.x, II)
-            rules = vcat(boundaryvalrules, vmaps, varrules)
+            rules = Dict(vcat(boundaryvalrules, vmaps, varrules))
 
-            substitute(bc.lhs, rules) ~ substitute(bc.rhs, rules)
+            pde_substitute(bc.lhs, rules) ~ pde_substitute(bc.rhs, rules)
         end
     )
 end

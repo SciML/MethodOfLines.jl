@@ -1,5 +1,5 @@
 @setup_workload begin
-    @compile_workload begin
+    @compile_workload begin if false # Temporarily disabled during compat update
         begin
             @parameters x y t
             @variables u(..) v(..)
@@ -97,5 +97,5 @@
 
             prob = discretize(pdesys, disc)
         end
-    end
+    end end # if false
 end

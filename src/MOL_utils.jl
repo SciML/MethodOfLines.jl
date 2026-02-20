@@ -22,8 +22,8 @@ function generate_coordinates(
 end
 
 function _get_gridloc(s, ut, is...)
-    u = Sym{SymbolicUtils.FnType{Tuple, Real}}(nameof(operation(ut)))
-    u = operation(s.ū[findfirst(isequal(u), operation.(s.ū))])
+    target_name = nameof(operation(ut))
+    u = operation(s.ū[findfirst(u -> nameof(operation(u)) == target_name, s.ū)])
     args = remove(s.args[u], s.time)
     gridloc = map(enumerate(args)) do (i, x)
         s.grid[x][is[i]]
@@ -42,13 +42,13 @@ end
 
 function generate_function_from_gridlocs(analyticmap, gridlocs, s)
     is_t_first_map = Dict(
-        map(s.ū) do u
+        map(s.ū) do u
             operation(u) => (findfirst(x -> isequal(s.time, x), arguments(u)) == 1)
         end
     )
 
     opsmap = Dict(
-        map(s.ū) do u
+        map(s.ū) do u
             operation(u) => u
         end
     )
@@ -77,10 +77,11 @@ function newindex(u_, II, s, indexmap; shift = false)
     is = map(enumerate(args_)) do (j, x)
         if haskey(indexmap, x)
             II[indexmap[x]]
-        elseif safe_unwrap(x) isa Number
-            if isequal(x, s.axies[args[j]][1])
+        elseif unwrap_const(safe_unwrap(x)) isa Number
+            xval = unwrap_const(safe_unwrap(x))
+            if isequal(xval, s.axies[args[j]][1])
                 1
-            elseif isequal(x, s.axies[args[j]][end])
+            elseif isequal(xval, s.axies[args[j]][end])
                 length(s, args[j]) - (shift ? 1 : 0)
             else
                 error("Boundary value $u_ is not defined at the boundary of the domain, or problem with index adaptation, please post an issue.")

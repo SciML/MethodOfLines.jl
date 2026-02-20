@@ -84,7 +84,7 @@ function upwind_difference(
     )
     # TODO: Allow derivatives in expr
     expr = substitute(
-        expr, valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap)
+        expr, Dict(valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
     )
     return IfElse.ifelse(
         expr > 0,

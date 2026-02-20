@@ -17,8 +17,10 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
     use_ODAE::Bool
     metadata::M
     complexmap::C
+    u0::Vector
     function MOLMetadata(
-            discretespace, disc, pdesys, boundarymap, complexmap, metadata = nothing
+            discretespace, disc, pdesys, boundarymap, complexmap,
+            metadata = nothing, u0 = []
         )
         metaref = Ref{Any}()
         metaref[] = metadata
@@ -46,16 +48,16 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
         }(
             discretespace,
             disc, pdesys, use_ODAE,
-            metaref, complexmap
+            metaref, complexmap, u0
         )
     end
 end
 
 function PDEBase.generate_metadata(
         s::DiscreteSpace, disc::MOLFiniteDifference, pdesys::PDESystem,
-        boundarymap, complexmap, metadata = nothing
+        boundarymap, complexmap, u0 = []
     )
-    return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, metadata)
+    return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, nothing, u0)
 end
 
 # function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference{G,D}, pdesys::PDESystem, boundarymap, metadata=nothing) where {G<:StaggeredGrid}

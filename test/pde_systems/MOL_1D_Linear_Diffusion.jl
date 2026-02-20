@@ -89,7 +89,7 @@ end
 
     # PDE system
     @named pdesys = PDESystem(
-        eq, bcs, domains, [t, x], [u(t, x)], [D]; defaults = Dict(D => 10.0)
+        eq, bcs, domains, [t, x], [u(t, x)], [D]; initial_conditions = Dict(D => 10.0)
     )
 
     # Method of lines discretization
@@ -655,7 +655,7 @@ end
 
     @named pdesys = PDESystem(
         eqs, bcs, domains, [t, x], [u(t, x), v(t, x)],
-        [Dn, Dp]; defaults = Dict(Dn => 0.5, Dp => 2)
+        [Dn, Dp]; initial_conditions = Dict(Dn => 0.5, Dp => 2)
     )
     discretization = MOLFiniteDifference([x => 0.1], t)
     prob = discretize(pdesys, discretization)
@@ -736,7 +736,7 @@ end
 
     # Parameters, variables, and derivatives
     @parameters t x y
-    @variables u[1:2](..)
+    @variables u(..)
     Dt = Differential(t)
     Dx = Differential(x)
     Dxx = Dx^2
@@ -745,16 +745,16 @@ end
 
     # 1D PDE and boundary conditions
     eqs = [
-        Dt(u[1](t, x)) ~ Dxx(u[1](t, x)),
-        Dt(u[2](t, y)) ~ Dyy(u[2](t, y)),
+        Dt(u(t, x)[1]) ~ Dxx(u(t, x)[1]),
+        Dt(u(t, y)[2]) ~ Dyy(u(t, y)[2]),
     ]
     bcs = [
-        u[1](0, x) ~ cos(x),
-        u[2](0, y) ~ sin(y),
-        u[1](t, 0) ~ exp(-t),
-        Dx(u[1](t, 1)) ~ -exp(-t) * sin(1),
-        Dy(u[2](t, 0)) ~ exp(-t),
-        u[2](t, 2) ~ exp(-t) * sin(2),
+        u(0, x)[1] ~ cos(x),
+        u(0, y)[2] ~ sin(y),
+        u(t, 0)[1] ~ exp(-t),
+        Dx(u(t, 1)[1]) ~ -exp(-t) * sin(1),
+        Dy(u(t, 0)[2]) ~ exp(-t),
+        u(t, 2)[2] ~ exp(-t) * sin(2),
     ]
 
     # Space and time domains
@@ -765,7 +765,9 @@ end
     ]
 
     # PDE system
-    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u[1](t, x), u[2](t, y)])
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x, y], [u(t, x)[1], u(t, y)[2]]
+    )
 
     # Method of lines discretization
     l = 100
@@ -782,8 +784,8 @@ end
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat = 0.1)
 
-    solu1 = sol[u[1](t, x)]
-    solu2 = sol[u[2](t, y)]
+    solu1 = sol[u(t, x)[1]]
+    solu2 = sol[u(t, y)[2]]
 
     x_sol = sol[x]
     y_sol = sol[y]
