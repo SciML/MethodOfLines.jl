@@ -1,6 +1,6 @@
 name = "MethodOfLines"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
-version = "0.11.10"
+version = "0.11.11"
 authors = ["Alex Jones, <alex.jones@juliahub.com>"]
 
 [deps]
