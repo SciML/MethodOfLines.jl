@@ -4,7 +4,7 @@ For more information on how to use a non-uniform rectilinear grid, see the docs 
 
 MethodOfLines exports the function `chebyspace`, which can be used to conveniently construct a [Chebyshev grid](https://en.wikipedia.org/wiki/Chebyshev_nodes), which may prove more accurate in certain cases, especially with higher approximation order (benchmarking to come, watch this space). It takes the arguments `chebyspace(N, dom)` where `N` is the number of points, and `dom` is the domain set for the variable you want to discretize in this way.
 
-```@example cheby
+```julia
 using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
 
 # Parameters, variables, and derivatives
