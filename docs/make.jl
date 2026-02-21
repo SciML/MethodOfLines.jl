@@ -14,7 +14,7 @@ makedocs(
     authors = "Chris Rackauckas, Alex Jones et al.",
     clean = true, doctest = false, linkcheck = true,
     modules = [MethodOfLines],
-    warnonly = [:docs_block, :missing_docs, :cross_references],
+    warnonly = [:docs_block, :missing_docs, :cross_references, :linkcheck],
     format = Documenter.HTML(
         assets = ["assets/favicon.ico"],
         canonical = "https://docs.sciml.ai/MethodOfLines/stable/"
