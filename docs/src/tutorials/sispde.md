@@ -26,7 +26,7 @@ where ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 
 Note here elliptic problem has condition ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 
-```julia
+```@example sispde
 using DifferentialEquations, ModelingToolkit, MethodOfLines, DomainSets, Plots
 
 # Parameters, variables, and derivatives
@@ -84,7 +84,7 @@ prob = discretize(pdesys, discretization);
 
 ### Solving time-dependent SIS epidemic model
 
-```julia
+```@example sispde
 # Solving SIS reaction diffusion model
 sol = solve(prob, Tsit5(), saveat = 0.2);
 
@@ -104,7 +104,7 @@ Change the elliptic problem to steady state problem of reaction diffusion equati
 
 See more solvers in [Steady State Solvers · DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/steady_state_solve/)
 
-```julia
+```@example sispde
 steadystateprob = SteadyStateProblem(prob)
 steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
 ```
@@ -114,7 +114,7 @@ steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
 Set the endemic size
 $$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$$
 
-```julia
+```@example sispde
 # Get the discretized I variables from the system
 I_vars = filter(s -> contains(string(s), "I("), unknowns(prob.f.sys))
 

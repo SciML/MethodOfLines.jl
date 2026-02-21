@@ -25,7 +25,7 @@ With BCs and ICs:
 
 We can discretize such a system like this:
 
-```julia
+```@example pide
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Plots
 
 @parameters t, x
@@ -62,7 +62,7 @@ plot(sol[x], transpose(solu))
 To have an integral over the whole domain, be sure to wrap the integral in an auxiliary variable.
 Due to a limitation, the whole domain integral needs to have the same arguments as the integrand, but is constant in x. To use it in an equation one dimension lower, use a boundary value like integral(t, 0.0)
 
-```julia
+```@example pide2
 using MethodOfLines, ModelingToolkit, DomainSets, OrdinaryDiffEq, Plots
 
 @parameters t, x

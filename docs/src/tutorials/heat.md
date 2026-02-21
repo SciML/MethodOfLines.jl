@@ -4,7 +4,7 @@ In this tutorial, we will use the symbolic interface to solve the heat equation.
 
 ### Dirichlet boundary conditions
 
-```julia
+```@example heatd
 using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
 # Method of Manufactured Solutions: exact solution
 u_exact = (x, t) -> exp.(-t) * cos.(x)
@@ -58,7 +58,7 @@ plt
 
 ### Neumann boundary conditions
 
-```julia
+```@example heatn
 using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
 # Method of Manufactured Solutions: exact solution
 u_exact = (x, t) -> exp.(-t) * cos.(x)
@@ -115,7 +115,7 @@ plt
 
 ### Robin boundary conditions
 
-```julia
+```@example heatr
 using ModelingToolkit, MethodOfLines, DomainSets, OrdinaryDiffEq
 # Method of Manufactured Solutions
 u_exact = (x, t) -> exp.(-t) * sin.(x)
