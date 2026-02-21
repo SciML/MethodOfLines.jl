@@ -25,7 +25,7 @@ With BCs and ICs:
 
 We can discretize such a system like this:
 
-```@example pide
+```julia
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Plots
 
 @parameters t, x
