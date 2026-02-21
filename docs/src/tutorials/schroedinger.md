@@ -2,7 +2,7 @@
 
 MethodOfLines can solve linear complex PDEs like the Schrödinger equation:
 
-```julia
+```@example schro
 using MethodOfLines, OrdinaryDiffEq, Plots, DomainSets, ModelingToolkit
 
 @parameters t, x
