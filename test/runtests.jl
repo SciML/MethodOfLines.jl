@@ -148,4 +148,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/wave_eq_staggered.jl")
         end
     end
+    if GROUP == "All" || GROUP == "Units"
+        @time @safetestset "Units" begin
+            include("pde_systems/units.jl")
+        end
+    end
 end
