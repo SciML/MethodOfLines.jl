@@ -148,4 +148,10 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/wave_eq_staggered.jl")
         end
     end
+
+    if GROUP == "All" || GROUP == "ArrayDisc"
+        @time @safetestset "MOLFiniteDifference Interface: ArrayDiscretization" begin
+            include("pde_systems/array_disc_tests.jl")
+        end
+    end
 end

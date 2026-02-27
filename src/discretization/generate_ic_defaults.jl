@@ -1,7 +1,7 @@
 function PDEBase.generate_ic_defaults(
         tconds, s::DiscreteSpace,
-        ::MOLFiniteDifference{G, DS}
-    ) where {G, DS <: ScalarizedDiscretization}
+        ::MOLFiniteDifference
+    )
     t = s.time
     if s.time !== nothing
         u0 = mapreduce(vcat, tconds) do ic
