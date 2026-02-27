@@ -1,20 +1,21 @@
 """
 Array-level finite difference rule generation for `ArrayDiscretization`.
 
-For simple centred-difference PDEs on 1D uniform grids, stencil weights are
-identical at every point.  This module pre-computes them once and builds a
-single template expression using a symbolic ArrayOp index from
-`SymbolicUtils.idxs_for_arrayop`.  The template is then instantiated at each
-interior point via `pde_substitute`, avoiding per-point scheme-detection and
-rule construction.
+For simple centred-difference PDEs on uniform grids with only even-order
+derivatives, stencil weights are identical at every interior point in each
+dimension.  This module pre-computes them once and builds a single template
+expression using N symbolic ArrayOp index variables `_i1, _i2, ...` (one per
+spatial dimension).  The template is then instantiated at each interior grid
+point via `pde_substitute`, avoiding per-point scheme-detection and rule
+construction.
 
-All other cases — non-uniform grids, odd-order derivatives (upwind), nonlinear
-Laplacians, spherical/mixed derivatives, multi-dimensional problems, WENO, etc.
-— fall back to per-point computation via `discretize_equation_at_point` from
-the scalar path, which supports ALL scheme types.
+All other cases -- non-uniform grids, odd-order derivatives (upwind), nonlinear
+Laplacians, spherical/mixed derivatives, WENO, etc. -- fall back to per-point
+computation via `discretize_equation_at_point` from the scalar path, which
+supports ALL scheme types.
 """
 
-# ─── stencil pre-computation ─────────────────────────────────────────────────
+# --- stencil pre-computation ------------------------------------------------
 
 """
     StencilInfo
@@ -66,17 +67,17 @@ function stencil_weights_and_taps(si::StencilInfo, II, j, ndim, grid_len, haslow
     idx = II[j]
 
     if (idx <= D.boundary_point_count) & !haslower
-        # Near lower boundary — use one-sided stencil
+        # Near lower boundary -- use one-sided stencil
         weights = D.low_boundary_coefs[idx]
         offset = 1 - idx
         Itap = [II + (k + offset) * I1 for k in 0:(D.boundary_stencil_length - 1)]
     elseif (idx > (grid_len - D.boundary_point_count)) & !hasupper
-        # Near upper boundary — use one-sided stencil
+        # Near upper boundary -- use one-sided stencil
         weights = D.high_boundary_coefs[grid_len - idx + 1]
         offset = grid_len - idx
         Itap = [II + (k + offset) * I1 for k in (-D.boundary_stencil_length + 1):0]
     else
-        # True interior — use centred stencil
+        # True interior -- use centred stencil
         if si.is_uniform
             weights = D.stencil_coefs
         else
@@ -87,7 +88,7 @@ function stencil_weights_and_taps(si::StencilInfo, II, j, ndim, grid_len, haslow
     return weights, Itap
 end
 
-# ─── interior equation generation ────────────────────────────────────────────
+# --- interior equation generation -------------------------------------------
 
 """
     generate_array_interior_eqs(s, depvars, pde, derivweights, bcmap, eqvar,
@@ -95,16 +96,18 @@ end
 
 Generate discretised interior equations.
 
-For the centred-stencil region on 1D uniform grids with only even-order
+For the centred-stencil region on N-D uniform grids with only even-order
 derivatives, substitution rules (FD stencils and variable/grid maps) are
-built once using a symbolic ArrayOp index variable `_i`, producing a template
-equation.  This template is then instantiated at each interior grid point via
-`pde_substitute`.
+built once using symbolic ArrayOp index variables `_i1, _i2, ...` (one per
+spatial dimension), producing a template equation.  This template is then
+instantiated at each centred-stencil interior grid point via `pde_substitute`.
+
+Boundary-proximity interior points (the "frame" around the centred region)
+fall back to per-point computation via `discretize_equation_at_point`.
 
 All other cases (non-uniform grids, odd-order derivatives such as upwind
-schemes, multi-dimensional problems, nonlinear Laplacians, etc.) fall back to
-per-point computation via `discretize_equation_at_point` from the scalar path,
-which supports ALL scheme types.
+schemes, nonlinear Laplacians, etc.) fall back entirely to per-point
+computation, which supports ALL scheme types.
 """
 function generate_array_interior_eqs(
         s, depvars, pde, derivweights, bcmap, eqvar,
@@ -112,8 +115,8 @@ function generate_array_interior_eqs(
     )
     stencil_cache = precompute_stencils(s, depvars, derivweights)
 
-    # ── determine whether the ArrayOp template path can handle this PDE ──────
-    # Requirements: (1) uniform grids, (2) even-order derivatives only, (3) 1D.
+    # -- determine whether the ArrayOp template path can handle this PDE ------
+    # Requirements: (1) uniform grids, (2) even-order derivatives only.
     # When any requirement is unmet we fall back to per-point scalar
     # discretisation which supports ALL scheme types (upwind, nonlinear
     # Laplacian, spherical, mixed derivatives, WENO, etc.).
@@ -123,7 +126,9 @@ function generate_array_interior_eqs(
         all(iseven(d) for d in derivweights.orders[x])
         for u in depvars for x in ivs(u, s)
     )
-    can_template = all_uniform && all_even_orders && length(interior_ranges) == 1
+    can_template = all_uniform && all_even_orders
+
+    ndim = length(interior_ranges)
 
     if !can_template
         # Full per-point fallback: delegate every interior point to the
@@ -138,50 +143,57 @@ function generate_array_interior_eqs(
         end))
     end
 
-    # ── 1D template path (uniform grid, all even-order derivatives) ──────────
-    lo, hi = interior_ranges[1]
+    # -- N-D template path (uniform grid, all even-order derivatives) ---------
+    lo_vec = [r[1] for r in interior_ranges]
+    hi_vec = [r[2] for r in interior_ranges]
+    eqvar_ivs = ivs(eqvar, s)
+    gl_vec = [length(s, x) for x in eqvar_ivs]
 
-    # Find the grid length and the maximum boundary_point_count on each side
-    # across all (variable, spatial dim, derivative order) triples.
-    max_lower_bpc = 0
-    max_upper_bpc = 0
-    gl = 0
+    # Per-dimension maximum boundary_point_count on each side across all
+    # (variable, spatial dim, derivative order) triples.
+    max_lower_bpc = zeros(Int, ndim)
+    max_upper_bpc = zeros(Int, ndim)
     for u in depvars
-        for (dim_j, x) in enumerate(ivs(u, s))
-            gl = length(s, x)
+        for (_, x) in enumerate(ivs(u, s))
+            eq_dim = indexmap[x]  # dimension index in eqvar's ordering
             bs = filter_interfaces(bcmap[operation(u)][x])
             haslower, hasupper = haslowerupper(bs, x)
             for d in derivweights.orders[x]
                 iseven(d) || continue
                 bpc = stencil_cache[(u, x, d)].D_op.boundary_point_count
                 if !haslower
-                    max_lower_bpc = max(max_lower_bpc, bpc)
+                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], bpc)
                 end
                 if !hasupper
-                    max_upper_bpc = max(max_upper_bpc, bpc)
+                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], bpc)
                 end
             end
         end
     end
 
-    lo_centered = max(lo, max_lower_bpc + 1)
-    hi_centered = min(hi, gl - max_upper_bpc)
-    n_centered = max(0, hi_centered - lo_centered + 1)
+    lo_centered = [max(lo_vec[d], max_lower_bpc[d] + 1) for d in 1:ndim]
+    hi_centered = [min(hi_vec[d], gl_vec[d] - max_upper_bpc[d]) for d in 1:ndim]
+    n_centered  = [max(0, hi_centered[d] - lo_centered[d] + 1) for d in 1:ndim]
 
-    # ── per-point equations for boundary-proximity interior points ───────────
-    eqs_lower = _per_point_eqs(
-        collect(lo:(lo_centered - 1)),
-        s, depvars, pde, derivweights, bcmap, eqvar,
-        indexmap, boundaryvalfuncs
-    )
-    eqs_upper = _per_point_eqs(
-        collect((hi_centered + 1):hi),
-        s, depvars, pde, derivweights, bcmap, eqvar,
-        indexmap, boundaryvalfuncs
-    )
+    # -- per-point equations for boundary-proximity interior points -----------
+    # These are the "frame" around the centred region: all interior points
+    # that are NOT in the centred rectangle.
+    full_interior = CartesianIndices(Tuple(lo_vec[d]:hi_vec[d] for d in 1:ndim))
+    centered_nonempty = all(lo_centered[d] <= hi_centered[d] for d in 1:ndim)
 
-    # ── ArrayOp-based template for centred-stencil region ────────────────────
-    eqs_centered = if n_centered > 0
+    eqs_boundary = Equation[]
+    for II in full_interior
+        in_centered = centered_nonempty &&
+            all(lo_centered[d] <= II[d] <= hi_centered[d] for d in 1:ndim)
+        in_centered && continue
+        push!(eqs_boundary, discretize_equation_at_point(
+            II, s, depvars, pde, derivweights, bcmap,
+            eqvar, indexmap, boundaryvalfuncs
+        ))
+    end
+
+    # -- ArrayOp-based template for centred-stencil region --------------------
+    eqs_centered = if centered_nonempty && all(n_centered .> 0)
         candidate = _build_centered_eqs(
             n_centered, lo_centered, s, depvars, pde, derivweights,
             stencil_cache, eqvar, indexmap
@@ -192,7 +204,7 @@ function generate_array_interior_eqs(
         # correctly handled by the scalar path but silently produce wrong
         # equations via the template.  Validate by comparing the first
         # template equation against the scalar path for the same point.
-        II_check = CartesianIndex(lo_centered)
+        II_check = CartesianIndex(Tuple(lo_centered))
         eq_scalar = discretize_equation_at_point(
             II_check, s, depvars, pde, derivweights, bcmap,
             eqvar, indexmap, boundaryvalfuncs
@@ -201,51 +213,26 @@ function generate_array_interior_eqs(
            isequal(candidate[1].rhs, eq_scalar.rhs)
             candidate
         else
-            # Template doesn't match scalar path — fall back to per-point
+            # Template doesn't match scalar path -- fall back to per-point
             # for the centred region as well.
-            _per_point_eqs(
-                collect(lo_centered:hi_centered),
-                s, depvars, pde, derivweights, bcmap, eqvar,
-                indexmap, boundaryvalfuncs
+            centered_rect = CartesianIndices(
+                Tuple(lo_centered[d]:hi_centered[d] for d in 1:ndim)
             )
+            collect(vec(map(centered_rect) do II
+                discretize_equation_at_point(
+                    II, s, depvars, pde, derivweights, bcmap,
+                    eqvar, indexmap, boundaryvalfuncs
+                )
+            end))
         end
     else
         Equation[]
     end
 
-    return collect(vcat(eqs_lower, eqs_centered, eqs_upper))
+    return collect(vcat(eqs_boundary, eqs_centered))
 end
 
-# ─── per-point fallback ──────────────────────────────────────────────────────
-
-"""
-    _per_point_eqs(indices, s, depvars, pde, derivweights, bcmap, eqvar,
-                    indexmap, boundaryvalfuncs)
-
-Build equations for specific 1D grid indices by delegating to
-`discretize_equation_at_point` from the scalar path.  This supports ALL
-scheme types (centered, upwind, nonlinear Laplacian, spherical, mixed
-derivatives, WENO, callbacks, integrals).
-
-Used for boundary-proximity interior points where the centred-stencil
-template doesn't fit, and also as the full fallback when the template
-path cannot handle the PDE (e.g. odd-order derivatives, multi-D).
-"""
-function _per_point_eqs(
-        indices, s, depvars, pde, derivweights, bcmap, eqvar,
-        indexmap, boundaryvalfuncs
-    )
-    isempty(indices) && return Equation[]
-    map(indices) do i
-        II = CartesianIndex(i)
-        discretize_equation_at_point(
-            II, s, depvars, pde, derivweights, bcmap,
-            eqvar, indexmap, boundaryvalfuncs
-        )
-    end
-end
-
-# ─── ArrayOp template for centred-stencil region ────────────────────────────
+# --- ArrayOp template for centred-stencil region ----------------------------
 
 """
     _build_centered_eqs(n_centered, lo_centered, s, depvars, pde, derivweights,
@@ -253,56 +240,73 @@ end
 
 Build centred-stencil equations using a symbolic index template.
 
-Constructs FD and variable/grid substitution rules parameterised by a symbolic
-index `_i` from `SymbolicUtils.idxs_for_arrayop(SymReal)`.  The PDE is
-symbolically transformed once to produce a template, which is then
-instantiated at each centred-stencil point via `pde_substitute`.
+Constructs FD and variable/grid substitution rules parameterised by N symbolic
+indices `_i1, _i2, ...` from `SymbolicUtils.idxs_for_arrayop(SymReal)` (one
+per spatial dimension).  The PDE is symbolically transformed once to produce a
+template, which is then instantiated at each centred-stencil point via
+`pde_substitute`.
 """
 function _build_centered_eqs(
         n_centered, lo_centered, s, depvars, pde, derivweights,
         stencil_cache, eqvar, indexmap
     )
-    _i = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)[1]
-    base = lo_centered - 1  # _i=1 maps to grid index lo_centered
+    ndim = length(n_centered)
+    _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
+    _idxs = [_idxs_arr[d] for d in 1:ndim]
+    bases = [lo_centered[d] - 1 for d in 1:ndim]
 
-    # ── FD rules using symbolic _i ───────────────────────────────────────────
+    # -- FD rules using symbolic indices --------------------------------------
     fd_rules = Pair[]
     for u in depvars
         u_raw = Symbolics.unwrap(s.discvars[u])
         u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
-        for (dim_j, x) in enumerate(ivs(u, s))
+        u_spatial = ivs(u, s)
+        for (_, x) in enumerate(u_spatial)
             for d in derivweights.orders[x]
                 iseven(d) || continue
                 si = stencil_cache[(u, x, d)]
                 weights = si.D_op.stencil_coefs  # uniform, centred
-                taps = [Symbolics.wrap(u_c[_i + base + off]) for off in si.offsets]
+                taps = map(si.offsets) do off
+                    idx_exprs = map(u_spatial) do xv
+                        eq_d = indexmap[xv]
+                        base_expr = _idxs[eq_d] + bases[eq_d]
+                        isequal(xv, x) ? base_expr + off : base_expr
+                    end
+                    Symbolics.wrap(u_c[idx_exprs...])
+                end
                 expr = sym_dot(weights, taps)
                 push!(fd_rules, (Differential(x)^d)(u) => expr)
             end
         end
     end
 
-    # ── Variable/grid rules using symbolic _i ────────────────────────────────
+    # -- Variable/grid rules using symbolic indices ---------------------------
     var_rules = Pair[]
     for u in depvars
         u_raw = Symbolics.unwrap(s.discvars[u])
         u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
-        push!(var_rules, u => Symbolics.wrap(u_c[_i + base]))
+        u_spatial = ivs(u, s)
+        idx_exprs = [_idxs[indexmap[xv]] + bases[indexmap[xv]] for xv in u_spatial]
+        push!(var_rules, u => Symbolics.wrap(u_c[idx_exprs...]))
     end
-    for x in ivs(eqvar, s)
+    eqvar_ivs = ivs(eqvar, s)
+    for x in eqvar_ivs
         grid_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(collect(s.grid[x]))
-        push!(var_rules, x => Symbolics.wrap(grid_c[_i + base]))
+        dim = indexmap[x]
+        push!(var_rules, x => Symbolics.wrap(grid_c[_idxs[dim] + bases[dim]]))
     end
 
-    # ── Build template (once) ────────────────────────────────────────────────
+    # -- Build template (once) ------------------------------------------------
     rdict = Dict(vcat(fd_rules, var_rules))
     template_lhs = expand_derivatives(pde_substitute(pde.lhs, rdict))
     template_rhs = pde_substitute(pde.rhs, rdict)
 
-    # ── Instantiate at each centred-stencil point ────────────────────────────
-    return map(1:n_centered) do k
-        lhs_k = pde_substitute(template_lhs, Dict(_i => k))
-        rhs_k = pde_substitute(template_rhs, Dict(_i => k))
+    # -- Instantiate at each centred-stencil point ----------------------------
+    cart_ranges = Tuple(1:n_centered[d] for d in 1:ndim)
+    return collect(vec(map(CartesianIndices(cart_ranges)) do KK
+        sub_dict = Dict(_idxs[d] => KK[d] for d in 1:ndim)
+        lhs_k = pde_substitute(template_lhs, sub_dict)
+        rhs_k = pde_substitute(template_rhs, sub_dict)
         lhs_k ~ rhs_k
-    end
+    end))
 end

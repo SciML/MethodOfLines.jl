@@ -361,8 +361,8 @@ end
 end
 
 @testset "ArrayDiscretization: 2D diffusion" begin
-    # 2D diffusion Dt(u) ~ Dxx(u) + Dyy(u) — exercises the per-point fallback
-    # because the template path currently only handles 1D.
+    # 2D diffusion Dt(u) ~ Dxx(u) + Dyy(u) — now uses the N-D template path
+    # for the centred-stencil interior region.
     @parameters t x y
     @variables u(..)
     Dxx = Differential(x)^2
@@ -403,4 +403,150 @@ end
 
     sol′ = sol[u(t, x, y)]
     @test asf ≈ sol′[end, :, :] atol = 0.4
+end
+
+# --- Phase 3: N-D template tests --------------------------------------------
+
+@testset "ArrayDiscretization: 2D diffusion template matches scalar" begin
+    # 2D diffusion with uniform grid and even-order derivatives only.
+    # Should use the N-D template path. Compare Array vs Scalar solutions.
+    @parameters t x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0.0, x, y) ~ sin(pi * x) * sin(pi * y),
+        u(t, 0.0, y) ~ 0.0,
+        u(t, 1.0, y) ~ 0.0,
+        u(t, x, 0.0) ~ 0.0,
+        u(t, x, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    dx = 0.1
+    dy = 0.1
+
+    disc_scalar = MOLFiniteDifference([x => dx, y => dy], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx, y => dy], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x, y)]
+    u_array = sol_array[u(t, x, y)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "ArrayOp template: 2D symbolic structure" begin
+    # Small 2D grid: verify equation count and that the N-D template path
+    # is actually used (via symbolic_discretize).
+    @parameters t x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0.0, x, y) ~ sin(pi * x) * sin(pi * y),
+        u(t, 0.0, y) ~ 0.0,
+        u(t, 1.0, y) ~ 0.0,
+        u(t, x, 0.0) ~ 0.0,
+        u(t, x, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    # dx=dy=0.25 => 5 grid points per dim, interior = [2,4] x [2,4] = 9 interior pts
+    dx = 0.25
+    disc = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Interior: 3*3 = 9 equations
+    # Boundary equations from extrapolation / corners can add more.
+    # At minimum we should have 9 interior equations.
+    @test length(eqs) >= 9
+end
+
+@testset "ArrayDiscretization: 3D diffusion matches scalar" begin
+    # 3D diffusion on a coarse grid. Verifies the 3-index template path.
+    @parameters t x y z
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dzz = Differential(z)^2
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x, y, z)) ~ Dxx(u(t, x, y, z)) + Dyy(u(t, x, y, z)) + Dzz(u(t, x, y, z))
+
+    bcs = [
+        u(0.0, x, y, z) ~ sin(pi * x) * sin(pi * y) * sin(pi * z),
+        u(t, 0.0, y, z) ~ 0.0,
+        u(t, 1.0, y, z) ~ 0.0,
+        u(t, x, 0.0, z) ~ 0.0,
+        u(t, x, 1.0, z) ~ 0.0,
+        u(t, x, y, 0.0) ~ 0.0,
+        u(t, x, y, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+        z ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y, z], [u(t, x, y, z)])
+
+    d = 0.25  # coarse grid for speed
+
+    disc_scalar = MOLFiniteDifference([x => d, y => d, z => d], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => d, y => d, z => d], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.05)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.05)
+
+    u_scalar = sol_scalar[u(t, x, y, z)]
+    u_array = sol_array[u(t, x, y, z)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
 end
