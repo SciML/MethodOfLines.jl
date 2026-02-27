@@ -1,17 +1,21 @@
 """
 Array-level finite difference rule generation for `ArrayDiscretization`.
 
-For simple centred-difference PDEs on uniform grids with only even-order
-derivatives, stencil weights are identical at every interior point in each
-dimension.  This module pre-computes them once and builds a single ArrayOp
-expression using N symbolic index variables `_i1, _i2, ...` (one per spatial
-dimension).  The ArrayOp is a genuine symbolic array operation that, when
-ModelingToolkit supports native array compilation, will compile to a single
-vectorized loop.  Until then, MTK's `flatten_equations` scalarizes it into
-individual per-point equations, preserving correctness.
+For PDEs on uniform grids, stencil weights are identical at every interior
+point in each dimension.  This module pre-computes them once and builds a
+single ArrayOp expression using N symbolic index variables `_i1, _i2, ...`
+(one per spatial dimension).  The ArrayOp is a genuine symbolic array operation
+that, when ModelingToolkit supports native array compilation, will compile to a
+single vectorized loop.  Until then, MTK's `flatten_equations` scalarizes it
+into individual per-point equations, preserving correctness.
 
-All other cases -- non-uniform grids, odd-order derivatives (upwind), nonlinear
-Laplacians, spherical/mixed derivatives, WENO, etc. -- fall back to per-point
+Supported ArrayOp patterns:
+- Centred (even-order) derivatives on uniform grids
+- Upwind (odd-order) derivatives with UpwindScheme on uniform grids
+- Mixed cross-derivatives on uniform grids
+
+All other cases -- non-uniform grids, nonlinear Laplacians, spherical
+derivatives, WENO, FunctionalScheme, etc. -- fall back to per-point
 computation via `discretize_equation_at_point` from the scalar path, which
 supports ALL scheme types.
 """
@@ -21,12 +25,25 @@ supports ALL scheme types.
 """
     StencilInfo
 
-Pre-computed information for a particular derivative operator.
+Pre-computed information for a particular centred derivative operator.
 """
 struct StencilInfo
     D_op::DerivativeOperator     # full operator, needed for boundary stencils
     offsets::Vector{Int}         # half_range(stencil_length)
     is_uniform::Bool             # true if dx is a Number
+end
+
+"""
+    UpwindStencilInfo
+
+Pre-computed information for upwind derivative operators (both wind directions).
+"""
+struct UpwindStencilInfo
+    D_neg::DerivativeOperator    # negative-wind (offside=0)
+    D_pos::DerivativeOperator    # positive-wind (offside=d+upwind_order-1)
+    neg_offsets::Vector{Int}     # 0:(stencil_length-1) for neg
+    pos_offsets::Vector{Int}     # (-stencil_length+1):0 for pos
+    is_uniform::Bool
 end
 
 """
@@ -46,6 +63,37 @@ function precompute_stencils(s, depvars, derivweights)
                     D_op,
                     collect(half_range(D_op.stencil_length)),
                     D_op.dx isa Number
+                )
+            end
+        end
+    end
+    return info
+end
+
+"""
+    precompute_upwind_stencils(s, depvars, derivweights)
+
+Returns a `Dict` mapping `(u, x, d)` to an `UpwindStencilInfo` for every
+(variable, spatial dim, odd derivative order) triple.  Only populated when
+the advection scheme is `UpwindScheme` and windmap operators exist.
+"""
+function precompute_upwind_stencils(s, depvars, derivweights)
+    info = Dict{Any, UpwindStencilInfo}()
+    !(derivweights.advection_scheme isa UpwindScheme) && return info
+    for u in depvars
+        for x in ivs(u, s)
+            for d in derivweights.orders[x]
+                isodd(d) || continue
+                Dx_d = Differential(x)^d
+                haskey(derivweights.windmap[1], Dx_d) || continue
+                D_neg = derivweights.windmap[1][Dx_d]  # offside=0
+                D_pos = derivweights.windmap[2][Dx_d]  # offside=d+upwind_order-1
+                info[(u, x, d)] = UpwindStencilInfo(
+                    D_neg,
+                    D_pos,
+                    collect(0:(D_neg.stencil_length - 1)),
+                    collect((-D_pos.stencil_length + 1):0),
+                    D_neg.dx isa Number
                 )
             end
         end
@@ -97,18 +145,17 @@ end
 
 Generate discretised interior equations.
 
-For the centred-stencil region on N-D uniform grids with only even-order
-derivatives, a single ArrayOp equation is produced: the PDE's RHS is expressed
-as an ArrayOp parameterised by symbolic index variables, and the LHS is
-`D(u_arrayop)` where `u_arrayop` is an ArrayOp over the corresponding grid
-slice.  This ArrayOp structure is ready for future native array compilation
-in ModelingToolkit; currently MTK scalarizes it to per-point equations.
+For the interior region on N-D uniform grids, a single ArrayOp equation is
+produced when possible.  Supported patterns:
+- Centred (even-order) derivatives
+- Upwind (odd-order) derivatives with UpwindScheme
+- Mixed cross-derivatives
 
 Boundary-proximity interior points (the "frame" around the centred region)
 fall back to per-point computation via `discretize_equation_at_point`.
 
-All other cases (non-uniform grids, odd-order derivatives such as upwind
-schemes, nonlinear Laplacians, etc.) fall back entirely to per-point
+All other cases (non-uniform grids, nonlinear Laplacians, WENO,
+FunctionalScheme, spherical, etc.) fall back entirely to per-point
 computation, which supports ALL scheme types.
 """
 function generate_array_interior_eqs(
@@ -116,19 +163,21 @@ function generate_array_interior_eqs(
         indexmap, boundaryvalfuncs, interior_ranges
     )
     stencil_cache = precompute_stencils(s, depvars, derivweights)
+    upwind_cache = precompute_upwind_stencils(s, depvars, derivweights)
 
     # -- determine whether the ArrayOp path can handle this PDE ---------------
-    # Requirements: (1) uniform grids, (2) even-order derivatives only.
-    # When any requirement is unmet we fall back to per-point scalar
-    # discretisation which supports ALL scheme types (upwind, nonlinear
-    # Laplacian, spherical, mixed derivatives, WENO, etc.).
     all_uniform = isempty(stencil_cache) ? true :
         all(si.is_uniform for si in values(stencil_cache))
-    all_even_orders = all(
-        all(iseven(d) for d in derivweights.orders[x])
+    if !isempty(upwind_cache)
+        all_uniform = all_uniform && all(si.is_uniform for si in values(upwind_cache))
+    end
+
+    has_odd_orders = any(
+        any(isodd(d) for d in derivweights.orders[x])
         for u in depvars for x in ivs(u, s)
     )
-    can_template = all_uniform && all_even_orders
+    can_upwind = has_odd_orders && derivweights.advection_scheme isa UpwindScheme
+    can_template = all_uniform && (!has_odd_orders || can_upwind)
 
     ndim = length(interior_ranges)
 
@@ -145,7 +194,7 @@ function generate_array_interior_eqs(
         end))
     end
 
-    # -- N-D ArrayOp path (uniform grid, all even-order derivatives) ----------
+    # -- N-D ArrayOp path (uniform grid) --------------------------------------
     lo_vec = [r[1] for r in interior_ranges]
     hi_vec = [r[2] for r in interior_ranges]
     eqvar_ivs = ivs(eqvar, s)
@@ -161,13 +210,29 @@ function generate_array_interior_eqs(
             bs = filter_interfaces(bcmap[operation(u)][x])
             haslower, hasupper = haslowerupper(bs, x)
             for d in derivweights.orders[x]
-                iseven(d) || continue
-                bpc = stencil_cache[(u, x, d)].D_op.boundary_point_count
-                if !haslower
-                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], bpc)
-                end
-                if !hasupper
-                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], bpc)
+                if iseven(d)
+                    bpc = stencil_cache[(u, x, d)].D_op.boundary_point_count
+                    if !haslower
+                        max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], bpc)
+                    end
+                    if !hasupper
+                        max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], bpc)
+                    end
+                elseif isodd(d) && haskey(upwind_cache, (u, x, d))
+                    usi = upwind_cache[(u, x, d)]
+                    # Negative-wind (offside=0): stencil reaches forward
+                    # → boundary proximity near upper end
+                    neg_bpc = usi.D_neg.boundary_point_count
+                    # Positive-wind (offside>0): stencil reaches backward
+                    # → boundary proximity near lower end
+                    pos_bpc = usi.D_pos.boundary_point_count
+                    bpc = max(neg_bpc, pos_bpc)
+                    if !haslower
+                        max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], bpc)
+                    end
+                    if !hasupper
+                        max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], bpc)
+                    end
                 end
             end
         end
@@ -194,18 +259,16 @@ function generate_array_interior_eqs(
         ))
     end
 
-    # -- ArrayOp equation for centred-stencil region --------------------------
+    # -- ArrayOp equation for interior region ---------------------------------
     eqs_centered = if centered_nonempty && all(n_centered .> 0)
-        candidate, eq_first = _build_centered_arrayop(
+        candidate, eq_first = _build_interior_arrayop(
             n_centered, lo_centered, s, depvars, pde, derivweights,
-            stencil_cache, eqvar, indexmap
+            stencil_cache, upwind_cache, bcmap, eqvar, indexmap
         )
-        # Validate: the template only handles simple (Differential(x)^d)(u)
-        # patterns (centered differences).  PDEs with nonlinear Laplacian,
-        # spherical, mixed-derivative, or other compound derivative forms are
-        # correctly handled by the scalar path but silently produce wrong
-        # equations via the template.  Validate by comparing the first
-        # instantiated equation against the scalar path for the same point.
+        # Validate: compare the first instantiated equation against the
+        # scalar path for the same point.  This catches any mismatch from
+        # unsupported derivative patterns (nonlinear Laplacian, spherical,
+        # etc.) that the template cannot handle.
         II_check = CartesianIndex(Tuple(lo_centered))
         eq_scalar = discretize_equation_at_point(
             II_check, s, depvars, pde, derivweights, bcmap,
@@ -234,34 +297,32 @@ function generate_array_interior_eqs(
     return collect(vcat(eqs_boundary, eqs_centered))
 end
 
-# --- ArrayOp construction for centred-stencil region ------------------------
+# --- ArrayOp construction for interior region --------------------------------
 
 """
-    _build_centered_arrayop(n_centered, lo_centered, s, depvars, pde,
-                             derivweights, stencil_cache, eqvar, indexmap)
+    _build_interior_arrayop(n_centered, lo_centered, s, depvars, pde,
+                             derivweights, stencil_cache, upwind_cache,
+                             bcmap, eqvar, indexmap)
 
-Build a single ArrayOp equation for the centred-stencil interior region.
+Build a single ArrayOp equation for the interior region.
 
-Constructs FD and variable/grid substitution rules parameterised by N symbolic
-indices from `SymbolicUtils.idxs_for_arrayop(SymReal)`.  The PDE RHS is
-transformed once to produce an ArrayOp expression.  The LHS is constructed as
-`D(u_arrayop)` where `u_arrayop` is an ArrayOp indexing the discretised
-variable at the centred grid points.
+Handles centred (even-order), upwind (odd-order), and mixed cross-derivative
+stencils using symbolic index variables.
 
 Returns `(eqs, eq_first)` where `eqs` is a single-element vector containing
 the ArrayOp equation, and `eq_first` is the scalar equation at the first
 centred point (for validation against the scalar path).
 """
-function _build_centered_arrayop(
+function _build_interior_arrayop(
         n_centered, lo_centered, s, depvars, pde, derivweights,
-        stencil_cache, eqvar, indexmap
+        stencil_cache, upwind_cache, bcmap, eqvar, indexmap
     )
     ndim = length(n_centered)
     _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
     _idxs = [_idxs_arr[d] for d in 1:ndim]
     bases = [lo_centered[d] - 1 for d in 1:ndim]
 
-    # -- FD rules using symbolic indices --------------------------------------
+    # -- FD rules for centred (even-order) derivatives ------------------------
     fd_rules = Pair[]
     for u in depvars
         u_raw = Symbolics.unwrap(s.discvars[u])
@@ -302,52 +363,248 @@ function _build_centered_arrayop(
         push!(var_rules, x => Symbolics.wrap(grid_c[_idxs[dim] + bases[dim]]))
     end
 
+    # -- Upwind (odd-order) rules with IfElse wind switching ------------------
+    upwind_rules = Pair[]
+    if !isempty(upwind_cache)
+        upwind_rules = _build_upwind_rules(
+            pde, s, depvars, derivweights, upwind_cache,
+            bcmap, indexmap, _idxs, bases, var_rules
+        )
+    end
+
+    # -- Mixed derivative rules -----------------------------------------------
+    mixed_rules = _build_mixed_derivative_rules(
+        s, depvars, derivweights, indexmap, _idxs, bases
+    )
+
     # -- Build templates (once) -----------------------------------------------
-    # PDEBase rearranges equations to `lhs - rhs ~ 0`, so pde.lhs typically
-    # contains both the time derivative D(u) and the spatial terms -stencil,
-    # while pde.rhs = 0.  Apply all substitution rules to both sides.
-    rdict = Dict(vcat(fd_rules, var_rules))
-    template_lhs = expand_derivatives(pde_substitute(pde.lhs, rdict))
-    template_rhs = pde_substitute(pde.rhs, rdict)
+    # Upwind rules are term-level substitutions (they replace entire additive
+    # terms, not just derivative sub-expressions).  Apply them first on the
+    # PDE expression, then apply FD + var rules on the result.
+    all_fd_rules = vcat(fd_rules, mixed_rules)
+    rdict = Dict(vcat(all_fd_rules, var_rules))
+
+    if isempty(upwind_rules)
+        template_lhs = expand_derivatives(pde_substitute(pde.lhs, rdict))
+        template_rhs = pde_substitute(pde.rhs, rdict)
+    else
+        # Apply upwind term-level substitutions first, then FD+var rules
+        upwind_dict = Dict(upwind_rules)
+        lhs_upwinded = pde_substitute(pde.lhs, upwind_dict)
+        rhs_upwinded = pde_substitute(pde.rhs, upwind_dict)
+        template_lhs = expand_derivatives(pde_substitute(lhs_upwinded, rdict))
+        template_rhs = pde_substitute(rhs_upwinded, rdict)
+    end
 
     # -- Separate time derivative from spatial terms --------------------------
-    # Construct the known time-derivative template: D(eqvar_disc[_i + base])
     eqvar_raw = Symbolics.unwrap(s.discvars[eqvar])
     eqvar_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(eqvar_raw)
     eqvar_idx_exprs = [_idxs[d] + bases[d] for d in 1:ndim]
     dt_template = Differential(s.time)(Symbolics.wrap(eqvar_c[eqvar_idx_exprs...]))
 
-    # Since template_lhs = D(u_disc[...]) + spatial_terms and template_rhs = 0
-    # (after rearrangement to lhs ~ 0 form), the spatial RHS is:
-    #   spatial_rhs = dt_template - template_lhs + template_rhs
-    # This extracts everything except the time derivative and moves it to RHS.
     spatial_rhs = dt_template - template_lhs + template_rhs
 
     # -- Wrap in ArrayOps -----------------------------------------------------
     ao_ranges = Dict(_idxs[d] => (1:1:n_centered[d]) for d in 1:ndim)
 
-    # LHS: D applied OUTSIDE the ArrayOp (scalarize/substitute cannot
-    # penetrate Differential nodes, but D(ArrayOp) scalarizes correctly).
     u_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
         _idxs, eqvar_c[eqvar_idx_exprs...], +, nothing, ao_ranges
     )
     lhs_wrapped = Differential(s.time)(Symbolics.wrap(u_ao))
 
-    # RHS: the spatial stencil expression as an ArrayOp.
     rhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
         _idxs, Symbolics.unwrap(spatial_rhs), +, nothing, ao_ranges
     )
 
-    # -- The single ArrayOp equation ------------------------------------------
     arrayop_eq = lhs_wrapped ~ Symbolics.wrap(rhs_ao)
 
     # -- Also produce first scalar equation for validation --------------------
-    # Use pde_substitute (which penetrates Differential) to instantiate the
-    # full template at the first centred point.
     sub_first = Dict(_idxs[d] => 1 for d in 1:ndim)
     lhs_first = pde_substitute(template_lhs, sub_first)
     rhs_first = pde_substitute(template_rhs, sub_first)
     eq_first = lhs_first ~ rhs_first
 
     return [arrayop_eq], eq_first
+end
+
+# --- Upwind ArrayOp rules ---------------------------------------------------
+
+"""
+    _build_upwind_rules(pde, s, depvars, derivweights, upwind_cache,
+                         bcmap, indexmap, _idxs, bases, var_rules)
+
+Build term-level upwind substitution rules for odd-order derivatives.
+
+Uses the same pattern-matching approach as `generate_winding_rules` from the
+scalar path, but substitutes ArrayOp-parameterized stencils instead of
+concrete-index stencils.  The advection coefficient is expressed in terms of
+symbolic grid indices via `var_rules`.
+
+Returns a vector of `Pair{term => IfElse_expr}` for matched terms, plus
+fallback rules for unmatched standalone derivatives.
+"""
+function _build_upwind_rules(
+        pde, s, depvars, derivweights, upwind_cache,
+        bcmap, indexmap, _idxs, bases, var_rules
+    )
+    # Helper: build stencil expression for a given variable, dimension, offsets, weights
+    function _upwind_stencil_expr(u, x, offsets, weights, _idxs, bases, indexmap, s)
+        u_raw = Symbolics.unwrap(s.discvars[u])
+        u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
+        u_spatial = ivs(u, s)
+        taps = map(offsets) do off
+            idx_exprs = map(u_spatial) do xv
+                eq_d = indexmap[xv]
+                base_expr = _idxs[eq_d] + bases[eq_d]
+                isequal(xv, x) ? base_expr + off : base_expr
+            end
+            Symbolics.wrap(u_c[idx_exprs...])
+        end
+        return sym_dot(weights, taps)
+    end
+
+    terms = split_terms(pde, s.x̄)
+    vr_dict = Dict(var_rules)
+
+    # Build @rule patterns for multiplication and division (same structure as
+    # generate_winding_rules but returning ArrayOp-parameterized stencils).
+    wind_rules = Pair[]
+
+    for u in depvars
+        u_spatial = ivs(u, s)
+        for x in u_spatial
+            odd_orders = filter(isodd, derivweights.orders[x])
+            for d in odd_orders
+                haskey(upwind_cache, (u, x, d)) || continue
+                usi = upwind_cache[(u, x, d)]
+
+                neg_expr = _upwind_stencil_expr(
+                    u, x, usi.neg_offsets, usi.D_neg.stencil_coefs,
+                    _idxs, bases, indexmap, s
+                )
+                pos_expr = _upwind_stencil_expr(
+                    u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
+                    _idxs, bases, indexmap, s
+                )
+
+                # Multiplication pattern: coeff * Dx^d(u)
+                mul_rule = @rule *(
+                    ~~a,
+                    $(Differential(x)^d)(u),
+                    ~~b
+                ) => begin
+                    coeff = *(~a..., ~b...)
+                    coeff_subst = pde_substitute(coeff, vr_dict)
+                    IfElse.ifelse(
+                        coeff_subst > 0,
+                        coeff_subst * pos_expr,
+                        coeff_subst * neg_expr
+                    )
+                end
+
+                # Division pattern: (coeff * Dx^d(u)) / denom
+                div_rule = @rule /(
+                    *(~~a, $(Differential(x)^d)(u), ~~b),
+                    ~c
+                ) => begin
+                    coeff = *(~a..., ~b...) / ~c
+                    coeff_subst = pde_substitute(coeff, vr_dict)
+                    IfElse.ifelse(
+                        coeff_subst > 0,
+                        coeff_subst * pos_expr,
+                        coeff_subst * neg_expr
+                    )
+                end
+
+                # Apply rules to each term
+                for t in terms
+                    matched = mul_rule(t)
+                    if matched !== nothing
+                        push!(wind_rules, t => matched)
+                        continue
+                    end
+                    matched = div_rule(t)
+                    if matched !== nothing
+                        push!(wind_rules, t => matched)
+                    end
+                end
+            end
+        end
+    end
+
+    # Fallback rules for standalone derivatives (no coefficient matched):
+    # default to positive-wind direction (same as scalar path).
+    fallback_rules = Pair[]
+    for u in depvars
+        u_spatial = ivs(u, s)
+        for x in u_spatial
+            odd_orders = filter(isodd, derivweights.orders[x])
+            for d in odd_orders
+                haskey(upwind_cache, (u, x, d)) || continue
+                usi = upwind_cache[(u, x, d)]
+                # Positive-wind stencil as default
+                pos_expr = _upwind_stencil_expr(
+                    u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
+                    _idxs, bases, indexmap, s
+                )
+                push!(fallback_rules, (Differential(x)^d)(u) => pos_expr)
+            end
+        end
+    end
+
+    return vcat(wind_rules, fallback_rules)
+end
+
+# --- Mixed derivative ArrayOp rules -----------------------------------------
+
+"""
+    _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs, bases)
+
+Build FD rules for mixed cross-derivatives `(Dx * Dy)(u)` using the Cartesian
+product of two 1D centred stencils.
+"""
+function _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs, bases)
+    mixed_rules = Pair[]
+    for u in depvars
+        u_raw = Symbolics.unwrap(s.discvars[u])
+        u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
+        u_spatial = ivs(u, s)
+        for x in u_spatial
+            # Need order-1 centred operator for this dimension
+            haskey(derivweights.map, Differential(x)) || continue
+            Dx_op = derivweights.map[Differential(x)]
+            Dx_op.dx isa Number || continue  # uniform only
+            x_weights = Dx_op.stencil_coefs
+            x_offsets = collect(half_range(Dx_op.stencil_length))
+
+            for y in u_spatial
+                isequal(x, y) && continue
+                haskey(derivweights.map, Differential(y)) || continue
+                Dy_op = derivweights.map[Differential(y)]
+                Dy_op.dx isa Number || continue  # uniform only
+                y_weights = Dy_op.stencil_coefs
+                y_offsets = collect(half_range(Dy_op.stencil_length))
+
+                # Double sum: Σ_i Σ_j wx[i] * wy[j] * u[... + x_off[i] + y_off[j] ...]
+                mixed_expr = sum(zip(x_weights, x_offsets)) do (wx, x_off)
+                    sum(zip(y_weights, y_offsets)) do (wy, y_off)
+                        idx_exprs = map(u_spatial) do xv
+                            eq_d = indexmap[xv]
+                            base_expr = _idxs[eq_d] + bases[eq_d]
+                            if isequal(xv, x)
+                                base_expr + x_off
+                            elseif isequal(xv, y)
+                                base_expr + y_off
+                            else
+                                base_expr
+                            end
+                        end
+                        wx * wy * Symbolics.wrap(u_c[idx_exprs...])
+                    end
+                end
+                push!(mixed_rules, (Differential(x) * Differential(y))(u) => mixed_expr)
+            end
+        end
+    end
+    return mixed_rules
 end

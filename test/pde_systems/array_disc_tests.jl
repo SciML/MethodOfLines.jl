@@ -565,3 +565,151 @@ end
     @test size(u_scalar) == size(u_array)
     @test isapprox(u_scalar, u_array, rtol = 1e-10)
 end
+
+# --- Phase 4: Upwind and mixed derivative ArrayOp tests ----------------------
+
+@testset "ArrayOp template: upwind Burgers symbolic structure" begin
+    # Burgers equation with UpwindScheme on uniform grid should use the
+    # ArrayOp path (not per-point fallback) and produce IfElse expressions.
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters x t
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ x,
+        u(t, 0.0) ~ 0.0,
+        u(t, 1.0) ~ 1.0 / (t + 1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.1
+    disc = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Should have ArrayOp equations (not N scalar equations)
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # After flattening, should produce the right number of interior equations
+    flat = flatten_equations(eqs)
+    @test length(flat) >= 9  # interior points + BCs
+end
+
+@testset "ArrayDiscretization: Upwind Burgers ArrayOp matches scalar" begin
+    # Compare ArrayOp path vs scalar path for Burgers with UpwindScheme.
+    @parameters x t
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    analytic_u(t, x) = x / (t + 1)
+
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ x,
+        u(t, 0.0) ~ analytic_u(t, 0.0),
+        u(t, 1.0) ~ analytic_u(t, 1.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc_scalar = MOLFiniteDifference([x => 0.05], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => 0.05], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "ArrayDiscretization: 2D mixed derivative ArrayOp matches scalar" begin
+    # PDE with mixed cross-derivative on uniform 2D grid.
+    # Dt(u) ~ Dxx(u) + Dxy(u) + Dyy(u)
+    @parameters t x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dxy = Differential(x) * Differential(y)
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dxy(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0.0, x, y) ~ sin(pi * x) * sin(pi * y),
+        u(t, 0.0, y) ~ 0.0,
+        u(t, 1.0, y) ~ 0.0,
+        u(t, x, 0.0) ~ 0.0,
+        u(t, x, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    dx = 0.1
+
+    disc_scalar = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x, y)]
+    u_array = sol_array[u(t, x, y)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
