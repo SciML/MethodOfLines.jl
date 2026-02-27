@@ -66,7 +66,7 @@ function cartesian_nonlinear_laplacian(
 
     # map variables to symbolically inerpolated/extrapolated expressions
     function map_vars_to_interpolated(stencil, weights)
-        return [v => sym_dot(weights, s.discvars[v][interface_wrap(stencil)]) for v in depvars]
+        return [v => sym_dot(weights, _disc_gather(s.discvars[v], interface_wrap(stencil))) for v in depvars]
     end
 
     # Map parameters to interpolated values. Using simplistic extrapolation/interpolation for now as grids are uniform
@@ -119,7 +119,7 @@ function generate_deriv_rules(
                             let (weights, stencil) = deriv_weights_and_stencil(u, i, order)
                                 [
                                     (Differential(x)^order)(u) => sym_dot(
-                                        weights, s.discvars[u][interface_wrap(stencil)]
+                                        weights, _disc_gather(s.discvars[u], interface_wrap(stencil))
                                     ),
                                 ]
                             end

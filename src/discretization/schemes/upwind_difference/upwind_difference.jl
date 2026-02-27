@@ -99,7 +99,7 @@ end
         II::CartesianIndex, s::DiscreteSpace, depvars,
         derivweights::DifferentialDiscretizer, bcmap, indexmap, terms; skip = []
     )
-    wind_ufunc(v, I, x) = s.discvars[v][I]
+    wind_ufunc(v, I, x) = _disc_gather(s.discvars[v], I)
     # for all independent variables and dependant variables
     rules = safe_vcat(#Catch multiplication
         reduce(

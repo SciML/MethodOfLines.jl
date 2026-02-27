@@ -82,7 +82,7 @@ function boundary_value_maps(
     ) where {N, M, G <: EdgeAlignedGrid}
     u_, x_ = getvars(boundary)
 
-    ufunc(v, I, x) = s.discvars[v][I]
+    ufunc(v, I, x) = _disc_gather(s.discvars[v], I)
 
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
@@ -165,7 +165,7 @@ function boundary_value_maps(
         indexmap
     ) where {N, M, G <: StaggeredGrid}
     u_, x_ = getvars(boundary)
-    ufunc(v, I, x) = s.discvars[v][I]
+    ufunc(v, I, x) = _disc_gather(s.discvars[v], I)
 
     depvarderivbcmaps = []
     depvarbcmaps = []
@@ -240,7 +240,7 @@ function boundary_value_maps(
         indexmap
     ) where {N, M, G <: CenterAlignedGrid}
     u_, x_ = getvars(boundary)
-    ufunc(v, I, x) = s.discvars[v][I]
+    ufunc(v, I, x) = _disc_gather(s.discvars[v], I)
 
     depvarderivbcmaps = []
     depvarbcmaps = []
@@ -340,7 +340,7 @@ function generate_extrap_eqs!(disc_state, pde, u, s, derivweights, interiormap, 
     lowerextents, upperextents = interiormap.stencil_extents[pde]
     vlower = interiormap.lower[pde]
     vupper = interiormap.upper[pde]
-    ufunc(u, I, x) = s.discvars[u][I]
+    ufunc(u, I, x) = _disc_gather(s.discvars[u], I)
 
     eqmap = [[] for _ in CartesianIndices(s.discvars[u])]
     for (j, x) in enumerate(args)
@@ -412,7 +412,7 @@ end
             setdiff!(domain, vec(copy(edge) .+ [I1 * k]))
         end
     end
-    return append!(disc_state.bceqs, s.discvars[u][domain] .~ 0)
+    return append!(disc_state.bceqs, [s.discvars[u][I] ~ 0 for I in domain])
 end
 
 """
@@ -452,7 +452,7 @@ end
         return
     elseif N == 2
         Icorners = findcorners(s, interiormap.lower[pde], interiormap.upper[pde], u)
-        append!(disc_state.bceqs, s.discvars[u][Icorners] .~ 0)
+        append!(disc_state.bceqs, [s.discvars[u][I] ~ 0 for I in Icorners])
     else
         generate_corner_eqs!(disc_state, s, interiormap, N, u)
     end

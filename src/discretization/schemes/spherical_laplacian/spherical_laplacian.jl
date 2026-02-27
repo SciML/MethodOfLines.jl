@@ -22,7 +22,7 @@ function spherical_diffusion(innerexpr, II, derivweights, s, indexmap, bcmap, de
         return safe_vcat([v => s.discvars[v][I] for v in depvars], [_rsubs(x, I) for x in s.x̄])
     end
     # Discretization func for u
-    ufunc_u(v, I, x) = s.discvars[v][I]
+    ufunc_u(v, I, x) = _disc_gather(s.discvars[v], I)
 
     # 2nd order finite difference in u
     exprhere = Num(substitute(innerexpr, Dict(rsubs(II))))
