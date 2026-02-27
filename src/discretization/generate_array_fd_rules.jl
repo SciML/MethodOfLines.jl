@@ -3,11 +3,12 @@ Array-level finite difference rule generation for `ArrayDiscretization`.
 
 For simple centred-difference PDEs on uniform grids with only even-order
 derivatives, stencil weights are identical at every interior point in each
-dimension.  This module pre-computes them once and builds a single template
-expression using N symbolic ArrayOp index variables `_i1, _i2, ...` (one per
-spatial dimension).  The template is then instantiated at each interior grid
-point via `pde_substitute`, avoiding per-point scheme-detection and rule
-construction.
+dimension.  This module pre-computes them once and builds a single ArrayOp
+expression using N symbolic index variables `_i1, _i2, ...` (one per spatial
+dimension).  The ArrayOp is a genuine symbolic array operation that, when
+ModelingToolkit supports native array compilation, will compile to a single
+vectorized loop.  Until then, MTK's `flatten_equations` scalarizes it into
+individual per-point equations, preserving correctness.
 
 All other cases -- non-uniform grids, odd-order derivatives (upwind), nonlinear
 Laplacians, spherical/mixed derivatives, WENO, etc. -- fall back to per-point
@@ -97,10 +98,11 @@ end
 Generate discretised interior equations.
 
 For the centred-stencil region on N-D uniform grids with only even-order
-derivatives, substitution rules (FD stencils and variable/grid maps) are
-built once using symbolic ArrayOp index variables `_i1, _i2, ...` (one per
-spatial dimension), producing a template equation.  This template is then
-instantiated at each centred-stencil interior grid point via `pde_substitute`.
+derivatives, a single ArrayOp equation is produced: the PDE's RHS is expressed
+as an ArrayOp parameterised by symbolic index variables, and the LHS is
+`D(u_arrayop)` where `u_arrayop` is an ArrayOp over the corresponding grid
+slice.  This ArrayOp structure is ready for future native array compilation
+in ModelingToolkit; currently MTK scalarizes it to per-point equations.
 
 Boundary-proximity interior points (the "frame" around the centred region)
 fall back to per-point computation via `discretize_equation_at_point`.
@@ -115,7 +117,7 @@ function generate_array_interior_eqs(
     )
     stencil_cache = precompute_stencils(s, depvars, derivweights)
 
-    # -- determine whether the ArrayOp template path can handle this PDE ------
+    # -- determine whether the ArrayOp path can handle this PDE ---------------
     # Requirements: (1) uniform grids, (2) even-order derivatives only.
     # When any requirement is unmet we fall back to per-point scalar
     # discretisation which supports ALL scheme types (upwind, nonlinear
@@ -143,7 +145,7 @@ function generate_array_interior_eqs(
         end))
     end
 
-    # -- N-D template path (uniform grid, all even-order derivatives) ---------
+    # -- N-D ArrayOp path (uniform grid, all even-order derivatives) ----------
     lo_vec = [r[1] for r in interior_ranges]
     hi_vec = [r[2] for r in interior_ranges]
     eqvar_ivs = ivs(eqvar, s)
@@ -192,9 +194,9 @@ function generate_array_interior_eqs(
         ))
     end
 
-    # -- ArrayOp-based template for centred-stencil region --------------------
+    # -- ArrayOp equation for centred-stencil region --------------------------
     eqs_centered = if centered_nonempty && all(n_centered .> 0)
-        candidate = _build_centered_eqs(
+        candidate, eq_first = _build_centered_arrayop(
             n_centered, lo_centered, s, depvars, pde, derivweights,
             stencil_cache, eqvar, indexmap
         )
@@ -203,14 +205,14 @@ function generate_array_interior_eqs(
         # spherical, mixed-derivative, or other compound derivative forms are
         # correctly handled by the scalar path but silently produce wrong
         # equations via the template.  Validate by comparing the first
-        # template equation against the scalar path for the same point.
+        # instantiated equation against the scalar path for the same point.
         II_check = CartesianIndex(Tuple(lo_centered))
         eq_scalar = discretize_equation_at_point(
             II_check, s, depvars, pde, derivweights, bcmap,
             eqvar, indexmap, boundaryvalfuncs
         )
-        if isequal(candidate[1].lhs, eq_scalar.lhs) &&
-           isequal(candidate[1].rhs, eq_scalar.rhs)
+        if isequal(eq_first.lhs, eq_scalar.lhs) &&
+           isequal(eq_first.rhs, eq_scalar.rhs)
             candidate
         else
             # Template doesn't match scalar path -- fall back to per-point
@@ -232,21 +234,25 @@ function generate_array_interior_eqs(
     return collect(vcat(eqs_boundary, eqs_centered))
 end
 
-# --- ArrayOp template for centred-stencil region ----------------------------
+# --- ArrayOp construction for centred-stencil region ------------------------
 
 """
-    _build_centered_eqs(n_centered, lo_centered, s, depvars, pde, derivweights,
-                         stencil_cache, eqvar, indexmap)
+    _build_centered_arrayop(n_centered, lo_centered, s, depvars, pde,
+                             derivweights, stencil_cache, eqvar, indexmap)
 
-Build centred-stencil equations using a symbolic index template.
+Build a single ArrayOp equation for the centred-stencil interior region.
 
 Constructs FD and variable/grid substitution rules parameterised by N symbolic
-indices `_i1, _i2, ...` from `SymbolicUtils.idxs_for_arrayop(SymReal)` (one
-per spatial dimension).  The PDE is symbolically transformed once to produce a
-template, which is then instantiated at each centred-stencil point via
-`pde_substitute`.
+indices from `SymbolicUtils.idxs_for_arrayop(SymReal)`.  The PDE RHS is
+transformed once to produce an ArrayOp expression.  The LHS is constructed as
+`D(u_arrayop)` where `u_arrayop` is an ArrayOp indexing the discretised
+variable at the centred grid points.
+
+Returns `(eqs, eq_first)` where `eqs` is a single-element vector containing
+the ArrayOp equation, and `eq_first` is the scalar equation at the first
+centred point (for validation against the scalar path).
 """
-function _build_centered_eqs(
+function _build_centered_arrayop(
         n_centered, lo_centered, s, depvars, pde, derivweights,
         stencil_cache, eqvar, indexmap
     )
@@ -296,17 +302,52 @@ function _build_centered_eqs(
         push!(var_rules, x => Symbolics.wrap(grid_c[_idxs[dim] + bases[dim]]))
     end
 
-    # -- Build template (once) ------------------------------------------------
+    # -- Build templates (once) -----------------------------------------------
+    # PDEBase rearranges equations to `lhs - rhs ~ 0`, so pde.lhs typically
+    # contains both the time derivative D(u) and the spatial terms -stencil,
+    # while pde.rhs = 0.  Apply all substitution rules to both sides.
     rdict = Dict(vcat(fd_rules, var_rules))
     template_lhs = expand_derivatives(pde_substitute(pde.lhs, rdict))
     template_rhs = pde_substitute(pde.rhs, rdict)
 
-    # -- Instantiate at each centred-stencil point ----------------------------
-    cart_ranges = Tuple(1:n_centered[d] for d in 1:ndim)
-    return collect(vec(map(CartesianIndices(cart_ranges)) do KK
-        sub_dict = Dict(_idxs[d] => KK[d] for d in 1:ndim)
-        lhs_k = pde_substitute(template_lhs, sub_dict)
-        rhs_k = pde_substitute(template_rhs, sub_dict)
-        lhs_k ~ rhs_k
-    end))
+    # -- Separate time derivative from spatial terms --------------------------
+    # Construct the known time-derivative template: D(eqvar_disc[_i + base])
+    eqvar_raw = Symbolics.unwrap(s.discvars[eqvar])
+    eqvar_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(eqvar_raw)
+    eqvar_idx_exprs = [_idxs[d] + bases[d] for d in 1:ndim]
+    dt_template = Differential(s.time)(Symbolics.wrap(eqvar_c[eqvar_idx_exprs...]))
+
+    # Since template_lhs = D(u_disc[...]) + spatial_terms and template_rhs = 0
+    # (after rearrangement to lhs ~ 0 form), the spatial RHS is:
+    #   spatial_rhs = dt_template - template_lhs + template_rhs
+    # This extracts everything except the time derivative and moves it to RHS.
+    spatial_rhs = dt_template - template_lhs + template_rhs
+
+    # -- Wrap in ArrayOps -----------------------------------------------------
+    ao_ranges = Dict(_idxs[d] => (1:1:n_centered[d]) for d in 1:ndim)
+
+    # LHS: D applied OUTSIDE the ArrayOp (scalarize/substitute cannot
+    # penetrate Differential nodes, but D(ArrayOp) scalarizes correctly).
+    u_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+        _idxs, eqvar_c[eqvar_idx_exprs...], +, nothing, ao_ranges
+    )
+    lhs_wrapped = Differential(s.time)(Symbolics.wrap(u_ao))
+
+    # RHS: the spatial stencil expression as an ArrayOp.
+    rhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+        _idxs, Symbolics.unwrap(spatial_rhs), +, nothing, ao_ranges
+    )
+
+    # -- The single ArrayOp equation ------------------------------------------
+    arrayop_eq = lhs_wrapped ~ Symbolics.wrap(rhs_ao)
+
+    # -- Also produce first scalar equation for validation --------------------
+    # Use pde_substitute (which penetrates Differential) to instantiate the
+    # full template at the first centred point.
+    sub_first = Dict(_idxs[d] => 1 for d in 1:ndim)
+    lhs_first = pde_substitute(template_lhs, sub_first)
+    rhs_first = pde_substitute(template_rhs, sub_first)
+    eq_first = lhs_first ~ rhs_first
+
+    return [arrayop_eq], eq_first
 end

@@ -214,9 +214,10 @@ end
 end
 
 @testset "ArrayOp template: symbolic structure" begin
-    # Verify that the template approach with symbolic _i produces equations
-    # structurally equivalent to the per-point approach.
+    # Verify that the ArrayOp path produces a single array equation for the
+    # centred interior region instead of N scalar equations.
     using SymbolicUtils: SymReal, idxs_for_arrayop, BSImpl
+    using SymbolicUtils
     using Symbolics: unwrap, wrap
     using PDEBase: sym_dot, pde_substitute
 
@@ -237,7 +238,7 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    dx = 0.25  # Exact: 4 intervals, 5 grid points, interior = [2, 4]
+    dx = 0.25  # 4 intervals, 5 grid points, interior = [2, 3, 4]
     disc = MOLFiniteDifference(
         [x => dx], t; discretization_strategy = ArrayDiscretization()
     )
@@ -245,19 +246,30 @@ end
     sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
     eqs = equations(sys)
 
-    # Interior equations should be 3 (indices 2, 3, 4) + 2 boundary
-    @test length(eqs) == 5
+    # With ArrayOp: 1 array equation (3 interior points) + 2 BC equations = 3
+    @test length(eqs) == 3
 
-    # Verify that the ArrayOp symbolic index (_i) was used in template
-    # by checking that idxs_for_arrayop exists and the template produces
-    # correct instantiated equations
+    # Verify that at least one equation contains an ArrayOp
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # The ArrayOp equation should scalarize to 3 interior equations
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+    flat = flatten_equations(eqs)
+    @test length(flat) == 5  # 3 interior + 2 BCs
+
+    # Verify stencil structure: the ArrayOp index mechanism works correctly
     _i = idxs_for_arrayop(SymReal)[1]
-    u_disc = first(@variables u(t)[1:5])
-    u_c = BSImpl.Const{SymReal}(unwrap(u_disc))
+    u_disc_test = first(@variables u(t)[1:5])
+    u_c = BSImpl.Const{SymReal}(unwrap(u_disc_test))
 
-    # Build a 3-point stencil template for dx=0.25: weights = [16, -32, 16]
     w = [1 / dx^2, -2 / dx^2, 1 / dx^2]
-    base = 1  # _i=1 → grid index 2
+    base = 1
     offsets = [-1, 0, 1]
     taps = [wrap(u_c[_i + base + off]) for off in offsets]
     stencil_template = sym_dot(w, taps)
@@ -268,13 +280,6 @@ end
     @test occursin("(u(t))[1]", stencil_str)
     @test occursin("(u(t))[2]", stencil_str)
     @test occursin("(u(t))[3]", stencil_str)
-
-    # Instantiate at _i = 3 (grid index 4): should involve u[3], u[4], u[5]
-    stencil_at_3 = pde_substitute(stencil_template, Dict(_i => 3))
-    stencil_str_3 = string(stencil_at_3)
-    @test occursin("(u(t))[3]", stencil_str_3)
-    @test occursin("(u(t))[4]", stencil_str_3)
-    @test occursin("(u(t))[5]", stencil_str_3)
 end
 
 # ─── Phase 2: Tests for per-point fallback (non-templateable PDEs) ───────────
@@ -458,8 +463,11 @@ end
 end
 
 @testset "ArrayOp template: 2D symbolic structure" begin
-    # Small 2D grid: verify equation count and that the N-D template path
-    # is actually used (via symbolic_discretize).
+    # Small 2D grid: verify that the ArrayOp path produces a single array
+    # equation that flattens to the correct number of scalar equations.
+    using SymbolicUtils
+    using Symbolics: unwrap
+
     @parameters t x y
     @variables u(..)
     Dxx = Differential(x)^2
@@ -484,7 +492,7 @@ end
 
     @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
 
-    # dx=dy=0.25 => 5 grid points per dim, interior = [2,4] x [2,4] = 9 interior pts
+    # dx=dy=0.25 => 5 grid points per dim, interior [2,4] x [2,4] = 3x3
     dx = 0.25
     disc = MOLFiniteDifference([x => dx, y => dx], t;
         discretization_strategy = ArrayDiscretization()
@@ -493,10 +501,17 @@ end
     sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
     eqs = equations(sys)
 
-    # Interior: 3*3 = 9 equations
-    # Boundary equations from extrapolation / corners can add more.
-    # At minimum we should have 9 interior equations.
-    @test length(eqs) >= 9
+    # Verify at least one equation contains an ArrayOp
+    has_arrayop = any(eqs) do eq
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # After flattening, should have at least 9 interior equations
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+    flat = flatten_equations(eqs)
+    @test length(flat) >= 9
 end
 
 @testset "ArrayDiscretization: 3D diffusion matches scalar" begin
