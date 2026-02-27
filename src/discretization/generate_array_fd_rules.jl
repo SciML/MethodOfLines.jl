@@ -1,14 +1,17 @@
 """
 Array-level finite difference rule generation for `ArrayDiscretization`.
 
-For interior points on uniform grids, the stencil weights are identical at
-every point.  This module pre-computes them once and builds a single template
-expression using a symbolic ArrayOp index from `SymbolicUtils.idxs_for_arrayop`.
-The template is then instantiated at each interior point via `pde_substitute`,
-avoiding per-point scheme-detection and rule construction.
+For simple centred-difference PDEs on 1D uniform grids, stencil weights are
+identical at every point.  This module pre-computes them once and builds a
+single template expression using a symbolic ArrayOp index from
+`SymbolicUtils.idxs_for_arrayop`.  The template is then instantiated at each
+interior point via `pde_substitute`, avoiding per-point scheme-detection and
+rule construction.
 
-Near-boundary interior points (where centred stencils don't fit) fall back to
-per-point stencil computation using `stencil_weights_and_taps`.
+All other cases — non-uniform grids, odd-order derivatives (upwind), nonlinear
+Laplacians, spherical/mixed derivatives, multi-dimensional problems, WENO, etc.
+— fall back to per-point computation via `discretize_equation_at_point` from
+the scalar path, which supports ALL scheme types.
 """
 
 # ─── stencil pre-computation ─────────────────────────────────────────────────
@@ -92,13 +95,16 @@ end
 
 Generate discretised interior equations.
 
-For the centred-stencil region, substitution rules (FD stencils and
-variable/grid maps) are built once using a symbolic ArrayOp index variable
-`_i`, producing a template equation.  This template is then instantiated at
-each interior grid point via `pde_substitute`.
+For the centred-stencil region on 1D uniform grids with only even-order
+derivatives, substitution rules (FD stencils and variable/grid maps) are
+built once using a symbolic ArrayOp index variable `_i`, producing a template
+equation.  This template is then instantiated at each interior grid point via
+`pde_substitute`.
 
-Near-boundary interior points that require non-centred stencils fall back to
-per-point computation using `stencil_weights_and_taps`.
+All other cases (non-uniform grids, odd-order derivatives such as upwind
+schemes, multi-dimensional problems, nonlinear Laplacians, etc.) fall back to
+per-point computation via `discretize_equation_at_point` from the scalar path,
+which supports ALL scheme types.
 """
 function generate_array_interior_eqs(
         s, depvars, pde, derivweights, bcmap, eqvar,
@@ -106,9 +112,35 @@ function generate_array_interior_eqs(
     )
     stencil_cache = precompute_stencils(s, depvars, derivweights)
 
-    lo, hi = interior_ranges[1]           # Phase 1: 1D only
+    # ── determine whether the ArrayOp template path can handle this PDE ──────
+    # Requirements: (1) uniform grids, (2) even-order derivatives only, (3) 1D.
+    # When any requirement is unmet we fall back to per-point scalar
+    # discretisation which supports ALL scheme types (upwind, nonlinear
+    # Laplacian, spherical, mixed derivatives, WENO, etc.).
+    all_uniform = isempty(stencil_cache) ? true :
+        all(si.is_uniform for si in values(stencil_cache))
+    all_even_orders = all(
+        all(iseven(d) for d in derivweights.orders[x])
+        for u in depvars for x in ivs(u, s)
+    )
+    can_template = all_uniform && all_even_orders && length(interior_ranges) == 1
 
-    # ── determine centred-stencil region ─────────────────────────────────────
+    if !can_template
+        # Full per-point fallback: delegate every interior point to the
+        # scalar path's discretize_equation_at_point.
+        cart_ranges = Tuple(r[1]:r[2] for r in interior_ranges)
+        interior = CartesianIndices(cart_ranges)
+        return collect(vec(map(interior) do II
+            discretize_equation_at_point(
+                II, s, depvars, pde, derivweights, bcmap,
+                eqvar, indexmap, boundaryvalfuncs
+            )
+        end))
+    end
+
+    # ── 1D template path (uniform grid, all even-order derivatives) ──────────
+    lo, hi = interior_ranges[1]
+
     # Find the grid length and the maximum boundary_point_count on each side
     # across all (variable, spatial dim, derivative order) triples.
     max_lower_bpc = 0
@@ -136,36 +168,47 @@ function generate_array_interior_eqs(
     hi_centered = min(hi, gl - max_upper_bpc)
     n_centered = max(0, hi_centered - lo_centered + 1)
 
-    # The ArrayOp template requires uniform grids (shared stencil weights).
-    # For non-uniform grids, fall back to per-point for all interior points.
-    all_uniform = all(si.is_uniform for si in values(stencil_cache))
-
-    if !all_uniform
-        return _per_point_eqs(
-            collect(lo:hi),
-            s, depvars, pde, derivweights, stencil_cache, bcmap, eqvar,
-            indexmap, boundaryvalfuncs, gl
-        )
-    end
-
     # ── per-point equations for boundary-proximity interior points ───────────
     eqs_lower = _per_point_eqs(
         collect(lo:(lo_centered - 1)),
-        s, depvars, pde, derivweights, stencil_cache, bcmap, eqvar,
-        indexmap, boundaryvalfuncs, gl
+        s, depvars, pde, derivweights, bcmap, eqvar,
+        indexmap, boundaryvalfuncs
     )
     eqs_upper = _per_point_eqs(
         collect((hi_centered + 1):hi),
-        s, depvars, pde, derivweights, stencil_cache, bcmap, eqvar,
-        indexmap, boundaryvalfuncs, gl
+        s, depvars, pde, derivweights, bcmap, eqvar,
+        indexmap, boundaryvalfuncs
     )
 
     # ── ArrayOp-based template for centred-stencil region ────────────────────
     eqs_centered = if n_centered > 0
-        _build_centered_eqs(
+        candidate = _build_centered_eqs(
             n_centered, lo_centered, s, depvars, pde, derivweights,
             stencil_cache, eqvar, indexmap
         )
+        # Validate: the template only handles simple (Differential(x)^d)(u)
+        # patterns (centered differences).  PDEs with nonlinear Laplacian,
+        # spherical, mixed-derivative, or other compound derivative forms are
+        # correctly handled by the scalar path but silently produce wrong
+        # equations via the template.  Validate by comparing the first
+        # template equation against the scalar path for the same point.
+        II_check = CartesianIndex(lo_centered)
+        eq_scalar = discretize_equation_at_point(
+            II_check, s, depvars, pde, derivweights, bcmap,
+            eqvar, indexmap, boundaryvalfuncs
+        )
+        if isequal(candidate[1].lhs, eq_scalar.lhs) &&
+           isequal(candidate[1].rhs, eq_scalar.rhs)
+            candidate
+        else
+            # Template doesn't match scalar path — fall back to per-point
+            # for the centred region as well.
+            _per_point_eqs(
+                collect(lo_centered:hi_centered),
+                s, depvars, pde, derivweights, bcmap, eqvar,
+                indexmap, boundaryvalfuncs
+            )
+        end
     else
         Equation[]
     end
@@ -173,48 +216,32 @@ function generate_array_interior_eqs(
     return collect(vcat(eqs_lower, eqs_centered, eqs_upper))
 end
 
-# ─── per-point fallback for boundary-proximity interior points ───────────────
+# ─── per-point fallback ──────────────────────────────────────────────────────
 
 """
-    _per_point_eqs(indices, ...)
+    _per_point_eqs(indices, s, depvars, pde, derivweights, bcmap, eqvar,
+                    indexmap, boundaryvalfuncs)
 
-Build equations for specific grid indices using the per-point approach.
-Used for interior points near boundaries where the centred stencil doesn't fit.
+Build equations for specific 1D grid indices by delegating to
+`discretize_equation_at_point` from the scalar path.  This supports ALL
+scheme types (centered, upwind, nonlinear Laplacian, spherical, mixed
+derivatives, WENO, callbacks, integrals).
+
+Used for boundary-proximity interior points where the centred-stencil
+template doesn't fit, and also as the full fallback when the template
+path cannot handle the PDE (e.g. odd-order derivatives, multi-D).
 """
 function _per_point_eqs(
-        indices, s, depvars, pde, derivweights, stencil_cache, bcmap, eqvar,
-        indexmap, boundaryvalfuncs, gl
+        indices, s, depvars, pde, derivweights, bcmap, eqvar,
+        indexmap, boundaryvalfuncs
     )
     isempty(indices) && return Equation[]
-    central_ufunc(u, I, x) = _disc_gather(s.discvars[u], I)
-
     map(indices) do i
         II = CartesianIndex(i)
-
-        fd_rules = Pair[]
-        for u in depvars
-            for (dim_j, x) in enumerate(ivs(u, s))
-                j = x2i(s, u, x)
-                bs = filter_interfaces(bcmap[operation(u)][x])
-                haslower, hasupper = haslowerupper(bs, x)
-                ndim = ndims(u, s)
-                for d in derivweights.orders[x]
-                    iseven(d) || continue
-                    si = stencil_cache[(u, x, d)]
-                    weights, Itap = stencil_weights_and_taps(
-                        si, Idx(II, s, u, indexmap), j, ndim, gl, haslower, hasupper
-                    )
-                    expr = sym_dot(weights, central_ufunc(u, Itap, x))
-                    push!(fd_rules, (Differential(x)^d)(u) => expr)
-                end
-            end
-        end
-
-        boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs, init = [])
-        var_rules = valmaps(s, eqvar, depvars, II, indexmap)
-        rules = vcat(fd_rules, boundaryrules, var_rules)
-        rdict = Dict(rules)
-        expand_derivatives(pde_substitute(pde.lhs, rdict)) ~ pde_substitute(pde.rhs, rdict)
+        discretize_equation_at_point(
+            II, s, depvars, pde, derivweights, bcmap,
+            eqvar, indexmap, boundaryvalfuncs
+        )
     end
 end
 

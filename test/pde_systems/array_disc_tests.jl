@@ -276,3 +276,131 @@ end
     @test occursin("(u(t))[4]", stencil_str_3)
     @test occursin("(u(t))[5]", stencil_str_3)
 end
+
+# ─── Phase 2: Tests for per-point fallback (non-templateable PDEs) ───────────
+
+@testset "ArrayDiscretization: Upwind convection (Burgers)" begin
+    # Inviscid Burgers equation with UpwindScheme — exercises the per-point
+    # fallback path because the PDE has an odd-order derivative (Dx).
+    @parameters x t
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    analytic_u(t, x) = x / (t + 1)
+
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ x,
+        u(t, 0.0) ~ analytic_u(t, 0.0),
+        u(t, 1.0) ~ analytic_u(t, 1.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 6.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc = MOLFiniteDifference([x => 0.05], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5())
+
+    x_disc = sol[x]
+    solu = sol[u(t, x)]
+
+    for (i, t_val) in enumerate(sol.t)
+        u_analytic = analytic_u.([t_val], x_disc)
+        @test all(isapprox.(u_analytic, solu[i, :], atol = 1.0e-3))
+    end
+end
+
+@testset "ArrayDiscretization: Nonlinear diffusion" begin
+    # Nonlinear diffusion Dt(u) ~ Dx(u^(-1) * Dx(u)) — exercises the per-point
+    # fallback because this uses the nonlinear Laplacian scheme.
+    @parameters t x
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+    c = 1.0
+    a = 1.0
+
+    analytic_sol_func(t, x) = 2.0 * (c + t) / (a + x)^2
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
+
+    bcs = [
+        u(0.0, x) ~ analytic_sol_func(0.0, x),
+        u(t, 0.0) ~ analytic_sol_func(t, 0.0),
+        u(t, 2.0) ~ analytic_sol_func(t, 2.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    disc = MOLFiniteDifference([x => 0.01], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Rosenbrock32())
+    @test SciMLBase.successful_retcode(sol)
+
+    x_disc = sol[x]
+    asf = [analytic_sol_func(2.0, x_val) for x_val in x_disc]
+    sol′ = sol[u(t, x)]
+    @test asf ≈ sol′[end, :] atol = 0.1
+end
+
+@testset "ArrayDiscretization: 2D diffusion" begin
+    # 2D diffusion Dt(u) ~ Dxx(u) + Dyy(u) — exercises the per-point fallback
+    # because the template path currently only handles 1D.
+    @parameters t x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dt = Differential(t)
+
+    analytic_sol_func(t, x, y) = exp(x + y) * cos(x + y + 4t)
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0.0, x, y) ~ analytic_sol_func(0.0, x, y),
+        u(t, 0.0, y) ~ analytic_sol_func(t, 0.0, y),
+        u(t, 2.0, y) ~ analytic_sol_func(t, 2.0, y),
+        u(t, x, 0.0) ~ analytic_sol_func(t, x, 0.0),
+        u(t, x, 2.0) ~ analytic_sol_func(t, x, 2.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 2.0),
+        y ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    disc = MOLFiniteDifference([x => 0.1, y => 0.2], t;
+        approx_order = 4,
+        discretization_strategy = ArrayDiscretization()
+    )
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5())
+
+    r_space_x = sol[x]
+    r_space_y = sol[y]
+    asf = [analytic_sol_func(2.0, X, Y) for X in r_space_x, Y in r_space_y]
+    asf[1, 1] = asf[1, end] = asf[end, 1] = asf[end, end] = 0.0
+
+    sol′ = sol[u(t, x, y)]
+    @test asf ≈ sol′[end, :, :] atol = 0.4
+end
