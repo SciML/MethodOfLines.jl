@@ -4,19 +4,21 @@ Array-level finite difference rule generation for `ArrayDiscretization`.
 For PDEs on uniform grids, stencil weights are identical at every interior
 point in each dimension.  This module pre-computes them once and builds a
 single ArrayOp expression using N symbolic index variables `_i1, _i2, ...`
-(one per spatial dimension).  The ArrayOp is a genuine symbolic array operation
+(one per spatial dimension).  For non-uniform grids, centred derivative
+weights vary per point and are stored in a Const-wrapped matrix indexed by
+symbolic grid indices.  The ArrayOp is a genuine symbolic array operation
 that, when ModelingToolkit supports native array compilation, will compile to a
 single vectorized loop.  Until then, MTK's `flatten_equations` scalarizes it
 into individual per-point equations, preserving correctness.
 
 Supported ArrayOp patterns:
-- Centred (even-order) derivatives on uniform grids
+- Centred (even-order) derivatives on uniform and non-uniform grids
 - Upwind (odd-order) derivatives with UpwindScheme on uniform grids
 - Mixed cross-derivatives on uniform grids
 - Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform grids
 - Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform grids
 
-All other cases -- non-uniform grids, WENO, FunctionalScheme, etc. --
+All other cases -- WENO, FunctionalScheme, non-uniform upwind/nonlinlap, etc. --
 fall back to per-point computation via `discretize_equation_at_point`
 from the scalar path, which supports ALL scheme types.
 """
@@ -32,6 +34,7 @@ struct StencilInfo
     D_op::DerivativeOperator     # full operator, needed for boundary stencils
     offsets::Vector{Int}         # half_range(stencil_length)
     is_uniform::Bool             # true if dx is a Number
+    weight_matrix::Union{Nothing, Matrix{Float64}}  # non-uniform: stencil_length × num_interior
 end
 
 """
@@ -80,10 +83,18 @@ function precompute_stencils(s, depvars, derivweights)
             for d in derivweights.orders[x]
                 iseven(d) || continue
                 D_op = derivweights.map[Differential(x)^d]
+                is_uniform = D_op.dx isa Number
+                wmat = if !is_uniform
+                    # stencil_coefs is Vector{SVector{L,T}} — convert to L×N matrix
+                    hcat(Vector.(D_op.stencil_coefs)...)
+                else
+                    nothing
+                end
                 info[(u, x, d)] = StencilInfo(
                     D_op,
                     collect(half_range(D_op.stencil_length)),
-                    D_op.dx isa Number
+                    is_uniform,
+                    wmat
                 )
             end
         end
@@ -357,19 +368,19 @@ end
 
 Generate discretised interior equations.
 
-For the interior region on N-D uniform grids, a single ArrayOp equation is
-produced when possible.  Supported patterns:
-- Centred (even-order) derivatives
-- Upwind (odd-order) derivatives with UpwindScheme
-- Mixed cross-derivatives
+For the interior region, a single ArrayOp equation is produced when possible.
+Supported patterns:
+- Centred (even-order) derivatives on uniform and non-uniform grids
+- Upwind (odd-order) derivatives with UpwindScheme on uniform grids
+- Mixed cross-derivatives on uniform grids
 - Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform grids
 - Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform grids
 
 Boundary-proximity interior points (the "frame" around the centred region)
 fall back to per-point computation via `discretize_equation_at_point`.
 
-All other cases (non-uniform grids, WENO, FunctionalScheme, etc.) fall
-back entirely to per-point computation, which supports ALL scheme types.
+All other cases (WENO, FunctionalScheme, non-uniform upwind/nonlinlap, etc.)
+fall back entirely to per-point computation, which supports ALL scheme types.
 """
 function generate_array_interior_eqs(
         s, depvars, pde, derivweights, bcmap, eqvar,
@@ -380,11 +391,16 @@ function generate_array_interior_eqs(
     nonlinlap_cache = precompute_nonlinlap_stencils(s, depvars, derivweights)
 
     # -- determine whether the ArrayOp path can handle this PDE ---------------
-    all_uniform = isempty(stencil_cache) ? true :
-        all(si.is_uniform for si in values(stencil_cache))
+    # Centered derivatives support both uniform and non-uniform grids.
+    # Upwind, nonlinlap, and spherical still require uniform grids.
+    schemes_needing_uniform = Bool[]
     if !isempty(upwind_cache)
-        all_uniform = all_uniform && all(si.is_uniform for si in values(upwind_cache))
+        append!(schemes_needing_uniform, [si.is_uniform for si in values(upwind_cache)])
     end
+    if !isempty(nonlinlap_cache)
+        append!(schemes_needing_uniform, [si.is_uniform for si in values(nonlinlap_cache)])
+    end
+    schemes_uniform = isempty(schemes_needing_uniform) || all(schemes_needing_uniform)
 
     has_odd_orders = any(
         any(isodd(d) for d in derivweights.orders[x])
@@ -402,7 +418,7 @@ function generate_array_interior_eqs(
     nonlinlap_terms = _detect_nonlinlap_terms(pde, s, depvars, spherical_terms_info)
     has_nonlinlap = !isempty(nonlinlap_terms) && !isempty(nonlinlap_cache)
 
-    can_template = all_uniform && (!has_odd_orders || can_upwind || has_nonlinlap || has_spherical)
+    can_template = schemes_uniform && (!has_odd_orders || can_upwind || has_nonlinlap || has_spherical)
 
     ndim = length(interior_ranges)
 
@@ -529,7 +545,6 @@ function generate_array_interior_eqs(
             candidate
         else
             @debug "ArrayOp validation failed" eq_first eq_scalar
-            @debug "Diff" diff_lhs=eq_first.lhs-eq_scalar.lhs diff_rhs=eq_first.rhs-eq_scalar.rhs
             # Template doesn't match scalar path -- fall back to per-point
             # for the centred region as well.
             centered_rect = CartesianIndices(
@@ -622,7 +637,6 @@ function _build_interior_arrayop(
             for d in derivweights.orders[x]
                 iseven(d) || continue
                 si = stencil_cache[(u, x, d)]
-                weights = si.D_op.stencil_coefs  # uniform, centred
                 taps = map(si.offsets) do off
                     idx_exprs = map(u_spatial) do xv
                         eq_d = indexmap[xv]
@@ -631,7 +645,21 @@ function _build_interior_arrayop(
                     end
                     Symbolics.wrap(u_c[idx_exprs...])
                 end
-                expr = sym_dot(weights, taps)
+                if si.is_uniform
+                    expr = sym_dot(si.D_op.stencil_coefs, taps)
+                else
+                    # Non-uniform: index into weight matrix with symbolic point index.
+                    # Weight matrix column i = weights for grid point (bpc + i).
+                    # ArrayOp point k is at grid position (k + bases[dim]).
+                    # So weight column = k + bases[dim] - bpc.
+                    wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(si.weight_matrix)
+                    dim = indexmap[x]
+                    bpc = si.D_op.boundary_point_count
+                    point_idx = _idxs[dim] + bases[dim] - bpc
+                    expr = sum(1:length(si.offsets)) do k
+                        Symbolics.wrap(wmat_c[k, point_idx]) * taps[k]
+                    end
+                end
                 push!(fd_rules, (Differential(x)^d)(u) => expr)
             end
         end

@@ -1091,3 +1091,242 @@ end
     @test size(u_scalar) == size(u_array)
     @test isapprox(u_scalar, u_array, rtol = 1e-10)
 end
+
+# ===========================================================================
+# Phase 7: Non-uniform grid ArrayOp tests
+# ===========================================================================
+
+using StableRNGs
+
+@testset "Non-uniform ArrayOp: 1D diffusion matches scalar" begin
+    u_exact = (x, t) -> exp.(-t) * cos.(x)
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [
+        u(0, x) ~ cos(x),
+        u(t, 0) ~ exp(-t),
+        u(t, Float64(π)) ~ -exp(-t),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(π)),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # Non-uniform grid: perturb interior points
+    dx = collect(range(0.0, Float64(π), length = 30))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ScalarizedDiscretization())
+    disc_array = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ArrayDiscretization())
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Non-uniform ArrayOp: symbolic structure" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [
+        u(0, x) ~ cos(x),
+        u(t, 0) ~ exp(-t),
+        u(t, Float64(π)) ~ -exp(-t),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(π)),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # Non-uniform grid
+    dx = collect(range(0.0, Float64(π), length = 30))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+
+    disc = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ArrayDiscretization())
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    using Symbolics: unwrap
+    using SymbolicUtils
+
+    # With ArrayOp: 1 array equation (28 interior) + 2 BC = 3 equations
+    @test length(eqs) == 3
+
+    # Verify that at least one equation contains an ArrayOp
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # After flattening, should have 30 equations (28 interior + 2 boundary)
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+    flat = flatten_equations(eqs)
+    @test length(flat) == 30
+end
+
+@testset "Non-uniform ArrayOp: 1D diffusion with coefficient" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    D_coeff = 2.0
+    eq = Dt(u(t, x)) ~ D_coeff * Dxx(u(t, x))
+    bcs = [
+        u(0, x) ~ cos(x),
+        u(t, 0) ~ exp(-D_coeff * t),
+        u(t, Float64(π)) ~ -exp(-D_coeff * t),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(π)),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = collect(range(0.0, Float64(π), length = 30))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+        rand(StableRNG(42), [0.002, -0.002], length(dx[2:(end - 1)]))
+
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ScalarizedDiscretization())
+    disc_array = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ArrayDiscretization())
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Non-uniform ArrayOp: higher order (approx_order=4)" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [
+        u(0, x) ~ cos(x),
+        u(t, 0) ~ exp(-t),
+        u(t, Float64(π)) ~ -exp(-t),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(π)),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = collect(range(0.0, Float64(π), length = 30))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+        rand(StableRNG(0), [0.001, -0.001], length(dx[2:(end - 1)]))
+
+    disc_scalar = MOLFiniteDifference([x => dx], t; approx_order = 4,
+        discretization_strategy = ScalarizedDiscretization())
+    disc_array = MOLFiniteDifference([x => dx], t; approx_order = 4,
+        discretization_strategy = ArrayDiscretization())
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Non-uniform ArrayOp: 2D diffusion" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0, x, y) ~ cos(x) * cos(y),
+        u(t, 0, y) ~ exp(-2t) * cos(y),
+        u(t, Float64(π), y) ~ -exp(-2t) * cos(y),
+        u(t, x, 0) ~ exp(-2t) * cos(x),
+        u(t, x, Float64(π)) ~ -exp(-2t) * cos(x),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, Float64(π)),
+        y ∈ Interval(0.0, Float64(π)),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    # Non-uniform grids in both dimensions
+    dx = collect(range(0.0, Float64(π), length = 12))
+    dx[2:(end - 1)] .= dx[2:(end - 1)] .+
+        rand(StableRNG(1), [0.005, -0.005], length(dx[2:(end - 1)]))
+    dy = collect(range(0.0, Float64(π), length = 12))
+    dy[2:(end - 1)] .= dy[2:(end - 1)] .+
+        rand(StableRNG(2), [0.005, -0.005], length(dy[2:(end - 1)]))
+
+    disc_scalar = MOLFiniteDifference([x => dx, y => dy], t;
+        discretization_strategy = ScalarizedDiscretization())
+    disc_array = MOLFiniteDifference([x => dx, y => dy], t;
+        discretization_strategy = ArrayDiscretization())
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.2)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.2)
+
+    u_scalar = sol_scalar[u(t, x, y)]
+    u_array = sol_array[u(t, x, y)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
