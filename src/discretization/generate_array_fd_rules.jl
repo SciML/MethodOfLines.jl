@@ -13,11 +13,12 @@ Supported ArrayOp patterns:
 - Centred (even-order) derivatives on uniform grids
 - Upwind (odd-order) derivatives with UpwindScheme on uniform grids
 - Mixed cross-derivatives on uniform grids
+- Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform grids
+- Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform grids
 
-All other cases -- non-uniform grids, nonlinear Laplacians, spherical
-derivatives, WENO, FunctionalScheme, etc. -- fall back to per-point
-computation via `discretize_equation_at_point` from the scalar path, which
-supports ALL scheme types.
+All other cases -- non-uniform grids, WENO, FunctionalScheme, etc. --
+fall back to per-point computation via `discretize_equation_at_point`
+from the scalar path, which supports ALL scheme types.
 """
 
 # --- stencil pre-computation ------------------------------------------------
@@ -43,6 +44,26 @@ struct UpwindStencilInfo
     D_pos::DerivativeOperator    # positive-wind (offside=d+upwind_order-1)
     neg_offsets::Vector{Int}     # 0:(stencil_length-1) for neg
     pos_offsets::Vector{Int}     # (-stencil_length+1):0 for pos
+    is_uniform::Bool
+end
+
+"""
+    NonlinlapStencilInfo
+
+Pre-computed stencil information for the nonlinear Laplacian `Dx(expr * Dx(u))`
+on a uniform grid.  Contains the outer (half-offset) derivative, inner (half-offset)
+derivative, and interpolation weights/offsets, all of which are constant at every
+interior point on a uniform grid.
+"""
+struct NonlinlapStencilInfo
+    outer_weights        # stencil_coefs of D_outer (half-offset 1st derivative)
+    outer_offsets::Vector{Int}
+    inner_weights        # stencil_coefs of D_inner (half-offset 1st derivative)
+    inner_offsets::Vector{Int}
+    interp_weights       # stencil_coefs of interpolation operator
+    interp_offsets::Vector{Int}
+    combined_lower_bpc::Int   # combined boundary point count, lower side
+    combined_upper_bpc::Int   # combined boundary point count, upper side
     is_uniform::Bool
 end
 
@@ -102,6 +123,57 @@ function precompute_upwind_stencils(s, depvars, derivweights)
 end
 
 """
+    precompute_nonlinlap_stencils(s, depvars, derivweights)
+
+Returns a `Dict` mapping `(u, x)` to a `NonlinlapStencilInfo` for every
+(variable, spatial dim) pair where the half-offset operators exist and the
+grid is uniform.
+"""
+function precompute_nonlinlap_stencils(s, depvars, derivweights)
+    info = Dict{Any, NonlinlapStencilInfo}()
+    for u in depvars
+        for x in ivs(u, s)
+            haskey(derivweights.halfoffsetmap[1], Differential(x)) || continue
+            haskey(derivweights.halfoffsetmap[2], Differential(x)) || continue
+            haskey(derivweights.interpmap, x) || continue
+
+            D_inner = derivweights.halfoffsetmap[1][Differential(x)]
+            D_outer = derivweights.halfoffsetmap[2][Differential(x)]
+            interp  = derivweights.interpmap[x]
+
+            is_uniform = (D_inner.dx isa Number) &&
+                         (D_outer.dx isa Number) &&
+                         (interp.dx isa Number)
+            is_uniform || continue
+
+            outer_offsets  = collect((1 - div(D_outer.stencil_length, 2)):(div(D_outer.stencil_length, 2)))
+            inner_offsets  = collect((1 - div(D_inner.stencil_length, 2)):(div(D_inner.stencil_length, 2)))
+            interp_offsets = collect((1 - div(interp.stencil_length, 2)):(div(interp.stencil_length, 2)))
+
+            # Combined boundary point count: total stencil reach from original grid point i
+            # Original grid positions accessed: (i-1) + outer_off + {inner_off, interp_off}
+            combined_lower_bpc = max(0,
+                1 - minimum(outer_offsets) - min(minimum(inner_offsets), minimum(interp_offsets)))
+            combined_upper_bpc = max(0,
+                -1 + maximum(outer_offsets) + max(maximum(inner_offsets), maximum(interp_offsets)))
+
+            info[(u, x)] = NonlinlapStencilInfo(
+                D_outer.stencil_coefs,
+                outer_offsets,
+                D_inner.stencil_coefs,
+                inner_offsets,
+                interp.stencil_coefs,
+                interp_offsets,
+                combined_lower_bpc,
+                combined_upper_bpc,
+                is_uniform
+            )
+        end
+    end
+    return info
+end
+
+"""
     stencil_weights_and_taps(si, II, j, grid_len, haslower, hasupper)
 
 Compute the stencil weights and tap-point offsets at index `II` in dimension
@@ -137,6 +209,146 @@ function stencil_weights_and_taps(si::StencilInfo, II, j, ndim, grid_len, haslow
     return weights, Itap
 end
 
+# --- nonlinear Laplacian detection ------------------------------------------
+
+"""
+    _detect_nonlinlap_terms(pde, s, depvars, exclude_terms=Dict())
+
+Scan PDE terms for nonlinear Laplacian patterns `Dx(expr * Dx(u))`.
+Returns the set of matched terms (symbolic expressions).
+Terms in `exclude_terms` (e.g., spherical-matched terms) are skipped.
+"""
+function _detect_nonlinlap_terms(pde, s, depvars, exclude_terms=Dict{Any, NamedTuple}())
+    terms = split_terms(pde, s.x̄)
+    matched = Set{Any}()
+    for u in depvars
+        for x in ivs(u, s)
+            rules = [
+                @rule(*(~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d) => true),
+                @rule($(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)) => true),
+                @rule($(Differential(x))($(Differential(x))(u) / ~a) => true),
+                @rule(*(~~b, $(Differential(x))($(Differential(x))(u) / ~a), ~~c) => true),
+                @rule(/(*(~~b, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~d)), ~~c), ~e) => true),
+            ]
+            for t in terms
+                haskey(exclude_terms, t) && continue
+                for r in rules
+                    if r(t) !== nothing
+                        push!(matched, t)
+                        break
+                    end
+                end
+            end
+        end
+    end
+    return matched
+end
+
+# --- spherical Laplacian detection ------------------------------------------
+
+"""
+    _detect_spherical_terms(pde, s, depvars)
+
+Scan PDE terms for spherical Laplacian patterns `r^{-2} * Dr(r^2 * Dr(u))`.
+Returns a `Dict` mapping each matched term to a `NamedTuple` with
+`(u, r, innerexpr, outer_coeff)` for template building.
+"""
+function _detect_spherical_terms(pde, s, depvars)
+    # Use split_additive_terms (NOT split_terms) to preserve the complete
+    # spherical expression `1/r^2 * Dr(r^2 * Dr(u))` as a single term.
+    # split_terms(pde, s.x̄) decomposes it into pieces that the patterns
+    # cannot match.
+    terms = split_additive_terms(pde)
+    matched = Dict{Any, NamedTuple}()
+    for u in depvars
+        for r in ivs(u, s)
+            # Pattern 1: *(~~a, 1/(r^2), Dr(*(~~c, r^2, ~~d, Dr(u), ~~e)), ~~b)
+            rule1 = @rule *(
+                ~~a,
+                1 / (r^2),
+                $(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)),
+                ~~b
+            ) => (
+                u = u, r = r,
+                innerexpr = *(~c..., ~d..., ~e..., Num(1)),
+                outer_coeff = *(~a..., ~b..., Num(1))
+            )
+
+            # Pattern 2: /(*(~~a, Dr(*(~~c, r^2, ~~d, Dr(u), ~~e)), ~~b), r^2)
+            rule2 = @rule /(
+                *(
+                    ~~a, $(Differential(r))(
+                        *(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e)
+                    ), ~~b
+                ),
+                (r^2)
+            ) => (
+                u = u, r = r,
+                innerexpr = *(~c..., ~d..., ~e..., Num(1)),
+                outer_coeff = *(~a..., ~b..., Num(1))
+            )
+
+            # Pattern 3: /(Dr(*(~~c, r^2, ~~d, Dr(u), ~~e)), r^2)
+            rule3 = @rule /(
+                ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))),
+                (r^2)
+            ) => (
+                u = u, r = r,
+                innerexpr = *(~c..., ~d..., ~e..., Num(1)),
+                outer_coeff = Num(1)
+            )
+
+            rules = [rule1, rule2, rule3]
+            for t in terms
+                haskey(matched, t) && continue
+                for rl in rules
+                    result = rl(t)
+                    if result !== nothing
+                        matched[t] = result
+                        break
+                    end
+                end
+            end
+        end
+    end
+    return matched
+end
+
+# --- equation comparison ----------------------------------------------------
+
+"""
+    _equations_match(eq_template, eq_scalar)
+
+Compare two equations for equivalence.  First tries exact structural comparison
+via `isequal`.  If that fails, falls back to numerical comparison by
+substituting random values for all free symbolic variables.  This handles
+mathematically equivalent expressions that differ only in symbolic form
+(e.g., different sign distribution or term ordering).
+"""
+function _equations_match(eq_template, eq_scalar)
+    # Fast path: exact structural match
+    if isequal(eq_template.lhs, eq_scalar.lhs) &&
+       isequal(eq_template.rhs, eq_scalar.rhs)
+        return true
+    end
+    # Slow path: numerical comparison
+    # The difference lhs1 - lhs2 (and rhs1 - rhs2) should be zero if equal.
+    # Time derivatives cancel since they're structurally identical.
+    diff_lhs = eq_template.lhs - eq_scalar.lhs
+    diff_rhs = eq_template.rhs - eq_scalar.rhs
+    diff_expr = diff_lhs - diff_rhs
+    all_vars = Symbolics.get_variables(diff_expr)
+    isempty(all_vars) && return isequal(Symbolics.value(diff_expr), 0)
+    for _ in 1:3
+        subs = Dict(v => 0.5 + rand() for v in all_vars)
+        val = Symbolics.value(substitute(diff_expr, subs))
+        if !(val isa Number) || abs(val) > 1e-8
+            return false
+        end
+    end
+    return true
+end
+
 # --- interior equation generation -------------------------------------------
 
 """
@@ -150,13 +362,14 @@ produced when possible.  Supported patterns:
 - Centred (even-order) derivatives
 - Upwind (odd-order) derivatives with UpwindScheme
 - Mixed cross-derivatives
+- Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform grids
+- Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform grids
 
 Boundary-proximity interior points (the "frame" around the centred region)
 fall back to per-point computation via `discretize_equation_at_point`.
 
-All other cases (non-uniform grids, nonlinear Laplacians, WENO,
-FunctionalScheme, spherical, etc.) fall back entirely to per-point
-computation, which supports ALL scheme types.
+All other cases (non-uniform grids, WENO, FunctionalScheme, etc.) fall
+back entirely to per-point computation, which supports ALL scheme types.
 """
 function generate_array_interior_eqs(
         s, depvars, pde, derivweights, bcmap, eqvar,
@@ -164,6 +377,7 @@ function generate_array_interior_eqs(
     )
     stencil_cache = precompute_stencils(s, depvars, derivweights)
     upwind_cache = precompute_upwind_stencils(s, depvars, derivweights)
+    nonlinlap_cache = precompute_nonlinlap_stencils(s, depvars, derivweights)
 
     # -- determine whether the ArrayOp path can handle this PDE ---------------
     all_uniform = isempty(stencil_cache) ? true :
@@ -177,7 +391,18 @@ function generate_array_interior_eqs(
         for u in depvars for x in ivs(u, s)
     )
     can_upwind = has_odd_orders && derivweights.advection_scheme isa UpwindScheme
-    can_template = all_uniform && (!has_odd_orders || can_upwind)
+
+    # Detect spherical Laplacian terms first (they take priority over nonlinlap).
+    spherical_terms_info = _detect_spherical_terms(pde, s, depvars)
+    has_spherical = !isempty(spherical_terms_info) && !isempty(nonlinlap_cache)
+
+    # Detect nonlinear Laplacian terms -- their odd-order derivatives are
+    # handled internally, so they don't block the template path.
+    # Exclude spherical-matched terms to prevent double-matching.
+    nonlinlap_terms = _detect_nonlinlap_terms(pde, s, depvars, spherical_terms_info)
+    has_nonlinlap = !isempty(nonlinlap_terms) && !isempty(nonlinlap_cache)
+
+    can_template = all_uniform && (!has_odd_orders || can_upwind || has_nonlinlap || has_spherical)
 
     ndim = length(interior_ranges)
 
@@ -235,6 +460,32 @@ function generate_array_interior_eqs(
                     end
                 end
             end
+            # Nonlinear Laplacian combined stencil extent
+            if has_nonlinlap && haskey(nonlinlap_cache, (u, x))
+                nsi = nonlinlap_cache[(u, x)]
+                if !haslower
+                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], nsi.combined_lower_bpc)
+                end
+                if !hasupper
+                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], nsi.combined_upper_bpc)
+                end
+            end
+            # Spherical Laplacian stencil extent: combines D1, D2, and nonlinlap reach
+            if has_spherical && haskey(nonlinlap_cache, (u, x))
+                nsi = nonlinlap_cache[(u, x)]
+                D1_op = derivweights.map[Differential(x)]
+                D2_op = derivweights.map[Differential(x)^2]
+                d1_bpc = D1_op.boundary_point_count
+                d2_bpc = D2_op.boundary_point_count
+                sph_lower = max(nsi.combined_lower_bpc, d1_bpc, d2_bpc)
+                sph_upper = max(nsi.combined_upper_bpc, d1_bpc, d2_bpc)
+                if !haslower
+                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], sph_lower)
+                end
+                if !hasupper
+                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], sph_upper)
+                end
+            end
         end
     end
 
@@ -263,21 +514,22 @@ function generate_array_interior_eqs(
     eqs_centered = if centered_nonempty && all(n_centered .> 0)
         candidate, eq_first = _build_interior_arrayop(
             n_centered, lo_centered, s, depvars, pde, derivweights,
-            stencil_cache, upwind_cache, bcmap, eqvar, indexmap
+            stencil_cache, upwind_cache, nonlinlap_cache,
+            spherical_terms_info, bcmap, eqvar, indexmap
         )
         # Validate: compare the first instantiated equation against the
         # scalar path for the same point.  This catches any mismatch from
-        # unsupported derivative patterns (nonlinear Laplacian, spherical,
-        # etc.) that the template cannot handle.
+        # unsupported derivative patterns that the template cannot handle.
         II_check = CartesianIndex(Tuple(lo_centered))
         eq_scalar = discretize_equation_at_point(
             II_check, s, depvars, pde, derivweights, bcmap,
             eqvar, indexmap, boundaryvalfuncs
         )
-        if isequal(eq_first.lhs, eq_scalar.lhs) &&
-           isequal(eq_first.rhs, eq_scalar.rhs)
+        if _equations_match(eq_first, eq_scalar)
             candidate
         else
+            @debug "ArrayOp validation failed" eq_first eq_scalar
+            @debug "Diff" diff_lhs=eq_first.lhs-eq_scalar.lhs diff_rhs=eq_first.rhs-eq_scalar.rhs
             # Template doesn't match scalar path -- fall back to per-point
             # for the centred region as well.
             centered_rect = CartesianIndices(
@@ -297,17 +549,54 @@ function generate_array_interior_eqs(
     return collect(vcat(eqs_boundary, eqs_centered))
 end
 
+# --- Term-level + FD substitution helper ------------------------------------
+
+"""
+    _substitute_terms(expr, termlevel_dict, rdict, do_expand)
+
+Process `expr` by splitting it into additive terms.  Terms that match a key
+in `termlevel_dict` are replaced with the precomputed template value.  All
+other terms are processed via `pde_substitute(term, rdict)`.
+
+This avoids passing template values (which contain `Const`-wrapped arrays
+with symbolic indices) through `pde_substitute`, whose `maketerm`
+reconstruction would try to literally index concrete arrays.
+"""
+function _substitute_terms(expr, termlevel_dict, rdict, do_expand)
+    uw = Symbolics.unwrap(expr)
+    if SymbolicUtils.iscall(uw) && SymbolicUtils.operation(uw) == +
+        additive_terms = SymbolicUtils.arguments(uw)
+    else
+        additive_terms = [uw]
+    end
+    processed = map(additive_terms) do term
+        if haskey(termlevel_dict, term)
+            # Already-discretized template — use directly, skip pde_substitute.
+            Symbolics.unwrap(termlevel_dict[term])
+        else
+            t_wrapped = Symbolics.wrap(term)
+            result = do_expand ?
+                expand_derivatives(pde_substitute(t_wrapped, rdict)) :
+                pde_substitute(t_wrapped, rdict)
+            Symbolics.unwrap(result)
+        end
+    end
+    return Symbolics.wrap(sum(Symbolics.wrap, processed))
+end
+
 # --- ArrayOp construction for interior region --------------------------------
 
 """
     _build_interior_arrayop(n_centered, lo_centered, s, depvars, pde,
                              derivweights, stencil_cache, upwind_cache,
+                             nonlinlap_cache, spherical_terms_info,
                              bcmap, eqvar, indexmap)
 
 Build a single ArrayOp equation for the interior region.
 
-Handles centred (even-order), upwind (odd-order), and mixed cross-derivative
-stencils using symbolic index variables.
+Handles centred (even-order), upwind (odd-order), mixed cross-derivative,
+nonlinear Laplacian, and spherical Laplacian stencils using symbolic index
+variables.
 
 Returns `(eqs, eq_first)` where `eqs` is a single-element vector containing
 the ArrayOp equation, and `eq_first` is the scalar equation at the first
@@ -315,7 +604,8 @@ centred point (for validation against the scalar path).
 """
 function _build_interior_arrayop(
         n_centered, lo_centered, s, depvars, pde, derivweights,
-        stencil_cache, upwind_cache, bcmap, eqvar, indexmap
+        stencil_cache, upwind_cache, nonlinlap_cache,
+        spherical_terms_info, bcmap, eqvar, indexmap
     )
     ndim = length(n_centered)
     _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
@@ -377,23 +667,46 @@ function _build_interior_arrayop(
         s, depvars, derivweights, indexmap, _idxs, bases
     )
 
+    # -- Nonlinear Laplacian rules --------------------------------------------
+    nl_rules = Pair[]
+    if !isempty(nonlinlap_cache)
+        nl_rules = _build_nonlinlap_rules(
+            pde, s, depvars, derivweights, nonlinlap_cache,
+            indexmap, _idxs, bases, var_rules
+        )
+    end
+
+    # -- Spherical Laplacian rules -------------------------------------------
+    sph_rules = Pair[]
+    if !isempty(spherical_terms_info) && !isempty(nonlinlap_cache)
+        sph_rules = _build_spherical_rules(
+            pde, s, depvars, derivweights, nonlinlap_cache,
+            spherical_terms_info, indexmap, _idxs, bases, var_rules
+        )
+    end
+
     # -- Build templates (once) -----------------------------------------------
-    # Upwind rules are term-level substitutions (they replace entire additive
-    # terms, not just derivative sub-expressions).  Apply them first on the
-    # PDE expression, then apply FD + var rules on the result.
+    # Upwind, nonlinear Laplacian, and spherical Laplacian rules are term-level
+    # substitutions (they replace entire additive terms, not just derivative
+    # sub-expressions).  Apply them first on the PDE expression, then apply
+    # FD + var rules.
     all_fd_rules = vcat(fd_rules, mixed_rules)
     rdict = Dict(vcat(all_fd_rules, var_rules))
 
-    if isempty(upwind_rules)
+    termlevel_rules = vcat(sph_rules, upwind_rules, nl_rules)
+    if isempty(termlevel_rules)
         template_lhs = expand_derivatives(pde_substitute(pde.lhs, rdict))
         template_rhs = pde_substitute(pde.rhs, rdict)
     else
-        # Apply upwind term-level substitutions first, then FD+var rules
-        upwind_dict = Dict(upwind_rules)
-        lhs_upwinded = pde_substitute(pde.lhs, upwind_dict)
-        rhs_upwinded = pde_substitute(pde.rhs, upwind_dict)
-        template_lhs = expand_derivatives(pde_substitute(lhs_upwinded, rdict))
-        template_rhs = pde_substitute(rhs_upwinded, rdict)
+        # Process each additive term separately.  Term-level templates
+        # (spherical, upwind, nonlinlap) contain Const-wrapped arrays with
+        # symbolic indices that pde_substitute cannot safely traverse (its
+        # maketerm reconstruction tries to literally index concrete arrays).
+        # By processing matched and unmatched terms independently we avoid
+        # passing templates through pde_substitute.
+        termlevel_dict = Dict(Symbolics.unwrap(k) => v for (k, v) in termlevel_rules)
+        template_lhs = _substitute_terms(pde.lhs, termlevel_dict, rdict, true)
+        template_rhs = _substitute_terms(pde.rhs, termlevel_dict, rdict, false)
     end
 
     # -- Separate time derivative from spatial terms --------------------------
@@ -607,4 +920,288 @@ function _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs
         end
     end
     return mixed_rules
+end
+
+# --- Nonlinear Laplacian ArrayOp rules --------------------------------------
+
+"""
+    _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases)
+
+Build the ArrayOp-indexed discretization of `Dx(expr_sym * Dx(u))` using the
+precomputed `NonlinlapStencilInfo`.
+
+At each outer stencil half-point:
+1. Interpolate all depvars and grid coordinates to the half-point
+2. Compute the inner derivative of `u` at the half-point
+3. Substitute rules into `expr_sym * Dx(u)` to get the inner expression
+
+Then take the outer finite difference across the inner expressions.
+"""
+function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases)
+    u_raw = Symbolics.unwrap(s.discvars[u])
+    u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
+    u_spatial = ivs(u, s)
+
+    inner_exprs = map(nsi.outer_offsets) do outer_off
+        # --- Interpolation rules for variables at this half-point ---
+        interp_var_rules = Pair[]
+        for v in depvars
+            v_raw = Symbolics.unwrap(s.discvars[v])
+            v_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(v_raw)
+            v_spatial = ivs(v, s)
+            taps = map(nsi.interp_offsets) do ioff
+                idx_exprs = map(v_spatial) do xv
+                    eq_d = indexmap[xv]
+                    base_expr = _idxs[eq_d] + bases[eq_d]
+                    # Offset: -1 for clipped grid, + outer_off, + interp offset
+                    isequal(xv, x) ? base_expr + outer_off + ioff - 1 : base_expr
+                end
+                Symbolics.wrap(v_c[idx_exprs...])
+            end
+            push!(interp_var_rules, v => sym_dot(nsi.interp_weights, taps))
+        end
+
+        # --- Interpolation rules for grid coordinates ---
+        interp_iv_rules = Pair[]
+        for xv in s.x̄
+            if isequal(xv, x)
+                grid_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(collect(s.grid[x]))
+                dim = indexmap[x]
+                taps = map(nsi.interp_offsets) do ioff
+                    Symbolics.wrap(grid_c[_idxs[dim] + bases[dim] + outer_off + ioff - 1])
+                end
+                push!(interp_iv_rules, x => sym_dot(nsi.interp_weights, taps))
+            else
+                haskey(indexmap, xv) || continue
+                grid_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(collect(s.grid[xv]))
+                dim = indexmap[xv]
+                push!(interp_iv_rules, xv => Symbolics.wrap(grid_c[_idxs[dim] + bases[dim]]))
+            end
+        end
+
+        # --- Inner derivative of u at this half-point: Dx(u) ---
+        inner_deriv_taps = map(nsi.inner_offsets) do ioff
+            idx_exprs = map(u_spatial) do xv
+                eq_d = indexmap[xv]
+                base_expr = _idxs[eq_d] + bases[eq_d]
+                isequal(xv, x) ? base_expr + outer_off + ioff - 1 : base_expr
+            end
+            Symbolics.wrap(u_c[idx_exprs...])
+        end
+        inner_deriv = sym_dot(nsi.inner_weights, inner_deriv_taps)
+
+        # --- Substitute all rules into expr * Dx(u) ---
+        deriv_rules = Pair[Differential(x)(u) => inner_deriv]
+        all_rules = Dict(vcat(deriv_rules, interp_var_rules, interp_iv_rules))
+        substitute(expr_sym * Differential(x)(u), all_rules)
+    end
+
+    # Apply outer weights to get the full nonlinear Laplacian
+    return sym_dot(nsi.outer_weights, inner_exprs)
+end
+
+"""
+    _build_nonlinlap_rules(pde, s, depvars, derivweights, nonlinlap_cache,
+                            indexmap, _idxs, bases, var_rules)
+
+Build term-level substitution rules for nonlinear Laplacian patterns.
+
+Uses the same pattern-matching approach as `generate_nonlinlap_rules` from the
+scalar path, but substitutes ArrayOp-parameterized stencils.
+
+Returns a vector of `Pair{term => discretized_expr}`.
+"""
+function _build_nonlinlap_rules(
+        pde, s, depvars, derivweights, nonlinlap_cache,
+        indexmap, _idxs, bases, var_rules
+    )
+    terms = split_terms(pde, s.x̄)
+    vr_dict = Dict(var_rules)
+    nonlinlap_rules = Pair[]
+
+    for u in depvars
+        for x in ivs(u, s)
+            haskey(nonlinlap_cache, (u, x)) || continue
+            nsi = nonlinlap_cache[(u, x)]
+
+            # Pattern 1: *(~~c, Dx(*(~~a, Dx(u), ~~b)), ~~d)
+            rule_mul = @rule *(
+                ~~c,
+                $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)),
+                ~~d
+            ) => begin
+                expr_sym = *(~a..., ~b...)
+                outer_coeff = *(~c..., ~d...)
+                outer_coeff_subst = pde_substitute(outer_coeff, vr_dict)
+                nlap = _nonlinlap_template(
+                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases
+                )
+                outer_coeff_subst * nlap
+            end
+
+            # Pattern 2: Dx(*(~~a, Dx(u), ~~b))
+            rule_standalone = @rule $(Differential(x))(
+                *(~~a, $(Differential(x))(u), ~~b)
+            ) => begin
+                expr_sym = *(~a..., ~b...)
+                _nonlinlap_template(
+                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases
+                )
+            end
+
+            # Pattern 3: Dx(Dx(u) / ~a)
+            rule_div = @rule $(Differential(x))(
+                $(Differential(x))(u) / ~a
+            ) => begin
+                expr_sym = 1 / ~a
+                _nonlinlap_template(
+                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases
+                )
+            end
+
+            # Pattern 4: *(~~b, Dx(Dx(u) / ~a), ~~c)
+            rule_mul_div = @rule *(
+                ~~b,
+                $(Differential(x))($(Differential(x))(u) / ~a),
+                ~~c
+            ) => begin
+                expr_sym = 1 / ~a
+                outer_coeff = *(~b..., ~c...)
+                outer_coeff_subst = pde_substitute(outer_coeff, vr_dict)
+                nlap = _nonlinlap_template(
+                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases
+                )
+                outer_coeff_subst * nlap
+            end
+
+            # Pattern 5: /(*(~~b, Dx(*(~~a, Dx(u), ~~d)), ~~c), ~e)
+            rule_full_div = @rule /(
+                *(~~b, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~d)), ~~c),
+                ~e
+            ) => begin
+                expr_sym = *(~a..., ~d...)
+                outer_coeff = *(~b..., ~c...) / ~e
+                outer_coeff_subst = pde_substitute(outer_coeff, vr_dict)
+                nlap = _nonlinlap_template(
+                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases
+                )
+                outer_coeff_subst * nlap
+            end
+
+            # Try matching each term
+            all_rules = [rule_mul, rule_standalone, rule_div, rule_mul_div, rule_full_div]
+            for t in terms
+                for r in all_rules
+                    matched = r(t)
+                    if matched !== nothing
+                        push!(nonlinlap_rules, t => matched)
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    return nonlinlap_rules
+end
+
+# --- Spherical Laplacian ArrayOp rules --------------------------------------
+
+"""
+    _spherical_template(info, nsi, s, depvars, derivweights,
+                         indexmap, _idxs, bases, var_rules)
+
+Build the ArrayOp-indexed discretization of the spherical Laplacian
+`r^{-2} * Dr(r^2 * innerexpr * Dr(u))`.
+
+At r ≈ 0:   `6 * innerexpr * D2(u)`   (L'Hôpital's rule)
+At r ≠ 0:   `innerexpr * (D1(u)/r + nonlinlap(innerexpr, u, r))`
+
+Uses `IfElse.ifelse` for the r ≈ 0 conditional (same pattern as upwind wind
+switching).
+"""
+function _spherical_template(info, nsi, s, depvars, derivweights,
+                              indexmap, _idxs, bases, var_rules)
+    u = info.u
+    r = info.r
+    innerexpr = info.innerexpr
+
+    u_raw = Symbolics.unwrap(s.discvars[u])
+    u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
+    u_spatial = ivs(u, s)
+
+    # Compute the grid coordinate at the current ArrayOp index using a linear
+    # formula.  This avoids using grid_c[_i + base] (Const-wrapped Float64 vec)
+    # which pde_substitute cannot reconstruct via maketerm when the index is
+    # symbolic.  The grid is guaranteed uniform here, so r = r0 + (idx-1)*dr.
+    grid_r = collect(s.grid[r])
+    r_start = grid_r[1]
+    dr = grid_r[2] - grid_r[1]
+    dim = indexmap[r]
+    r_at_i = Num(r_start) + (_idxs[dim] + bases[dim] - 1) * Num(dr)
+
+    # The ArrayOp centred region never includes r = 0 (which is handled by
+    # boundary conditions), so we always use the r ≠ 0 branch:
+    #   innerexpr * (D1(u)/r + cartesian_nonlinear_laplacian(innerexpr, u, r))
+
+    # --- Centered 1st derivative template ---
+    D1_op = derivweights.map[Differential(r)]
+    d1_offsets = collect(half_range(D1_op.stencil_length))
+    d1_taps = map(d1_offsets) do off
+        idx_exprs = map(u_spatial) do xv
+            eq_d = indexmap[xv]
+            base_expr = _idxs[eq_d] + bases[eq_d]
+            isequal(xv, r) ? base_expr + off : base_expr
+        end
+        Symbolics.wrap(u_c[idx_exprs...])
+    end
+    D1_template = sym_dot(D1_op.stencil_coefs, d1_taps)
+
+    # --- Nonlinear Laplacian template (reuse existing infrastructure) ---
+    nlap_template = _nonlinlap_template(
+        innerexpr, u, r, nsi, s, depvars, indexmap, _idxs, bases
+    )
+
+    # --- Substitute innerexpr variables at the current point ---
+    vr_dict = Dict(var_rules)
+    innerexpr_at_i = pde_substitute(innerexpr, vr_dict)
+
+    # --- Combine: innerexpr * (D1/r + nonlinlap) ---
+    return innerexpr_at_i * (D1_template / r_at_i + nlap_template)
+end
+
+"""
+    _build_spherical_rules(pde, s, depvars, derivweights, nonlinlap_cache,
+                            spherical_terms_info, indexmap, _idxs, bases, var_rules)
+
+Build term-level substitution rules for spherical Laplacian patterns.
+
+For each spherical-matched term, builds the ArrayOp-indexed discretization
+using `_spherical_template` and multiplies by the outer coefficient.
+
+Returns a vector of `Pair{term => discretized_expr}`.
+"""
+function _build_spherical_rules(
+        pde, s, depvars, derivweights, nonlinlap_cache,
+        spherical_terms_info, indexmap, _idxs, bases, var_rules
+    )
+    vr_dict = Dict(var_rules)
+    spherical_rules = Pair[]
+
+    for (term, info) in spherical_terms_info
+        haskey(nonlinlap_cache, (info.u, info.r)) || continue
+        nsi = nonlinlap_cache[(info.u, info.r)]
+
+        sph_expr = _spherical_template(
+            info, nsi, s, depvars, derivweights,
+            indexmap, _idxs, bases, var_rules
+        )
+
+        # Substitute outer_coeff variables now (the template is self-contained,
+        # so the second pde_substitute pass should not need to process it).
+        outer_subst = pde_substitute(info.outer_coeff, vr_dict)
+        push!(spherical_rules, term => outer_subst * sph_expr)
+    end
+
+    return spherical_rules
 end

@@ -713,3 +713,381 @@ end
     @test size(u_scalar) == size(u_array)
     @test isapprox(u_scalar, u_array, rtol = 1e-10)
 end
+
+# --- Phase 5: Nonlinear Laplacian ArrayOp tests ------------------------------
+
+@testset "Nonlinlap ArrayOp matches scalar" begin
+    # 1D nonlinear diffusion Dt(u) ~ Dx(u^(-1) * Dx(u)) on uniform grid.
+    # Compare ArrayDiscretization (which should now use the ArrayOp path)
+    # against ScalarizedDiscretization.
+    @parameters t x
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+    c = 1.0
+    a = 1.0
+
+    analytic_sol_func(t, x) = 2.0 * (c + t) / (a + x)^2
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
+
+    bcs = [
+        u(0.0, x) ~ analytic_sol_func(0.0, x),
+        u(t, 0.0) ~ analytic_sol_func(t, 0.0),
+        u(t, 2.0) ~ analytic_sol_func(t, 2.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Rosenbrock32(), saveat = 0.5)
+    sol_array = solve(prob_array, Rosenbrock32(), saveat = 0.5)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Nonlinlap ArrayOp symbolic structure" begin
+    # Verify that the ArrayOp path produces a single array equation (not
+    # per-point fallback) for a nonlinear Laplacian on uniform grid.
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
+
+    bcs = [
+        u(0.0, x) ~ 2.0 / (1.0 + x)^2,
+        u(t, 0.0) ~ 2.0 * (1.0 + t),
+        u(t, 2.0) ~ 2.0 * (1.0 + t) / 9.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.25
+    disc = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Should have ArrayOp equations (not N scalar equations)
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # After flattening, should produce the right number of equations
+    flat = flatten_equations(eqs)
+    # dx=0.25 on [0,2] gives 9 grid points, interior has some points
+    # (exact count depends on boundary frame)
+    @test length(flat) >= 5
+end
+
+@testset "Nonlinlap ArrayOp with analytical solution" begin
+    # Verify the nonlinear Laplacian ArrayOp produces correct solutions by
+    # comparing against the known analytical solution.
+    @parameters t x
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+    c = 1.0
+    a = 1.0
+
+    analytic_sol_func(t, x) = 2.0 * (c + t) / (a + x)^2
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
+
+    bcs = [
+        u(0.0, x) ~ analytic_sol_func(0.0, x),
+        u(t, 0.0) ~ analytic_sol_func(t, 0.0),
+        u(t, 2.0) ~ analytic_sol_func(t, 2.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    disc = MOLFiniteDifference([x => 0.05], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Rosenbrock32())
+    @test SciMLBase.successful_retcode(sol)
+
+    x_disc = sol[x]
+    asf = [analytic_sol_func(2.0, x_val) for x_val in x_disc]
+    sol′ = sol[u(t, x)]
+    @test asf ≈ sol′[end, :] atol = 0.1
+end
+
+@testset "Nonlinlap ArrayOp higher-order (approx_order=4)" begin
+    # Verify the nonlinear Laplacian ArrayOp works with 4th order accuracy.
+    @parameters t x
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+    c = 1.0
+    a = 1.0
+
+    analytic_sol_func(t, x) = 2.0 * (c + t) / (a + x)^2
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
+
+    bcs = [
+        u(0.0, x) ~ analytic_sol_func(0.0, x),
+        u(t, 0.0) ~ analytic_sol_func(t, 0.0),
+        u(t, 2.0) ~ analytic_sol_func(t, 2.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        approx_order = 4,
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        approx_order = 4,
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Rosenbrock32(), saveat = 0.5)
+    sol_array = solve(prob_array, Rosenbrock32(), saveat = 0.5)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+# --- Phase 6: Spherical Laplacian ArrayOp tests ------------------------------
+
+@testset "Spherical ArrayOp matches scalar" begin
+    # Spherical diffusion Dt(u) ~ 1/r^2 * Dr(r^2 * Dr(u)) on uniform grid.
+    # Compare ArrayDiscretization against ScalarizedDiscretization.
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    eq = Dt(u(t, r)) ~ 1 / r^2 * Dr(r^2 * Dr(u(t, r)))
+
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0,
+        u(t, 1) ~ exp(-t) * sin(1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        r ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    dr = 0.1
+
+    disc_scalar = MOLFiniteDifference([r => dr], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([r => dr], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Rodas4(), saveat = 0.1)
+    sol_array = solve(prob_array, Rodas4(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, r)]
+    u_array = sol_array[u(t, r)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Spherical ArrayOp symbolic structure" begin
+    # Verify that the spherical Laplacian uses the ArrayOp path (not per-point).
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    eq = Dt(u(t, r)) ~ 1 / r^2 * Dr(r^2 * Dr(u(t, r)))
+
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0,
+        u(t, 1) ~ exp(-t) * sin(1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        r ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    dr = 0.1
+    disc = MOLFiniteDifference([r => dr], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Should have ArrayOp equations
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    flat = flatten_equations(eqs)
+    @test length(flat) >= 5
+end
+
+@testset "Spherical ArrayOp with coefficient" begin
+    # Spherical diffusion with coefficient: Dt(u) ~ 4/r^2 * Dr(r^2 * Dr(u)).
+    # Compare ArrayDiscretization against ScalarizedDiscretization.
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    eq = Dt(u(t, r)) ~ 4 / r^2 * Dr(r^2 * Dr(u(t, r)))
+
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0,
+        u(t, 1) ~ exp(-4t) * sin(1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        r ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    dr = 0.1
+
+    disc_scalar = MOLFiniteDifference([r => dr], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([r => dr], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, r)]
+    u_array = sol_array[u(t, r)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Spherical ArrayOp higher-order (approx_order=4)" begin
+    # Spherical diffusion with 4th order accuracy.
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    eq = Dt(u(t, r)) ~ 1 / r^2 * Dr(r^2 * Dr(u(t, r)))
+
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0,
+        u(t, 1) ~ exp(-t) * sin(1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        r ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    dr = 0.1
+
+    disc_scalar = MOLFiniteDifference([r => dr], t;
+        approx_order = 4,
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([r => dr], t;
+        approx_order = 4,
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Rodas4(), saveat = 0.1)
+    sol_array = solve(prob_array, Rodas4(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, r)]
+    u_array = sol_array[u(t, r)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
