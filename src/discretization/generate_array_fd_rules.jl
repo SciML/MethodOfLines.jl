@@ -13,12 +13,12 @@ into individual per-point equations, preserving correctness.
 
 Supported ArrayOp patterns:
 - Centred (even-order) derivatives on uniform and non-uniform grids
-- Upwind (odd-order) derivatives with UpwindScheme on uniform grids
+- Upwind (odd-order) derivatives with UpwindScheme on uniform and non-uniform grids
 - Mixed cross-derivatives on uniform grids
 - Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform grids
 - Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform grids
 
-All other cases -- WENO, FunctionalScheme, non-uniform upwind/nonlinlap, etc. --
+All other cases -- WENO, FunctionalScheme, non-uniform nonlinlap, etc. --
 fall back to per-point computation via `discretize_equation_at_point`
 from the scalar path, which supports ALL scheme types.
 """
@@ -48,6 +48,8 @@ struct UpwindStencilInfo
     neg_offsets::Vector{Int}     # 0:(stencil_length-1) for neg
     pos_offsets::Vector{Int}     # (-stencil_length+1):0 for pos
     is_uniform::Bool
+    neg_weight_matrix::Union{Nothing, Matrix{Float64}}  # non-uniform: stencil_length × num_interior
+    pos_weight_matrix::Union{Nothing, Matrix{Float64}}  # non-uniform: stencil_length × num_interior
 end
 
 """
@@ -120,12 +122,16 @@ function precompute_upwind_stencils(s, depvars, derivweights)
                 haskey(derivweights.windmap[1], Dx_d) || continue
                 D_neg = derivweights.windmap[1][Dx_d]  # offside=0
                 D_pos = derivweights.windmap[2][Dx_d]  # offside=d+upwind_order-1
+                is_uniform = D_neg.dx isa Number
+                neg_wmat = !is_uniform ? hcat(Vector.(D_neg.stencil_coefs)...) : nothing
+                pos_wmat = !is_uniform ? hcat(Vector.(D_pos.stencil_coefs)...) : nothing
                 info[(u, x, d)] = UpwindStencilInfo(
                     D_neg,
                     D_pos,
                     collect(0:(D_neg.stencil_length - 1)),
                     collect((-D_pos.stencil_length + 1):0),
-                    D_neg.dx isa Number
+                    is_uniform,
+                    neg_wmat, pos_wmat
                 )
             end
         end
@@ -371,7 +377,7 @@ Generate discretised interior equations.
 For the interior region, a single ArrayOp equation is produced when possible.
 Supported patterns:
 - Centred (even-order) derivatives on uniform and non-uniform grids
-- Upwind (odd-order) derivatives with UpwindScheme on uniform grids
+- Upwind (odd-order) derivatives with UpwindScheme on uniform and non-uniform grids
 - Mixed cross-derivatives on uniform grids
 - Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform grids
 - Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform grids
@@ -379,7 +385,7 @@ Supported patterns:
 Boundary-proximity interior points (the "frame" around the centred region)
 fall back to per-point computation via `discretize_equation_at_point`.
 
-All other cases (WENO, FunctionalScheme, non-uniform upwind/nonlinlap, etc.)
+All other cases (WENO, FunctionalScheme, non-uniform nonlinlap, etc.)
 fall back entirely to per-point computation, which supports ALL scheme types.
 """
 function generate_array_interior_eqs(
@@ -393,10 +399,8 @@ function generate_array_interior_eqs(
     # -- determine whether the ArrayOp path can handle this PDE ---------------
     # Centered derivatives support both uniform and non-uniform grids.
     # Upwind, nonlinlap, and spherical still require uniform grids.
+    # Upwind now supports non-uniform grids — only nonlinlap still requires uniform.
     schemes_needing_uniform = Bool[]
-    if !isempty(upwind_cache)
-        append!(schemes_needing_uniform, [si.is_uniform for si in values(upwind_cache)])
-    end
     if !isempty(nonlinlap_cache)
         append!(schemes_needing_uniform, [si.is_uniform for si in values(nonlinlap_cache)])
     end
@@ -461,18 +465,17 @@ function generate_array_interior_eqs(
                     end
                 elseif isodd(d) && haskey(upwind_cache, (u, x, d))
                     usi = upwind_cache[(u, x, d)]
-                    # Negative-wind (offside=0): stencil reaches forward
-                    # → boundary proximity near upper end
-                    neg_bpc = usi.D_neg.boundary_point_count
-                    # Positive-wind (offside>0): stencil reaches backward
-                    # → boundary proximity near lower end
-                    pos_bpc = usi.D_pos.boundary_point_count
-                    bpc = max(neg_bpc, pos_bpc)
+                    # Negative-wind (offside=0): low_bpc=0, high_bpc=stencil_length-1
+                    # Positive-wind (offside>0): low_bpc=offside, high_bpc=0
+                    # Lower boundary needs max(neg.offside, pos.offside) points
+                    # Upper boundary needs max(neg.boundary_point_count, pos.boundary_point_count) points
+                    lower_bpc = max(usi.D_neg.offside, usi.D_pos.offside)
+                    upper_bpc = max(usi.D_neg.boundary_point_count, usi.D_pos.boundary_point_count)
                     if !haslower
-                        max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], bpc)
+                        max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], lower_bpc)
                     end
                     if !hasupper
-                        max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], bpc)
+                        max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], upper_bpc)
                     end
                 end
             end
@@ -788,8 +791,12 @@ function _build_upwind_rules(
         pde, s, depvars, derivweights, upwind_cache,
         bcmap, indexmap, _idxs, bases, var_rules
     )
-    # Helper: build stencil expression for a given variable, dimension, offsets, weights
-    function _upwind_stencil_expr(u, x, offsets, weights, _idxs, bases, indexmap, s)
+    # Helper: build stencil expression for a given variable, dimension, offsets, weights.
+    # For non-uniform grids, weight_matrix is a stencil_length × num_interior Matrix
+    # and bpc is the offside (= low_boundary_point_count) used to align weight matrix
+    # column indexing: stencil_coefs[j] corresponds to grid index (j + bpc).
+    function _upwind_stencil_expr(u, x, offsets, weights, _idxs, bases, indexmap, s;
+                                   weight_matrix=nothing, bpc=0)
         u_raw = Symbolics.unwrap(s.discvars[u])
         u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
         u_spatial = ivs(u, s)
@@ -801,7 +808,18 @@ function _build_upwind_rules(
             end
             Symbolics.wrap(u_c[idx_exprs...])
         end
-        return sym_dot(weights, taps)
+        if weight_matrix === nothing
+            # Uniform: constant weights
+            return sym_dot(weights, taps)
+        else
+            # Non-uniform: index into weight matrix by interior point index
+            wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(weight_matrix)
+            dim = indexmap[x]
+            point_idx = _idxs[dim] + bases[dim] - bpc
+            return sum(1:length(offsets)) do k
+                Symbolics.wrap(wmat_c[k, point_idx]) * taps[k]
+            end
+        end
     end
 
     terms = split_terms(pde, s.x̄)
@@ -821,11 +839,15 @@ function _build_upwind_rules(
 
                 neg_expr = _upwind_stencil_expr(
                     u, x, usi.neg_offsets, usi.D_neg.stencil_coefs,
-                    _idxs, bases, indexmap, s
+                    _idxs, bases, indexmap, s;
+                    weight_matrix=usi.neg_weight_matrix,
+                    bpc=usi.D_neg.offside
                 )
                 pos_expr = _upwind_stencil_expr(
                     u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
-                    _idxs, bases, indexmap, s
+                    _idxs, bases, indexmap, s;
+                    weight_matrix=usi.pos_weight_matrix,
+                    bpc=usi.D_pos.offside
                 )
 
                 # Multiplication pattern: coeff * Dx^d(u)
@@ -886,7 +908,9 @@ function _build_upwind_rules(
                 # Positive-wind stencil as default
                 pos_expr = _upwind_stencil_expr(
                     u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
-                    _idxs, bases, indexmap, s
+                    _idxs, bases, indexmap, s;
+                    weight_matrix=usi.pos_weight_matrix,
+                    bpc=usi.D_pos.offside
                 )
                 push!(fallback_rules, (Differential(x)^d)(u) => pos_expr)
             end

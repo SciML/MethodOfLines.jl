@@ -1330,3 +1330,251 @@ end
     @test size(u_scalar) == size(u_array)
     @test isapprox(u_scalar, u_array, rtol = 1e-10)
 end
+
+# ===========================================================================
+# Phase 8: Non-uniform upwind ArrayOp tests
+# ===========================================================================
+
+@testset "Non-uniform upwind: scalar path bug fix verification" begin
+    # 1D advection (Burgers) with UpwindScheme on a non-uniform grid.
+    # Verify the scalar path produces correct results after the offside bug fix.
+    # Use Burgers equation u*Dx(u) so the wind direction matters.
+    @parameters x t
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    analytic_u(t, x) = x / (t + 1)
+
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
+
+    xs = sort([0.0; [0.1i + 0.01 * (-1)^i for i in 1:9]; 1.0])
+
+    bcs = [
+        u(0, x) ~ x,
+        u(t, 0.0) ~ analytic_u(t, 0.0),
+        u(t, 1.0) ~ analytic_u(t, 1.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc_scalar = MOLFiniteDifference([x => xs], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_scalar = solve(prob_scalar, Tsit5())
+    @test SciMLBase.successful_retcode(sol_scalar)
+
+    x_disc = sol_scalar[x]
+    solu = sol_scalar[u(t, x)]
+
+    # On a coarse 11-point grid with first-order upwind, numerical diffusion is
+    # significant, so use a generous tolerance.
+    for (i, t_val) in enumerate(sol_scalar.t)
+        u_analytic = analytic_u.([t_val], x_disc)
+        @test all(isapprox.(u_analytic, solu[i, :], atol = 0.5))
+    end
+end
+
+@testset "Non-uniform upwind: ArrayOp matches scalar" begin
+    # 1D advection with UpwindScheme on non-uniform grid.
+    # Compare ArrayDiscretization vs ScalarizedDiscretization.
+    @parameters x t
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    analytic_u(t, x) = x / (t + 1)
+
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
+
+    xs = sort([0.0; [0.1i + 0.01 * (-1)^i for i in 1:9]; 1.0])
+
+    bcs = [
+        u(0, x) ~ x,
+        u(t, 0.0) ~ analytic_u(t, 0.0),
+        u(t, 1.0) ~ analytic_u(t, 1.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc_scalar = MOLFiniteDifference([x => xs], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => xs], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Non-uniform upwind: symbolic structure" begin
+    # Verify ArrayOp equations are produced (not per-point fallback).
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters x t
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x))
+
+    xs = sort([0.0; [0.1i + 0.01 * (-1)^i for i in 1:9]; 1.0])
+
+    bcs = [
+        u(0, x) ~ x,
+        u(t, 0.0) ~ 0.0,
+        u(t, 1.0) ~ 1.0 / (t + 1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc = MOLFiniteDifference([x => xs], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Should have ArrayOp equations (not N scalar equations)
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # After flattening, should produce interior + BC equations
+    flat = flatten_equations(eqs)
+    @test length(flat) >= 9  # interior points + BCs
+end
+
+@testset "Non-uniform upwind: with parameter" begin
+    # Dt(u) ~ -v_param * Dx(u) with UpwindScheme and non-uniform grid.
+    @parameters x t v_param
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x)) ~ -v_param * Dx(u(t, x))
+
+    xs = sort([0.0; [0.1i + 0.01 * (-1)^i for i in 1:9]; 1.0])
+
+    bcs = [
+        u(0, x) ~ sin(π * x),
+        u(t, 0.0) ~ 0.0,
+        u(t, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [v_param];
+        initial_conditions = Dict(v_param => 0.5))
+
+    disc_scalar = MOLFiniteDifference([x => xs], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => xs], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Non-uniform upwind: advection-diffusion" begin
+    # Dt(u) ~ -v * Dx(u) + D * Dxx(u) combining non-uniform upwind (odd order)
+    # and non-uniform centered (even order).
+    @parameters x t
+    @variables u(..)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dt = Differential(t)
+
+    v = 0.5
+    D_coeff = 0.1
+
+    eq = Dt(u(t, x)) ~ -v * Dx(u(t, x)) + D_coeff * Dxx(u(t, x))
+
+    xs = sort([0.0; [0.1i + 0.01 * (-1)^i for i in 1:9]; 1.0])
+
+    bcs = [
+        u(0, x) ~ sin(π * x),
+        u(t, 0.0) ~ 0.0,
+        u(t, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc_scalar = MOLFiniteDifference([x => xs], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => xs], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
