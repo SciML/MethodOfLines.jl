@@ -4,23 +4,24 @@ Array-level finite difference rule generation for `ArrayDiscretization`.
 For PDEs on uniform grids, stencil weights are identical at every interior
 point in each dimension.  This module pre-computes them once and builds a
 single ArrayOp expression using N symbolic index variables `_i1, _i2, ...`
-(one per spatial dimension).  For non-uniform grids, centred derivative
-weights vary per point and are stored in a Const-wrapped matrix indexed by
-symbolic grid indices.  The ArrayOp is a genuine symbolic array operation
-that, when ModelingToolkit supports native array compilation, will compile to a
-single vectorized loop.  Until then, MTK's `flatten_equations` scalarizes it
-into individual per-point equations, preserving correctness.
+(one per spatial dimension).  For non-uniform grids, per-point weights are
+stored in Const-wrapped matrices indexed by symbolic grid indices.  The
+ArrayOp is a genuine symbolic array operation that, when ModelingToolkit
+supports native array compilation, will compile to a single vectorized loop.
+Until then, MTK's `flatten_equations` scalarizes it into individual
+per-point equations, preserving correctness.
 
 Supported ArrayOp patterns:
 - Centred (even-order) derivatives on uniform and non-uniform grids
 - Upwind (odd-order) derivatives with UpwindScheme on uniform and non-uniform grids
-- Mixed cross-derivatives on uniform grids
-- Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform grids
-- Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform grids
+- WENO (Jiang-Shu) first-order derivatives on uniform grids
+- Mixed cross-derivatives on uniform and non-uniform grids
+- Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform and non-uniform grids
+- Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform and non-uniform grids
 
-All other cases -- WENO, FunctionalScheme, non-uniform nonlinlap, etc. --
-fall back to per-point computation via `discretize_equation_at_point`
-from the scalar path, which supports ALL scheme types.
+Generic user-defined `FunctionalScheme` falls back to per-point computation
+via `discretize_equation_at_point` from the scalar path, which supports ALL
+scheme types.
 """
 
 # --- stencil pre-computation ------------------------------------------------
@@ -55,21 +56,46 @@ end
 """
     NonlinlapStencilInfo
 
-Pre-computed stencil information for the nonlinear Laplacian `Dx(expr * Dx(u))`
-on a uniform grid.  Contains the outer (half-offset) derivative, inner (half-offset)
-derivative, and interpolation weights/offsets, all of which are constant at every
-interior point on a uniform grid.
+Pre-computed stencil information for the nonlinear Laplacian `Dx(expr * Dx(u))`.
+Contains the outer (half-offset) derivative, inner (half-offset) derivative,
+and interpolation weights/offsets.
+
+For uniform grids, weights are constant SVectors at every interior point.
+For non-uniform grids, per-point weights are stored in weight matrices
+(stencil_length × num_interior) indexed by symbolic grid position.
 """
 struct NonlinlapStencilInfo
-    outer_weights        # stencil_coefs of D_outer (half-offset 1st derivative)
+    outer_weights        # uniform: stencil_coefs of D_outer; non-uniform: nothing
     outer_offsets::Vector{Int}
-    inner_weights        # stencil_coefs of D_inner (half-offset 1st derivative)
+    inner_weights        # uniform: stencil_coefs of D_inner; non-uniform: nothing
     inner_offsets::Vector{Int}
-    interp_weights       # stencil_coefs of interpolation operator
+    interp_weights       # uniform: stencil_coefs of interp; non-uniform: nothing
     interp_offsets::Vector{Int}
     combined_lower_bpc::Int   # combined boundary point count, lower side
     combined_upper_bpc::Int   # combined boundary point count, upper side
     is_uniform::Bool
+    # Non-uniform weight matrices (nothing for uniform grids)
+    outer_weight_matrix::Union{Nothing, Matrix{Float64}}
+    inner_weight_matrix::Union{Nothing, Matrix{Float64}}
+    interp_weight_matrix::Union{Nothing, Matrix{Float64}}
+    outer_bpc::Int       # D_outer.boundary_point_count
+    inner_bpc::Int       # D_inner.boundary_point_count
+    interp_bpc::Int      # interp.boundary_point_count
+end
+
+"""
+    WENOStencilInfo
+
+Pre-computed stencil information for WENO5 (Jiang-Shu) scheme.
+The WENO scheme computes all substencil reconstructions at every point
+and blends them with data-dependent nonlinear weights — no branching.
+"""
+struct WENOStencilInfo
+    epsilon::Float64          # smoothness indicator regularization parameter
+    offsets::Vector{Int}      # [-2, -1, 0, 1, 2] for 5-point stencil
+    lower_bpc::Int            # boundary point count, lower side (= 2 for WENO5)
+    upper_bpc::Int            # boundary point count, upper side (= 2 for WENO5)
+    dx_val::Float64           # uniform grid spacing (WENO currently uniform only)
 end
 
 """
@@ -108,12 +134,19 @@ end
     precompute_upwind_stencils(s, depvars, derivweights)
 
 Returns a `Dict` mapping `(u, x, d)` to an `UpwindStencilInfo` for every
-(variable, spatial dim, odd derivative order) triple.  Only populated when
-the advection scheme is `UpwindScheme` and windmap operators exist.
+(variable, spatial dim, odd derivative order) triple.  Populated when
+the advection scheme is `UpwindScheme` (all odd orders) or
+`FunctionalScheme`/WENO (odd orders >= 3, since WENO handles order 1
+internally) and windmap operators exist.
 """
 function precompute_upwind_stencils(s, depvars, derivweights)
     info = Dict{Any, UpwindStencilInfo}()
-    !(derivweights.advection_scheme isa UpwindScheme) && return info
+    # Upwind stencils are used for UpwindScheme (all odd orders) and for
+    # FunctionalScheme/WENO (odd orders >= 3, since WENO handles order 1 internally).
+    has_windmap = derivweights.advection_scheme isa UpwindScheme ||
+                  (derivweights.advection_scheme isa FunctionalScheme &&
+                   !isempty(derivweights.windmap[1]))
+    !has_windmap && return info
     for u in depvars
         for x in ivs(u, s)
             for d in derivweights.orders[x]
@@ -143,8 +176,8 @@ end
     precompute_nonlinlap_stencils(s, depvars, derivweights)
 
 Returns a `Dict` mapping `(u, x)` to a `NonlinlapStencilInfo` for every
-(variable, spatial dim) pair where the half-offset operators exist and the
-grid is uniform.
+(variable, spatial dim) pair where the half-offset operators exist.
+Supports both uniform and non-uniform grids.
 """
 function precompute_nonlinlap_stencils(s, depvars, derivweights)
     info = Dict{Any, NonlinlapStencilInfo}()
@@ -161,29 +194,100 @@ function precompute_nonlinlap_stencils(s, depvars, derivweights)
             is_uniform = (D_inner.dx isa Number) &&
                          (D_outer.dx isa Number) &&
                          (interp.dx isa Number)
-            is_uniform || continue
 
             outer_offsets  = collect((1 - div(D_outer.stencil_length, 2)):(div(D_outer.stencil_length, 2)))
             inner_offsets  = collect((1 - div(D_inner.stencil_length, 2)):(div(D_inner.stencil_length, 2)))
             interp_offsets = collect((1 - div(interp.stencil_length, 2)):(div(interp.stencil_length, 2)))
 
-            # Combined boundary point count: total stencil reach from original grid point i
-            # Original grid positions accessed: (i-1) + outer_off + {inner_off, interp_off}
-            combined_lower_bpc = max(0,
-                1 - minimum(outer_offsets) - min(minimum(inner_offsets), minimum(interp_offsets)))
-            combined_upper_bpc = max(0,
-                -1 + maximum(outer_offsets) + max(maximum(inner_offsets), maximum(interp_offsets)))
+            bpc_outer  = D_outer.boundary_point_count
+            bpc_inner  = D_inner.boundary_point_count
+            bpc_interp = interp.boundary_point_count
 
-            info[(u, x)] = NonlinlapStencilInfo(
-                D_outer.stencil_coefs,
-                outer_offsets,
-                D_inner.stencil_coefs,
-                inner_offsets,
-                interp.stencil_coefs,
-                interp_offsets,
-                combined_lower_bpc,
-                combined_upper_bpc,
-                is_uniform
+            if is_uniform
+                # Uniform: constant weights, tap-bounds-only BPC formula
+                combined_lower_bpc = max(0,
+                    1 - minimum(outer_offsets) - min(minimum(inner_offsets), minimum(interp_offsets)))
+                combined_upper_bpc = max(0,
+                    -1 + maximum(outer_offsets) + max(maximum(inner_offsets), maximum(interp_offsets)))
+
+                info[(u, x)] = NonlinlapStencilInfo(
+                    D_outer.stencil_coefs,
+                    outer_offsets,
+                    D_inner.stencil_coefs,
+                    inner_offsets,
+                    interp.stencil_coefs,
+                    interp_offsets,
+                    combined_lower_bpc,
+                    combined_upper_bpc,
+                    is_uniform,
+                    nothing, nothing, nothing,
+                    bpc_outer, bpc_inner, bpc_interp
+                )
+            else
+                # Non-uniform: build weight matrices and use stronger BPC formula
+                # that ensures all three operators' weight matrix columns are in range.
+                outer_wmat  = hcat(Vector.(D_outer.stencil_coefs)...)
+                inner_wmat  = hcat(Vector.(D_inner.stencil_coefs)...)
+                interp_wmat = hcat(Vector.(interp.stencil_coefs)...)
+
+                # Non-uniform combined BPC: must keep all weight matrix column indices valid
+                # AND keep tap indices within [1, N].
+                combined_lower_bpc = max(
+                    bpc_outer + 1,                                          # outer wmat valid range
+                    bpc_inner + 1 - minimum(outer_offsets),                  # inner wmat valid range
+                    bpc_interp + 1 - minimum(outer_offsets),                 # interp wmat valid range
+                    1 - minimum(outer_offsets) - min(minimum(inner_offsets), minimum(interp_offsets))  # tap bounds
+                )
+                combined_upper_bpc = max(
+                    bpc_outer,                                               # outer wmat valid range
+                    bpc_inner + maximum(outer_offsets) - 1,                   # inner wmat valid range
+                    bpc_interp + maximum(outer_offsets) - 1,                  # interp wmat valid range
+                    -1 + maximum(outer_offsets) + max(maximum(inner_offsets), maximum(interp_offsets))  # tap bounds
+                )
+
+                info[(u, x)] = NonlinlapStencilInfo(
+                    nothing,
+                    outer_offsets,
+                    nothing,
+                    inner_offsets,
+                    nothing,
+                    interp_offsets,
+                    combined_lower_bpc,
+                    combined_upper_bpc,
+                    is_uniform,
+                    outer_wmat, inner_wmat, interp_wmat,
+                    bpc_outer, bpc_inner, bpc_interp
+                )
+            end
+        end
+    end
+    return info
+end
+
+"""
+    precompute_weno_stencils(s, depvars, derivweights)
+
+Returns a `Dict` mapping `(u, x)` to a `WENOStencilInfo` for every
+(variable, spatial dim) pair when the advection scheme is WENO.
+Only populated for uniform grids (WENO is currently uniform-only).
+"""
+function precompute_weno_stencils(s, depvars, derivweights)
+    info = Dict{Any, WENOStencilInfo}()
+    !(derivweights.advection_scheme isa FunctionalScheme) && return info
+    F = derivweights.advection_scheme
+    F.name != "WENO" && return info   # Only handle known WENO, not generic FunctionalScheme
+
+    for u in depvars
+        for x in ivs(u, s)
+            dx = s.dxs[x]
+            dx isa Number || continue   # WENO uniform only (is_nonuniform = false)
+            epsilon = isempty(F.ps) ? 1e-6 : F.ps[1]
+            bpc = div(F.interior_points, 2)  # = 2 for WENO5
+            info[(u, x)] = WENOStencilInfo(
+                epsilon,
+                collect(half_range(F.interior_points)),
+                bpc, bpc,
+                Float64(dx)
             )
         end
     end
@@ -378,15 +482,16 @@ For the interior region, a single ArrayOp equation is produced when possible.
 Supported patterns:
 - Centred (even-order) derivatives on uniform and non-uniform grids
 - Upwind (odd-order) derivatives with UpwindScheme on uniform and non-uniform grids
-- Mixed cross-derivatives on uniform grids
-- Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform grids
-- Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform grids
+- WENO (Jiang-Shu) first-order derivatives on uniform grids
+- Mixed cross-derivatives on uniform and non-uniform grids
+- Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform and non-uniform grids
+- Spherical Laplacian `r^{-2} * Dr(r^2 * Dr(u))` on uniform and non-uniform grids
 
 Boundary-proximity interior points (the "frame" around the centred region)
 fall back to per-point computation via `discretize_equation_at_point`.
 
-All other cases (WENO, FunctionalScheme, non-uniform nonlinlap, etc.)
-fall back entirely to per-point computation, which supports ALL scheme types.
+Generic user-defined `FunctionalScheme` falls back entirely to per-point
+computation, which supports ALL scheme types.
 """
 function generate_array_interior_eqs(
         s, depvars, pde, derivweights, bcmap, eqvar,
@@ -395,17 +500,9 @@ function generate_array_interior_eqs(
     stencil_cache = precompute_stencils(s, depvars, derivweights)
     upwind_cache = precompute_upwind_stencils(s, depvars, derivweights)
     nonlinlap_cache = precompute_nonlinlap_stencils(s, depvars, derivweights)
+    weno_cache = precompute_weno_stencils(s, depvars, derivweights)
 
     # -- determine whether the ArrayOp path can handle this PDE ---------------
-    # Centered derivatives support both uniform and non-uniform grids.
-    # Upwind, nonlinlap, and spherical still require uniform grids.
-    # Upwind now supports non-uniform grids — only nonlinlap still requires uniform.
-    schemes_needing_uniform = Bool[]
-    if !isempty(nonlinlap_cache)
-        append!(schemes_needing_uniform, [si.is_uniform for si in values(nonlinlap_cache)])
-    end
-    schemes_uniform = isempty(schemes_needing_uniform) || all(schemes_needing_uniform)
-
     has_odd_orders = any(
         any(isodd(d) for d in derivweights.orders[x])
         for u in depvars for x in ivs(u, s)
@@ -422,7 +519,8 @@ function generate_array_interior_eqs(
     nonlinlap_terms = _detect_nonlinlap_terms(pde, s, depvars, spherical_terms_info)
     has_nonlinlap = !isempty(nonlinlap_terms) && !isempty(nonlinlap_cache)
 
-    can_template = schemes_uniform && (!has_odd_orders || can_upwind || has_nonlinlap || has_spherical)
+    has_weno = !isempty(weno_cache)
+    can_template = !has_odd_orders || can_upwind || has_nonlinlap || has_spherical || has_weno
 
     ndim = length(interior_ranges)
 
@@ -439,7 +537,7 @@ function generate_array_interior_eqs(
         end))
     end
 
-    # -- N-D ArrayOp path (uniform grid) --------------------------------------
+    # -- N-D ArrayOp path ------------------------------------------------------
     lo_vec = [r[1] for r in interior_ranges]
     hi_vec = [r[2] for r in interior_ranges]
     eqvar_ivs = ivs(eqvar, s)
@@ -505,6 +603,16 @@ function generate_array_interior_eqs(
                     max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], sph_upper)
                 end
             end
+            # WENO stencil extent
+            if has_weno && haskey(weno_cache, (u, x))
+                wsi = weno_cache[(u, x)]
+                if !haslower
+                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], wsi.lower_bpc)
+                end
+                if !hasupper
+                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], wsi.upper_bpc)
+                end
+            end
         end
     end
 
@@ -534,7 +642,7 @@ function generate_array_interior_eqs(
         candidate, eq_first = _build_interior_arrayop(
             n_centered, lo_centered, s, depvars, pde, derivweights,
             stencil_cache, upwind_cache, nonlinlap_cache,
-            spherical_terms_info, bcmap, eqvar, indexmap
+            spherical_terms_info, weno_cache, bcmap, eqvar, indexmap
         )
         # Validate: compare the first instantiated equation against the
         # scalar path for the same point.  This catches any mismatch from
@@ -608,13 +716,13 @@ end
     _build_interior_arrayop(n_centered, lo_centered, s, depvars, pde,
                              derivweights, stencil_cache, upwind_cache,
                              nonlinlap_cache, spherical_terms_info,
-                             bcmap, eqvar, indexmap)
+                             weno_cache, bcmap, eqvar, indexmap)
 
 Build a single ArrayOp equation for the interior region.
 
-Handles centred (even-order), upwind (odd-order), mixed cross-derivative,
-nonlinear Laplacian, and spherical Laplacian stencils using symbolic index
-variables.
+Handles centred (even-order), upwind (odd-order), WENO (1st-order), mixed
+cross-derivative, nonlinear Laplacian, and spherical Laplacian stencils
+using symbolic index variables.
 
 Returns `(eqs, eq_first)` where `eqs` is a single-element vector containing
 the ArrayOp equation, and `eq_first` is the scalar equation at the first
@@ -623,7 +731,7 @@ centred point (for validation against the scalar path).
 function _build_interior_arrayop(
         n_centered, lo_centered, s, depvars, pde, derivweights,
         stencil_cache, upwind_cache, nonlinlap_cache,
-        spherical_terms_info, bcmap, eqvar, indexmap
+        spherical_terms_info, weno_cache, bcmap, eqvar, indexmap
     )
     ndim = length(n_centered)
     _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
@@ -716,15 +824,24 @@ function _build_interior_arrayop(
         )
     end
 
+    # -- WENO rules ----------------------------------------------------------
+    weno_rules = Pair[]
+    if !isempty(weno_cache)
+        weno_rules = _build_weno_rules(
+            pde, s, depvars, weno_cache,
+            indexmap, _idxs, bases, var_rules
+        )
+    end
+
     # -- Build templates (once) -----------------------------------------------
-    # Upwind, nonlinear Laplacian, and spherical Laplacian rules are term-level
-    # substitutions (they replace entire additive terms, not just derivative
-    # sub-expressions).  Apply them first on the PDE expression, then apply
-    # FD + var rules.
+    # Upwind, nonlinear Laplacian, spherical Laplacian, and WENO rules are
+    # term-level substitutions (they replace entire additive terms, not just
+    # derivative sub-expressions).  Apply them first on the PDE expression,
+    # then apply FD + var rules.
     all_fd_rules = vcat(fd_rules, mixed_rules)
     rdict = Dict(vcat(all_fd_rules, var_rules))
 
-    termlevel_rules = vcat(sph_rules, upwind_rules, nl_rules)
+    termlevel_rules = vcat(sph_rules, upwind_rules, nl_rules, weno_rules)
     if isempty(termlevel_rules)
         template_lhs = expand_derivatives(pde_substitute(pde.lhs, rdict))
         template_rhs = pde_substitute(pde.rhs, rdict)
@@ -938,21 +1055,39 @@ function _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs
             # Need order-1 centred operator for this dimension
             haskey(derivweights.map, Differential(x)) || continue
             Dx_op = derivweights.map[Differential(x)]
-            Dx_op.dx isa Number || continue  # uniform only
-            x_weights = Dx_op.stencil_coefs
+            x_is_uniform = Dx_op.dx isa Number
             x_offsets = collect(half_range(Dx_op.stencil_length))
+
+            # For non-uniform: build weight matrix and Const-wrap it
+            if x_is_uniform
+                x_weights = Dx_op.stencil_coefs
+            else
+                x_wmat = hcat(Vector.(Dx_op.stencil_coefs)...)
+                x_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(x_wmat)
+                x_bpc = Dx_op.boundary_point_count
+            end
 
             for y in u_spatial
                 isequal(x, y) && continue
                 haskey(derivweights.map, Differential(y)) || continue
                 Dy_op = derivweights.map[Differential(y)]
-                Dy_op.dx isa Number || continue  # uniform only
-                y_weights = Dy_op.stencil_coefs
+                y_is_uniform = Dy_op.dx isa Number
                 y_offsets = collect(half_range(Dy_op.stencil_length))
 
+                if y_is_uniform
+                    y_weights = Dy_op.stencil_coefs
+                else
+                    y_wmat = hcat(Vector.(Dy_op.stencil_coefs)...)
+                    y_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(y_wmat)
+                    y_bpc = Dy_op.boundary_point_count
+                end
+
+                dim_x = indexmap[x]
+                dim_y = indexmap[y]
+
                 # Double sum: Σ_i Σ_j wx[i] * wy[j] * u[... + x_off[i] + y_off[j] ...]
-                mixed_expr = sum(zip(x_weights, x_offsets)) do (wx, x_off)
-                    sum(zip(y_weights, y_offsets)) do (wy, y_off)
+                mixed_expr = sum(enumerate(x_offsets)) do (kx, x_off)
+                    sum(enumerate(y_offsets)) do (ky, y_off)
                         idx_exprs = map(u_spatial) do xv
                             eq_d = indexmap[xv]
                             base_expr = _idxs[eq_d] + bases[eq_d]
@@ -964,7 +1099,21 @@ function _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs
                                 base_expr
                             end
                         end
-                        wx * wy * Symbolics.wrap(u_c[idx_exprs...])
+                        tap = Symbolics.wrap(u_c[idx_exprs...])
+
+                        wx = if x_is_uniform
+                            x_weights[kx]
+                        else
+                            Symbolics.wrap(x_wmat_c[kx, _idxs[dim_x] + bases[dim_x] - x_bpc])
+                        end
+
+                        wy = if y_is_uniform
+                            y_weights[ky]
+                        else
+                            Symbolics.wrap(y_wmat_c[ky, _idxs[dim_y] + bases[dim_y] - y_bpc])
+                        end
+
+                        wx * wy * tap
                     end
                 end
                 push!(mixed_rules, (Differential(x) * Differential(y))(u) => mixed_expr)
@@ -993,6 +1142,14 @@ function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, b
     u_raw = Symbolics.unwrap(s.discvars[u])
     u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
     u_spatial = ivs(u, s)
+    dim = indexmap[x]
+
+    # Pre-wrap Const weight matrices for non-uniform case (outside the loop)
+    if !nsi.is_uniform
+        interp_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(nsi.interp_weight_matrix)
+        inner_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(nsi.inner_weight_matrix)
+        outer_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(nsi.outer_weight_matrix)
+    end
 
     inner_exprs = map(nsi.outer_offsets) do outer_off
         # --- Interpolation rules for variables at this half-point ---
@@ -1010,7 +1167,15 @@ function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, b
                 end
                 Symbolics.wrap(v_c[idx_exprs...])
             end
-            push!(interp_var_rules, v => sym_dot(nsi.interp_weights, taps))
+            if nsi.is_uniform
+                push!(interp_var_rules, v => sym_dot(nsi.interp_weights, taps))
+            else
+                interp_pt_idx = _idxs[dim] + bases[dim] + outer_off - 1 - nsi.interp_bpc
+                interp_expr = sum(1:length(nsi.interp_offsets)) do k
+                    Symbolics.wrap(interp_wmat_c[k, interp_pt_idx]) * taps[k]
+                end
+                push!(interp_var_rules, v => interp_expr)
+            end
         end
 
         # --- Interpolation rules for grid coordinates ---
@@ -1018,16 +1183,23 @@ function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, b
         for xv in s.x̄
             if isequal(xv, x)
                 grid_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(collect(s.grid[x]))
-                dim = indexmap[x]
                 taps = map(nsi.interp_offsets) do ioff
                     Symbolics.wrap(grid_c[_idxs[dim] + bases[dim] + outer_off + ioff - 1])
                 end
-                push!(interp_iv_rules, x => sym_dot(nsi.interp_weights, taps))
+                if nsi.is_uniform
+                    push!(interp_iv_rules, x => sym_dot(nsi.interp_weights, taps))
+                else
+                    interp_pt_idx = _idxs[dim] + bases[dim] + outer_off - 1 - nsi.interp_bpc
+                    interp_expr = sum(1:length(nsi.interp_offsets)) do k
+                        Symbolics.wrap(interp_wmat_c[k, interp_pt_idx]) * taps[k]
+                    end
+                    push!(interp_iv_rules, x => interp_expr)
+                end
             else
                 haskey(indexmap, xv) || continue
                 grid_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(collect(s.grid[xv]))
-                dim = indexmap[xv]
-                push!(interp_iv_rules, xv => Symbolics.wrap(grid_c[_idxs[dim] + bases[dim]]))
+                xv_dim = indexmap[xv]
+                push!(interp_iv_rules, xv => Symbolics.wrap(grid_c[_idxs[xv_dim] + bases[xv_dim]]))
             end
         end
 
@@ -1040,7 +1212,14 @@ function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, b
             end
             Symbolics.wrap(u_c[idx_exprs...])
         end
-        inner_deriv = sym_dot(nsi.inner_weights, inner_deriv_taps)
+        if nsi.is_uniform
+            inner_deriv = sym_dot(nsi.inner_weights, inner_deriv_taps)
+        else
+            inner_pt_idx = _idxs[dim] + bases[dim] + outer_off - 1 - nsi.inner_bpc
+            inner_deriv = sum(1:length(nsi.inner_offsets)) do k
+                Symbolics.wrap(inner_wmat_c[k, inner_pt_idx]) * inner_deriv_taps[k]
+            end
+        end
 
         # --- Substitute all rules into expr * Dx(u) ---
         deriv_rules = Pair[Differential(x)(u) => inner_deriv]
@@ -1049,7 +1228,14 @@ function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, b
     end
 
     # Apply outer weights to get the full nonlinear Laplacian
-    return sym_dot(nsi.outer_weights, inner_exprs)
+    if nsi.is_uniform
+        return sym_dot(nsi.outer_weights, inner_exprs)
+    else
+        outer_pt_idx = _idxs[dim] + bases[dim] - 1 - nsi.outer_bpc
+        return sum(1:length(nsi.outer_offsets)) do k
+            Symbolics.wrap(outer_wmat_c[k, outer_pt_idx]) * inner_exprs[k]
+        end
+    end
 end
 
 """
@@ -1182,15 +1368,13 @@ function _spherical_template(info, nsi, s, depvars, derivweights,
     u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
     u_spatial = ivs(u, s)
 
-    # Compute the grid coordinate at the current ArrayOp index using a linear
-    # formula.  This avoids using grid_c[_i + base] (Const-wrapped Float64 vec)
-    # which pde_substitute cannot reconstruct via maketerm when the index is
-    # symbolic.  The grid is guaranteed uniform here, so r = r0 + (idx-1)*dr.
+    # Compute the grid coordinate at the current ArrayOp index.
+    # Use Const-wrapped grid lookup (works for both uniform and non-uniform).
+    # Safe because the result goes into termlevel_dict which bypasses pde_substitute.
     grid_r = collect(s.grid[r])
-    r_start = grid_r[1]
-    dr = grid_r[2] - grid_r[1]
     dim = indexmap[r]
-    r_at_i = Num(r_start) + (_idxs[dim] + bases[dim] - 1) * Num(dr)
+    grid_r_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(grid_r)
+    r_at_i = Symbolics.wrap(grid_r_c[_idxs[dim] + bases[dim]])
 
     # The ArrayOp centred region never includes r = 0 (which is handled by
     # boundary conditions), so we always use the r ≠ 0 branch:
@@ -1198,6 +1382,7 @@ function _spherical_template(info, nsi, s, depvars, derivweights,
 
     # --- Centered 1st derivative template ---
     D1_op = derivweights.map[Differential(r)]
+    d1_is_uniform = D1_op.dx isa Number
     d1_offsets = collect(half_range(D1_op.stencil_length))
     d1_taps = map(d1_offsets) do off
         idx_exprs = map(u_spatial) do xv
@@ -1207,7 +1392,17 @@ function _spherical_template(info, nsi, s, depvars, derivweights,
         end
         Symbolics.wrap(u_c[idx_exprs...])
     end
-    D1_template = sym_dot(D1_op.stencil_coefs, d1_taps)
+    if d1_is_uniform
+        D1_template = sym_dot(D1_op.stencil_coefs, d1_taps)
+    else
+        d1_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(
+            hcat(Vector.(D1_op.stencil_coefs)...)
+        )
+        d1_pt_idx = _idxs[dim] + bases[dim] - D1_op.boundary_point_count
+        D1_template = sum(1:length(d1_offsets)) do k
+            Symbolics.wrap(d1_wmat_c[k, d1_pt_idx]) * d1_taps[k]
+        end
+    end
 
     # --- Nonlinear Laplacian template (reuse existing infrastructure) ---
     nlap_template = _nonlinlap_template(
@@ -1256,4 +1451,151 @@ function _build_spherical_rules(
     end
 
     return spherical_rules
+end
+
+# --- WENO ArrayOp rules ----------------------------------------------------
+
+"""
+    _weno_template(u, x, wsi, s, indexmap, _idxs, bases)
+
+Build the WENO5 (Jiang-Shu) formula as a symbolic ArrayOp expression.
+
+Transcribes the `weno_f` function from `WENO.jl` using Const-wrapped array
+taps instead of runtime values.  All coefficients are Float64 literals to
+match the scalar path exactly (for `_equations_match` validation).
+"""
+function _weno_template(u, x, wsi, s, indexmap, _idxs, bases)
+    u_raw = Symbolics.unwrap(s.discvars[u])
+    u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
+    u_spatial = ivs(u, s)
+
+    # Build the 5 shifted taps: u[i-2], u[i-1], u[i], u[i+1], u[i+2]
+    taps = map(wsi.offsets) do off
+        idx_exprs = map(u_spatial) do xv
+            eq_d = indexmap[xv]
+            base_expr = _idxs[eq_d] + bases[eq_d]
+            isequal(xv, x) ? base_expr + off : base_expr
+        end
+        Symbolics.wrap(u_c[idx_exprs...])
+    end
+    # Map to weno_f naming: u_m2, u_m1, u_0, u_p1, u_p2
+    u_m2, u_m1, u_0, u_p1, u_p2 = taps
+
+    ε = wsi.epsilon
+    dx = wsi.dx_val
+
+    # --- Smoothness indicators (β values) --- same for both L and R sides
+    β1 = 13 * (u_0 - 2 * u_p1 + u_p2)^2 / 12 + (3 * u_0 - 4 * u_p1 + u_p2)^2 / 4
+    β2 = 13 * (u_m1 - 2 * u_0 + u_p1)^2 / 12 + (u_m1 - u_p1)^2 / 4
+    β3 = 13 * (u_m2 - 2 * u_m1 + u_0)^2 / 12 + (u_m2 - 4 * u_m1 + 3 * u_0)^2 / 4
+
+    # --- Left-biased (minus) weights and reconstructions ---
+    γm1 = 1 / 10
+    γm2 = 3 / 5
+    γm3 = 3 / 10
+
+    ωm1 = γm1 / (ε + β1)^2
+    ωm2 = γm2 / (ε + β2)^2
+    ωm3 = γm3 / (ε + β3)^2
+    wm_denom = ωm1 + ωm2 + ωm3
+    wm1 = ωm1 / wm_denom
+    wm2 = ωm2 / wm_denom
+    wm3 = ωm3 / wm_denom
+
+    hm1 = (11 * u_0 - 7 * u_p1 + 2 * u_p2) / 6
+    hm2 = (5 * u_0 - u_p1 + 2 * u_m1) / 6
+    hm3 = (2 * u_0 + 5 * u_m1 - u_m2) / 6
+    hm = wm1 * hm1 + wm2 * hm2 + wm3 * hm3
+
+    # --- Right-biased (plus) weights and reconstructions ---
+    γp1 = 3 / 10
+    γp2 = 3 / 5
+    γp3 = 1 / 10
+
+    ωp1 = γp1 / (ε + β1)^2
+    ωp2 = γp2 / (ε + β2)^2
+    ωp3 = γp3 / (ε + β3)^2
+    wp_denom = ωp1 + ωp2 + ωp3
+    wp1 = ωp1 / wp_denom
+    wp2 = ωp2 / wp_denom
+    wp3 = ωp3 / wp_denom
+
+    hp1 = (2 * u_0 + 5 * u_p1 - u_p2) / 6
+    hp2 = (5 * u_0 + 2 * u_p1 - u_m1) / 6
+    hp3 = (11 * u_0 - 7 * u_m1 + 2 * u_m2) / 6
+    hp = wp1 * hp1 + wp2 * hp2 + wp3 * hp3
+
+    return (hp - hm) / dx
+end
+
+"""
+    _build_weno_rules(pde, s, depvars, weno_cache, indexmap, _idxs, bases, var_rules)
+
+Build term-level substitution rules for WENO 1st-order derivatives.
+
+Unlike upwind schemes, WENO internally handles both flux directions (left-
+and right-biased reconstructions), so no IfElse wind switching is needed.
+The result is the numerical derivative itself; coefficients simply scale it.
+
+Returns a vector of `Pair{term => discretized_expr}`.
+"""
+function _build_weno_rules(pde, s, depvars, weno_cache, indexmap, _idxs, bases, var_rules)
+    terms = split_terms(pde, s.x̄)
+    vr_dict = Dict(var_rules)
+    weno_rules = Pair[]
+
+    for u in depvars
+        for x in ivs(u, s)
+            haskey(weno_cache, (u, x)) || continue
+            wsi = weno_cache[(u, x)]
+
+            weno_expr = _weno_template(u, x, wsi, s, indexmap, _idxs, bases)
+
+            # Pattern 1: *(~~a, Dx(u), ~~b) — coefficient-multiplied 1st-order
+            mul_rule = @rule *(
+                ~~a,
+                $(Differential(x))(u),
+                ~~b
+            ) => begin
+                coeff = *(~a..., ~b...)
+                coeff_subst = pde_substitute(coeff, vr_dict)
+                coeff_subst * weno_expr
+            end
+
+            # Pattern 2: /(*(~~a, Dx(u), ~~b), ~c) — divided coefficient
+            div_rule = @rule /(
+                *(~~a, $(Differential(x))(u), ~~b),
+                ~c
+            ) => begin
+                coeff = *(~a..., ~b...) / ~c
+                coeff_subst = pde_substitute(coeff, vr_dict)
+                coeff_subst * weno_expr
+            end
+
+            for t in terms
+                matched = mul_rule(t)
+                if matched !== nothing
+                    push!(weno_rules, t => matched)
+                    continue
+                end
+                matched = div_rule(t)
+                if matched !== nothing
+                    push!(weno_rules, t => matched)
+                end
+            end
+        end
+    end
+
+    # Fallback: bare Dx(u) with no coefficient
+    fallback_rules = Pair[]
+    for u in depvars
+        for x in ivs(u, s)
+            haskey(weno_cache, (u, x)) || continue
+            wsi = weno_cache[(u, x)]
+            weno_expr = _weno_template(u, x, wsi, s, indexmap, _idxs, bases)
+            push!(fallback_rules, Differential(x)(u) => weno_expr)
+        end
+    end
+
+    return vcat(weno_rules, fallback_rules)
 end

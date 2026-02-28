@@ -1578,3 +1578,603 @@ end
     @test size(u_scalar) == size(u_array)
     @test isapprox(u_scalar, u_array, rtol = 1e-10)
 end
+
+# ===========================================================================
+# Phase 9: Non-uniform nonlinear Laplacian, spherical Laplacian, and mixed
+#           cross-derivative ArrayOp tests
+# ===========================================================================
+
+# --- 9a: Non-uniform nonlinear Laplacian ---
+
+@testset "Non-uniform Nonlinlap ArrayOp matches scalar" begin
+    # 1D nonlinear diffusion Dt(u) ~ Dx(u^(-1) * Dx(u)) on non-uniform grid.
+    @parameters t x
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+    c = 1.0
+    a = 1.0
+
+    analytic_sol_func(t, x) = 2.0 * (c + t) / (a + x)^2
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
+
+    bcs = [
+        u(0.0, x) ~ analytic_sol_func(0.0, x),
+        u(t, 0.0) ~ analytic_sol_func(t, 0.0),
+        u(t, 2.0) ~ analytic_sol_func(t, 2.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    # Non-uniform grid
+    xs = collect(range(0.0, 2.0, length = 41))
+    xs[2:(end - 1)] .+= rand(StableRNG(42), [0.001, -0.001], length(xs) - 2)
+
+    disc_scalar = MOLFiniteDifference([x => xs], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => xs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Rosenbrock32(), saveat = 0.5)
+    sol_array = solve(prob_array, Rosenbrock32(), saveat = 0.5)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Non-uniform Nonlinlap ArrayOp symbolic structure" begin
+    # Verify that the ArrayOp path produces array equations on a non-uniform grid.
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
+
+    bcs = [
+        u(0.0, x) ~ 2.0 / (1.0 + x)^2,
+        u(t, 0.0) ~ 2.0 * (1.0 + t),
+        u(t, 2.0) ~ 2.0 * (1.0 + t) / 9.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    xs = collect(range(0.0, 2.0, length = 20))
+    xs[2:(end - 1)] .+= rand(StableRNG(43), [0.001, -0.001], length(xs) - 2)
+
+    disc = MOLFiniteDifference([x => xs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Should have ArrayOp equations (not per-point fallback)
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    flat = flatten_equations(eqs)
+    @test length(flat) >= 5
+end
+
+@testset "Non-uniform Nonlinlap ArrayOp analytical solution" begin
+    # Verify the nonlinear Laplacian ArrayOp produces correct solutions on
+    # a non-uniform grid by comparing to the analytical solution.
+    @parameters t x
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+    c = 1.0
+    a = 1.0
+
+    analytic_sol_func(t, x) = 2.0 * (c + t) / (a + x)^2
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
+
+    bcs = [
+        u(0.0, x) ~ analytic_sol_func(0.0, x),
+        u(t, 0.0) ~ analytic_sol_func(t, 0.0),
+        u(t, 2.0) ~ analytic_sol_func(t, 2.0),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 2.0),
+        x ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    xs = collect(range(0.0, 2.0, length = 41))
+    xs[2:(end - 1)] .+= rand(StableRNG(44), [0.001, -0.001], length(xs) - 2)
+
+    disc = MOLFiniteDifference([x => xs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Rosenbrock32(), saveat = 0.5)
+
+    x_disc = sol[x]
+    t_disc = sol[t]
+    u_approx = sol[u(t, x)]
+
+    for i in eachindex(t_disc)
+        exact = [analytic_sol_func(t_disc[i], xi) for xi in x_disc]
+        @test isapprox(u_approx[i, :], exact, atol = 0.05)
+    end
+end
+
+# --- 9b: Non-uniform spherical Laplacian ---
+
+@testset "Non-uniform Spherical ArrayOp matches scalar" begin
+    # Spherical diffusion Dt(u) ~ 1/r^2 * Dr(r^2 * Dr(u)) on non-uniform grid.
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    eq = Dt(u(t, r)) ~ 1 / r^2 * Dr(r^2 * Dr(u(t, r)))
+
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0,
+        u(t, 1) ~ exp(-t) * sin(1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        r ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    rs = collect(range(0.0, 1.0, length = 11))
+    rs[2:(end - 1)] .+= rand(StableRNG(45), [0.001, -0.001], length(rs) - 2)
+
+    disc_scalar = MOLFiniteDifference([r => rs], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([r => rs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Rodas4(), saveat = 0.1)
+    sol_array = solve(prob_array, Rodas4(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, r)]
+    u_array = sol_array[u(t, r)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Non-uniform Spherical ArrayOp with coefficient" begin
+    # Spherical diffusion with coefficient: Dt(u) ~ 4/r^2 * Dr(r^2 * Dr(u))
+    # on non-uniform grid.
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    eq = Dt(u(t, r)) ~ 4 / r^2 * Dr(r^2 * Dr(u(t, r)))
+
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0,
+        u(t, 1) ~ exp(-4t) * sin(1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        r ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    rs = collect(range(0.0, 1.0, length = 11))
+    rs[2:(end - 1)] .+= rand(StableRNG(46), [0.001, -0.001], length(rs) - 2)
+
+    disc_scalar = MOLFiniteDifference([r => rs], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([r => rs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Rodas4(), saveat = 0.1)
+    sol_array = solve(prob_array, Rodas4(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, r)]
+    u_array = sol_array[u(t, r)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+# --- 9c: Non-uniform mixed cross-derivatives ---
+
+@testset "Non-uniform mixed derivative ArrayOp matches scalar" begin
+    # 2D PDE with mixed cross-derivative on non-uniform grids.
+    # Dt(u) ~ Dxx(u) + Dxy(u) + Dyy(u)
+    @parameters t x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dxy = Differential(x) * Differential(y)
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dxy(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0.0, x, y) ~ sin(pi * x) * sin(pi * y),
+        u(t, 0.0, y) ~ 0.0,
+        u(t, 1.0, y) ~ 0.0,
+        u(t, x, 0.0) ~ 0.0,
+        u(t, x, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    xs = collect(range(0.0, 1.0, length = 11))
+    xs[2:(end - 1)] .+= rand(StableRNG(47), [0.001, -0.001], length(xs) - 2)
+    ys = collect(range(0.0, 1.0, length = 11))
+    ys[2:(end - 1)] .+= rand(StableRNG(48), [0.001, -0.001], length(ys) - 2)
+
+    disc_scalar = MOLFiniteDifference([x => xs, y => ys], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => xs, y => ys], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x, y)]
+    u_array = sol_array[u(t, x, y)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "Non-uniform mixed derivative ArrayOp symbolic structure" begin
+    # Verify the ArrayOp path is used for mixed cross-derivatives on non-uniform grids.
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dxy = Differential(x) * Differential(y)
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dxy(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0.0, x, y) ~ sin(pi * x) * sin(pi * y),
+        u(t, 0.0, y) ~ 0.0,
+        u(t, 1.0, y) ~ 0.0,
+        u(t, x, 0.0) ~ 0.0,
+        u(t, x, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    xs = collect(range(0.0, 1.0, length = 11))
+    xs[2:(end - 1)] .+= rand(StableRNG(49), [0.001, -0.001], length(xs) - 2)
+    ys = collect(range(0.0, 1.0, length = 11))
+    ys[2:(end - 1)] .+= rand(StableRNG(50), [0.001, -0.001], length(ys) - 2)
+
+    disc = MOLFiniteDifference([x => xs, y => ys], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    flat = flatten_equations(eqs)
+    @test length(flat) >= 5
+end
+
+# ==========================================================================
+# Phase 10: WENO ArrayOp tests
+# ==========================================================================
+
+# --- 10a: WENO ArrayOp matches scalar ---
+
+@testset "WENO ArrayOp basic linear convection matches scalar" begin
+    # Dt(u) ~ -Dx(u) with WENO scheme, Dirichlet BCs.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(pi * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    using OrdinaryDiffEq
+    sol_scalar = solve(prob_scalar, SSPRK33(), dt = 0.005, saveat = 0.05)
+    sol_array = solve(prob_array, SSPRK33(), dt = 0.005, saveat = 0.05)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "WENO ArrayOp coefficient-multiplied matches scalar" begin
+    # Dt(u) ~ -v*Dx(u) with WENO scheme, Dirichlet BCs.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -2.0 * Dx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(pi * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    using OrdinaryDiffEq
+    sol_scalar = solve(prob_scalar, SSPRK33(), dt = 0.005, saveat = 0.05)
+    sol_array = solve(prob_array, SSPRK33(), dt = 0.005, saveat = 0.05)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+@testset "WENO ArrayOp mixed advection+diffusion matches scalar" begin
+    # Dt(u) ~ -Dx(u) + D*Dxx(u) with WENO advection + centered diffusion.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    D_coeff = 0.01
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x)) + D_coeff * Dxx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(pi * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    using OrdinaryDiffEq
+    sol_scalar = solve(prob_scalar, SSPRK33(), dt = 0.005, saveat = 0.05)
+    sol_array = solve(prob_array, SSPRK33(), dt = 0.005, saveat = 0.05)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+# --- 10b: WENO ArrayOp symbolic structure ---
+
+@testset "WENO ArrayOp symbolic structure" begin
+    # Verify the ArrayOp path is used for WENO scheme.
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(pi * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+    disc = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    flat = flatten_equations(eqs)
+    @test length(flat) >= 5
+end
+
+# --- 10c: WENO with higher-order odd derivatives ---
+
+@testset "WENO ArrayOp with 3rd-order derivative matches scalar" begin
+    # PDE with Dxxx alongside WENO 1st-order: Dt(u) ~ -Dx(u) + 0.01*Dxxx(u)
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxxx = Differential(x)^3
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x)) + 0.01 * Dxxx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(pi * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    using OrdinaryDiffEq
+    sol_scalar = solve(prob_scalar, SSPRK33(), dt = 0.005, saveat = 0.05)
+    sol_array = solve(prob_array, SSPRK33(), dt = 0.005, saveat = 0.05)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
