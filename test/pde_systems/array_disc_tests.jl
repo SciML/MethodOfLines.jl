@@ -3104,3 +3104,519 @@ end
     @test size(u_scalar) == size(u_array)
     @test isapprox(u_scalar, u_array, rtol = 1e-10)
 end
+
+# ─── Phase 13: Complex PDE Validation, PDAE Support, Higher-Order Upwind ──────
+
+# --- 13a (B1): PDAE — diffusion + algebraic constraint ---
+
+@testset "PDAE: diffusion + algebraic constraint ArrayOp matches scalar" begin
+    # Adapted from MOL_1D_PDAE.jl
+    # Dt(u(t,x)) ~ Dxx(u(t,x))
+    # 0 ~ Dxx(v(t,x)) + exp(-t)*sin(x)
+
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Dx^2
+
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)),
+        0 ~ Dxx(v(t, x)) + exp(-t) * sin(x),
+    ]
+    bcs = [
+        u(0, x) ~ cos(x),
+        v(0, x) ~ sin(x),
+        u(t, 0) ~ exp(-t),
+        Dx(u(t, 1)) ~ -exp(-t) * sin(1),
+        Dx(v(t, 0)) ~ exp(-t),
+        v(t, 1) ~ exp(-t) * sin(1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
+
+    l = 20
+    dx = range(0.0, 1.0, length = l)
+    dx_ = dx[2] - dx[1]
+
+    disc_scalar = MOLFiniteDifference([x => dx_], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx_], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Rodas4(), saveat = 0.1)
+    sol_array = solve(prob_array, Rodas4(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+    v_scalar = sol_scalar[v(t, x)]
+    v_array = sol_array[v(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+    @test size(v_scalar) == size(v_array)
+    @test isapprox(v_scalar, v_array, rtol = 1e-10)
+end
+
+# --- 13b (B2): KdV equation — 3rd-order upwind with UpwindScheme ---
+
+@testset "KdV 3rd-order upwind ArrayOp matches scalar" begin
+    # Adapted from MOL_1D_HigherOrder.jl KdV test
+    # Dt(u(x,t)) ~ -6*u*Dx(u) - Dx3(u)
+
+    @parameters x t
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dx2 = Differential(x)^2
+    Dx3 = Differential(x)^3
+
+    α = 6
+    β = 1
+    eq = Dt(u(x, t)) ~ -α * u(x, t) * Dx(u(x, t)) - β * Dx3(u(x, t))
+
+    u_analytic(x, t; z = (x - t) / 2) = 1 / 2 * sech(z)^2
+    du(x, t; z = (x - t) / 2) = 1 / 2 * tanh(z) * sech(z)^2
+    ddu(x, t; z = (x - t) / 2) = 1 / 4 * (2 * tanh(z)^2 + sech(z)^2) * sech(z)^2
+    bcs = [
+        u(x, 0) ~ u_analytic(x, 0),
+        u(-10, t) ~ u_analytic(-10, t),
+        u(10, t) ~ u_analytic(10, t),
+        Dx(u(-10, t)) ~ du(-10, t),
+        Dx(u(10, t)) ~ du(10, t),
+        Dx2(u(-10, t)) ~ ddu(-10, t),
+        Dx2(u(10, t)) ~ ddu(10, t),
+    ]
+
+    domains = [
+        x ∈ Interval(-10.0, 10.0),
+        t ∈ Interval(0.0, 1.0),
+    ]
+
+    dx = 0.4
+
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        upwind_order = 1, grid_align = center_align,
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        upwind_order = 1, grid_align = center_align,
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, FBDF(), saveat = 0.1)
+    sol_array = solve(prob_array, FBDF(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+
+    u_scalar = sol_scalar[u(x, t)]
+    u_array = sol_array[u(x, t)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+# --- 13c (B3): Mixed advection + diffusion + dispersion ---
+
+@testset "Mixed advection+diffusion+dispersion ArrayOp matches scalar" begin
+    # Dt(u) ~ -alpha*Dx(u) + beta*Dxx(u) + gamma*Dxxx(u) - delta*Dxxxx(u)
+    # Combines 1st-order upwind, 2nd-order centered, 3rd-order upwind, 4th-order centered
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dxxx = Differential(x)^3
+    Dxxxx = Differential(x)^4
+
+    alpha_val = 1.0
+    beta_val = 0.1
+    gamma_val = 0.01
+    delta_val = 0.001
+
+    eq = Dt(u(t, x)) ~ -alpha_val * Dx(u(t, x)) + beta_val * Dxx(u(t, x)) +
+                         gamma_val * Dxxx(u(t, x)) - delta_val * Dxxxx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ exp(-((x - 5)^2)),
+        u(t, 0) ~ 0.0,
+        u(t, 10) ~ 0.0,
+        Dx(u(t, 0)) ~ 0.0,
+        Dx(u(t, 10)) ~ 0.0,
+        Dxx(u(t, 0)) ~ 0.0,
+        Dxx(u(t, 10)) ~ 0.0,
+        Dxxx(u(t, 0)) ~ 0.0,
+        Dxxx(u(t, 10)) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 10.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.2
+
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, FBDF(), saveat = 0.1)
+    sol_array = solve(prob_array, FBDF(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+# --- 13d (B4): Beam equation — 4th-order spatial + coupled system ---
+
+@testset "Beam equation with velocity ArrayOp matches scalar" begin
+    # Adapted from MOL_1D_HigherOrder.jl Test 01
+    # v(t,x) ~ Dt(u(t,x))
+    # Dt(v(t,x)) ~ -mu*EI*Dx4(u(t,x)) + mu*g
+
+    @parameters x t
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dx3 = Differential(x)^3
+    Dx4 = Differential(x)^4
+
+    g = -9.81
+    EI = 1
+    mu = 1
+    L = 10.0
+    dx = 0.4
+
+    eqs = [
+        v(t, x) ~ Dt(u(t, x)),
+        Dt(v(t, x)) ~ -mu * EI * Dx4(u(t, x)) + mu * g,
+    ]
+
+    bcs = [
+        u(0, x) ~ 0,
+        v(0, x) ~ 0,
+        u(t, 0) ~ 0,
+        v(t, 0) ~ 0,
+        Dxx(u(t, L)) ~ 0,
+        Dx3(u(t, L)) ~ 0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, L),
+    ]
+
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
+
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        approx_order = 4,
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        approx_order = 4,
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, FBDF())
+    sol_array = solve(prob_array, FBDF())
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+    v_scalar = sol_scalar[v(t, x)]
+    v_array = sol_array[v(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+    @test size(v_scalar) == size(v_array)
+    @test isapprox(v_scalar, v_array, rtol = 1e-10)
+end
+
+# --- 13e (B5): Brusselator — 2D coupled reaction-diffusion + periodic BCs ---
+
+@testset "Brusselator 2D periodic ArrayOp matches scalar" begin
+    # Adapted from brusselator_eq.jl with smaller grid and shorter time
+
+    @parameters x y t
+    @variables u(..) v(..)
+    Difft = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    ∇²(u) = Dxx(u) + Dyy(u)
+
+    brusselator_f(x, y, t) = (((x - 0.3)^2 + (y - 0.6)^2) <= 0.1^2) * (t >= 1.1) * 5.0
+
+    α = 10.0
+
+    u0(x, y, t) = 22(y * (1 - y))^(3 / 2)
+    v0(x, y, t) = 27(x * (1 - x))^(3 / 2)
+
+    eq = [
+        Difft(u(x, y, t)) ~
+            1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
+            α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
+        Difft(v(x, y, t)) ~
+            3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
+            α * ∇²(v(x, y, t)),
+    ]
+
+    domains = [
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+        t ∈ Interval(0.0, 1.0),
+    ]
+
+    bcs = [
+        u(x, y, 0) ~ u0(x, y, 0),
+        u(0, y, t) ~ u(1, y, t),
+        u(x, 0, t) ~ u(x, 1, t),
+        v(x, y, 0) ~ v0(x, y, 0),
+        v(0, y, t) ~ v(1, y, t),
+        v(x, 0, t) ~ v(x, 1, t),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [x, y, t], [u(x, y, t), v(x, y, t)])
+
+    N = 8
+    dx = 1 / N
+    dy = 1 / N
+
+    disc_scalar = MOLFiniteDifference([x => dx, y => dy], t;
+        approx_order = 2,
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx, y => dy], t;
+        approx_order = 2,
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, TRBDF2(), saveat = 0.1)
+    sol_array = solve(prob_array, TRBDF2(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+
+    u_scalar = sol_scalar[u(x, y, t)]
+    u_array = sol_array[u(x, y, t)]
+    v_scalar = sol_scalar[v(x, y, t)]
+    v_array = sol_array[v(x, y, t)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+    @test size(v_scalar) == size(v_array)
+    @test isapprox(v_scalar, v_array, rtol = 1e-10)
+end
+
+# --- 13f (B6): Schrödinger — complex-valued PDE ---
+
+@testset "Schrödinger complex PDE ArrayOp matches scalar" begin
+    # Adapted from schroedinger.jl
+    # im * Dt(ψ(t,x)) ~ Dxx(ψ(t,x))
+
+    @parameters t x
+    @variables ψ(..)
+
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    xmin = 0
+    xmax = 1
+
+    V(x) = 0.0
+
+    eq = [im * Dt(ψ(t, x)) ~ (Dxx(ψ(t, x)) + V(x) * ψ(t, x))]
+
+    ψ0 = x -> ((1 + im) / sqrt(2)) * sinpi(2 * x)
+
+    bcs = [
+        ψ(0, x) => ψ0(x),
+        ψ(t, xmin) ~ 0,
+        ψ(t, xmax) ~ 0,
+    ]
+
+    domains = [t ∈ Interval(0, 1), x ∈ Interval(xmin, xmax)]
+
+    @named sys = PDESystem(eq, bcs, domains, [t, x], [ψ(t, x)])
+
+    disc_scalar = MOLFiniteDifference([x => 50], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => 50], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(sys, disc_scalar)
+    prob_array = discretize(sys, disc_array)
+
+    sol_scalar = solve(prob_scalar, FBDF(), saveat = 0.1)
+    sol_array = solve(prob_array, FBDF(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+
+    ψ_scalar = sol_scalar[ψ(t, x)]
+    ψ_array = sol_array[ψ(t, x)]
+
+    @test size(ψ_scalar) == size(ψ_array)
+    @test isapprox(ψ_scalar, ψ_array, rtol = 1e-10)
+end
+
+# --- 13g (B7): Higher-order upwind symbolic structure ---
+
+@testset "3rd-order upwind produces ArrayOp" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters x t
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dx2 = Differential(x)^2
+    Dx3 = Differential(x)^3
+
+    eq = Dt(u(x, t)) ~ -u(x, t) * Dx(u(x, t)) - Dx3(u(x, t))
+
+    # Need enough BCs for 3rd order
+    bcs = [
+        u(x, 0) ~ exp(-(x^2)),
+        u(-5, t) ~ 0.0,
+        u(5, t) ~ 0.0,
+        Dx(u(-5, t)) ~ 0.0,
+        Dx(u(5, t)) ~ 0.0,
+        Dx2(u(-5, t)) ~ 0.0,
+        Dx2(u(5, t)) ~ 0.0,
+    ]
+
+    domains = [
+        x ∈ Interval(-5.0, 5.0),
+        t ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
+
+    dx = 0.5
+    disc = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Verify ArrayOp is used (not per-point fallback)
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # 3rd-order upwind should have wider boundary frame than 1st-order
+    flat = flatten_equations(eqs)
+    # Interior points should be fewer than total grid points
+    n_total = Int(10.0 / dx) + 1  # 21 grid points
+    # Flattened equations = interior (from ArrayOp) + boundary
+    @test length(flat) >= n_total - 2  # At least n_total - 2 equations
+end
+
+# --- 13h (B8): 4th-order spatial derivative symbolic structure ---
+
+@testset "4th-order spatial derivative Dx4 produces ArrayOp" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dx4 = Differential(x)^4
+
+    eq = Dt(u(t, x)) ~ -Dx4(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(π * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+        Dx(u(t, 0)) ~ π,
+        Dx(u(t, 1)) ~ -π,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+    disc = MOLFiniteDifference([x => dx], t;
+        approx_order = 4,
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Verify ArrayOp is used
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # 4th-order derivative with approx_order=4 needs wider boundary frame
+    flat = flatten_equations(eqs)
+    n_total = Int(1.0 / dx) + 1  # 21 grid points
+    @test length(flat) >= n_total - 2  # At least n_total - 2 equations
+end

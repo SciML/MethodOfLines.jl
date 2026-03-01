@@ -625,36 +625,14 @@ function generate_array_interior_eqs(
 
     # -- ArrayOp equation for interior region ---------------------------------
     eqs_centered = if centered_nonempty && all(n_centered .> 0)
-        candidate, eq_first = _build_interior_arrayop(
+        result = _build_interior_arrayop(
             n_centered, lo_centered, s, depvars, pde, derivweights,
             stencil_cache, upwind_cache, nonlinlap_cache,
             spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
             is_periodic, gl_vec
         )
-        # Validate: compare the first instantiated equation against the
-        # scalar path for the same point.  This catches any mismatch from
-        # unsupported derivative patterns that the template cannot handle.
-        #
-        # For periodic dimensions, the template uses IfElse.ifelse for index
-        # wrapping, which doesn't simplify in the symbolic system even with
-        # concrete condition values (e.g., `ifelse(1 <= 1, 5, 1)` stays as-is).
-        # This causes structural and numerical comparison to fail against the
-        # scalar path (which uses concrete wrapped indices).  We skip validation
-        # for periodic problems and rely on the numerical Array-vs-Scalar tests.
-        has_periodic = any(is_periodic)
-        if !has_periodic
-            II_check = CartesianIndex(Tuple(lo_centered))
-            eq_scalar = discretize_equation_at_point(
-                II_check, s, depvars, pde, derivweights, bcmap,
-                eqvar, indexmap, boundaryvalfuncs
-            )
-        end
-        if has_periodic || _equations_match(eq_first, eq_scalar)
-            candidate
-        else
-            @debug "ArrayOp validation failed" eq_first eq_scalar
-            # Template doesn't match scalar path -- fall back to per-point
-            # for the centred region as well.
+        if result === nothing
+            # Algebraic equation — per-point fallback (no Dt(eqvar) to wrap)
             centered_rect = CartesianIndices(
                 Tuple(lo_centered[d]:hi_centered[d] for d in 1:ndim)
             )
@@ -664,6 +642,42 @@ function generate_array_interior_eqs(
                     eqvar, indexmap, boundaryvalfuncs
                 )
             end))
+        else
+            candidate, eq_first = result
+            # Validate: compare the first instantiated equation against the
+            # scalar path for the same point.  This catches any mismatch from
+            # unsupported derivative patterns that the template cannot handle.
+            #
+            # For periodic dimensions, the template uses IfElse.ifelse for index
+            # wrapping, which doesn't simplify in the symbolic system even with
+            # concrete condition values (e.g., `ifelse(1 <= 1, 5, 1)` stays as-is).
+            # This causes structural and numerical comparison to fail against the
+            # scalar path (which uses concrete wrapped indices).  We skip validation
+            # for periodic problems and rely on the numerical Array-vs-Scalar tests.
+            has_periodic = any(is_periodic)
+            if !has_periodic
+                II_check = CartesianIndex(Tuple(lo_centered))
+                eq_scalar = discretize_equation_at_point(
+                    II_check, s, depvars, pde, derivweights, bcmap,
+                    eqvar, indexmap, boundaryvalfuncs
+                )
+            end
+            if has_periodic || _equations_match(eq_first, eq_scalar)
+                candidate
+            else
+                @debug "ArrayOp validation failed" eq_first eq_scalar
+                # Template doesn't match scalar path -- fall back to per-point
+                # for the centred region as well.
+                centered_rect = CartesianIndices(
+                    Tuple(lo_centered[d]:hi_centered[d] for d in 1:ndim)
+                )
+                collect(vec(map(centered_rect) do II
+                    discretize_equation_at_point(
+                        II, s, depvars, pde, derivweights, bcmap,
+                        eqvar, indexmap, boundaryvalfuncs
+                    )
+                end))
+            end
         end
     else
         Equation[]
@@ -896,26 +910,65 @@ function _build_interior_arrayop(
         template_rhs = _substitute_terms(pde.rhs, termlevel_dict, rdict, false)
     end
 
+    # -- Detect algebraic equations (no time derivative of eqvar) ---------------
+    # After PDE rearrangement, equations have the form `lhs ~ 0`.  For ODEs,
+    # `lhs` contains `Dt(eqvar(...))`.  For algebraic equations it does not.
+    function _contains_time_diff(expr_raw, time)
+        SymbolicUtils.iscall(expr_raw) || return false
+        op = SymbolicUtils.operation(expr_raw)
+        if op isa Differential && isequal(op.x, time)
+            return true
+        end
+        return any(a -> _contains_time_diff(a, time), SymbolicUtils.arguments(expr_raw))
+    end
+    # Check both sides — the time derivative could be on either side of the
+    # rearranged equation (though typically lhs after rearrangement).
+    is_algebraic = !_contains_time_diff(Symbolics.unwrap(pde.lhs), s.time) &&
+                   !_contains_time_diff(Symbolics.unwrap(pde.rhs), s.time)
+
     # -- Separate time derivative from spatial terms --------------------------
     eqvar_raw = Symbolics.unwrap(s.discvars[eqvar])
     eqvar_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(eqvar_raw)
     eqvar_idx_exprs = [_idxs[d] + bases[d] for d in 1:ndim]
-    dt_template = Differential(s.time)(Symbolics.wrap(eqvar_c[eqvar_idx_exprs...]))
 
-    spatial_rhs = dt_template - template_lhs + template_rhs
+    if is_algebraic
+        # Algebraic equation: no Dt term.  Cannot use the standard
+        # `Dt(u_ao) ~ rhs_ao` ArrayOp form — signal caller to use per-point.
+        return nothing
+    else
+        # ODE equation: contains Dt(eqvar).  Isolate the spatial RHS.
+        dt_template = Differential(s.time)(Symbolics.wrap(eqvar_c[eqvar_idx_exprs...]))
+
+        # Try the standard formula first (works when Dt coefficient is +1,
+        # which is the common case: `Dt(u) - spatial ~ 0`).
+        spatial_rhs_candidate = dt_template - template_lhs + template_rhs
+
+        if !_contains_time_diff(Symbolics.unwrap(spatial_rhs_candidate), s.time)
+            # Standard case: Dt coefficient was +1, cleanly cancelled.
+            spatial_rhs = spatial_rhs_candidate
+        else
+            # Non-standard Dt coefficient (e.g. `v - Dt(u) ~ 0` where
+            # coefficient is -1).  Use pde_substitute to extract it.
+            dt_key = Symbolics.unwrap(dt_template)
+            f = pde_substitute(template_lhs, Dict(dt_key => 0))
+            c_plus_f = pde_substitute(template_lhs, Dict(dt_key => 1))
+            c = c_plus_f - f
+            spatial_rhs = (template_rhs - f) / c
+        end
+    end
 
     # -- Wrap in ArrayOps -----------------------------------------------------
     ao_ranges = Dict(_idxs[d] => (1:1:n_centered[d]) for d in 1:ndim)
-
-    u_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
-        _idxs, eqvar_c[eqvar_idx_exprs...], +, nothing, ao_ranges
-    )
-    lhs_wrapped = Differential(s.time)(Symbolics.wrap(u_ao))
 
     rhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
         _idxs, Symbolics.unwrap(spatial_rhs), +, nothing, ao_ranges
     )
 
+    # ODE: Dt(u_ao) ~ rhs_ao  (algebraic case already returned above)
+    u_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+        _idxs, eqvar_c[eqvar_idx_exprs...], +, nothing, ao_ranges
+    )
+    lhs_wrapped = Differential(s.time)(Symbolics.wrap(u_ao))
     arrayop_eq = lhs_wrapped ~ Symbolics.wrap(rhs_ao)
 
     # -- Also produce first scalar equation for validation --------------------
