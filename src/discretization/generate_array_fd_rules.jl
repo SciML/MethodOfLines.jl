@@ -555,37 +555,21 @@ function generate_array_interior_eqs(
             for d in derivweights.orders[x]
                 if iseven(d)
                     bpc = stencil_cache[(u, x, d)].D_op.boundary_point_count
-                    if !haslower
-                        max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], bpc)
-                    end
-                    if !hasupper
-                        max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], bpc)
-                    end
+                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], bpc)
+                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], bpc)
                 elseif isodd(d) && haskey(upwind_cache, (u, x, d))
                     usi = upwind_cache[(u, x, d)]
-                    # Negative-wind (offside=0): low_bpc=0, high_bpc=stencil_length-1
-                    # Positive-wind (offside>0): low_bpc=offside, high_bpc=0
-                    # Lower boundary needs max(neg.offside, pos.offside) points
-                    # Upper boundary needs max(neg.boundary_point_count, pos.boundary_point_count) points
                     lower_bpc = max(usi.D_neg.offside, usi.D_pos.offside)
                     upper_bpc = max(usi.D_neg.boundary_point_count, usi.D_pos.boundary_point_count)
-                    if !haslower
-                        max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], lower_bpc)
-                    end
-                    if !hasupper
-                        max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], upper_bpc)
-                    end
+                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], lower_bpc)
+                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], upper_bpc)
                 end
             end
             # Nonlinear Laplacian combined stencil extent
             if has_nonlinlap && haskey(nonlinlap_cache, (u, x))
                 nsi = nonlinlap_cache[(u, x)]
-                if !haslower
-                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], nsi.combined_lower_bpc)
-                end
-                if !hasupper
-                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], nsi.combined_upper_bpc)
-                end
+                max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], nsi.combined_lower_bpc)
+                max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], nsi.combined_upper_bpc)
             end
             # Spherical Laplacian stencil extent: combines D1, D2, and nonlinlap reach
             if has_spherical && haskey(nonlinlap_cache, (u, x))
@@ -596,22 +580,14 @@ function generate_array_interior_eqs(
                 d2_bpc = D2_op.boundary_point_count
                 sph_lower = max(nsi.combined_lower_bpc, d1_bpc, d2_bpc)
                 sph_upper = max(nsi.combined_upper_bpc, d1_bpc, d2_bpc)
-                if !haslower
-                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], sph_lower)
-                end
-                if !hasupper
-                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], sph_upper)
-                end
+                max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], sph_lower)
+                max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], sph_upper)
             end
             # WENO stencil extent
             if has_weno && haskey(weno_cache, (u, x))
                 wsi = weno_cache[(u, x)]
-                if !haslower
-                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], wsi.lower_bpc)
-                end
-                if !hasupper
-                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], wsi.upper_bpc)
-                end
+                max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], wsi.lower_bpc)
+                max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], wsi.upper_bpc)
             end
         end
     end
