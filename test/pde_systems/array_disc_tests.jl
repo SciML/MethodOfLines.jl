@@ -2703,3 +2703,404 @@ end
     end
     @test has_arrayop
 end
+
+# ===========================================================================
+# Phase 12: 2D/3D ArrayOp validation and Periodic BC ArrayOp tests
+# ===========================================================================
+
+# --- 12a: 2D upwind advection-diffusion ---
+
+@testset "ArrayDiscretization: 2D upwind advection-diffusion matches scalar" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ -Dx(u(t, x, y)) + 0.1 * (Dxx(u(t, x, y)) + Dyy(u(t, x, y)))
+
+    bcs = [
+        u(0.0, x, y) ~ sin(pi * x) * sin(pi * y),
+        u(t, 0.0, y) ~ 0.0,
+        u(t, 1.0, y) ~ 0.0,
+        u(t, x, 0.0) ~ 0.0,
+        u(t, x, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    dx = 0.1
+
+    disc_scalar = MOLFiniteDifference([x => dx, y => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx, y => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x, y)]
+    u_array = sol_array[u(t, x, y)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+# --- 12b: 2D coupled system ---
+
+@testset "ArrayDiscretization: 2D coupled diffusion matches scalar" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + v(t, x, y),
+        Dt(v(t, x, y)) ~ Dxx(v(t, x, y)) + Dyy(v(t, x, y)) + u(t, x, y),
+    ]
+
+    bcs = [
+        u(0.0, x, y) ~ sin(pi * x) * sin(pi * y),
+        v(0.0, x, y) ~ 0.0,
+        u(t, 0.0, y) ~ 0.0,
+        u(t, 1.0, y) ~ 0.0,
+        u(t, x, 0.0) ~ 0.0,
+        u(t, x, 1.0) ~ 0.0,
+        v(t, 0.0, y) ~ 0.0,
+        v(t, 1.0, y) ~ 0.0,
+        v(t, x, 0.0) ~ 0.0,
+        v(t, x, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)])
+
+    dx = 0.1
+
+    disc_scalar = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x, y)]
+    u_array = sol_array[u(t, x, y)]
+    v_scalar = sol_scalar[v(t, x, y)]
+    v_array = sol_array[v(t, x, y)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+    @test size(v_scalar) == size(v_array)
+    @test isapprox(v_scalar, v_array, rtol = 1e-10)
+end
+
+# --- 12c: 2D symbolic structure with ranges check ---
+
+@testset "ArrayOp template: 2D symbolic structure with flattening count" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dt = Differential(t)
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0.0, x, y) ~ sin(pi * x) * sin(pi * y),
+        u(t, 0.0, y) ~ 0.0,
+        u(t, 1.0, y) ~ 0.0,
+        u(t, x, 0.0) ~ 0.0,
+        u(t, x, 1.0) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    # dx=dy=0.2 => 6 points per dim, interior [2,5] x [2,5] = 4x4 = 16
+    dx = 0.2
+    disc = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Verify ArrayOp presence
+    has_arrayop = any(eqs) do eq
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # After flattening: 4*4 interior + boundary equations
+    flat = flatten_equations(eqs)
+    @test length(flat) >= 16  # At least the interior points
+end
+
+# --- 12d: Periodic BC ArrayOp symbolic structure (should use ArrayOp now) ---
+
+@testset "Periodic BC: ArrayOp template used (not per-point fallback)" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    L = 2.0
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(2π * x / L),
+        u(t, 0) ~ u(t, L),  # Periodic BC
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, L),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.25
+    disc = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # With periodic ArrayOp support, should now use ArrayOp (not per-point fallback)
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # After flattening, should have the correct number of equations
+    flat = flatten_equations(eqs)
+    @test length(flat) >= 7  # At least the interior + boundary
+end
+
+# --- 12e: Periodic BC centered diffusion with ArrayOp numerical verification ---
+
+@testset "Periodic BC: centered diffusion ArrayOp numerical match" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    L = 2.0
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(2π * x / L),
+        u(t, 0) ~ u(t, L),  # Periodic BC
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, L),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.1
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
+# --- 12f: Periodic WENO ArrayOp path ---
+
+@testset "Periodic BC: WENO advection ArrayOp uses template" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    L = 2.0
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(2π * x / L),
+        u(t, 0) ~ u(t, L),  # Periodic BC
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, L),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.1
+    disc = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # With periodic support, should use ArrayOp template
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+end
+
+# --- 12g: Periodic upwind ArrayOp path ---
+
+@testset "Periodic BC: upwind advection ArrayOp uses template" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    L = 2.0
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ sin(2π * x / L),
+        u(t, 0) ~ u(t, L),  # Periodic BC
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, L),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.1
+    disc = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # With periodic support, should use ArrayOp template
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+end
+
+# --- 12h: 2D periodic diffusion ---
+
+@testset "Periodic BC: 2D diffusion ArrayOp matches scalar" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    Lx = 2.0
+    Ly = 2.0
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0, x, y) ~ sin(2π * x / Lx) * sin(2π * y / Ly),
+        u(t, 0, y) ~ u(t, Lx, y),  # Periodic in x
+        u(t, x, 0) ~ u(t, x, Ly),  # Periodic in y
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, Lx),
+        y ∈ Interval(0.0, Ly),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    dx = 0.2
+
+    disc_scalar = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x, y)]
+    u_array = sol_array[u(t, x, y)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
