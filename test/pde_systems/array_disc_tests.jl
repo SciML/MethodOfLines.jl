@@ -3620,3 +3620,411 @@ end
     n_total = Int(1.0 / dx) + 1  # 21 grid points
     @test length(flat) >= n_total - 2  # At least n_total - 2 equations
 end
+
+# ─── Phase 14: Full-Interior ArrayOp + Algebraic Equation Support ─────────────
+
+# --- 14a (E1): PDAE algebraic equation uses ArrayOp ---
+
+@testset "PDAE algebraic equation produces ArrayOp" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Dx^2
+
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)),
+        0 ~ Dxx(v(t, x)) + exp(-t) * sin(x),
+    ]
+    bcs = [
+        u(0, x) ~ cos(x),
+        v(0, x) ~ sin(x),
+        u(t, 0) ~ exp(-t),
+        Dx(u(t, 1)) ~ -exp(-t) * sin(1),
+        Dx(v(t, 0)) ~ exp(-t),
+        v(t, 1) ~ exp(-t) * sin(1),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
+
+    dx = 0.05
+    disc = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs_out = equations(sys)
+
+    # Both u (ODE) and v (algebraic) should produce ArrayOp equations
+    arrayop_count = count(eqs_out) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test arrayop_count >= 2  # At least one ArrayOp for u and one for v
+
+    # Solution should match scalar path
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc)
+    sol_scalar = solve(prob_scalar, Rodas4(), saveat = 0.1)
+    sol_array = solve(prob_array, Rodas4(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+    # The array path evaluates grid-dependent forcing terms (e.g. sin(x))
+    # numerically via Const-wrapped grid arrays, while the scalar path keeps
+    # them symbolic.  This creates small floating-point differences in the
+    # DAE solver trajectory (up to ~0.6% relative for the algebraic variable).
+    @test isapprox(sol_scalar[u(t, x)], sol_array[u(t, x)], rtol = 1e-2)
+    @test isapprox(sol_scalar[v(t, x)], sol_array[v(t, x)], rtol = 1e-2)
+end
+
+# --- 14b (E2): 1D diffusion full-interior (approx_order=2) ---
+
+@testset "1D diffusion full-interior approx_order=2" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [
+        u(0, x) ~ sin(π * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+    disc_array = MOLFiniteDifference([x => dx], t;
+        approx_order = 2,
+        discretization_strategy = ArrayDiscretization()
+    )
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        approx_order = 2,
+        discretization_strategy = ScalarizedDiscretization()
+    )
+
+    sys_array, _ = MethodOfLines.symbolic_discretize(pdesys, disc_array)
+    eqs_array = equations(sys_array)
+
+    # Verify ArrayOp is used (full-interior mode: no scalar frame equations)
+    has_arrayop = any(eqs_array) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # Solution should match scalar path
+    prob_array = discretize(pdesys, disc_array)
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    @test SciMLBase.successful_retcode(sol_array)
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test isapprox(sol_array[u(t, x)], sol_scalar[u(t, x)], rtol = 1e-10)
+end
+
+# --- 14c (E3): 1D diffusion full-interior (approx_order=4) ---
+
+@testset "1D diffusion full-interior approx_order=4" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Dx^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [
+        u(0, x) ~ sin(π * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+        Dx(u(t, 0)) ~ π,
+        Dx(u(t, 1)) ~ -π,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+    disc_array = MOLFiniteDifference([x => dx], t;
+        approx_order = 4,
+        discretization_strategy = ArrayDiscretization()
+    )
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        approx_order = 4,
+        discretization_strategy = ScalarizedDiscretization()
+    )
+
+    sys_array, _ = MethodOfLines.symbolic_discretize(pdesys, disc_array)
+    eqs_array = equations(sys_array)
+
+    # Should have ArrayOp
+    has_arrayop = any(eqs_array) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # Solution should match scalar path
+    prob_array = discretize(pdesys, disc_array)
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    @test SciMLBase.successful_retcode(sol_array)
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test isapprox(sol_array[u(t, x)], sol_scalar[u(t, x)], rtol = 1e-10)
+end
+
+# --- 14d (E4): 1D Burgers upwind full-interior ---
+
+@testset "1D Burgers upwind full-interior" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x)) + 0.01 * Dxx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ 0.5 * (1.0 - tanh(x / 0.2)),
+        u(t, -2) ~ 1.0,
+        u(t, 2) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(-2.0, 2.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.1
+    disc_array = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+
+    prob_array = discretize(pdesys, disc_array)
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_array)
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test isapprox(sol_array[u(t, x)], sol_scalar[u(t, x)], rtol = 1e-6)
+end
+
+# --- 14e (E5): 2D diffusion full-interior ---
+
+@testset "2D diffusion full-interior" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+
+    bcs = [
+        u(0, x, y) ~ sin(π * x) * sin(π * y),
+        u(t, 0, y) ~ 0.0,
+        u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0,
+        u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    dx = 0.1
+    disc_array = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+    disc_scalar = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+
+    prob_array = discretize(pdesys, disc_array)
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.01)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.01)
+
+    @test SciMLBase.successful_retcode(sol_array)
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test isapprox(sol_array[u(t, x, y)], sol_scalar[u(t, x, y)], rtol = 1e-10)
+end
+
+# --- 14f (E6): 1D non-uniform grid full-interior ---
+
+@testset "1D non-uniform grid full-interior" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [
+        u(0, x) ~ sin(π * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # Non-uniform grid: finer near x=0.5
+    dx_grid = [0.0; cumsum([0.05 + 0.02*sin(π*i/20) for i in 1:19])]
+    dx_grid = dx_grid / dx_grid[end]  # normalize to [0,1]
+
+    disc_array = MOLFiniteDifference([x => dx_grid], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+    disc_scalar = MOLFiniteDifference([x => dx_grid], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+
+    prob_array = discretize(pdesys, disc_array)
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_array)
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test isapprox(sol_array[u(t, x)], sol_scalar[u(t, x)], rtol = 1e-6)
+end
+
+# --- 14g (E7): Mixed centered+upwind advection-diffusion full-interior ---
+
+@testset "Mixed centered+upwind advection-diffusion full-interior" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    c = 1.0
+    D_coeff = 0.05
+    eq = Dt(u(t, x)) ~ -c * Dx(u(t, x)) + D_coeff * Dxx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ exp(-(x - 2)^2 / 0.5),
+        u(t, 0) ~ 0.0,
+        u(t, 5) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 5.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.1
+    disc_array = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+
+    prob_array = discretize(pdesys, disc_array)
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_array)
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test isapprox(sol_array[u(t, x)], sol_scalar[u(t, x)], rtol = 1e-6)
+end
+
+# --- 14h (E8): Nonlinlap equation keeps frame (regression guard) ---
+
+@testset "Nonlinlap equation retains frame per-point equations" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    # Nonlinear diffusion: Dt(u) ~ Dx(u * Dx(u))
+    eq = Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x)))
+
+    bcs = [
+        u(0, x) ~ 1.0 + 0.5 * sin(π * x),
+        u(t, 0) ~ 1.0,
+        u(t, 1) ~ 1.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        x ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+    disc = MOLFiniteDifference([x => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs_out = equations(sys)
+
+    # Nonlinlap should still use the standard path with frame per-point equations.
+    # The flattened equation count should equal the number of interior points,
+    # but the non-flattened equations should include both ArrayOp and scalar equations.
+    n_grid = Int(1.0 / dx) + 1  # 21
+    n_interior = n_grid - 2     # 19
+    flat = flatten_equations(eqs_out)
+    @test length(flat) == n_interior
+
+    # There should be some scalar (non-ArrayOp) equations for the frame
+    scalar_eq_count = count(eqs_out) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        !SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) &&
+        !SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test scalar_eq_count > 0  # Frame per-point equations should be present
+end

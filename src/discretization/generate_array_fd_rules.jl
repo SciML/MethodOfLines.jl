@@ -294,6 +294,185 @@ function precompute_weno_stencils(s, depvars, derivweights)
     return info
 end
 
+# --- Full-interior stencil data structures ----------------------------------
+
+"""
+    FullInteriorStencilInfo
+
+Weight and offset matrices covering ALL interior points (including boundary-
+proximity frame points) for a single centered derivative.  Boundary stencils
+from `D_op.low_boundary_coefs` / `D_op.high_boundary_coefs` are folded into
+position-dependent rows so that a single ArrayOp covers the entire interior.
+"""
+struct FullInteriorStencilInfo
+    weight_matrix::Matrix{Float64}   # padded_len × N_full_interior
+    offset_matrix::Matrix{Int}       # padded_len × N_full_interior
+    padded_len::Int                  # max(stencil_length, boundary_stencil_length)
+end
+
+"""
+    FullInteriorUpwindStencilInfo
+
+Weight and offset matrices covering ALL interior points for upwind derivatives.
+Both wind directions get their own matrices.
+"""
+struct FullInteriorUpwindStencilInfo
+    neg_weight_matrix::Matrix{Float64}
+    neg_offset_matrix::Matrix{Int}
+    padded_neg::Int
+    pos_weight_matrix::Matrix{Float64}
+    pos_offset_matrix::Matrix{Int}
+    padded_pos::Int
+end
+
+"""
+    precompute_full_interior_stencils(s, depvars, derivweights, stencil_cache,
+                                       lo_vec, hi_vec, indexmap, eqvar)
+
+Build `FullInteriorStencilInfo` for every `(u, x, d)` key in `stencil_cache`.
+The matrices cover grid indices `lo_vec[dim]..hi_vec[dim]` (the full interior).
+"""
+function precompute_full_interior_stencils(s, depvars, derivweights, stencil_cache,
+                                            lo_vec, hi_vec, indexmap, eqvar)
+    info = Dict{Any, FullInteriorStencilInfo}()
+    eqvar_ivs = ivs(eqvar, s)
+    gl_vec = [length(s, x) for x in eqvar_ivs]
+
+    for (key, si) in stencil_cache
+        u, x, d = key
+        dim = indexmap[x]
+        gl = gl_vec[dim]
+        N = hi_vec[dim] - lo_vec[dim] + 1
+        D_op = si.D_op
+        bpc = D_op.boundary_point_count
+        sl = D_op.stencil_length
+        bsl = D_op.boundary_stencil_length
+        padded = max(sl, bsl)
+
+        wmat = zeros(Float64, padded, N)
+        omat = zeros(Int, padded, N)
+
+        for k in 1:N
+            g = lo_vec[dim] + k - 1  # absolute grid index
+
+            if g <= bpc
+                # Lower frame: use low_boundary_coefs[g]
+                weights = Vector{Float64}(D_op.low_boundary_coefs[g])
+                # Taps are at grid indices 1:bsl, relative offsets from g
+                offsets = collect((1 - g):(bsl - g))
+            elseif g > gl - bpc
+                # Upper frame: use high_boundary_coefs[gl - g + 1]
+                weights = Vector{Float64}(D_op.high_boundary_coefs[gl - g + 1])
+                # Taps are at grid indices (gl-bsl+1):gl
+                offsets = collect((gl - bsl + 1 - g):(gl - g))
+            else
+                # Centered interior
+                if si.is_uniform
+                    weights = Vector{Float64}(D_op.stencil_coefs)
+                else
+                    # Non-uniform: stencil_coefs is indexed by interior position
+                    weights = Vector{Float64}(D_op.stencil_coefs[g - bpc])
+                end
+                offsets = collect(si.offsets)
+            end
+
+            # Zero-pad to padded length
+            nw = length(weights)
+            for j in 1:nw
+                wmat[j, k] = weights[j]
+                omat[j, k] = offsets[j]
+            end
+            # Remaining entries stay 0 (zero weight = no contribution)
+        end
+
+        info[key] = FullInteriorStencilInfo(wmat, omat, padded)
+    end
+    return info
+end
+
+"""
+    precompute_full_interior_upwind(s, depvars, derivweights, upwind_cache,
+                                     lo_vec, hi_vec, indexmap, eqvar)
+
+Build `FullInteriorUpwindStencilInfo` for every `(u, x, d)` key in `upwind_cache`.
+"""
+function precompute_full_interior_upwind(s, depvars, derivweights, upwind_cache,
+                                          lo_vec, hi_vec, indexmap, eqvar)
+    info = Dict{Any, FullInteriorUpwindStencilInfo}()
+    eqvar_ivs = ivs(eqvar, s)
+    gl_vec = [length(s, x) for x in eqvar_ivs]
+
+    for (key, usi) in upwind_cache
+        u, x, d = key
+        dim = indexmap[x]
+        gl = gl_vec[dim]
+        N = hi_vec[dim] - lo_vec[dim] + 1
+
+        # Process both neg and pos directions
+        neg_wmat, neg_omat, padded_neg = _build_upwind_full_matrices(
+            usi.D_neg, N, lo_vec[dim], gl, usi.neg_offsets, usi.is_uniform
+        )
+        pos_wmat, pos_omat, padded_pos = _build_upwind_full_matrices(
+            usi.D_pos, N, lo_vec[dim], gl, usi.pos_offsets, usi.is_uniform
+        )
+
+        info[key] = FullInteriorUpwindStencilInfo(
+            neg_wmat, neg_omat, padded_neg,
+            pos_wmat, pos_omat, padded_pos
+        )
+    end
+    return info
+end
+
+"""
+    _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_uniform)
+
+Build weight and offset matrices for a single upwind direction operator.
+"""
+function _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_uniform)
+    bpc = D_op.boundary_point_count
+    offside = D_op.offside
+    sl = D_op.stencil_length
+    bsl = D_op.boundary_stencil_length
+    padded = max(sl, bsl)
+
+    wmat = zeros(Float64, padded, N)
+    omat = zeros(Int, padded, N)
+
+    for k in 1:N
+        g = lo + k - 1  # absolute grid index
+
+        if g <= offside
+            # Lower frame: use low_boundary_coefs[g]
+            weights = Vector{Float64}(D_op.low_boundary_coefs[g])
+            # Taps at grid indices 1:bsl
+            offsets = collect((1 - g):(bsl - g))
+        elseif g > gl - bpc
+            # Upper frame: use high_boundary_coefs[gl - g + 1]
+            weights = Vector{Float64}(D_op.high_boundary_coefs[gl - g + 1])
+            # Taps at grid indices (gl-bsl+1):gl
+            offsets = collect((gl - bsl + 1 - g):(gl - g))
+        else
+            # Interior
+            if is_uniform
+                weights = Vector{Float64}(D_op.stencil_coefs)
+            else
+                # Non-uniform: stencil_coefs indexed by interior position
+                weights = Vector{Float64}(D_op.stencil_coefs[g - offside])
+            end
+            offsets = collect(interior_offsets)
+        end
+
+        nw = length(weights)
+        for j in 1:nw
+            wmat[j, k] = weights[j]
+            omat[j, k] = offsets[j]
+        end
+    end
+
+    return wmat, omat, padded
+end
+
 """
     stencil_weights_and_taps(si, II, j, grid_len, haslower, hasupper)
 
@@ -600,87 +779,123 @@ function generate_array_interior_eqs(
         end
     end
 
-    # For periodic dimensions: no boundary frame needed (stencil wraps around),
-    # so the ArrayOp covers the full grid.
-    lo_centered = [is_periodic[d] ? lo_vec[d] : max(lo_vec[d], max_lower_bpc[d] + 1) for d in 1:ndim]
-    hi_centered = [is_periodic[d] ? hi_vec[d] : min(hi_vec[d], gl_vec[d] - max_upper_bpc[d]) for d in 1:ndim]
-    n_centered  = [max(0, hi_centered[d] - lo_centered[d] + 1) for d in 1:ndim]
+    # -- Determine whether full-interior mode is possible ----------------------
+    # Full-interior mode eliminates the boundary-proximity frame by using
+    # position-dependent weight+offset matrices.  Only possible when ALL
+    # derivative types support it (centered + upwind).  Nonlinlap, spherical,
+    # and WENO keep the existing centered-ArrayOp + frame-per-point behavior.
+    all_full_interior = !(has_nonlinlap || has_spherical || has_weno) && !any(is_periodic)
 
-    # -- per-point equations for boundary-proximity interior points -----------
-    # These are the "frame" around the centred region: all interior points
-    # that are NOT in the centred rectangle.
-    full_interior = CartesianIndices(Tuple(lo_vec[d]:hi_vec[d] for d in 1:ndim))
-    centered_nonempty = all(lo_centered[d] <= hi_centered[d] for d in 1:ndim)
-
-    eqs_boundary = Equation[]
-    for II in full_interior
-        in_centered = centered_nonempty &&
-            all(lo_centered[d] <= II[d] <= hi_centered[d] for d in 1:ndim)
-        in_centered && continue
-        push!(eqs_boundary, discretize_equation_at_point(
-            II, s, depvars, pde, derivweights, bcmap,
-            eqvar, indexmap, boundaryvalfuncs
-        ))
-    end
-
-    # -- ArrayOp equation for interior region ---------------------------------
-    eqs_centered = if centered_nonempty && all(n_centered .> 0)
-        result = _build_interior_arrayop(
-            n_centered, lo_centered, s, depvars, pde, derivweights,
-            stencil_cache, upwind_cache, nonlinlap_cache,
-            spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
-            is_periodic, gl_vec
+    if all_full_interior
+        # Full-interior mode: ArrayOp covers lo_vec..hi_vec (entire interior)
+        fi_centered = precompute_full_interior_stencils(
+            s, depvars, derivweights, stencil_cache,
+            lo_vec, hi_vec, indexmap, eqvar
         )
-        if result === nothing
-            # Algebraic equation — per-point fallback (no Dt(eqvar) to wrap)
-            centered_rect = CartesianIndices(
-                Tuple(lo_centered[d]:hi_centered[d] for d in 1:ndim)
+        fi_upwind = if !isempty(upwind_cache)
+            precompute_full_interior_upwind(
+                s, depvars, derivweights, upwind_cache,
+                lo_vec, hi_vec, indexmap, eqvar
             )
-            collect(vec(map(centered_rect) do II
-                discretize_equation_at_point(
-                    II, s, depvars, pde, derivweights, bcmap,
-                    eqvar, indexmap, boundaryvalfuncs
-                )
-            end))
         else
+            nothing
+        end
+
+        n_region = [hi_vec[d] - lo_vec[d] + 1 for d in 1:ndim]
+        eqs_boundary = Equation[]  # No frame loop needed
+
+        eqs_centered = if all(n_region .> 0)
+            result = _build_interior_arrayop(
+                n_region, lo_vec, s, depvars, pde, derivweights,
+                stencil_cache, upwind_cache, nonlinlap_cache,
+                spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
+                is_periodic, gl_vec;
+                full_interior_centered_cache=fi_centered,
+                full_interior_upwind_cache=fi_upwind
+            )
             candidate, eq_first = result
-            # Validate: compare the first instantiated equation against the
-            # scalar path for the same point.  This catches any mismatch from
-            # unsupported derivative patterns that the template cannot handle.
-            #
-            # For periodic dimensions, the template uses IfElse.ifelse for index
-            # wrapping, which doesn't simplify in the symbolic system even with
-            # concrete condition values (e.g., `ifelse(1 <= 1, 5, 1)` stays as-is).
-            # This causes structural and numerical comparison to fail against the
-            # scalar path (which uses concrete wrapped indices).  We skip validation
-            # for periodic problems and rely on the numerical Array-vs-Scalar tests.
-            has_periodic = any(is_periodic)
-            if !has_periodic
-                II_check = CartesianIndex(Tuple(lo_centered))
-                eq_scalar = discretize_equation_at_point(
-                    II_check, s, depvars, pde, derivweights, bcmap,
-                    eqvar, indexmap, boundaryvalfuncs
-                )
-            end
-            if has_periodic || _equations_match(eq_first, eq_scalar)
+            # Validate at the first point (which is a frame point in this mode)
+            II_check = CartesianIndex(Tuple(lo_vec))
+            eq_scalar = discretize_equation_at_point(
+                II_check, s, depvars, pde, derivweights, bcmap,
+                eqvar, indexmap, boundaryvalfuncs
+            )
+            if _equations_match(eq_first, eq_scalar)
                 candidate
             else
-                @debug "ArrayOp validation failed" eq_first eq_scalar
-                # Template doesn't match scalar path -- fall back to per-point
-                # for the centred region as well.
-                centered_rect = CartesianIndices(
-                    Tuple(lo_centered[d]:hi_centered[d] for d in 1:ndim)
-                )
-                collect(vec(map(centered_rect) do II
+                @debug "Full-interior ArrayOp validation failed" eq_first eq_scalar
+                # Fall back to standard centered + frame path
+                collect(vec(map(CartesianIndices(Tuple(lo_vec[d]:hi_vec[d] for d in 1:ndim))) do II
                     discretize_equation_at_point(
                         II, s, depvars, pde, derivweights, bcmap,
                         eqvar, indexmap, boundaryvalfuncs
                     )
                 end))
             end
+        else
+            Equation[]
         end
     else
-        Equation[]
+        # Standard path: centered-only ArrayOp + frame per-point
+        # For periodic dimensions: no boundary frame needed (stencil wraps around),
+        # so the ArrayOp covers the full grid.
+        lo_centered = [is_periodic[d] ? lo_vec[d] : max(lo_vec[d], max_lower_bpc[d] + 1) for d in 1:ndim]
+        hi_centered = [is_periodic[d] ? hi_vec[d] : min(hi_vec[d], gl_vec[d] - max_upper_bpc[d]) for d in 1:ndim]
+        n_centered  = [max(0, hi_centered[d] - lo_centered[d] + 1) for d in 1:ndim]
+
+        # -- per-point equations for boundary-proximity interior points -----------
+        full_interior = CartesianIndices(Tuple(lo_vec[d]:hi_vec[d] for d in 1:ndim))
+        centered_nonempty = all(lo_centered[d] <= hi_centered[d] for d in 1:ndim)
+
+        eqs_boundary = Equation[]
+        for II in full_interior
+            in_centered = centered_nonempty &&
+                all(lo_centered[d] <= II[d] <= hi_centered[d] for d in 1:ndim)
+            in_centered && continue
+            push!(eqs_boundary, discretize_equation_at_point(
+                II, s, depvars, pde, derivweights, bcmap,
+                eqvar, indexmap, boundaryvalfuncs
+            ))
+        end
+
+        # -- ArrayOp equation for interior region ---------------------------------
+        eqs_centered = if centered_nonempty && all(n_centered .> 0)
+            result = _build_interior_arrayop(
+                n_centered, lo_centered, s, depvars, pde, derivweights,
+                stencil_cache, upwind_cache, nonlinlap_cache,
+                spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
+                is_periodic, gl_vec
+            )
+            candidate, eq_first = result
+            begin
+                # Validate: compare the first instantiated equation against the
+                # scalar path for the same point.
+                has_periodic = any(is_periodic)
+                if !has_periodic
+                    II_check = CartesianIndex(Tuple(lo_centered))
+                    eq_scalar = discretize_equation_at_point(
+                        II_check, s, depvars, pde, derivweights, bcmap,
+                        eqvar, indexmap, boundaryvalfuncs
+                    )
+                end
+                if has_periodic || _equations_match(eq_first, eq_scalar)
+                    candidate
+                else
+                    @debug "ArrayOp validation failed" eq_first eq_scalar
+                    centered_rect = CartesianIndices(
+                        Tuple(lo_centered[d]:hi_centered[d] for d in 1:ndim)
+                    )
+                    collect(vec(map(centered_rect) do II
+                        discretize_equation_at_point(
+                            II, s, depvars, pde, derivweights, bcmap,
+                            eqvar, indexmap, boundaryvalfuncs
+                        )
+                    end))
+                end
+            end
+        else
+            Equation[]
+        end
     end
 
     return collect(vcat(eqs_boundary, eqs_centered))
@@ -758,7 +973,8 @@ _maybe_wrap(raw_idx, dim, is_periodic, gl_vec) =
                              derivweights, stencil_cache, upwind_cache,
                              nonlinlap_cache, spherical_terms_info,
                              weno_cache, bcmap, eqvar, indexmap,
-                             is_periodic, gl_vec)
+                             is_periodic, gl_vec;
+                             full_interior_centered_cache, full_interior_upwind_cache)
 
 Build a single ArrayOp equation for the interior region.
 
@@ -769,6 +985,10 @@ using symbolic index variables.
 For periodic dimensions, stencil indices are wrapped using `_wrap_periodic_idx`
 so the ArrayOp covers the full grid without a boundary frame.
 
+When `full_interior_centered_cache` and/or `full_interior_upwind_cache` are
+provided, uses position-dependent weight+offset matrices to cover ALL interior
+points (including boundary-proximity frame points) in a single ArrayOp.
+
 Returns `(eqs, eq_first)` where `eqs` is a single-element vector containing
 the ArrayOp equation, and `eq_first` is the scalar equation at the first
 centred point (for validation against the scalar path).
@@ -778,7 +998,9 @@ function _build_interior_arrayop(
         stencil_cache, upwind_cache, nonlinlap_cache,
         spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
         is_periodic=falses(length(n_centered)),
-        gl_vec=zeros(Int, length(n_centered))
+        gl_vec=zeros(Int, length(n_centered));
+        full_interior_centered_cache=nothing,
+        full_interior_upwind_cache=nothing
     )
     ndim = length(n_centered)
     _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
@@ -795,28 +1017,45 @@ function _build_interior_arrayop(
             for d in derivweights.orders[x]
                 iseven(d) || continue
                 si = stencil_cache[(u, x, d)]
-                taps = map(si.offsets) do off
-                    idx_exprs = map(u_spatial) do xv
-                        eq_d = indexmap[xv]
-                        raw_idx = _idxs[eq_d] + bases[eq_d]
-                        raw_idx = isequal(xv, x) ? raw_idx + off : raw_idx
-                        _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-                    end
-                    Symbolics.wrap(u_c[idx_exprs...])
-                end
-                if si.is_uniform
-                    expr = sym_dot(si.D_op.stencil_coefs, taps)
-                else
-                    # Non-uniform: index into weight matrix with symbolic point index.
-                    # Weight matrix column i = weights for grid point (bpc + i).
-                    # ArrayOp point k is at grid position (k + bases[dim]).
-                    # So weight column = k + bases[dim] - bpc.
-                    wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(si.weight_matrix)
+
+                if full_interior_centered_cache !== nothing && haskey(full_interior_centered_cache, (u, x, d))
+                    # Full-interior mode: position-dependent weight+offset matrices
+                    fisi = full_interior_centered_cache[(u, x, d)]
+                    wm_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(fisi.weight_matrix)
+                    om_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(fisi.offset_matrix)
                     dim = indexmap[x]
-                    bpc = si.D_op.boundary_point_count
-                    point_idx = _idxs[dim] + bases[dim] - bpc
-                    expr = sum(1:length(si.offsets)) do k
-                        Symbolics.wrap(wmat_c[k, point_idx]) * taps[k]
+                    expr = sum(1:fisi.padded_len) do j
+                        w = Symbolics.wrap(wm_c[j, _idxs[dim]])
+                        off_val = Symbolics.wrap(om_c[j, _idxs[dim]])
+                        idx_exprs = map(u_spatial) do xv
+                            eq_d = indexmap[xv]
+                            raw_idx = _idxs[eq_d] + bases[eq_d]
+                            isequal(xv, x) ? raw_idx + off_val : raw_idx
+                        end
+                        w * Symbolics.wrap(u_c[idx_exprs...])
+                    end
+                else
+                    # Standard centered-only mode
+                    taps = map(si.offsets) do off
+                        idx_exprs = map(u_spatial) do xv
+                            eq_d = indexmap[xv]
+                            raw_idx = _idxs[eq_d] + bases[eq_d]
+                            raw_idx = isequal(xv, x) ? raw_idx + off : raw_idx
+                            _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
+                        end
+                        Symbolics.wrap(u_c[idx_exprs...])
+                    end
+                    if si.is_uniform
+                        expr = sym_dot(si.D_op.stencil_coefs, taps)
+                    else
+                        # Non-uniform: index into weight matrix with symbolic point index.
+                        wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(si.weight_matrix)
+                        dim = indexmap[x]
+                        bpc = si.D_op.boundary_point_count
+                        point_idx = _idxs[dim] + bases[dim] - bpc
+                        expr = sum(1:length(si.offsets)) do k
+                            Symbolics.wrap(wmat_c[k, point_idx]) * taps[k]
+                        end
                     end
                 end
                 push!(fd_rules, (Differential(x)^d)(u) => expr)
@@ -846,7 +1085,8 @@ function _build_interior_arrayop(
         upwind_rules = _build_upwind_rules(
             pde, s, depvars, derivweights, upwind_cache,
             bcmap, indexmap, _idxs, bases, var_rules,
-            is_periodic, gl_vec
+            is_periodic, gl_vec;
+            full_interior_upwind_cache=full_interior_upwind_cache
         )
     end
 
@@ -932,9 +1172,34 @@ function _build_interior_arrayop(
     eqvar_idx_exprs = [_idxs[d] + bases[d] for d in 1:ndim]
 
     if is_algebraic
-        # Algebraic equation: no Dt term.  Cannot use the standard
-        # `Dt(u_ao) ~ rhs_ao` ArrayOp form — signal caller to use per-point.
-        return nothing
+        # Algebraic equation: no Dt term.  Wrap both sides directly as ArrayOps.
+        ao_ranges = Dict(_idxs[d] => (1:1:n_centered[d]) for d in 1:ndim)
+
+        lhs_raw = Symbolics.unwrap(template_lhs)
+        rhs_raw = Symbolics.unwrap(template_rhs)
+        # Handle numeric RHS (e.g., literal 0 after rearrangement)
+        if !(lhs_raw isa SymbolicUtils.BasicSymbolic)
+            lhs_raw = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(lhs_raw)
+        end
+        if !(rhs_raw isa SymbolicUtils.BasicSymbolic)
+            rhs_raw = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(rhs_raw)
+        end
+
+        lhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+            _idxs, lhs_raw, +, nothing, ao_ranges
+        )
+        rhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+            _idxs, rhs_raw, +, nothing, ao_ranges
+        )
+        arrayop_eq = Symbolics.wrap(lhs_ao) ~ Symbolics.wrap(rhs_ao)
+
+        # Validation equation at first point
+        sub_first = Dict(_idxs[d] => 1 for d in 1:ndim)
+        lhs_first = pde_substitute(template_lhs, sub_first)
+        rhs_first = pde_substitute(template_rhs, sub_first)
+        eq_first = lhs_first ~ rhs_first
+
+        return [arrayop_eq], eq_first
     else
         # ODE equation: contains Dt(eqvar).  Isolate the spatial RHS.
         dt_template = Differential(s.time)(Symbolics.wrap(eqvar_c[eqvar_idx_exprs...]))
@@ -1000,7 +1265,8 @@ function _build_upwind_rules(
         pde, s, depvars, derivweights, upwind_cache,
         bcmap, indexmap, _idxs, bases, var_rules,
         is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases))
+        gl_vec=zeros(Int, length(bases));
+        full_interior_upwind_cache=nothing
     )
     # Helper: build stencil expression for a given variable, dimension, offsets, weights.
     # For non-uniform grids, weight_matrix is a stencil_length × num_interior Matrix
@@ -1034,6 +1300,27 @@ function _build_upwind_rules(
         end
     end
 
+    # Helper: build full-interior stencil expression using weight+offset matrices.
+    function _upwind_full_interior_expr(u, x, wmat, omat, padded_len,
+                                         _idxs, bases, indexmap, s)
+        u_raw = Symbolics.unwrap(s.discvars[u])
+        u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
+        u_spatial = ivs(u, s)
+        dim = indexmap[x]
+        wm_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(wmat)
+        om_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(omat)
+        return sum(1:padded_len) do j
+            w = Symbolics.wrap(wm_c[j, _idxs[dim]])
+            off_val = Symbolics.wrap(om_c[j, _idxs[dim]])
+            idx_exprs = map(u_spatial) do xv
+                eq_d = indexmap[xv]
+                raw_idx = _idxs[eq_d] + bases[eq_d]
+                isequal(xv, x) ? raw_idx + off_val : raw_idx
+            end
+            w * Symbolics.wrap(u_c[idx_exprs...])
+        end
+    end
+
     terms = split_terms(pde, s.x̄)
     vr_dict = Dict(var_rules)
 
@@ -1049,18 +1336,30 @@ function _build_upwind_rules(
                 haskey(upwind_cache, (u, x, d)) || continue
                 usi = upwind_cache[(u, x, d)]
 
-                neg_expr = _upwind_stencil_expr(
-                    u, x, usi.neg_offsets, usi.D_neg.stencil_coefs,
-                    _idxs, bases, indexmap, s;
-                    weight_matrix=usi.neg_weight_matrix,
-                    bpc=usi.D_neg.offside
-                )
-                pos_expr = _upwind_stencil_expr(
-                    u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
-                    _idxs, bases, indexmap, s;
-                    weight_matrix=usi.pos_weight_matrix,
-                    bpc=usi.D_pos.offside
-                )
+                if full_interior_upwind_cache !== nothing && haskey(full_interior_upwind_cache, (u, x, d))
+                    fiusi = full_interior_upwind_cache[(u, x, d)]
+                    neg_expr = _upwind_full_interior_expr(
+                        u, x, fiusi.neg_weight_matrix, fiusi.neg_offset_matrix,
+                        fiusi.padded_neg, _idxs, bases, indexmap, s
+                    )
+                    pos_expr = _upwind_full_interior_expr(
+                        u, x, fiusi.pos_weight_matrix, fiusi.pos_offset_matrix,
+                        fiusi.padded_pos, _idxs, bases, indexmap, s
+                    )
+                else
+                    neg_expr = _upwind_stencil_expr(
+                        u, x, usi.neg_offsets, usi.D_neg.stencil_coefs,
+                        _idxs, bases, indexmap, s;
+                        weight_matrix=usi.neg_weight_matrix,
+                        bpc=usi.D_neg.offside
+                    )
+                    pos_expr = _upwind_stencil_expr(
+                        u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
+                        _idxs, bases, indexmap, s;
+                        weight_matrix=usi.pos_weight_matrix,
+                        bpc=usi.D_pos.offside
+                    )
+                end
 
                 # Multiplication pattern: coeff * Dx^d(u)
                 mul_rule = @rule *(
@@ -1118,12 +1417,20 @@ function _build_upwind_rules(
                 haskey(upwind_cache, (u, x, d)) || continue
                 usi = upwind_cache[(u, x, d)]
                 # Positive-wind stencil as default
-                pos_expr = _upwind_stencil_expr(
-                    u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
-                    _idxs, bases, indexmap, s;
-                    weight_matrix=usi.pos_weight_matrix,
-                    bpc=usi.D_pos.offside
-                )
+                if full_interior_upwind_cache !== nothing && haskey(full_interior_upwind_cache, (u, x, d))
+                    fiusi = full_interior_upwind_cache[(u, x, d)]
+                    pos_expr = _upwind_full_interior_expr(
+                        u, x, fiusi.pos_weight_matrix, fiusi.pos_offset_matrix,
+                        fiusi.padded_pos, _idxs, bases, indexmap, s
+                    )
+                else
+                    pos_expr = _upwind_stencil_expr(
+                        u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
+                        _idxs, bases, indexmap, s;
+                        weight_matrix=usi.pos_weight_matrix,
+                        bpc=usi.D_pos.offside
+                    )
+                end
                 push!(fallback_rules, (Differential(x)^d)(u) => pos_expr)
             end
         end
