@@ -473,6 +473,247 @@ function _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_unifo
     return wmat, omat, padded
 end
 
+# --- Full-interior nonlinlap data structures --------------------------------
+
+"""
+    FullNonlinlapInfo
+
+Pre-expanded 3D weight+tap matrices for full-interior nonlinear Laplacian.
+Uses single-level Const indexing: `Const(matrix_3d)[j_outer, j_inner, _i]`.
+
+The outer derivative accesses half-points, and at each half-point the
+inner/interp stencils access grid values.  Near boundaries, all three
+operators may use boundary stencils.
+"""
+struct FullNonlinlapInfo
+    # Outer derivative: 2D matrices indexed by (j_outer, _i)
+    outer_weight_matrix::Matrix{Float64}   # padded_outer × N_full
+    padded_outer::Int
+
+    # Interpolation: 3D matrices indexed by (j_outer, j_interp, _i)
+    interp_weight_3d::Array{Float64, 3}    # padded_outer × padded_interp × N_full
+    interp_tap_3d::Array{Int, 3}           # padded_outer × padded_interp × N_full
+    padded_interp::Int
+
+    # Inner derivative: 3D matrices indexed by (j_outer, j_inner, _i)
+    inner_weight_3d::Array{Float64, 3}     # padded_outer × padded_inner × N_full
+    inner_tap_3d::Array{Int, 3}            # padded_outer × padded_inner × N_full
+    padded_inner::Int
+end
+
+"""
+    precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
+                               lo_vec, hi_vec, indexmap, eqvar)
+
+Build `FullNonlinlapInfo` for every `(u, x)` key in `nonlinlap_cache`.
+The matrices cover grid indices `lo_vec[dim]..hi_vec[dim]` (the full interior).
+
+Half-point `h` (1-indexed) lies between grid points `h` and `h+1`.
+There are `N_grid - 1` half-points total.
+"""
+function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
+                                    lo_vec, hi_vec, indexmap, eqvar)
+    info = Dict{Any, FullNonlinlapInfo}()
+    eqvar_ivs = ivs(eqvar, s)
+    gl_vec = [length(s, x) for x in eqvar_ivs]
+
+    for ((u, x), nsi) in nonlinlap_cache
+        # Non-uniform grids are not yet supported in full-interior nonlinlap mode.
+        if !nsi.is_uniform
+            return nothing
+        end
+        dim = indexmap[x]
+        gl = gl_vec[dim]
+        N = hi_vec[dim] - lo_vec[dim] + 1   # number of full-interior grid points
+
+        D_inner = derivweights.halfoffsetmap[1][Differential(x)]
+        D_outer = derivweights.halfoffsetmap[2][Differential(x)]
+        interp  = derivweights.interpmap[x]
+
+        N_half = gl - 1  # total number of half-points
+
+        # Padded stencil lengths (max of interior and boundary)
+        padded_outer  = max(D_outer.stencil_length, D_outer.boundary_stencil_length)
+        padded_inner  = max(D_inner.stencil_length, D_inner.boundary_stencil_length)
+        padded_interp = max(interp.stencil_length, interp.boundary_stencil_length)
+
+        # Allocate matrices
+        outer_wmat = zeros(Float64, padded_outer, N)
+        interp_w3d = zeros(Float64, padded_outer, padded_interp, N)
+        interp_t3d = ones(Int, padded_outer, padded_interp, N)  # ones = safe default (index 1)
+        inner_w3d  = zeros(Float64, padded_outer, padded_inner, N)
+        inner_t3d  = ones(Int, padded_outer, padded_inner, N)
+
+        bpc_outer  = D_outer.boundary_point_count
+        bpc_inner  = D_inner.boundary_point_count
+        bpc_interp = interp.boundary_point_count
+
+        is_uniform = nsi.is_uniform
+
+        for k in 1:N
+            g = lo_vec[dim] + k - 1  # absolute grid index (1-indexed)
+
+            # --- Outer operator at grid point g ---
+            outer_weights, outer_half_points = _half_op_weights_and_taps(
+                D_outer, g, gl, N_half, bpc_outer, nsi.outer_offsets, is_uniform
+            )
+            nw_outer = length(outer_weights)
+            for j in 1:nw_outer
+                outer_wmat[j, k] = outer_weights[j]
+            end
+
+            # --- For each outer tap (half-point), compute inner and interp ---
+            for j_outer in 1:nw_outer
+                h = outer_half_points[j_outer]  # absolute half-point index (1-indexed)
+
+                # Inner derivative at half-point h
+                inner_weights, inner_taps = _half_inner_weights_and_taps(
+                    D_inner, h, gl, N_half, bpc_inner, nsi.inner_offsets, is_uniform
+                )
+                nw_inner = length(inner_weights)
+                for j_inner in 1:nw_inner
+                    inner_w3d[j_outer, j_inner, k] = inner_weights[j_inner]
+                    inner_t3d[j_outer, j_inner, k] = inner_taps[j_inner]
+                end
+
+                # Interpolation at half-point h
+                interp_weights, interp_taps = _half_inner_weights_and_taps(
+                    interp, h, gl, N_half, bpc_interp, nsi.interp_offsets, is_uniform
+                )
+                nw_interp = length(interp_weights)
+                for j_interp in 1:nw_interp
+                    interp_w3d[j_outer, j_interp, k] = interp_weights[j_interp]
+                    interp_t3d[j_outer, j_interp, k] = interp_taps[j_interp]
+                end
+            end
+
+            # For padded outer taps (j > nw_outer), the outer weight is zero
+            # so their contribution is zero.  However, expr_sym may contain
+            # negative powers of dependent variables (e.g. u^(-1)), which causes
+            # 0/0 when both inner and interp weights are zero.  Avoid this by
+            # setting the first interp weight to 1.0 for padded taps, making
+            # the interpolation non-zero.  The product is still zero because
+            # outer_weight = 0.
+            for j_pad in (nw_outer + 1):padded_outer
+                interp_w3d[j_pad, 1, k] = 1.0
+            end
+        end
+
+        info[(u, x)] = FullNonlinlapInfo(
+            outer_wmat, padded_outer,
+            interp_w3d, interp_t3d, padded_interp,
+            inner_w3d, inner_t3d, padded_inner
+        )
+    end
+    return info
+end
+
+"""
+    _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, is_uniform)
+
+Compute outer operator weights and half-point tap positions at grid point `g`.
+The outer operator maps grid points to half-points.
+
+Returns `(weights, half_points)` where `half_points` are absolute 1-indexed
+half-point positions.
+"""
+function _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, is_uniform)
+    sl = D_op.stencil_length
+    bsl = D_op.boundary_stencil_length
+
+    # The outer operator is defined on half-points.
+    # At grid point g, the interior stencil accesses half-points at
+    # g + offset - 1 for each offset in interior_offsets.
+    #
+    # For non-uniform grids, the outer operator may be constructed on the
+    # midpoint grid (length gl-1) rather than the full grid (length gl).
+    # We compute the effective number of output positions from the operator
+    # itself and map g to the operator's position space accordingly.
+
+    if is_uniform
+        # Uniform: stencil_coefs is a single SVector, no indexing needed
+        if g <= bpc
+            weights = Vector{Float64}(D_op.low_boundary_coefs[g])
+            half_points = collect(1:bsl)
+        elseif g > gl - bpc
+            weights = Vector{Float64}(D_op.high_boundary_coefs[gl - g + 1])
+            half_points = collect((N_half - bsl + 1):N_half)
+        else
+            weights = Vector{Float64}(D_op.stencil_coefs)
+            half_points = [g + off - 1 for off in interior_offsets]
+        end
+    else
+        # Non-uniform: stencil_coefs is a Vector of SVectors.
+        # Compute effective number of output positions from the operator.
+        n_interior = length(D_op.stencil_coefs)
+        N_eff = n_interior + 2 * bpc
+
+        # Map grid point g to operator position p.
+        # The operator covers N_eff positions; grid covers gl positions.
+        # For outer operator (constructed on midpoint grid): N_eff = gl - 1, p = g - 1
+        # For inner/interp (constructed on full grid): N_eff = gl, p = g
+        p = g - (gl - N_eff)
+
+        if p <= bpc
+            weights = Vector{Float64}(D_op.low_boundary_coefs[p])
+            half_points = collect(1:bsl)
+        elseif p > N_eff - bpc
+            weights = Vector{Float64}(D_op.high_boundary_coefs[N_eff - p + 1])
+            half_points = collect((N_half - bsl + 1):N_half)
+        else
+            weights = Vector{Float64}(D_op.stencil_coefs[p - bpc])
+            half_points = [g + off - 1 for off in interior_offsets]
+        end
+    end
+
+    return weights, half_points
+end
+
+"""
+    _half_inner_weights_and_taps(D_op, h, gl, N_half, bpc, interior_offsets, is_uniform)
+
+Compute inner/interp operator weights and grid-point tap positions at
+half-point `h` (1-indexed, total `N_half` half-points).
+
+The inner/interp operators are defined at half-points and access grid points.
+At interior half-point `h`, the stencil accesses grid points at
+`h + offset - 1 + 1 = h + offset` for the standard centered offsets
+(the +1 accounts for the half-point lying between grid points h and h+1,
+and the stencil_coefs being computed at position 0.5 relative to the stencil).
+
+Returns `(weights, grid_taps)` where `grid_taps` are absolute 1-indexed
+grid point positions.
+"""
+function _half_inner_weights_and_taps(D_op, h, gl, N_half, bpc, interior_offsets, is_uniform)
+    sl = D_op.stencil_length
+    bsl = D_op.boundary_stencil_length
+
+    if h <= bpc
+        # Lower boundary: use low_boundary_coefs[h]
+        weights = Vector{Float64}(D_op.low_boundary_coefs[h])
+        # Boundary stencil taps at grid points 1:bsl
+        grid_taps = collect(1:bsl)
+    elseif h > N_half - bpc
+        # Upper boundary: use high_boundary_coefs[N_half - h + 1]
+        weights = Vector{Float64}(D_op.high_boundary_coefs[N_half - h + 1])
+        # Boundary stencil taps at grid points (gl-bsl+1):gl
+        grid_taps = collect((gl - bsl + 1):gl)
+    else
+        # Interior
+        if is_uniform
+            weights = Vector{Float64}(D_op.stencil_coefs)
+        else
+            # Non-uniform: stencil_coefs indexed by interior position
+            weights = Vector{Float64}(D_op.stencil_coefs[h - bpc])
+        end
+        # Interior grid taps: h + offset for each offset in interior_offsets
+        # (where offset is centered around 0, e.g. [0, 1] for 2-point stencil)
+        grid_taps = [h + off for off in interior_offsets]
+    end
+
+    return weights, grid_taps
+end
+
 """
     stencil_weights_and_taps(si, II, j, grid_len, haslower, hasupper)
 
@@ -781,10 +1022,14 @@ function generate_array_interior_eqs(
 
     # -- Determine whether full-interior mode is possible ----------------------
     # Full-interior mode eliminates the boundary-proximity frame by using
-    # position-dependent weight+offset matrices.  Only possible when ALL
-    # derivative types support it (centered + upwind).  Nonlinlap, spherical,
-    # and WENO keep the existing centered-ArrayOp + frame-per-point behavior.
-    all_full_interior = !(has_nonlinlap || has_spherical || has_weno) && !any(is_periodic)
+    # position-dependent weight+offset matrices.  Supported for centered,
+    # upwind, and nonlinlap derivatives on uniform grids.  WENO, periodic
+    # dimensions, spherical Laplacian, and nonlinlap on non-uniform grids
+    # keep the existing centered-ArrayOp + frame-per-point behavior.
+    nonlinlap_nonuniform = has_nonlinlap &&
+        any(nsi -> !nsi.is_uniform, values(nonlinlap_cache))
+    all_full_interior = !(has_spherical || has_weno || nonlinlap_nonuniform) &&
+        !any(is_periodic)
 
     if all_full_interior
         # Full-interior mode: ArrayOp covers lo_vec..hi_vec (entire interior)
@@ -800,6 +1045,20 @@ function generate_array_interior_eqs(
         else
             nothing
         end
+        fi_nonlinlap = if has_nonlinlap
+            precompute_full_nonlinlap(
+                s, depvars, derivweights, nonlinlap_cache,
+                lo_vec, hi_vec, indexmap, eqvar
+            )
+        else
+            nothing
+        end
+
+        # If nonlinlap precomputation failed (e.g., non-uniform grid),
+        # fall back to the standard centered + frame path.
+        if has_nonlinlap && fi_nonlinlap === nothing
+            all_full_interior = false
+        end
 
         n_region = [hi_vec[d] - lo_vec[d] + 1 for d in 1:ndim]
         eqs_boundary = Equation[]  # No frame loop needed
@@ -811,7 +1070,8 @@ function generate_array_interior_eqs(
                 spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
                 is_periodic, gl_vec;
                 full_interior_centered_cache=fi_centered,
-                full_interior_upwind_cache=fi_upwind
+                full_interior_upwind_cache=fi_upwind,
+                full_nonlinlap_cache=fi_nonlinlap
             )
             candidate, eq_first = result
             # Validate at the first point (which is a frame point in this mode)
@@ -1000,7 +1260,8 @@ function _build_interior_arrayop(
         is_periodic=falses(length(n_centered)),
         gl_vec=zeros(Int, length(n_centered));
         full_interior_centered_cache=nothing,
-        full_interior_upwind_cache=nothing
+        full_interior_upwind_cache=nothing,
+        full_nonlinlap_cache=nothing
     )
     ndim = length(n_centered)
     _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
@@ -1102,7 +1363,8 @@ function _build_interior_arrayop(
         nl_rules = _build_nonlinlap_rules(
             pde, s, depvars, derivweights, nonlinlap_cache,
             indexmap, _idxs, bases, var_rules,
-            is_periodic, gl_vec
+            is_periodic, gl_vec;
+            full_nonlinlap_cache=full_nonlinlap_cache
         )
     end
 
@@ -1112,7 +1374,9 @@ function _build_interior_arrayop(
         sph_rules = _build_spherical_rules(
             pde, s, depvars, derivweights, nonlinlap_cache,
             spherical_terms_info, indexmap, _idxs, bases, var_rules,
-            is_periodic, gl_vec
+            is_periodic, gl_vec;
+            full_nonlinlap_cache=full_nonlinlap_cache,
+            full_interior_centered_cache=full_interior_centered_cache
         )
     end
 
@@ -1647,13 +1911,121 @@ function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, b
 end
 
 """
+    _nonlinlap_full_template(expr_sym, u, x, nsi, fi_nlap, s, depvars, indexmap,
+                              _idxs, bases_full)
+
+Full-interior version of `_nonlinlap_template`.  Uses pre-expanded 3D
+weight+tap matrices from `fi_nlap` (a `FullNonlinlapInfo`) so that a single
+ArrayOp covers ALL interior points including boundary-proximity ones.
+
+No `_maybe_wrap` (periodic excluded from full-interior).  Tap positions
+are absolute (from `interp_tap_3d` and `inner_tap_3d`).
+"""
+function _nonlinlap_full_template(expr_sym, u, x, nsi, fi_nlap, s, depvars, indexmap,
+                                   _idxs, bases_full)
+    u_raw = Symbolics.unwrap(s.discvars[u])
+    u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
+    u_spatial = ivs(u, s)
+    dim = indexmap[x]
+
+    wrap = Symbolics.wrap
+    ConstSR = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}
+
+    # Const-wrap the precomputed matrices
+    outer_wm_c   = ConstSR(fi_nlap.outer_weight_matrix)
+    interp_w3d_c = ConstSR(fi_nlap.interp_weight_3d)
+    interp_t3d_c = ConstSR(fi_nlap.interp_tap_3d)
+    inner_w3d_c  = ConstSR(fi_nlap.inner_weight_3d)
+    inner_t3d_c  = ConstSR(fi_nlap.inner_tap_3d)
+
+    # NOTE: All Const indexing must use raw SymReal indices (not Num/wrapped).
+    # Only wrap() the final product expressions.
+
+    inner_exprs = map(1:fi_nlap.padded_outer) do j_outer
+        # --- Interpolation rules for variables at this half-point ---
+        interp_var_rules = Pair[]
+        for v in depvars
+            v_raw = Symbolics.unwrap(s.discvars[v])
+            v_c = ConstSR(v_raw)
+            v_spatial = ivs(v, s)
+            taps = map(1:fi_nlap.padded_interp) do j_interp
+                # Tap index (absolute grid position) — raw SymReal
+                tap_idx = interp_t3d_c[j_outer, j_interp, _idxs[dim]]
+                # Interpolation weight — raw SymReal
+                iw = interp_w3d_c[j_outer, j_interp, _idxs[dim]]
+                idx_exprs = map(v_spatial) do xv
+                    eq_d = indexmap[xv]
+                    if isequal(xv, x)
+                        tap_idx
+                    else
+                        _idxs[eq_d] + bases_full[eq_d]
+                    end
+                end
+                wrap(iw) * wrap(v_c[idx_exprs...])
+            end
+            push!(interp_var_rules, v => sum(taps))
+        end
+
+        # --- Interpolation rules for grid coordinates ---
+        interp_iv_rules = Pair[]
+        for xv in s.x̄
+            if isequal(xv, x)
+                grid_c = ConstSR(collect(s.grid[x]))
+                taps = map(1:fi_nlap.padded_interp) do j_interp
+                    iw = interp_w3d_c[j_outer, j_interp, _idxs[dim]]
+                    tap_idx = interp_t3d_c[j_outer, j_interp, _idxs[dim]]
+                    # grid_c[tap_idx]: tap_idx is raw SymReal (Int-typed), so this works
+                    wrap(iw) * wrap(grid_c[tap_idx])
+                end
+                push!(interp_iv_rules, x => sum(taps))
+            else
+                haskey(indexmap, xv) || continue
+                grid_c = ConstSR(collect(s.grid[xv]))
+                xv_dim = indexmap[xv]
+                push!(interp_iv_rules, xv => wrap(grid_c[_idxs[xv_dim] + bases_full[xv_dim]]))
+            end
+        end
+
+        # --- Inner derivative of u at this half-point: Dx(u) ---
+        inner_deriv_taps = map(1:fi_nlap.padded_inner) do j_inner
+            tap_idx = inner_t3d_c[j_outer, j_inner, _idxs[dim]]
+            iw = inner_w3d_c[j_outer, j_inner, _idxs[dim]]
+            idx_exprs = map(u_spatial) do xv
+                eq_d = indexmap[xv]
+                if isequal(xv, x)
+                    tap_idx
+                else
+                    _idxs[eq_d] + bases_full[eq_d]
+                end
+            end
+            wrap(iw) * wrap(u_c[idx_exprs...])
+        end
+        inner_deriv = sum(inner_deriv_taps)
+
+        # --- Substitute all rules into expr * Dx(u) ---
+        deriv_rules = Pair[Differential(x)(u) => inner_deriv]
+        all_rules = Dict(vcat(deriv_rules, interp_var_rules, interp_iv_rules))
+        substitute(expr_sym * Differential(x)(u), all_rules)
+    end
+
+    # Apply outer weights to get the full nonlinear Laplacian
+    return sum(1:fi_nlap.padded_outer) do j_outer
+        wrap(outer_wm_c[j_outer, _idxs[dim]]) * inner_exprs[j_outer]
+    end
+end
+
+"""
     _build_nonlinlap_rules(pde, s, depvars, derivweights, nonlinlap_cache,
-                            indexmap, _idxs, bases, var_rules)
+                            indexmap, _idxs, bases, var_rules;
+                            full_nonlinlap_cache=nothing)
 
 Build term-level substitution rules for nonlinear Laplacian patterns.
 
 Uses the same pattern-matching approach as `generate_nonlinlap_rules` from the
 scalar path, but substitutes ArrayOp-parameterized stencils.
+
+When `full_nonlinlap_cache` is provided, uses `_nonlinlap_full_template`
+instead of `_nonlinlap_template` to eliminate boundary-proximity frame equations.
 
 Returns a vector of `Pair{term => discretized_expr}`.
 """
@@ -1661,7 +2033,8 @@ function _build_nonlinlap_rules(
         pde, s, depvars, derivweights, nonlinlap_cache,
         indexmap, _idxs, bases, var_rules,
         is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases))
+        gl_vec=zeros(Int, length(bases));
+        full_nonlinlap_cache=nothing
     )
     terms = split_terms(pde, s.x̄)
     vr_dict = Dict(var_rules)
@@ -1672,6 +2045,20 @@ function _build_nonlinlap_rules(
             haskey(nonlinlap_cache, (u, x)) || continue
             nsi = nonlinlap_cache[(u, x)]
 
+            # Local dispatch: full-interior template vs standard template
+            fi_nlap = (full_nonlinlap_cache !== nothing && haskey(full_nonlinlap_cache, (u, x))) ?
+                      full_nonlinlap_cache[(u, x)] : nothing
+            _nlap(expr_sym) = if fi_nlap !== nothing
+                _nonlinlap_full_template(
+                    expr_sym, u, x, nsi, fi_nlap, s, depvars, indexmap, _idxs, bases
+                )
+            else
+                _nonlinlap_template(
+                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases,
+                    is_periodic, gl_vec
+                )
+            end
+
             # Pattern 1: *(~~c, Dx(*(~~a, Dx(u), ~~b)), ~~d)
             rule_mul = @rule *(
                 ~~c,
@@ -1681,10 +2068,7 @@ function _build_nonlinlap_rules(
                 expr_sym = *(~a..., ~b...)
                 outer_coeff = *(~c..., ~d...)
                 outer_coeff_subst = pde_substitute(outer_coeff, vr_dict)
-                nlap = _nonlinlap_template(
-                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases,
-                    is_periodic, gl_vec
-                )
+                nlap = _nlap(expr_sym)
                 outer_coeff_subst * nlap
             end
 
@@ -1693,10 +2077,7 @@ function _build_nonlinlap_rules(
                 *(~~a, $(Differential(x))(u), ~~b)
             ) => begin
                 expr_sym = *(~a..., ~b...)
-                _nonlinlap_template(
-                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases,
-                    is_periodic, gl_vec
-                )
+                _nlap(expr_sym)
             end
 
             # Pattern 3: Dx(Dx(u) / ~a)
@@ -1704,10 +2085,7 @@ function _build_nonlinlap_rules(
                 $(Differential(x))(u) / ~a
             ) => begin
                 expr_sym = 1 / ~a
-                _nonlinlap_template(
-                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases,
-                    is_periodic, gl_vec
-                )
+                _nlap(expr_sym)
             end
 
             # Pattern 4: *(~~b, Dx(Dx(u) / ~a), ~~c)
@@ -1719,10 +2097,7 @@ function _build_nonlinlap_rules(
                 expr_sym = 1 / ~a
                 outer_coeff = *(~b..., ~c...)
                 outer_coeff_subst = pde_substitute(outer_coeff, vr_dict)
-                nlap = _nonlinlap_template(
-                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases,
-                    is_periodic, gl_vec
-                )
+                nlap = _nlap(expr_sym)
                 outer_coeff_subst * nlap
             end
 
@@ -1734,10 +2109,7 @@ function _build_nonlinlap_rules(
                 expr_sym = *(~a..., ~d...)
                 outer_coeff = *(~b..., ~c...) / ~e
                 outer_coeff_subst = pde_substitute(outer_coeff, vr_dict)
-                nlap = _nonlinlap_template(
-                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases,
-                    is_periodic, gl_vec
-                )
+                nlap = _nlap(expr_sym)
                 outer_coeff_subst * nlap
             end
 
@@ -1762,7 +2134,9 @@ end
 
 """
     _spherical_template(info, nsi, s, depvars, derivweights,
-                         indexmap, _idxs, bases, var_rules)
+                         indexmap, _idxs, bases, var_rules;
+                         full_nonlinlap_cache=nothing,
+                         full_interior_centered_cache=nothing)
 
 Build the ArrayOp-indexed discretization of the spherical Laplacian
 `r^{-2} * Dr(r^2 * innerexpr * Dr(u))`.
@@ -1772,11 +2146,17 @@ At r ≠ 0:   `innerexpr * (D1(u)/r + nonlinlap(innerexpr, u, r))`
 
 Uses `IfElse.ifelse` for the r ≈ 0 conditional (same pattern as upwind wind
 switching).
+
+When `full_nonlinlap_cache` is provided, uses `_nonlinlap_full_template` for
+the nonlinlap term.  When `full_interior_centered_cache` is provided, uses
+position-dependent weight+offset matrices for the D1 derivative.
 """
 function _spherical_template(info, nsi, s, depvars, derivweights,
                               indexmap, _idxs, bases, var_rules,
                               is_periodic=falses(length(bases)),
-                              gl_vec=zeros(Int, length(bases)))
+                              gl_vec=zeros(Int, length(bases));
+                              full_nonlinlap_cache=nothing,
+                              full_interior_centered_cache=nothing)
     u = info.u
     r = info.r
     innerexpr = info.innerexpr
@@ -1798,35 +2178,68 @@ function _spherical_template(info, nsi, s, depvars, derivweights,
     #   innerexpr * (D1(u)/r + cartesian_nonlinear_laplacian(innerexpr, u, r))
 
     # --- Centered 1st derivative template ---
-    D1_op = derivweights.map[Differential(r)]
-    d1_is_uniform = D1_op.dx isa Number
-    d1_offsets = collect(half_range(D1_op.stencil_length))
-    d1_taps = map(d1_offsets) do off
-        idx_exprs = map(u_spatial) do xv
-            eq_d = indexmap[xv]
-            raw_idx = _idxs[eq_d] + bases[eq_d]
-            raw_idx = isequal(xv, r) ? raw_idx + off : raw_idx
-            _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-        end
-        Symbolics.wrap(u_c[idx_exprs...])
-    end
-    if d1_is_uniform
-        D1_template = sym_dot(D1_op.stencil_coefs, d1_taps)
+    # Check if we have a full-interior centered cache for the D1(r) derivative
+    fi_d1 = if full_interior_centered_cache !== nothing
+        d1_key = (u, r, 1)
+        haskey(full_interior_centered_cache, d1_key) ? full_interior_centered_cache[d1_key] : nothing
     else
-        d1_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(
-            hcat(Vector.(D1_op.stencil_coefs)...)
-        )
-        d1_pt_idx = _idxs[dim] + bases[dim] - D1_op.boundary_point_count
-        D1_template = sum(1:length(d1_offsets)) do k
-            Symbolics.wrap(d1_wmat_c[k, d1_pt_idx]) * d1_taps[k]
+        nothing
+    end
+
+    if fi_d1 !== nothing
+        # Full-interior mode: position-dependent weight+offset matrices for D1
+        wm_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(fi_d1.weight_matrix)
+        om_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(fi_d1.offset_matrix)
+        D1_template = sum(1:fi_d1.padded_len) do j
+            w = Symbolics.wrap(wm_c[j, _idxs[dim]])
+            off_val = Symbolics.wrap(om_c[j, _idxs[dim]])
+            idx_exprs = map(u_spatial) do xv
+                eq_d = indexmap[xv]
+                raw_idx = _idxs[eq_d] + bases[eq_d]
+                isequal(xv, r) ? raw_idx + off_val : raw_idx
+            end
+            w * Symbolics.wrap(u_c[idx_exprs...])
+        end
+    else
+        # Standard centered D1 template
+        D1_op = derivweights.map[Differential(r)]
+        d1_is_uniform = D1_op.dx isa Number
+        d1_offsets = collect(half_range(D1_op.stencil_length))
+        d1_taps = map(d1_offsets) do off
+            idx_exprs = map(u_spatial) do xv
+                eq_d = indexmap[xv]
+                raw_idx = _idxs[eq_d] + bases[eq_d]
+                raw_idx = isequal(xv, r) ? raw_idx + off : raw_idx
+                _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
+            end
+            Symbolics.wrap(u_c[idx_exprs...])
+        end
+        if d1_is_uniform
+            D1_template = sym_dot(D1_op.stencil_coefs, d1_taps)
+        else
+            d1_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(
+                hcat(Vector.(D1_op.stencil_coefs)...)
+            )
+            d1_pt_idx = _idxs[dim] + bases[dim] - D1_op.boundary_point_count
+            D1_template = sum(1:length(d1_offsets)) do k
+                Symbolics.wrap(d1_wmat_c[k, d1_pt_idx]) * d1_taps[k]
+            end
         end
     end
 
     # --- Nonlinear Laplacian template (reuse existing infrastructure) ---
-    nlap_template = _nonlinlap_template(
-        innerexpr, u, r, nsi, s, depvars, indexmap, _idxs, bases,
-        is_periodic, gl_vec
-    )
+    fi_nlap = (full_nonlinlap_cache !== nothing && haskey(full_nonlinlap_cache, (u, r))) ?
+              full_nonlinlap_cache[(u, r)] : nothing
+    if fi_nlap !== nothing
+        nlap_template = _nonlinlap_full_template(
+            innerexpr, u, r, nsi, fi_nlap, s, depvars, indexmap, _idxs, bases
+        )
+    else
+        nlap_template = _nonlinlap_template(
+            innerexpr, u, r, nsi, s, depvars, indexmap, _idxs, bases,
+            is_periodic, gl_vec
+        )
+    end
 
     # --- Substitute innerexpr variables at the current point ---
     vr_dict = Dict(var_rules)
@@ -1838,7 +2251,9 @@ end
 
 """
     _build_spherical_rules(pde, s, depvars, derivweights, nonlinlap_cache,
-                            spherical_terms_info, indexmap, _idxs, bases, var_rules)
+                            spherical_terms_info, indexmap, _idxs, bases, var_rules;
+                            full_nonlinlap_cache=nothing,
+                            full_interior_centered_cache=nothing)
 
 Build term-level substitution rules for spherical Laplacian patterns.
 
@@ -1851,7 +2266,9 @@ function _build_spherical_rules(
         pde, s, depvars, derivweights, nonlinlap_cache,
         spherical_terms_info, indexmap, _idxs, bases, var_rules,
         is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases))
+        gl_vec=zeros(Int, length(bases));
+        full_nonlinlap_cache=nothing,
+        full_interior_centered_cache=nothing
     )
     vr_dict = Dict(var_rules)
     spherical_rules = Pair[]
@@ -1863,7 +2280,9 @@ function _build_spherical_rules(
         sph_expr = _spherical_template(
             info, nsi, s, depvars, derivweights,
             indexmap, _idxs, bases, var_rules,
-            is_periodic, gl_vec
+            is_periodic, gl_vec;
+            full_nonlinlap_cache=full_nonlinlap_cache,
+            full_interior_centered_cache=full_interior_centered_cache
         )
 
         # Substitute outer_coeff variables now (the template is self-contained,
