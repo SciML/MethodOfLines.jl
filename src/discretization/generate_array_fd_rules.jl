@@ -99,12 +99,17 @@ struct WENOStencilInfo
 end
 
 """
-    precompute_stencils(s, depvars, derivweights)
+    precompute_stencils(s, depvars, derivweights; spherical_vars=nothing)
 
 Returns a `Dict` mapping `(u, x, d)` to a `StencilInfo` for every
 (variable, spatial dim, even derivative order) triple.
+
+When `spherical_vars` is a list of `(u, r)` pairs, also caches the D1
+stencil for each pair so that `precompute_full_interior_stencils` can
+build `FullInteriorStencilInfo` for the first derivative used by
+`_spherical_template`.
 """
-function precompute_stencils(s, depvars, derivweights)
+function precompute_stencils(s, depvars, derivweights; spherical_vars=nothing)
     info = Dict{Any, StencilInfo}()
     for u in depvars
         for x in ivs(u, s)
@@ -125,6 +130,27 @@ function precompute_stencils(s, depvars, derivweights)
                     wmat
                 )
             end
+        end
+    end
+    # Add D1 stencils for spherical variables so that
+    # precompute_full_interior_stencils can build FullInteriorStencilInfo
+    # for the first derivative used by _spherical_template.
+    if spherical_vars !== nothing
+        for (u, r) in spherical_vars
+            haskey(info, (u, r, 1)) && continue
+            D_op = derivweights.map[Differential(r)]
+            is_uniform = D_op.dx isa Number
+            wmat = if !is_uniform
+                hcat(Vector.(D_op.stencil_coefs)...)
+            else
+                nothing
+            end
+            info[(u, r, 1)] = StencilInfo(
+                D_op,
+                collect(half_range(D_op.stencil_length)),
+                is_uniform,
+                wmat
+            )
         end
     end
     return info
@@ -518,10 +544,6 @@ function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
     gl_vec = [length(s, x) for x in eqvar_ivs]
 
     for ((u, x), nsi) in nonlinlap_cache
-        # Non-uniform grids are not yet supported in full-interior nonlinlap mode.
-        if !nsi.is_uniform
-            return nothing
-        end
         dim = indexmap[x]
         gl = gl_vec[dim]
         N = hi_vec[dim] - lo_vec[dim] + 1   # number of full-interior grid points
@@ -917,7 +939,6 @@ function generate_array_interior_eqs(
         s, depvars, pde, derivweights, bcmap, eqvar,
         indexmap, boundaryvalfuncs, interior_ranges
     )
-    stencil_cache = precompute_stencils(s, depvars, derivweights)
     upwind_cache = precompute_upwind_stencils(s, depvars, derivweights)
     nonlinlap_cache = precompute_nonlinlap_stencils(s, depvars, derivweights)
     weno_cache = precompute_weno_stencils(s, depvars, derivweights)
@@ -932,6 +953,15 @@ function generate_array_interior_eqs(
     # Detect spherical Laplacian terms first (they take priority over nonlinlap).
     spherical_terms_info = _detect_spherical_terms(pde, s, depvars)
     has_spherical = !isempty(spherical_terms_info) && !isempty(nonlinlap_cache)
+
+    # Precompute stencils, including D1 entries for spherical variables so that
+    # precompute_full_interior_stencils can build full-interior D1 info.
+    sph_vars = if has_spherical
+        unique([(info.u, info.r) for info in values(spherical_terms_info)])
+    else
+        nothing
+    end
+    stencil_cache = precompute_stencils(s, depvars, derivweights; spherical_vars=sph_vars)
 
     # Detect nonlinear Laplacian terms -- their odd-order derivatives are
     # handled internally, so they don't block the template path.
@@ -1023,13 +1053,10 @@ function generate_array_interior_eqs(
     # -- Determine whether full-interior mode is possible ----------------------
     # Full-interior mode eliminates the boundary-proximity frame by using
     # position-dependent weight+offset matrices.  Supported for centered,
-    # upwind, and nonlinlap derivatives on uniform grids.  WENO, periodic
-    # dimensions, spherical Laplacian, and nonlinlap on non-uniform grids
-    # keep the existing centered-ArrayOp + frame-per-point behavior.
-    nonlinlap_nonuniform = has_nonlinlap &&
-        any(nsi -> !nsi.is_uniform, values(nonlinlap_cache))
-    all_full_interior = !(has_spherical || has_weno || nonlinlap_nonuniform) &&
-        !any(is_periodic)
+    # upwind, nonlinlap, and spherical Laplacian derivatives on uniform and
+    # non-uniform grids.  Only WENO and periodic dimensions keep the existing
+    # centered-ArrayOp + frame-per-point behavior.
+    all_full_interior = !has_weno && !any(is_periodic)
 
     if all_full_interior
         # Full-interior mode: ArrayOp covers lo_vec..hi_vec (entire interior)
@@ -1045,19 +1072,13 @@ function generate_array_interior_eqs(
         else
             nothing
         end
-        fi_nonlinlap = if has_nonlinlap
+        fi_nonlinlap = if has_nonlinlap || has_spherical
             precompute_full_nonlinlap(
                 s, depvars, derivweights, nonlinlap_cache,
                 lo_vec, hi_vec, indexmap, eqvar
             )
         else
             nothing
-        end
-
-        # If nonlinlap precomputation failed (e.g., non-uniform grid),
-        # fall back to the standard centered + frame path.
-        if has_nonlinlap && fi_nonlinlap === nothing
-            all_full_interior = false
         end
 
         n_region = [hi_vec[d] - lo_vec[d] + 1 for d in 1:ndim]

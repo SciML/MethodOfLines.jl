@@ -4385,3 +4385,182 @@ end
     end
     @test scalar_eq_count > 0  # Frame per-point equations should be present
 end
+
+# ===========================================================================
+# Phase 16: Non-Uniform Nonlinlap + Spherical Full-Interior Tests
+# ===========================================================================
+
+# --- 16a (D1): 1D nonlinlap constant coeff non-uniform grid ---
+
+@testset "Nonlinlap constant-coeff non-uniform grid matches scalar" begin
+    @parameters t x
+    @variables u(..)
+    Dx = Differential(x)
+    Dt = Differential(t)
+
+    k = 0.1
+    eq = Dt(u(t, x)) ~ Dx(k * Dx(u(t, x)))
+
+    bcs = [
+        u(0.0, x) ~ sin(π * x),
+        u(t, 0.0) ~ 0.0,
+        u(t, 1.0) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    # Non-uniform grid: denser near x=0
+    xs = [0.0; 0.02:0.05:1.0...]
+    disc_scalar = MOLFiniteDifference([x => xs], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => xs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+    @test isapprox(sol_scalar[u(t, x)], sol_array[u(t, x)], rtol = 1e-10)
+end
+
+# --- 16b (D3): 2D nonlinlap non-uniform in one dimension ---
+
+@testset "2D nonlinlap non-uniform in x, uniform in y matches scalar" begin
+    @parameters t x y
+    @variables u(..)
+    Dx = Differential(x)
+    Dy = Differential(y)
+    Dt = Differential(t)
+
+    k = 0.1
+    eq = Dt(u(t, x, y)) ~ Dx(k * Dx(u(t, x, y))) + Dy(k * Dy(u(t, x, y)))
+
+    bcs = [
+        u(0, x, y) ~ sin(π * x) * sin(π * y),
+        u(t, 0, y) ~ 0.0,
+        u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0,
+        u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    # Non-uniform in x, uniform in y
+    xs = [0.0; 0.03:0.1:1.0...]
+    dy = 0.1
+    disc_scalar = MOLFiniteDifference([x => xs, y => dy], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => xs, y => dy], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.02)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.02)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+    @test isapprox(sol_scalar[u(t, x, y)], sol_array[u(t, x, y)], rtol = 1e-10)
+end
+
+# --- 16c (D5): 1D spherical Laplacian non-uniform grid ---
+
+@testset "Spherical Laplacian non-uniform grid matches scalar" begin
+    @parameters t r
+    @variables u(..)
+    Dr = Differential(r)
+    Dt = Differential(t)
+
+    D_coeff = 0.1
+    # Spherical Laplacian: (1/r^2) * Dr(r^2 * D_coeff * Dr(u))
+    eq = Dt(u(t, r)) ~ (1 / r^2) * Dr(r^2 * D_coeff * Dr(u(t, r)))
+
+    bcs = [
+        u(0, r) ~ sin(π * r) / r,
+        Dr(u(t, 0.1)) ~ 0.0,
+        u(t, 2.0) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        r ∈ Interval(0.1, 2.0),
+    ]
+    @named pdesys = PDESystem([eq], bcs, domains, [t, r], [u(t, r)])
+
+    # Non-uniform grid in r
+    rs = [0.1; 0.15:0.1:2.0...]
+    disc_scalar = MOLFiniteDifference([r => rs], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([r => rs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.1)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+    @test isapprox(sol_scalar[u(t, r)], sol_array[u(t, r)], rtol = 1e-10)
+end
+
+# --- 16d (D6): Spherical + standard centered derivative in 2D ---
+
+@testset "Spherical + centered 2D full-interior matches scalar" begin
+    @parameters t r z
+    @variables u(..)
+    Dr = Differential(r)
+    Dzz = Differential(z)^2
+    Dt = Differential(t)
+
+    D_coeff = 0.1
+    # Spherical Laplacian in r + standard diffusion in z
+    eq = Dt(u(t, r, z)) ~ (1 / r^2) * Dr(r^2 * D_coeff * Dr(u(t, r, z))) + D_coeff * Dzz(u(t, r, z))
+
+    bcs = [
+        u(0, r, z) ~ sin(π * r) * sin(π * z) / r,
+        Dr(u(t, 0.1, z)) ~ 0.0,
+        u(t, 2.0, z) ~ 0.0,
+        u(t, r, 0.0) ~ 0.0,
+        u(t, r, 1.0) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        r ∈ Interval(0.1, 2.0),
+        z ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem([eq], bcs, domains, [t, r, z], [u(t, r, z)])
+
+    dr = 0.1
+    dz = 0.1
+    disc_scalar = MOLFiniteDifference([r => dr, z => dz], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([r => dr, z => dz], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+    sol_scalar = solve(prob_scalar, Tsit5(), saveat = 0.02)
+    sol_array = solve(prob_array, Tsit5(), saveat = 0.02)
+
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test SciMLBase.successful_retcode(sol_array)
+    @test isapprox(sol_scalar[u(t, r, z)], sol_array[u(t, r, z)], rtol = 1e-4)
+end
