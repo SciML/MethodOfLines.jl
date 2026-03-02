@@ -353,13 +353,18 @@ end
 
 """
     precompute_full_interior_stencils(s, depvars, derivweights, stencil_cache,
-                                       lo_vec, hi_vec, indexmap, eqvar)
+                                       lo_vec, hi_vec, indexmap, eqvar;
+                                       is_periodic=falses(length(lo_vec)))
 
 Build `FullInteriorStencilInfo` for every `(u, x, d)` key in `stencil_cache`.
 The matrices cover grid indices `lo_vec[dim]..hi_vec[dim]` (the full interior).
+
+For periodic uniform dimensions, all columns use the interior stencil
+(no boundary branches).
 """
 function precompute_full_interior_stencils(s, depvars, derivweights, stencil_cache,
-                                            lo_vec, hi_vec, indexmap, eqvar)
+                                            lo_vec, hi_vec, indexmap, eqvar;
+                                            is_periodic=falses(length(lo_vec)))
     info = Dict{Any, FullInteriorStencilInfo}()
     eqvar_ivs = ivs(eqvar, s)
     gl_vec = [length(s, x) for x in eqvar_ivs]
@@ -381,7 +386,11 @@ function precompute_full_interior_stencils(s, depvars, derivweights, stencil_cac
         for k in 1:N
             g = lo_vec[dim] + k - 1  # absolute grid index
 
-            if g <= bpc
+            if is_periodic[dim]
+                # Periodic uniform: always use interior stencil (wrapping handled symbolically)
+                weights = Vector{Float64}(D_op.stencil_coefs)
+                offsets = collect(si.offsets)
+            elseif g <= bpc
                 # Lower frame: use low_boundary_coefs[g]
                 weights = Vector{Float64}(D_op.low_boundary_coefs[g])
                 # Taps are at grid indices 1:bsl, relative offsets from g
@@ -418,12 +427,14 @@ end
 
 """
     precompute_full_interior_upwind(s, depvars, derivweights, upwind_cache,
-                                     lo_vec, hi_vec, indexmap, eqvar)
+                                     lo_vec, hi_vec, indexmap, eqvar;
+                                     is_periodic=falses(length(lo_vec)))
 
 Build `FullInteriorUpwindStencilInfo` for every `(u, x, d)` key in `upwind_cache`.
 """
 function precompute_full_interior_upwind(s, depvars, derivweights, upwind_cache,
-                                          lo_vec, hi_vec, indexmap, eqvar)
+                                          lo_vec, hi_vec, indexmap, eqvar;
+                                          is_periodic=falses(length(lo_vec)))
     info = Dict{Any, FullInteriorUpwindStencilInfo}()
     eqvar_ivs = ivs(eqvar, s)
     gl_vec = [length(s, x) for x in eqvar_ivs]
@@ -436,10 +447,12 @@ function precompute_full_interior_upwind(s, depvars, derivweights, upwind_cache,
 
         # Process both neg and pos directions
         neg_wmat, neg_omat, padded_neg = _build_upwind_full_matrices(
-            usi.D_neg, N, lo_vec[dim], gl, usi.neg_offsets, usi.is_uniform
+            usi.D_neg, N, lo_vec[dim], gl, usi.neg_offsets, usi.is_uniform;
+            dim_periodic=is_periodic[dim]
         )
         pos_wmat, pos_omat, padded_pos = _build_upwind_full_matrices(
-            usi.D_pos, N, lo_vec[dim], gl, usi.pos_offsets, usi.is_uniform
+            usi.D_pos, N, lo_vec[dim], gl, usi.pos_offsets, usi.is_uniform;
+            dim_periodic=is_periodic[dim]
         )
 
         info[key] = FullInteriorUpwindStencilInfo(
@@ -451,11 +464,14 @@ function precompute_full_interior_upwind(s, depvars, derivweights, upwind_cache,
 end
 
 """
-    _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_uniform)
+    _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_uniform;
+                                 dim_periodic=false)
 
 Build weight and offset matrices for a single upwind direction operator.
+For periodic uniform dimensions, always use the interior stencil.
 """
-function _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_uniform)
+function _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_uniform;
+                                      dim_periodic=false)
     bpc = D_op.boundary_point_count
     offside = D_op.offside
     sl = D_op.stencil_length
@@ -468,7 +484,11 @@ function _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_unifo
     for k in 1:N
         g = lo + k - 1  # absolute grid index
 
-        if g <= offside
+        if dim_periodic
+            # Periodic uniform: always use interior stencil (wrapping handled symbolically)
+            weights = Vector{Float64}(D_op.stencil_coefs)
+            offsets = collect(interior_offsets)
+        elseif g <= offside
             # Lower frame: use low_boundary_coefs[g]
             weights = Vector{Float64}(D_op.low_boundary_coefs[g])
             # Taps at grid indices 1:bsl
@@ -498,6 +518,24 @@ function _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_unifo
 
     return wmat, omat, padded
 end
+
+# --- Periodic integer wrapping helpers for precompute-time ------------------
+
+"""
+    _wrap_grid_periodic(g, gl)
+
+Wrap absolute grid index `g` into the periodic range `[2, gl]`.
+Index 1 is the duplicate boundary point (same as index gl), so valid
+interior indices are 2:gl.  The mapping is: `mod(g - 2, gl - 1) + 2`.
+"""
+_wrap_grid_periodic(g, gl) = mod(g - 2, gl - 1) + 2
+
+"""
+    _wrap_half_periodic(h, N_half)
+
+Wrap half-point index `h` into the periodic range `[1, N_half]`.
+"""
+_wrap_half_periodic(h, N_half) = mod1(h, N_half)
 
 # --- Full-interior nonlinlap data structures --------------------------------
 
@@ -529,16 +567,22 @@ end
 
 """
     precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
-                               lo_vec, hi_vec, indexmap, eqvar)
+                               lo_vec, hi_vec, indexmap, eqvar;
+                               is_periodic=falses(length(lo_vec)))
 
 Build `FullNonlinlapInfo` for every `(u, x)` key in `nonlinlap_cache`.
 The matrices cover grid indices `lo_vec[dim]..hi_vec[dim]` (the full interior).
 
 Half-point `h` (1-indexed) lies between grid points `h` and `h+1`.
 There are `N_grid - 1` half-points total.
+
+For periodic uniform dimensions, the helper functions skip boundary branches
+and the returned tap indices are wrapped at precompute time using integer
+modular arithmetic.
 """
 function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
-                                    lo_vec, hi_vec, indexmap, eqvar)
+                                    lo_vec, hi_vec, indexmap, eqvar;
+                                    is_periodic=falses(length(lo_vec)))
     info = Dict{Any, FullNonlinlapInfo}()
     eqvar_ivs = ivs(eqvar, s)
     gl_vec = [length(s, x) for x in eqvar_ivs]
@@ -546,6 +590,7 @@ function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
     for ((u, x), nsi) in nonlinlap_cache
         dim = indexmap[x]
         gl = gl_vec[dim]
+        dim_periodic = is_periodic[dim]
         N = hi_vec[dim] - lo_vec[dim] + 1   # number of full-interior grid points
 
         D_inner = derivweights.halfoffsetmap[1][Differential(x)]
@@ -558,6 +603,13 @@ function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
         padded_outer  = max(D_outer.stencil_length, D_outer.boundary_stencil_length)
         padded_inner  = max(D_inner.stencil_length, D_inner.boundary_stencil_length)
         padded_interp = max(interp.stencil_length, interp.boundary_stencil_length)
+
+        # For periodic: only interior stencils used, so padded = stencil_length
+        if dim_periodic
+            padded_outer  = D_outer.stencil_length
+            padded_inner  = D_inner.stencil_length
+            padded_interp = interp.stencil_length
+        end
 
         # Allocate matrices
         outer_wmat = zeros(Float64, padded_outer, N)
@@ -577,11 +629,17 @@ function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
 
             # --- Outer operator at grid point g ---
             outer_weights, outer_half_points = _half_op_weights_and_taps(
-                D_outer, g, gl, N_half, bpc_outer, nsi.outer_offsets, is_uniform
+                D_outer, g, gl, N_half, bpc_outer, nsi.outer_offsets, is_uniform;
+                dim_periodic=dim_periodic
             )
             nw_outer = length(outer_weights)
             for j in 1:nw_outer
                 outer_wmat[j, k] = outer_weights[j]
+            end
+
+            # Wrap outer half-points for periodic
+            if dim_periodic
+                outer_half_points = [_wrap_half_periodic(h, N_half) for h in outer_half_points]
             end
 
             # --- For each outer tap (half-point), compute inner and interp ---
@@ -590,22 +648,26 @@ function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
 
                 # Inner derivative at half-point h
                 inner_weights, inner_taps = _half_inner_weights_and_taps(
-                    D_inner, h, gl, N_half, bpc_inner, nsi.inner_offsets, is_uniform
+                    D_inner, h, gl, N_half, bpc_inner, nsi.inner_offsets, is_uniform;
+                    dim_periodic=dim_periodic
                 )
                 nw_inner = length(inner_weights)
                 for j_inner in 1:nw_inner
                     inner_w3d[j_outer, j_inner, k] = inner_weights[j_inner]
-                    inner_t3d[j_outer, j_inner, k] = inner_taps[j_inner]
+                    tap = dim_periodic ? _wrap_grid_periodic(inner_taps[j_inner], gl) : inner_taps[j_inner]
+                    inner_t3d[j_outer, j_inner, k] = tap
                 end
 
                 # Interpolation at half-point h
                 interp_weights, interp_taps = _half_inner_weights_and_taps(
-                    interp, h, gl, N_half, bpc_interp, nsi.interp_offsets, is_uniform
+                    interp, h, gl, N_half, bpc_interp, nsi.interp_offsets, is_uniform;
+                    dim_periodic=dim_periodic
                 )
                 nw_interp = length(interp_weights)
                 for j_interp in 1:nw_interp
                     interp_w3d[j_outer, j_interp, k] = interp_weights[j_interp]
-                    interp_t3d[j_outer, j_interp, k] = interp_taps[j_interp]
+                    tap = dim_periodic ? _wrap_grid_periodic(interp_taps[j_interp], gl) : interp_taps[j_interp]
+                    interp_t3d[j_outer, j_interp, k] = tap
                 end
             end
 
@@ -631,15 +693,19 @@ function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
 end
 
 """
-    _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, is_uniform)
+    _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, is_uniform;
+                               dim_periodic=false)
 
 Compute outer operator weights and half-point tap positions at grid point `g`.
 The outer operator maps grid points to half-points.
 
 Returns `(weights, half_points)` where `half_points` are absolute 1-indexed
 half-point positions.
+
+For periodic uniform dimensions, always uses the interior stencil.
 """
-function _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, is_uniform)
+function _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, is_uniform;
+                                    dim_periodic=false)
     sl = D_op.stencil_length
     bsl = D_op.boundary_stencil_length
 
@@ -654,7 +720,11 @@ function _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, i
 
     if is_uniform
         # Uniform: stencil_coefs is a single SVector, no indexing needed
-        if g <= bpc
+        if dim_periodic
+            # Periodic: always use interior stencil (wrapping handled by caller)
+            weights = Vector{Float64}(D_op.stencil_coefs)
+            half_points = [g + off - 1 for off in interior_offsets]
+        elseif g <= bpc
             weights = Vector{Float64}(D_op.low_boundary_coefs[g])
             half_points = collect(1:bsl)
         elseif g > gl - bpc
@@ -692,7 +762,8 @@ function _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, i
 end
 
 """
-    _half_inner_weights_and_taps(D_op, h, gl, N_half, bpc, interior_offsets, is_uniform)
+    _half_inner_weights_and_taps(D_op, h, gl, N_half, bpc, interior_offsets, is_uniform;
+                                  dim_periodic=false)
 
 Compute inner/interp operator weights and grid-point tap positions at
 half-point `h` (1-indexed, total `N_half` half-points).
@@ -705,12 +776,19 @@ and the stencil_coefs being computed at position 0.5 relative to the stencil).
 
 Returns `(weights, grid_taps)` where `grid_taps` are absolute 1-indexed
 grid point positions.
+
+For periodic uniform dimensions, always uses the interior stencil.
 """
-function _half_inner_weights_and_taps(D_op, h, gl, N_half, bpc, interior_offsets, is_uniform)
+function _half_inner_weights_and_taps(D_op, h, gl, N_half, bpc, interior_offsets, is_uniform;
+                                       dim_periodic=false)
     sl = D_op.stencil_length
     bsl = D_op.boundary_stencil_length
 
-    if h <= bpc
+    if dim_periodic
+        # Periodic: always use interior stencil (tap wrapping handled by caller)
+        weights = Vector{Float64}(D_op.stencil_coefs)
+        grid_taps = [h + off for off in interior_offsets]
+    elseif h <= bpc
         # Lower boundary: use low_boundary_coefs[h]
         weights = Vector{Float64}(D_op.low_boundary_coefs[h])
         # Boundary stencil taps at grid points 1:bsl
@@ -1054,20 +1132,28 @@ function generate_array_interior_eqs(
     # Full-interior mode eliminates the boundary-proximity frame by using
     # position-dependent weight+offset matrices.  Supported for centered,
     # upwind, nonlinlap, and spherical Laplacian derivatives on uniform and
-    # non-uniform grids.  Only WENO and periodic dimensions keep the existing
-    # centered-ArrayOp + frame-per-point behavior.
-    all_full_interior = !has_weno && !any(is_periodic)
+    # non-uniform grids.  WENO keeps the existing centered-ArrayOp +
+    # frame-per-point behavior.  Periodic dimensions on uniform grids are
+    # supported (interior stencil everywhere, indices wrapped symbolically);
+    # periodic on non-uniform grids falls back to the standard path.
+    periodic_dim_uniform = map(eqvar_ivs) do x
+        s.dxs[x] isa Number
+    end
+    has_periodic_nonuniform = any(d -> is_periodic[d] && !periodic_dim_uniform[d], 1:ndim)
+    all_full_interior = !has_weno && !has_periodic_nonuniform
 
     if all_full_interior
         # Full-interior mode: ArrayOp covers lo_vec..hi_vec (entire interior)
         fi_centered = precompute_full_interior_stencils(
             s, depvars, derivweights, stencil_cache,
-            lo_vec, hi_vec, indexmap, eqvar
+            lo_vec, hi_vec, indexmap, eqvar;
+            is_periodic=is_periodic
         )
         fi_upwind = if !isempty(upwind_cache)
             precompute_full_interior_upwind(
                 s, depvars, derivweights, upwind_cache,
-                lo_vec, hi_vec, indexmap, eqvar
+                lo_vec, hi_vec, indexmap, eqvar;
+                is_periodic=is_periodic
             )
         else
             nothing
@@ -1075,7 +1161,8 @@ function generate_array_interior_eqs(
         fi_nonlinlap = if has_nonlinlap || has_spherical
             precompute_full_nonlinlap(
                 s, depvars, derivweights, nonlinlap_cache,
-                lo_vec, hi_vec, indexmap, eqvar
+                lo_vec, hi_vec, indexmap, eqvar;
+                is_periodic=is_periodic
             )
         else
             nothing
@@ -1095,13 +1182,19 @@ function generate_array_interior_eqs(
                 full_nonlinlap_cache=fi_nonlinlap
             )
             candidate, eq_first = result
-            # Validate at the first point (which is a frame point in this mode)
-            II_check = CartesianIndex(Tuple(lo_vec))
-            eq_scalar = discretize_equation_at_point(
-                II_check, s, depvars, pde, derivweights, bcmap,
-                eqvar, indexmap, boundaryvalfuncs
-            )
-            if _equations_match(eq_first, eq_scalar)
+            # Validate at the first point (which is a frame point in this mode).
+            # Skip validation for periodic: the scalar path uses IfElse-based
+            # wrapping which differs structurally from full-interior's Const-matrix
+            # approach, so _equations_match would fail even though numerics match.
+            has_any_periodic = any(is_periodic)
+            if !has_any_periodic
+                II_check = CartesianIndex(Tuple(lo_vec))
+                eq_scalar = discretize_equation_at_point(
+                    II_check, s, depvars, pde, derivweights, bcmap,
+                    eqvar, indexmap, boundaryvalfuncs
+                )
+            end
+            if has_any_periodic || _equations_match(eq_first, eq_scalar)
                 candidate
             else
                 @debug "Full-interior ArrayOp validation failed" eq_first eq_scalar
@@ -1312,7 +1405,8 @@ function _build_interior_arrayop(
                         idx_exprs = map(u_spatial) do xv
                             eq_d = indexmap[xv]
                             raw_idx = _idxs[eq_d] + bases[eq_d]
-                            isequal(xv, x) ? raw_idx + off_val : raw_idx
+                            combined = isequal(xv, x) ? raw_idx + off_val : raw_idx
+                            _maybe_wrap(combined, eq_d, is_periodic, gl_vec)
                         end
                         w * Symbolics.wrap(u_c[idx_exprs...])
                     end
@@ -1587,7 +1681,8 @@ function _build_upwind_rules(
 
     # Helper: build full-interior stencil expression using weight+offset matrices.
     function _upwind_full_interior_expr(u, x, wmat, omat, padded_len,
-                                         _idxs, bases, indexmap, s)
+                                         _idxs, bases, indexmap, s,
+                                         is_periodic, gl_vec)
         u_raw = Symbolics.unwrap(s.discvars[u])
         u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
         u_spatial = ivs(u, s)
@@ -1600,7 +1695,8 @@ function _build_upwind_rules(
             idx_exprs = map(u_spatial) do xv
                 eq_d = indexmap[xv]
                 raw_idx = _idxs[eq_d] + bases[eq_d]
-                isequal(xv, x) ? raw_idx + off_val : raw_idx
+                combined = isequal(xv, x) ? raw_idx + off_val : raw_idx
+                _maybe_wrap(combined, eq_d, is_periodic, gl_vec)
             end
             w * Symbolics.wrap(u_c[idx_exprs...])
         end
@@ -1625,11 +1721,13 @@ function _build_upwind_rules(
                     fiusi = full_interior_upwind_cache[(u, x, d)]
                     neg_expr = _upwind_full_interior_expr(
                         u, x, fiusi.neg_weight_matrix, fiusi.neg_offset_matrix,
-                        fiusi.padded_neg, _idxs, bases, indexmap, s
+                        fiusi.padded_neg, _idxs, bases, indexmap, s,
+                        is_periodic, gl_vec
                     )
                     pos_expr = _upwind_full_interior_expr(
                         u, x, fiusi.pos_weight_matrix, fiusi.pos_offset_matrix,
-                        fiusi.padded_pos, _idxs, bases, indexmap, s
+                        fiusi.padded_pos, _idxs, bases, indexmap, s,
+                        is_periodic, gl_vec
                     )
                 else
                     neg_expr = _upwind_stencil_expr(
@@ -1706,7 +1804,8 @@ function _build_upwind_rules(
                     fiusi = full_interior_upwind_cache[(u, x, d)]
                     pos_expr = _upwind_full_interior_expr(
                         u, x, fiusi.pos_weight_matrix, fiusi.pos_offset_matrix,
-                        fiusi.padded_pos, _idxs, bases, indexmap, s
+                        fiusi.padded_pos, _idxs, bases, indexmap, s,
+                        is_periodic, gl_vec
                     )
                 else
                     pos_expr = _upwind_stencil_expr(
@@ -1939,8 +2038,9 @@ Full-interior version of `_nonlinlap_template`.  Uses pre-expanded 3D
 weight+tap matrices from `fi_nlap` (a `FullNonlinlapInfo`) so that a single
 ArrayOp covers ALL interior points including boundary-proximity ones.
 
-No `_maybe_wrap` (periodic excluded from full-interior).  Tap positions
-are absolute (from `interp_tap_3d` and `inner_tap_3d`).
+Tap positions are absolute (from `interp_tap_3d` and `inner_tap_3d`).
+For periodic dimensions, tap indices are pre-wrapped at precompute time
+(see `precompute_full_nonlinlap`), so no symbolic `_maybe_wrap` is needed.
 """
 function _nonlinlap_full_template(expr_sym, u, x, nsi, fi_nlap, s, depvars, indexmap,
                                    _idxs, bases_full)
@@ -2217,7 +2317,8 @@ function _spherical_template(info, nsi, s, depvars, derivweights,
             idx_exprs = map(u_spatial) do xv
                 eq_d = indexmap[xv]
                 raw_idx = _idxs[eq_d] + bases[eq_d]
-                isequal(xv, r) ? raw_idx + off_val : raw_idx
+                combined = isequal(xv, r) ? raw_idx + off_val : raw_idx
+                _maybe_wrap(combined, eq_d, is_periodic, gl_vec)
             end
             w * Symbolics.wrap(u_c[idx_exprs...])
         end
