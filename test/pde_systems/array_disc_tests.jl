@@ -4864,11 +4864,11 @@ end
     @test isapprox(sol_scalar[u(t, x)], sol_array[u(t, x)], rtol = 1e-10)
 end
 
-# --- 17g: 1D periodic non-uniform (regression — falls back to standard path) ---
-# Note: Non-uniform periodic ArrayOp is a pre-existing limitation in the standard
-# path (weight matrix dimension mismatch). This test verifies that the gate condition
-# correctly routes non-uniform periodic to the standard path (not full-interior),
-# and that uniform periodic still works via full-interior.
+# --- 17g: 1D periodic non-uniform (falls back to standard path) ---
+# Note: Non-uniform periodic is now fixed in the standard path (Phase 18).
+# This test verifies that the gate condition correctly routes non-uniform periodic
+# to the standard path (not full-interior), and that uniform periodic still works
+# via full-interior.
 
 @testset "Periodic full-interior: non-uniform periodic uses standard path, uniform uses full-interior" begin
     using SymbolicUtils
@@ -4902,4 +4902,256 @@ end
         return !is_array
     end
     @test scalar_count == 1  # Only the periodic BC constraint
+end
+
+# ===========================================================================
+# Phase 18: Non-Uniform Periodic Fix Tests
+# ===========================================================================
+# Note: The scalar path (ScalarizedDiscretization) does not support
+# non-uniform periodic grids (asserts in centered_difference.jl).
+# Tests validate against analytical solutions instead.
+
+# --- 18a: 1D non-uniform periodic centered diffusion, structural ---
+
+@testset "Non-uniform periodic: 1D centered diffusion structural" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    L = 2.0
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sin(2π * x / L), u(t, 0) ~ u(t, L)]
+    domains = [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, L)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # Non-uniform grid (collect + perturbation)
+    N = 21
+    xs_base = range(0.0, L, length = N)
+    xs = [xs_base[1]; [xs_base[i] + 0.01 * (-1)^i for i in 2:(N - 1)]; xs_base[end]]
+    disc = MOLFiniteDifference([x => xs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Should produce ArrayOp equations (not fall back to per-point)
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # Non-uniform periodic should use the standard path (not full-interior),
+    # so there should be frame equations in addition to the ArrayOp.
+    # But the important thing is that it doesn't error out.
+    @test length(eqs) >= 1
+end
+
+# --- 18b: 1D non-uniform periodic centered diffusion, numerical ---
+# Analytical: u(t,x) = exp(-(2π/L)²*t) * sin(2πx/L)
+
+@testset "Non-uniform periodic: 1D centered diffusion vs analytical" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    L = 2.0
+    k = 2π / L
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sin(k * x), u(t, 0) ~ u(t, L)]
+    domains = [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, L)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    N = 41
+    xs_base = range(0.0, L, length = N)
+    xs = [xs_base[1]; [xs_base[i] + 0.005 * (-1)^i for i in 2:(N - 1)]; xs_base[end]]
+
+    disc = MOLFiniteDifference([x => xs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol)
+
+    u_exact(tv, xv) = exp(-k^2 * tv) * sin(k * xv)
+    x_disc = sol[x]
+    for (i, tv) in enumerate(sol.t)
+        exact = u_exact.(tv, x_disc)
+        @test isapprox(sol[u(t, x)][i, :], exact, atol = 0.01)
+    end
+end
+
+# --- 18c: 1D non-uniform periodic upwind advection ---
+# Analytical: u(t,x) = sin(2π(x - v*t)/L)
+
+@testset "Non-uniform periodic: 1D upwind advection vs analytical" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    L = 2.0
+    v_adv = 1.0
+    k = 2π / L
+    eq = Dt(u(t, x)) ~ -v_adv * Dx(u(t, x))
+    bcs = [u(0, x) ~ sin(k * x), u(t, 0) ~ u(t, L)]
+    domains = [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, L)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    N = 41
+    xs_base = range(0.0, L, length = N)
+    xs = [xs_base[1]; [xs_base[i] + 0.005 * (-1)^i for i in 2:(N - 1)]; xs_base[end]]
+
+    disc = MOLFiniteDifference([x => xs], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol)
+
+    u_exact(tv, xv) = sin(k * (xv - v_adv * tv))
+    x_disc = sol[x]
+    # First-order upwind is very diffusive; check per-element with generous tolerance
+    for (i, tv) in enumerate(sol.t)
+        exact = u_exact.(tv, x_disc)
+        @test all(isapprox.(sol[u(t, x)][i, :], exact, atol = 0.15))
+    end
+end
+
+# --- 18d: 2D mixed: non-uniform periodic + uniform non-periodic ---
+# Analytical: u(t,x,y) = exp(-((2π/Lx)² + (π/Ly)²)*t) * sin(2πx/Lx) * sin(πy/Ly)
+
+@testset "Non-uniform periodic: 2D mixed periodic/non-periodic vs analytical" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    Lx = 2.0
+    Ly = 1.0
+    kx = 2π / Lx
+    ky = π / Ly
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+    bcs = [
+        u(0, x, y) ~ sin(kx * x) * sin(ky * y),
+        u(t, 0, y) ~ u(t, Lx, y),  # Periodic in x
+        u(t, x, 0) ~ 0.0,           # Dirichlet in y
+        u(t, x, Ly) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, Lx),
+        y ∈ Interval(0.0, Ly),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    Nx = 21
+    xs_base = range(0.0, Lx, length = Nx)
+    xs = [xs_base[1]; [xs_base[i] + 0.005 * (-1)^i for i in 2:(Nx - 1)]; xs_base[end]]
+    dy = 0.1
+
+    disc = MOLFiniteDifference([x => xs, y => dy], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol)
+
+    u_exact(tv, xv, yv) = exp(-(kx^2 + ky^2) * tv) * sin(kx * xv) * sin(ky * yv)
+    x_disc = sol[x]
+    y_disc = sol[y]
+    for (i, tv) in enumerate(sol.t)
+        u_num = sol[u(t, x, y)][i, :, :]
+        u_ana = [u_exact(tv, xv, yv) for xv in x_disc, yv in y_disc]
+        @test isapprox(u_num, u_ana, atol = 0.05)
+    end
+end
+
+# --- 18e: Non-uniform periodic with higher order (order=4) ---
+
+@testset "Non-uniform periodic: higher order (order=4) vs analytical" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    L = 2.0
+    k = 2π / L
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sin(k * x), u(t, 0) ~ u(t, L)]
+    domains = [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, L)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    N = 41
+    xs_base = range(0.0, L, length = N)
+    xs = [xs_base[1]; [xs_base[i] + 0.005 * (-1)^i for i in 2:(N - 1)]; xs_base[end]]
+
+    disc = MOLFiniteDifference([x => xs], t;
+        approx_order = 4,
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol)
+
+    u_exact(tv, xv) = exp(-k^2 * tv) * sin(k * xv)
+    x_disc = sol[x]
+    for (i, tv) in enumerate(sol.t)
+        exact = u_exact.(tv, x_disc)
+        # Higher order should be more accurate
+        @test isapprox(sol[u(t, x)][i, :], exact, atol = 0.005)
+    end
+end
+
+# --- 18f: Regression — collect-based grid (uniform spacing, vector-typed) ---
+
+@testset "Non-uniform periodic: regression — collect grid can solve" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    L = 2.0
+    k = 2π / L
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sin(k * x), u(t, 0) ~ u(t, L)]
+    domains = [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, L)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # collect → Vector{Float64}, triggers non-uniform code path even though spacing is uniform
+    xs = collect(range(0.0, L, length = 21))
+
+    disc = MOLFiniteDifference([x => xs], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol)
+
+    u_exact(tv, xv) = exp(-k^2 * tv) * sin(k * xv)
+    x_disc = sol[x]
+    for (i, tv) in enumerate(sol.t)
+        exact = u_exact.(tv, x_disc)
+        @test isapprox(sol[u(t, x)][i, :], exact, atol = 0.01)
+    end
 end

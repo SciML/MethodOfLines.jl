@@ -99,6 +99,75 @@ struct WENOStencilInfo
 end
 
 """
+    _periodic_stencil_positions(grid_x, g, offsets)
+
+Compute the physical positions of stencil points around grid point `g`
+for a periodic grid, wrapping indices that fall outside `[2, N]`.
+
+`offsets` is a vector/range of integer offsets from `g` (e.g., `[-1, 0, 1]`
+for a 3-point centered stencil).
+
+For wrapped indices, positions are shifted by ±L where L = grid_x[N] - grid_x[1]
+is the domain length.
+"""
+function _periodic_stencil_positions(grid_x, g, offsets)
+    N = length(grid_x)
+    L = grid_x[N] - grid_x[1]
+    positions = Vector{Float64}(undef, length(offsets))
+    for (j, off) in enumerate(offsets)
+        raw = g + off
+        if raw <= 1
+            positions[j] = grid_x[raw + (N - 1)] - L
+        elseif raw > N
+            positions[j] = grid_x[raw - (N - 1)] + L
+        else
+            positions[j] = grid_x[raw]
+        end
+    end
+    return positions
+end
+
+"""
+    _build_periodic_centered_wmat(D_op, grid_x)
+
+Build an extended `stencil_length × N` weight matrix for a non-uniform
+periodic grid.  Interior points reuse the stencil coefficients from `D_op`;
+boundary-proximity points use wrapped grid positions.
+"""
+function _build_periodic_centered_wmat(D_op, grid_x)
+    N = length(grid_x)
+    sl = D_op.stencil_length
+    half_w = div(sl, 2)
+    offsets = -half_w:half_w
+
+    wmat = Matrix{Float64}(undef, sl, N)
+    for g in 1:N
+        positions = _periodic_stencil_positions(grid_x, g, offsets)
+        wmat[:, g] = calculate_weights(D_op.derivative_order, grid_x[g], positions)
+    end
+    return wmat
+end
+
+"""
+    _build_periodic_upwind_wmat(D_op, grid_x, offsets)
+
+Build an extended `stencil_length × N` weight matrix for upwind stencils
+on a non-uniform periodic grid.  `offsets` are the tap offsets relative to
+the evaluation point (e.g., `0:(sl-1)` for negative-wind).
+"""
+function _build_periodic_upwind_wmat(D_op, grid_x, offsets)
+    N = length(grid_x)
+    sl = D_op.stencil_length
+
+    wmat = Matrix{Float64}(undef, sl, N)
+    for g in 1:N
+        positions = _periodic_stencil_positions(grid_x, g, offsets)
+        wmat[:, g] = calculate_weights(D_op.derivative_order, grid_x[g], positions)
+    end
+    return wmat
+end
+
+"""
     precompute_stencils(s, depvars, derivweights; spherical_vars=nothing)
 
 Returns a `Dict` mapping `(u, x, d)` to a `StencilInfo` for every
@@ -1425,10 +1494,17 @@ function _build_interior_arrayop(
                         expr = sym_dot(si.D_op.stencil_coefs, taps)
                     else
                         # Non-uniform: index into weight matrix with symbolic point index.
-                        wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(si.weight_matrix)
                         dim = indexmap[x]
                         bpc = si.D_op.boundary_point_count
-                        point_idx = _idxs[dim] + bases[dim] - bpc
+                        if is_periodic[dim]
+                            # Periodic non-uniform: extended N-column weight matrix
+                            ext_wmat = _build_periodic_centered_wmat(si.D_op, collect(s.grid[x]))
+                            wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(ext_wmat)
+                            point_idx = _idxs[dim] + bases[dim]
+                        else
+                            wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(si.weight_matrix)
+                            point_idx = _idxs[dim] + bases[dim] - bpc
+                        end
                         expr = sum(1:length(si.offsets)) do k
                             Symbolics.wrap(wmat_c[k, point_idx]) * taps[k]
                         end
@@ -1652,7 +1728,7 @@ function _build_upwind_rules(
     # and bpc is the offside (= low_boundary_point_count) used to align weight matrix
     # column indexing: stencil_coefs[j] corresponds to grid index (j + bpc).
     function _upwind_stencil_expr(u, x, offsets, weights, _idxs, bases, indexmap, s;
-                                   weight_matrix=nothing, bpc=0)
+                                   weight_matrix=nothing, bpc=0, D_op=nothing)
         u_raw = Symbolics.unwrap(s.discvars[u])
         u_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(u_raw)
         u_spatial = ivs(u, s)
@@ -1670,9 +1746,16 @@ function _build_upwind_rules(
             return sym_dot(weights, taps)
         else
             # Non-uniform: index into weight matrix by interior point index
-            wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(weight_matrix)
             dim = indexmap[x]
-            point_idx = _idxs[dim] + bases[dim] - bpc
+            if is_periodic[dim]
+                # Periodic non-uniform: extended N-column weight matrix
+                ext_wmat = _build_periodic_upwind_wmat(D_op, collect(s.grid[x]), offsets)
+                wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(ext_wmat)
+                point_idx = _idxs[dim] + bases[dim]
+            else
+                wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(weight_matrix)
+                point_idx = _idxs[dim] + bases[dim] - bpc
+            end
             return sum(1:length(offsets)) do k
                 Symbolics.wrap(wmat_c[k, point_idx]) * taps[k]
             end
@@ -1734,13 +1817,15 @@ function _build_upwind_rules(
                         u, x, usi.neg_offsets, usi.D_neg.stencil_coefs,
                         _idxs, bases, indexmap, s;
                         weight_matrix=usi.neg_weight_matrix,
-                        bpc=usi.D_neg.offside
+                        bpc=usi.D_neg.offside,
+                        D_op=usi.D_neg
                     )
                     pos_expr = _upwind_stencil_expr(
                         u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
                         _idxs, bases, indexmap, s;
                         weight_matrix=usi.pos_weight_matrix,
-                        bpc=usi.D_pos.offside
+                        bpc=usi.D_pos.offside,
+                        D_op=usi.D_pos
                     )
                 end
 
@@ -1812,7 +1897,8 @@ function _build_upwind_rules(
                         u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
                         _idxs, bases, indexmap, s;
                         weight_matrix=usi.pos_weight_matrix,
-                        bpc=usi.D_pos.offside
+                        bpc=usi.D_pos.offside,
+                        D_op=usi.D_pos
                     )
                 end
                 push!(fallback_rules, (Differential(x)^d)(u) => pos_expr)
@@ -1847,12 +1933,17 @@ function _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs
             x_offsets = collect(half_range(Dx_op.stencil_length))
 
             # For non-uniform: build weight matrix and Const-wrap it
+            dim_x_local = indexmap[x]
             if x_is_uniform
                 x_weights = Dx_op.stencil_coefs
             else
-                x_wmat = hcat(Vector.(Dx_op.stencil_coefs)...)
-                x_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(x_wmat)
                 x_bpc = Dx_op.boundary_point_count
+                if is_periodic[dim_x_local]
+                    x_wmat = _build_periodic_centered_wmat(Dx_op, collect(s.grid[x]))
+                else
+                    x_wmat = hcat(Vector.(Dx_op.stencil_coefs)...)
+                end
+                x_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(x_wmat)
             end
 
             for y in u_spatial
@@ -1862,12 +1953,17 @@ function _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs
                 y_is_uniform = Dy_op.dx isa Number
                 y_offsets = collect(half_range(Dy_op.stencil_length))
 
+                dim_y_local = indexmap[y]
                 if y_is_uniform
                     y_weights = Dy_op.stencil_coefs
                 else
-                    y_wmat = hcat(Vector.(Dy_op.stencil_coefs)...)
-                    y_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(y_wmat)
                     y_bpc = Dy_op.boundary_point_count
+                    if is_periodic[dim_y_local]
+                        y_wmat = _build_periodic_centered_wmat(Dy_op, collect(s.grid[y]))
+                    else
+                        y_wmat = hcat(Vector.(Dy_op.stencil_coefs)...)
+                    end
+                    y_wmat_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(y_wmat)
                 end
 
                 dim_x = indexmap[x]
@@ -1891,13 +1987,15 @@ function _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs
                         wx = if x_is_uniform
                             x_weights[kx]
                         else
-                            Symbolics.wrap(x_wmat_c[kx, _idxs[dim_x] + bases[dim_x] - x_bpc])
+                            x_pt = is_periodic[dim_x] ? _idxs[dim_x] + bases[dim_x] : _idxs[dim_x] + bases[dim_x] - x_bpc
+                            Symbolics.wrap(x_wmat_c[kx, x_pt])
                         end
 
                         wy = if y_is_uniform
                             y_weights[ky]
                         else
-                            Symbolics.wrap(y_wmat_c[ky, _idxs[dim_y] + bases[dim_y] - y_bpc])
+                            y_pt = is_periodic[dim_y] ? _idxs[dim_y] + bases[dim_y] : _idxs[dim_y] + bases[dim_y] - y_bpc
+                            Symbolics.wrap(y_wmat_c[ky, y_pt])
                         end
 
                         wx * wy * tap
