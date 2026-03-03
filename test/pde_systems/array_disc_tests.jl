@@ -4,6 +4,7 @@
 
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets, SciMLBase
 using ModelingToolkit: Differential
+import PDEBase
 
 @testset "ArrayDiscretization: Dt(u(t,x)) ~ Dxx(u(t,x))" begin
     # Method of Manufactured Solutions
@@ -5434,4 +5435,248 @@ end
     # Verify solution is physically reasonable (bounded, not NaN)
     @test all(isfinite, sol.u[end])
     @test maximum(abs, sol.u[end]) < 100.0
+end
+
+# --- Float32 type-genericity tests -------------------------------------------
+
+@testset "Float32: type-generic structs and helpers" begin
+    # Test 1: _op_eltype extracts the correct type from DerivativeOperator{T}
+    D_f32 = MethodOfLines.CompleteCenteredDifference(2, 2, Float32(0.1))
+    D_f64 = MethodOfLines.CompleteCenteredDifference(2, 2, 0.1)
+    @test MethodOfLines._op_eltype(D_f32) === Float32
+    @test MethodOfLines._op_eltype(D_f64) === Float64
+
+    # Test 2: collect() on SVector{N,Float32} produces Vector{Float32}
+    coefs_f32 = collect(D_f32.stencil_coefs)
+    @test eltype(coefs_f32) === Float32
+    coefs_f64 = collect(D_f64.stencil_coefs)
+    @test eltype(coefs_f64) === Float64
+
+    # Test 3: StencilInfo{Float32} can be constructed
+    si_f32 = MethodOfLines.StencilInfo{Float32}(
+        D_f32, [0, 1, 2], true, nothing
+    )
+    @test si_f32.weight_matrix === nothing
+
+    wmat_f32 = Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
+    si_f32_nu = MethodOfLines.StencilInfo{Float32}(
+        D_f32, [0, 1, 2], false, wmat_f32
+    )
+    @test eltype(si_f32_nu.weight_matrix) === Float32
+
+    # Test 4: FullInteriorStencilInfo{Float32} can be constructed
+    wmat = zeros(Float32, 3, 5)
+    omat = zeros(Int, 3, 5)
+    fisi = MethodOfLines.FullInteriorStencilInfo(wmat, omat, 3)
+    @test eltype(fisi.weight_matrix) === Float32
+
+    # Test 5: WENOStencilInfo{Float32} can be constructed
+    wsi = MethodOfLines.WENOStencilInfo{Float32}(
+        Float32(1e-6), [-2, -1, 0, 1, 2], 2, 2, Float32(0.1)
+    )
+    @test wsi.epsilon isa Float32
+    @test wsi.dx_val isa Float32
+
+    # Test 6: _stencil_coefs_to_matrix preserves element type from operator
+    D_f32_nu = MethodOfLines.CompleteCenteredDifference(
+        2, 2, Float32.(collect(range(0.0f0, 1.0f0, length=11)))
+    )
+    mat = MethodOfLines._stencil_coefs_to_matrix(D_f32_nu)
+    @test eltype(mat) === Float32
+
+    # Test 7: _periodic_stencil_positions preserves grid element type
+    grid_f32 = Float32.(collect(range(0.0f0, 1.0f0, length=11)))
+    positions = MethodOfLines._periodic_stencil_positions(grid_f32, 5, [-1, 0, 1])
+    @test eltype(positions) === Float32
+
+    # Test 8: _build_periodic_wmat produces Float32 matrix from Float32 operator
+    wmat_periodic = MethodOfLines._build_periodic_wmat(D_f32_nu, grid_f32)
+    @test eltype(wmat_periodic) === Float32
+end
+
+@testset "Float32: 1D centered diffusion solves correctly" begin
+    # Verify that a PDE with Float32 grid spacing produces correct results
+    u_exact = (x, t) -> exp.(-t) * sin.(π * x)
+
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ (1 / π^2) * Dxx(u(t, x))
+    bcs = [
+        u(0, x) ~ sin(π * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = Float32(0.05)
+    disc = MOLFiniteDifference(
+        [x => dx], t; discretization_strategy = ArrayDiscretization()
+    )
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
+
+    x_disc = sol[x][2:(end - 1)]
+    t_disc = sol[t]
+    u_approx = sol[u(t, x)][:, 2:(end - 1)]
+
+    for i in 1:length(sol)
+        exact = u_exact(x_disc, t_disc[i])
+        @test all(isapprox.(u_approx[i, :], exact, atol = 0.01))
+    end
+end
+
+@testset "Float32: 1D centered diffusion matches Float64" begin
+    # Verify Float32 and Float64 discretizations produce equivalent results
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [
+        u(0, x) ~ sin(π * x),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc_f64 = MOLFiniteDifference(
+        [x => 0.1], t; discretization_strategy = ArrayDiscretization()
+    )
+    disc_f32 = MOLFiniteDifference(
+        [x => Float32(0.1)], t; discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_f64 = discretize(pdesys, disc_f64)
+    prob_f32 = discretize(pdesys, disc_f32)
+
+    sol_f64 = solve(prob_f64, Tsit5(), saveat = 0.1)
+    sol_f32 = solve(prob_f32, Tsit5(), saveat = 0.1)
+
+    u_f64 = sol_f64[u(t, x)]
+    u_f32 = sol_f32[u(t, x)]
+
+    @test size(u_f64) == size(u_f32)
+    # Float32(0.1) != Float64(0.1), so grids differ slightly; use relaxed tolerance
+    @test isapprox(u_f64, u_f32, rtol = 1e-2)
+end
+
+@testset "Float32: upwind advection solves correctly" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+    bcs = [
+        u(0, x) ~ sin(2π * x),
+        u(t, 0) ~ sin(-2π * t),
+        u(t, 1) ~ sin(2π * (1 - t)),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = Float32(0.05)
+    disc = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol)
+    @test all(isfinite, sol[u(t, x)])
+    # Solution should stay bounded (pure advection)
+    @test maximum(abs, sol[u(t, x)]) < 2.0
+end
+
+@testset "Float32: nonlinear diffusion (nonlinlap) solves correctly" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    # Nonlinear diffusion: Dt(u) = Dx(u * Dx(u))
+    eq = Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x)))
+    bcs = [
+        u(0, x) ~ 1.0 + 0.5 * sin(π * x),
+        u(t, 0) ~ 1.0,
+        u(t, 1) ~ 1.0,
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dx = Float32(0.05)
+    disc = MOLFiniteDifference(
+        [x => dx], t; discretization_strategy = ArrayDiscretization()
+    )
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(), saveat = 0.02)
+
+    @test SciMLBase.successful_retcode(sol)
+    @test all(isfinite, sol[u(t, x)])
+    # Solution should be bounded and positive (diffusion smooths toward 1.0)
+    @test all(sol[u(t, x)][end, :] .> 0.5)
+    @test all(sol[u(t, x)][end, :] .< 1.5)
+end
+
+@testset "Float32: WENO advection solves correctly" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+    bcs = [
+        u(0, x) ~ sin(2π * x),
+        u(t, 0) ~ sin(-2π * t),
+        u(t, 1) ~ sin(2π * (1 - t)),
+    ]
+
+    domains = [
+        t ∈ Interval(0.0, 0.5),
+        x ∈ Interval(0.0, 1.0),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # Use 0.125 (1/8) which is exact in binary and divides [0,1] evenly.
+    # WENO requires a uniform grid, so the Float32 dx must remain uniform
+    # after promotion to Float64.
+    dx = Float32(0.125)
+    disc = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(), saveat = 0.1)
+
+    @test SciMLBase.successful_retcode(sol)
+    @test all(isfinite, sol[u(t, x)])
+    @test maximum(abs, sol[u(t, x)]) < 2.0
 end
