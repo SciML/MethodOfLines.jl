@@ -32,11 +32,11 @@ scheme types.
 
 Pre-computed information for a particular centred derivative operator.
 """
-struct StencilInfo
+struct StencilInfo{T<:Real}
     D_op::DerivativeOperator     # full operator, needed for boundary stencils
     offsets::Vector{Int}         # half_range(stencil_length)
     is_uniform::Bool             # true if dx is a Number
-    weight_matrix::Union{Nothing, Matrix{Float64}}  # non-uniform: stencil_length × num_interior
+    weight_matrix::Union{Nothing, Matrix{T}}  # non-uniform: stencil_length × num_interior
 end
 
 """
@@ -44,14 +44,14 @@ end
 
 Pre-computed information for upwind derivative operators (both wind directions).
 """
-struct UpwindStencilInfo
+struct UpwindStencilInfo{T<:Real}
     D_neg::DerivativeOperator    # negative-wind (offside=0)
     D_pos::DerivativeOperator    # positive-wind (offside=d+upwind_order-1)
     neg_offsets::Vector{Int}     # 0:(stencil_length-1) for neg
     pos_offsets::Vector{Int}     # (-stencil_length+1):0 for pos
     is_uniform::Bool
-    neg_weight_matrix::Union{Nothing, Matrix{Float64}}  # non-uniform: stencil_length × num_interior
-    pos_weight_matrix::Union{Nothing, Matrix{Float64}}  # non-uniform: stencil_length × num_interior
+    neg_weight_matrix::Union{Nothing, Matrix{T}}  # non-uniform: stencil_length × num_interior
+    pos_weight_matrix::Union{Nothing, Matrix{T}}  # non-uniform: stencil_length × num_interior
 end
 
 """
@@ -65,7 +65,7 @@ For uniform grids, weights are constant SVectors at every interior point.
 For non-uniform grids, per-point weights are stored in weight matrices
 (stencil_length × num_interior) indexed by symbolic grid position.
 """
-struct NonlinlapStencilInfo
+struct NonlinlapStencilInfo{T<:Real}
     outer_weights::Any   # uniform: stencil_coefs of D_outer; non-uniform: nothing
     outer_offsets::Vector{Int}
     inner_weights::Any   # uniform: stencil_coefs of D_inner; non-uniform: nothing
@@ -76,9 +76,9 @@ struct NonlinlapStencilInfo
     combined_upper_bpc::Int   # combined boundary point count, upper side
     is_uniform::Bool
     # Non-uniform weight matrices (nothing for uniform grids)
-    outer_weight_matrix::Union{Nothing, Matrix{Float64}}
-    inner_weight_matrix::Union{Nothing, Matrix{Float64}}
-    interp_weight_matrix::Union{Nothing, Matrix{Float64}}
+    outer_weight_matrix::Union{Nothing, Matrix{T}}
+    inner_weight_matrix::Union{Nothing, Matrix{T}}
+    interp_weight_matrix::Union{Nothing, Matrix{T}}
     outer_bpc::Int       # D_outer.boundary_point_count
     inner_bpc::Int       # D_inner.boundary_point_count
     interp_bpc::Int      # interp.boundary_point_count
@@ -91,12 +91,12 @@ Pre-computed stencil information for WENO5 (Jiang-Shu) scheme.
 The WENO scheme computes all substencil reconstructions at every point
 and blends them with data-dependent nonlinear weights — no branching.
 """
-struct WENOStencilInfo
-    epsilon::Float64          # smoothness indicator regularization parameter
+struct WENOStencilInfo{T<:Real}
+    epsilon::T                # smoothness indicator regularization parameter
     offsets::Vector{Int}      # [-2, -1, 0, 1, 2] for 5-point stencil
     lower_bpc::Int            # boundary point count, lower side (= 2 for WENO5)
     upper_bpc::Int            # boundary point count, upper side (= 2 for WENO5)
-    dx_val::Float64           # uniform grid spacing (WENO currently uniform only)
+    dx_val::T                 # uniform grid spacing (WENO currently uniform only)
 end
 
 """
@@ -121,10 +121,13 @@ end
 """Alias for the Const wrapper type used throughout ArrayOp construction."""
 const _ConstSR = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}
 
+"""Extract the element type `T` from a `DerivativeOperator{T, ...}`."""
+_op_eltype(::DerivativeOperator{T}) where {T} = T
+
 """
     _stencil_coefs_to_matrix(D_op)
 
-Convert a DerivativeOperator's stencil coefficients (Vector{SVector}) to a Matrix{Float64}.
+Convert a DerivativeOperator's stencil coefficients (Vector{SVector}) to a Matrix.
 """
 _stencil_coefs_to_matrix(D_op) = reduce(hcat, D_op.stencil_coefs)
 
@@ -143,7 +146,8 @@ is the domain length.
 function _periodic_stencil_positions(grid_x, g, offsets)
     N = length(grid_x)
     L = grid_x[N] - grid_x[1]
-    positions = Vector{Float64}(undef, length(offsets))
+    T = eltype(grid_x)
+    positions = Vector{T}(undef, length(offsets))
     for (j, off) in enumerate(offsets)
         raw = g + off
         if raw <= 1
@@ -168,7 +172,8 @@ function _build_periodic_wmat(D_op, grid_x, offsets)
     N = length(grid_x)
     sl = D_op.stencil_length
 
-    wmat = Matrix{Float64}(undef, sl, N)
+    T = _op_eltype(D_op)
+    wmat = Matrix{T}(undef, sl, N)
     for g in 1:N
         positions = _periodic_stencil_positions(grid_x, g, offsets)
         wmat[:, g] = calculate_weights(D_op.derivative_order, grid_x[g], positions)
@@ -207,7 +212,7 @@ function precompute_stencils(s, depvars, derivweights; spherical_vars=nothing)
                 else
                     nothing
                 end
-                info[(u, x, d)] = StencilInfo(
+                info[(u, x, d)] = StencilInfo{_op_eltype(D_op)}(
                     D_op,
                     collect(half_range(D_op.stencil_length)),
                     is_uniform,
@@ -229,7 +234,7 @@ function precompute_stencils(s, depvars, derivweights; spherical_vars=nothing)
             else
                 nothing
             end
-            info[(u, r, 1)] = StencilInfo(
+            info[(u, r, 1)] = StencilInfo{_op_eltype(D_op)}(
                 D_op,
                 collect(half_range(D_op.stencil_length)),
                 is_uniform,
@@ -268,7 +273,7 @@ function precompute_upwind_stencils(s, depvars, derivweights)
                 is_uniform = D_neg.dx isa Number
                 neg_wmat = !is_uniform ? _stencil_coefs_to_matrix(D_neg) : nothing
                 pos_wmat = !is_uniform ? _stencil_coefs_to_matrix(D_pos) : nothing
-                info[(u, x, d)] = UpwindStencilInfo(
+                info[(u, x, d)] = UpwindStencilInfo{_op_eltype(D_neg)}(
                     D_neg,
                     D_pos,
                     collect(0:(D_neg.stencil_length - 1)),
@@ -320,7 +325,7 @@ function precompute_nonlinlap_stencils(s, depvars, derivweights)
                 combined_upper_bpc = max(0,
                     -1 + maximum(outer_offsets) + max(maximum(inner_offsets), maximum(interp_offsets)))
 
-                info[(u, x)] = NonlinlapStencilInfo(
+                info[(u, x)] = NonlinlapStencilInfo{_op_eltype(D_inner)}(
                     D_outer.stencil_coefs,
                     outer_offsets,
                     D_inner.stencil_coefs,
@@ -355,7 +360,7 @@ function precompute_nonlinlap_stencils(s, depvars, derivweights)
                     -1 + maximum(outer_offsets) + max(maximum(inner_offsets), maximum(interp_offsets))  # tap bounds
                 )
 
-                info[(u, x)] = NonlinlapStencilInfo(
+                info[(u, x)] = NonlinlapStencilInfo{_op_eltype(D_inner)}(
                     nothing,
                     outer_offsets,
                     nothing,
@@ -391,13 +396,14 @@ function precompute_weno_stencils(s, depvars, derivweights)
         for x in ivs(u, s)
             dx = s.dxs[x]
             dx isa Number || continue   # WENO uniform only (is_nonuniform = false)
-            epsilon = isempty(F.ps) ? 1e-6 : F.ps[1]
+            T = typeof(float(dx))
+            epsilon = convert(T, isempty(F.ps) ? 1e-6 : F.ps[1])
             bpc = div(F.interior_points, 2)  # = 2 for WENO5
-            info[(u, x)] = WENOStencilInfo(
+            info[(u, x)] = WENOStencilInfo{T}(
                 epsilon,
                 collect(half_range(F.interior_points)),
                 bpc, bpc,
-                Float64(dx)
+                convert(T, dx)
             )
         end
     end
@@ -454,8 +460,8 @@ proximity frame points) for a single centered derivative.  Boundary stencils
 from `D_op.low_boundary_coefs` / `D_op.high_boundary_coefs` are folded into
 position-dependent rows so that a single ArrayOp covers the entire interior.
 """
-struct FullInteriorStencilInfo
-    weight_matrix::Matrix{Float64}   # padded_len × N_full_interior
+struct FullInteriorStencilInfo{T<:Real}
+    weight_matrix::Matrix{T}         # padded_len × N_full_interior
     offset_matrix::Matrix{Int}       # padded_len × N_full_interior
     padded_len::Int                  # max(stencil_length, boundary_stencil_length)
 end
@@ -466,11 +472,11 @@ end
 Weight and offset matrices covering ALL interior points for upwind derivatives.
 Both wind directions get their own matrices.
 """
-struct FullInteriorUpwindStencilInfo
-    neg_weight_matrix::Matrix{Float64}
+struct FullInteriorUpwindStencilInfo{T<:Real}
+    neg_weight_matrix::Matrix{T}
     neg_offset_matrix::Matrix{Int}
     padded_neg::Int
-    pos_weight_matrix::Matrix{Float64}
+    pos_weight_matrix::Matrix{T}
     pos_offset_matrix::Matrix{Int}
     padded_pos::Int
 end
@@ -504,11 +510,12 @@ function precompute_full_interior_stencils(s, depvars, derivweights, stencil_cac
         bsl = D_op.boundary_stencil_length
         padded = max(sl, bsl)
 
-        wmat = zeros(Float64, padded, N)
+        T = _op_eltype(D_op)
+        wmat = zeros(T, padded, N)
         omat = zeros(Int, padded, N)
 
         # Pre-allocate reusable vectors for periodic/uniform interior cases
-        interior_weights = Vector{Float64}(D_op.stencil_coefs)
+        interior_weights = collect(D_op.stencil_coefs)
         interior_offsets = collect(si.offsets)
 
         for k in 1:N
@@ -520,12 +527,12 @@ function precompute_full_interior_stencils(s, depvars, derivweights, stencil_cac
                 offsets = interior_offsets
             elseif g <= bpc
                 # Lower frame: use low_boundary_coefs[g]
-                weights = Vector{Float64}(D_op.low_boundary_coefs[g])
+                weights = collect(D_op.low_boundary_coefs[g])
                 # Taps are at grid indices 1:bsl, relative offsets from g
                 offsets = collect((1 - g):(bsl - g))
             elseif g > gl - bpc
                 # Upper frame: use high_boundary_coefs[gl - g + 1]
-                weights = Vector{Float64}(D_op.high_boundary_coefs[gl - g + 1])
+                weights = collect(D_op.high_boundary_coefs[gl - g + 1])
                 # Taps are at grid indices (gl-bsl+1):gl
                 offsets = collect((gl - bsl + 1 - g):(gl - g))
             else
@@ -534,7 +541,7 @@ function precompute_full_interior_stencils(s, depvars, derivweights, stencil_cac
                     weights = interior_weights
                 else
                     # Non-uniform: stencil_coefs is indexed by interior position
-                    weights = Vector{Float64}(D_op.stencil_coefs[g - bpc])
+                    weights = collect(D_op.stencil_coefs[g - bpc])
                 end
                 offsets = interior_offsets
             end
@@ -606,11 +613,12 @@ function _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_unifo
     bsl = D_op.boundary_stencil_length
     padded = max(sl, bsl)
 
-    wmat = zeros(Float64, padded, N)
+    T = _op_eltype(D_op)
+    wmat = zeros(T, padded, N)
     omat = zeros(Int, padded, N)
 
     # Pre-allocate reusable vectors for periodic/uniform interior cases
-    int_weights = Vector{Float64}(D_op.stencil_coefs)
+    int_weights = collect(D_op.stencil_coefs)
     int_offsets = collect(interior_offsets)
 
     for k in 1:N
@@ -622,12 +630,12 @@ function _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_unifo
             offsets = int_offsets
         elseif g <= offside
             # Lower frame: use low_boundary_coefs[g]
-            weights = Vector{Float64}(D_op.low_boundary_coefs[g])
+            weights = collect(D_op.low_boundary_coefs[g])
             # Taps at grid indices 1:bsl
             offsets = collect((1 - g):(bsl - g))
         elseif g > gl - bpc
             # Upper frame: use high_boundary_coefs[gl - g + 1]
-            weights = Vector{Float64}(D_op.high_boundary_coefs[gl - g + 1])
+            weights = collect(D_op.high_boundary_coefs[gl - g + 1])
             # Taps at grid indices (gl-bsl+1):gl
             offsets = collect((gl - bsl + 1 - g):(gl - g))
         else
@@ -636,7 +644,7 @@ function _build_upwind_full_matrices(D_op, N, lo, gl, interior_offsets, is_unifo
                 weights = int_weights
             else
                 # Non-uniform: stencil_coefs indexed by interior position
-                weights = Vector{Float64}(D_op.stencil_coefs[g - offside])
+                weights = collect(D_op.stencil_coefs[g - offside])
             end
             offsets = int_offsets
         end
@@ -681,18 +689,18 @@ The outer derivative accesses half-points, and at each half-point the
 inner/interp stencils access grid values.  Near boundaries, all three
 operators may use boundary stencils.
 """
-struct FullNonlinlapInfo
+struct FullNonlinlapInfo{T<:Real}
     # Outer derivative: 2D matrices indexed by (j_outer, _i)
-    outer_weight_matrix::Matrix{Float64}   # padded_outer × N_full
+    outer_weight_matrix::Matrix{T}         # padded_outer × N_full
     padded_outer::Int
 
     # Interpolation: 3D matrices indexed by (j_outer, j_interp, _i)
-    interp_weight_3d::Array{Float64, 3}    # padded_outer × padded_interp × N_full
+    interp_weight_3d::Array{T, 3}          # padded_outer × padded_interp × N_full
     interp_tap_3d::Array{Int, 3}           # padded_outer × padded_interp × N_full
     padded_interp::Int
 
     # Inner derivative: 3D matrices indexed by (j_outer, j_inner, _i)
-    inner_weight_3d::Array{Float64, 3}     # padded_outer × padded_inner × N_full
+    inner_weight_3d::Array{T, 3}           # padded_outer × padded_inner × N_full
     inner_tap_3d::Array{Int, 3}            # padded_outer × padded_inner × N_full
     padded_inner::Int
 end
@@ -744,10 +752,11 @@ function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
         end
 
         # Allocate matrices
-        outer_wmat = zeros(Float64, padded_outer, N)
-        interp_w3d = zeros(Float64, padded_outer, padded_interp, N)
+        T = _op_eltype(D_inner)
+        outer_wmat = zeros(T, padded_outer, N)
+        interp_w3d = zeros(T, padded_outer, padded_interp, N)
         interp_t3d = ones(Int, padded_outer, padded_interp, N)  # ones = safe default (index 1)
-        inner_w3d  = zeros(Float64, padded_outer, padded_inner, N)
+        inner_w3d  = zeros(T, padded_outer, padded_inner, N)
         inner_t3d  = ones(Int, padded_outer, padded_inner, N)
 
         bpc_outer  = D_outer.boundary_point_count
@@ -811,7 +820,7 @@ function precompute_full_nonlinlap(s, depvars, derivweights, nonlinlap_cache,
             # the interpolation non-zero.  The product is still zero because
             # outer_weight = 0.
             for j_pad in (nw_outer + 1):padded_outer
-                interp_w3d[j_pad, 1, k] = 1.0
+                interp_w3d[j_pad, 1, k] = one(T)
             end
         end
 
@@ -854,16 +863,16 @@ function _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, i
         # Uniform: stencil_coefs is a single SVector, no indexing needed
         if dim_periodic
             # Periodic: always use interior stencil (wrapping handled by caller)
-            weights = Vector{Float64}(D_op.stencil_coefs)
+            weights = collect(D_op.stencil_coefs)
             half_points = [g + off - 1 for off in interior_offsets]
         elseif g <= bpc
-            weights = Vector{Float64}(D_op.low_boundary_coefs[g])
+            weights = collect(D_op.low_boundary_coefs[g])
             half_points = collect(1:bsl)
         elseif g > gl - bpc
-            weights = Vector{Float64}(D_op.high_boundary_coefs[gl - g + 1])
+            weights = collect(D_op.high_boundary_coefs[gl - g + 1])
             half_points = collect((N_half - bsl + 1):N_half)
         else
-            weights = Vector{Float64}(D_op.stencil_coefs)
+            weights = collect(D_op.stencil_coefs)
             half_points = [g + off - 1 for off in interior_offsets]
         end
     else
@@ -879,13 +888,13 @@ function _half_op_weights_and_taps(D_op, g, gl, N_half, bpc, interior_offsets, i
         p = g - (gl - N_eff)
 
         if p <= bpc
-            weights = Vector{Float64}(D_op.low_boundary_coefs[p])
+            weights = collect(D_op.low_boundary_coefs[p])
             half_points = collect(1:bsl)
         elseif p > N_eff - bpc
-            weights = Vector{Float64}(D_op.high_boundary_coefs[N_eff - p + 1])
+            weights = collect(D_op.high_boundary_coefs[N_eff - p + 1])
             half_points = collect((N_half - bsl + 1):N_half)
         else
-            weights = Vector{Float64}(D_op.stencil_coefs[p - bpc])
+            weights = collect(D_op.stencil_coefs[p - bpc])
             half_points = [g + off - 1 for off in interior_offsets]
         end
     end
@@ -918,25 +927,25 @@ function _half_inner_weights_and_taps(D_op, h, gl, N_half, bpc, interior_offsets
 
     if dim_periodic
         # Periodic: always use interior stencil (tap wrapping handled by caller)
-        weights = Vector{Float64}(D_op.stencil_coefs)
+        weights = collect(D_op.stencil_coefs)
         grid_taps = [h + off for off in interior_offsets]
     elseif h <= bpc
         # Lower boundary: use low_boundary_coefs[h]
-        weights = Vector{Float64}(D_op.low_boundary_coefs[h])
+        weights = collect(D_op.low_boundary_coefs[h])
         # Boundary stencil taps at grid points 1:bsl
         grid_taps = collect(1:bsl)
     elseif h > N_half - bpc
         # Upper boundary: use high_boundary_coefs[N_half - h + 1]
-        weights = Vector{Float64}(D_op.high_boundary_coefs[N_half - h + 1])
+        weights = collect(D_op.high_boundary_coefs[N_half - h + 1])
         # Boundary stencil taps at grid points (gl-bsl+1):gl
         grid_taps = collect((gl - bsl + 1):gl)
     else
         # Interior
         if is_uniform
-            weights = Vector{Float64}(D_op.stencil_coefs)
+            weights = collect(D_op.stencil_coefs)
         else
             # Non-uniform: stencil_coefs indexed by interior position
-            weights = Vector{Float64}(D_op.stencil_coefs[h - bpc])
+            weights = collect(D_op.stencil_coefs[h - bpc])
         end
         # Interior grid taps: h + offset for each offset in interior_offsets
         # (where offset is centered around 0, e.g. [0, 1] for 2-point stencil)
