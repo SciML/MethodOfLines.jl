@@ -66,11 +66,11 @@ For non-uniform grids, per-point weights are stored in weight matrices
 (stencil_length × num_interior) indexed by symbolic grid position.
 """
 struct NonlinlapStencilInfo
-    outer_weights        # uniform: stencil_coefs of D_outer; non-uniform: nothing
+    outer_weights::Any   # uniform: stencil_coefs of D_outer; non-uniform: nothing
     outer_offsets::Vector{Int}
-    inner_weights        # uniform: stencil_coefs of D_inner; non-uniform: nothing
+    inner_weights::Any   # uniform: stencil_coefs of D_inner; non-uniform: nothing
     inner_offsets::Vector{Int}
-    interp_weights       # uniform: stencil_coefs of interp; non-uniform: nothing
+    interp_weights::Any  # uniform: stencil_coefs of interp; non-uniform: nothing
     interp_offsets::Vector{Int}
     combined_lower_bpc::Int   # combined boundary point count, lower side
     combined_upper_bpc::Int   # combined boundary point count, upper side
@@ -109,7 +109,7 @@ uses `[-1, 0]` (backward half-shift).  No wind-direction switching is needed.
 Currently supported on uniform grids only.
 """
 struct StaggeredStencilInfo
-    alignment             # CenterAlignedVar or EdgeAlignedVar (Type)
+    alignment::Any        # CenterAlignedVar or EdgeAlignedVar (Type)
     interior_offsets::Vector{Int}   # [0,1] for CenterAligned, [-1,0] for EdgeAligned
     D_wind::DerivativeOperator      # from windmap[1]
     is_uniform::Bool
