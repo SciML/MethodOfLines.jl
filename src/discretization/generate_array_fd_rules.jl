@@ -14,6 +14,7 @@ per-point equations, preserving correctness.
 Supported ArrayOp patterns:
 - Centred (even-order) derivatives on uniform and non-uniform grids
 - Upwind (odd-order) derivatives with UpwindScheme on uniform and non-uniform grids
+- Staggered grid (odd-order) derivatives on uniform grids
 - WENO (Jiang-Shu) first-order derivatives on uniform grids
 - Mixed cross-derivatives on uniform and non-uniform grids
 - Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform and non-uniform grids
@@ -96,6 +97,23 @@ struct WENOStencilInfo
     lower_bpc::Int            # boundary point count, lower side (= 2 for WENO5)
     upper_bpc::Int            # boundary point count, upper side (= 2 for WENO5)
     dx_val::Float64           # uniform grid spacing (WENO currently uniform only)
+end
+
+"""
+    StaggeredStencilInfo
+
+Pre-computed stencil information for staggered grid odd-order derivatives.
+On a staggered grid, variable alignment determines a fixed stencil offset:
+`CenterAlignedVar` uses `[0, 1]` (forward half-shift) and `EdgeAlignedVar`
+uses `[-1, 0]` (backward half-shift).  No wind-direction switching is needed.
+Currently supported on uniform grids only.
+"""
+struct StaggeredStencilInfo
+    alignment             # CenterAlignedVar or EdgeAlignedVar (Type)
+    interior_offsets::Vector{Int}   # [0,1] for CenterAligned, [-1,0] for EdgeAligned
+    D_wind::DerivativeOperator      # from windmap[1]
+    is_uniform::Bool
+    bpc::Int                        # boundary_point_count from derivweights.map
 end
 
 """
@@ -384,6 +402,46 @@ function precompute_weno_stencils(s, depvars, derivweights)
                 bpc, bpc,
                 Float64(dx)
             )
+        end
+    end
+    return info
+end
+
+"""
+    precompute_staggered_stencils(s, depvars, derivweights)
+
+Returns a `Dict` mapping `(u, x, d)` to a `StaggeredStencilInfo` for every
+(variable, spatial dim, odd derivative order) triple when the grid is staggered
+and uniform.  Non-uniform staggered grids are not supported in the ArrayOp path
+and will fall back to per-point scalar discretization.
+"""
+function precompute_staggered_stencils(s, depvars, derivweights)
+    info = Dict{Any, StaggeredStencilInfo}()
+    s.staggeredvars === nothing && return info
+    for u in depvars
+        for x in ivs(u, s)
+            for d in derivweights.orders[x]
+                isodd(d) || continue
+                Dx_d = Differential(x)^d
+                haskey(derivweights.windmap[1], Dx_d) || continue
+                D_wind = derivweights.windmap[1][Dx_d]
+                is_uniform = D_wind.dx isa Number
+                !is_uniform && continue  # Non-uniform staggered not supported
+                alignment = s.staggeredvars[operation(u)]
+                interior_offsets = if alignment === CenterAlignedVar
+                    collect(0:1)
+                else  # EdgeAlignedVar
+                    collect(-1:0)
+                end
+                bpc = derivweights.map[Dx_d].boundary_point_count
+                info[(u, x, d)] = StaggeredStencilInfo(
+                    alignment,
+                    interior_offsets,
+                    D_wind,
+                    is_uniform,
+                    bpc
+                )
+            end
         end
     end
     return info
@@ -1071,6 +1129,7 @@ For the interior region, a single ArrayOp equation is produced when possible.
 Supported patterns:
 - Centred (even-order) derivatives on uniform and non-uniform grids
 - Upwind (odd-order) derivatives with UpwindScheme on uniform and non-uniform grids
+- Staggered grid (odd-order) derivatives on uniform grids
 - WENO (Jiang-Shu) first-order derivatives on uniform grids
 - Mixed cross-derivatives on uniform and non-uniform grids
 - Nonlinear Laplacian `Dx(expr * Dx(u))` on uniform and non-uniform grids
@@ -1089,6 +1148,7 @@ function generate_array_interior_eqs(
     upwind_cache = precompute_upwind_stencils(s, depvars, derivweights)
     nonlinlap_cache = precompute_nonlinlap_stencils(s, depvars, derivweights)
     weno_cache = precompute_weno_stencils(s, depvars, derivweights)
+    staggered_cache = precompute_staggered_stencils(s, depvars, derivweights)
 
     # -- determine whether the ArrayOp path can handle this PDE ---------------
     has_odd_orders = any(
@@ -1096,6 +1156,7 @@ function generate_array_interior_eqs(
         for u in depvars for x in ivs(u, s)
     )
     can_upwind = has_odd_orders && derivweights.advection_scheme isa UpwindScheme
+    is_staggered = !isempty(staggered_cache)
 
     # Detect spherical Laplacian terms first (they take priority over nonlinlap).
     spherical_terms_info = _detect_spherical_terms(pde, s, depvars)
@@ -1117,7 +1178,7 @@ function generate_array_interior_eqs(
     has_nonlinlap = !isempty(nonlinlap_terms) && !isempty(nonlinlap_cache)
 
     has_weno = !isempty(weno_cache)
-    can_template = !has_odd_orders || can_upwind || has_nonlinlap || has_spherical || has_weno
+    can_template = !has_odd_orders || can_upwind || has_nonlinlap || has_spherical || has_weno || is_staggered
 
     ndim = length(interior_ranges)
 
@@ -1168,6 +1229,10 @@ function generate_array_interior_eqs(
                     upper_bpc = max(usi.D_neg.boundary_point_count, usi.D_pos.boundary_point_count)
                     max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], lower_bpc)
                     max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], upper_bpc)
+                elseif isodd(d) && haskey(staggered_cache, (u, x, d))
+                    ssi = staggered_cache[(u, x, d)]
+                    max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], ssi.bpc)
+                    max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], ssi.bpc)
                 end
             end
             # Nonlinear Laplacian combined stencil extent
@@ -1205,11 +1270,14 @@ function generate_array_interior_eqs(
     # frame-per-point behavior.  Periodic dimensions on uniform grids are
     # supported (interior stencil everywhere, indices wrapped symbolically);
     # periodic on non-uniform grids falls back to the standard path.
+    # Staggered grids use the standard path (boundary frame + interior ArrayOp)
+    # because their alignment-dependent boundary stencils are already handled
+    # correctly by the per-point scalar fallback.
     periodic_dim_uniform = map(eqvar_ivs) do x
         s.dxs[x] isa Number
     end
     has_periodic_nonuniform = any(d -> is_periodic[d] && !periodic_dim_uniform[d], 1:ndim)
-    all_full_interior = !has_weno && !has_periodic_nonuniform
+    all_full_interior = !has_weno && !has_periodic_nonuniform && !is_staggered
 
     if all_full_interior
         # Full-interior mode: ArrayOp covers lo_vec..hi_vec (entire interior)
@@ -1248,7 +1316,8 @@ function generate_array_interior_eqs(
                 is_periodic, gl_vec;
                 full_interior_centered_cache=fi_centered,
                 full_interior_upwind_cache=fi_upwind,
-                full_nonlinlap_cache=fi_nonlinlap
+                full_nonlinlap_cache=fi_nonlinlap,
+                staggered_cache=staggered_cache
             )
             candidate, eq_first = result
             # Validate at the first point (which is a frame point in this mode).
@@ -1307,7 +1376,8 @@ function generate_array_interior_eqs(
                 n_centered, lo_centered, s, depvars, pde, derivweights,
                 stencil_cache, upwind_cache, nonlinlap_cache,
                 spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
-                is_periodic, gl_vec
+                is_periodic, gl_vec;
+                staggered_cache=staggered_cache
             )
             candidate, eq_first = result
             begin
@@ -1417,13 +1487,14 @@ _maybe_wrap(raw_idx, dim, is_periodic, gl_vec) =
                              nonlinlap_cache, spherical_terms_info,
                              weno_cache, bcmap, eqvar, indexmap,
                              is_periodic, gl_vec;
-                             full_interior_centered_cache, full_interior_upwind_cache)
+                             full_interior_centered_cache, full_interior_upwind_cache,
+                             staggered_cache)
 
 Build a single ArrayOp equation for the interior region.
 
-Handles centred (even-order), upwind (odd-order), WENO (1st-order), mixed
-cross-derivative, nonlinear Laplacian, and spherical Laplacian stencils
-using symbolic index variables.
+Handles centred (even-order), upwind (odd-order), staggered (odd-order),
+WENO (1st-order), mixed cross-derivative, nonlinear Laplacian, and
+spherical Laplacian stencils using symbolic index variables.
 
 For periodic dimensions, stencil indices are wrapped using `_wrap_periodic_idx`
 so the ArrayOp covers the full grid without a boundary frame.
@@ -1444,14 +1515,15 @@ function _build_interior_arrayop(
         gl_vec=zeros(Int, length(n_centered));
         full_interior_centered_cache=nothing,
         full_interior_upwind_cache=nothing,
-        full_nonlinlap_cache=nothing
+        full_nonlinlap_cache=nothing,
+        staggered_cache=nothing
     )
     ndim = length(n_centered)
     _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
     _idxs = [_idxs_arr[d] for d in 1:ndim]
     bases = [lo_centered[d] - 1 for d in 1:ndim]
 
-    # -- FD rules for centred (even-order) derivatives ------------------------
+    # -- FD rules for centred (even-order) and staggered (odd-order) derivatives
     fd_rules = Pair[]
     for u in depvars
         u_raw = Symbolics.unwrap(s.discvars[u])
@@ -1459,7 +1531,24 @@ function _build_interior_arrayop(
         u_spatial = ivs(u, s)
         for (_, x) in enumerate(u_spatial)
             for d in derivweights.orders[x]
-                iseven(d) || continue
+                # Staggered odd-order derivatives: fixed offset per alignment
+                if !iseven(d)
+                    if staggered_cache !== nothing && haskey(staggered_cache, (u, x, d))
+                        ssi = staggered_cache[(u, x, d)]
+                        taps = map(ssi.interior_offsets) do off
+                            idx_exprs = map(u_spatial) do xv
+                                eq_d = indexmap[xv]
+                                raw_idx = _idxs[eq_d] + bases[eq_d]
+                                raw_idx = isequal(xv, x) ? raw_idx + off : raw_idx
+                                _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
+                            end
+                            Symbolics.wrap(u_c[idx_exprs...])
+                        end
+                        expr = sym_dot(ssi.D_wind.stencil_coefs, taps)
+                        push!(fd_rules, (Differential(x)^d)(u) => expr)
+                    end
+                    continue
+                end
                 si = stencil_cache[(u, x, d)]
 
                 if full_interior_centered_cache !== nothing && haskey(full_interior_centered_cache, (u, x, d))
@@ -1532,8 +1621,10 @@ function _build_interior_arrayop(
     end
 
     # -- Upwind (odd-order) rules with IfElse wind switching ------------------
+    # Staggered grids use alignment-based offsets instead of upwind switching,
+    # matching the scalar path which sets advection_rules = [] for StaggeredGrid.
     upwind_rules = Pair[]
-    if !isempty(upwind_cache)
+    if !isempty(upwind_cache) && (staggered_cache === nothing || isempty(staggered_cache))
         upwind_rules = _build_upwind_rules(
             pde, s, depvars, derivweights, upwind_cache,
             bcmap, indexmap, _idxs, bases, var_rules,

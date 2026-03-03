@@ -2,7 +2,7 @@
 # These mirror selected tests from MOL_1D_Linear_Diffusion.jl but use
 # ArrayDiscretization() as the discretization strategy.
 
-using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets, SciMLBase
 using ModelingToolkit: Differential
 
 @testset "ArrayDiscretization: Dt(u(t,x)) ~ Dxx(u(t,x))" begin
@@ -5154,4 +5154,284 @@ end
         exact = u_exact.(tv, x_disc)
         @test isapprox(sol[u(t, x)][i, :], exact, atol = 0.01)
     end
+end
+
+# ===========================================================================
+# Phase 19: Staggered Grid ArrayOp Support
+# ===========================================================================
+
+# --- 19a: 1D wave equation (mixed BCs), structural ---
+
+@testset "Staggered ArrayOp: 1D wave equation (mixed BCs), structural" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+    using ModelingToolkit.ModelingToolkitBase: flatten_equations
+
+    @parameters t x
+    @variables ρ(..) ϕ(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    a = 5.0
+    L = 8.0
+    dx = 0.125
+
+    initialFunction(x) = exp(-(x)^2)
+    eq = [
+        Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0,
+    ]
+    bcs = [
+        ρ(0, x) ~ initialFunction(x),
+        ϕ(0.0, x) ~ 0.0,
+        Dx(ρ(t, L)) ~ 0.0,
+        ϕ(t, -L) ~ 0.0,
+    ]
+
+    domains = [
+        t in Interval(0.0, 1.0),
+        x in Interval(-L, L),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
+
+    disc = MOLFiniteDifference(
+        [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = ϕ(t, x),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs = equations(sys)
+
+    # Verify ArrayOp is generated
+    has_arrayop = any(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test has_arrayop
+
+    # Verify scalar equations are fewer than total interior points
+    # (meaning ArrayOp is covering most of them)
+    scalar_eqs = filter(eqs) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        is_array = SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+                   SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+        return !is_array
+    end
+    # With staggered grid, there are 2 equations (ρ and ϕ), each gets an ArrayOp
+    # plus boundary frame equations and BC equations.
+    # The number of scalar equations should be much less than total grid points.
+    Ngrid = round(Int, 2 * L / dx) + 1
+    @test length(scalar_eqs) < 2 * Ngrid
+end
+
+# --- 19b: 1D wave equation (mixed BCs), numerical ---
+# Compare scalar and array paths using non-split ODEProblems.
+# We use symbolic_discretize + mtkcompile to bypass symbolic_trace (which
+# creates SplitODEProblem), then compare via PDE variable access which
+# handles unknowns ordering automatically.
+
+@testset "Staggered ArrayOp: 1D wave equation (mixed BCs), numerical" begin
+    using SymbolicUtils: getmetadata
+
+    @parameters t x
+    @variables ρ(..) ϕ(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    a = 5.0
+    L = 8.0
+    dx = 0.125
+    dt = (dx / a)^2
+    tmax = 0.1  # short run for test speed
+
+    initialFunction(x) = exp(-(x)^2)
+    eq = [
+        Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0,
+    ]
+    bcs = [
+        ρ(0, x) ~ initialFunction(x),
+        ϕ(0.0, x) ~ 0.0,
+        Dx(ρ(t, L)) ~ 0.0,
+        ϕ(t, -L) ~ 0.0,
+    ]
+
+    domains = [
+        t in Interval(0.0, tmax),
+        x in Interval(-L, L),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
+
+    disc_scalar = MOLFiniteDifference(
+        [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = ϕ(t, x),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference(
+        [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = ϕ(t, x),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    # Build non-split ODEProblems via symbolic_discretize + mtkcompile
+    # (bypassing symbolic_trace which creates SplitODEProblem)
+    sys_s, tspan = MethodOfLines.symbolic_discretize(pdesys, disc_scalar)
+    sys_a, _ = MethodOfLines.symbolic_discretize(pdesys, disc_array)
+
+    csys_s = mtkcompile(sys_s)
+    csys_a = mtkcompile(sys_a)
+
+    # Get u0 from metadata (same mechanism as staggered_discretize.jl)
+    mol_s = getmetadata(csys_s, ModelingToolkit.ProblemTypeCtx, nothing)
+    u0_s = hasproperty(mol_s, :u0) ? mol_s.u0 : []
+    mol_a = getmetadata(csys_a, ModelingToolkit.ProblemTypeCtx, nothing)
+    u0_a = hasproperty(mol_a, :u0) ? mol_a.u0 : []
+
+    # Build regular ODEProblems (not SplitODEProblem)
+    prob_s = ODEProblem(csys_s, u0_s, tspan; build_initializeprob = false)
+    prob_a = ODEProblem(csys_a, u0_a, tspan; build_initializeprob = false)
+
+    # Solve with explicit Euler (equivalent to SplitEuler for non-split problems)
+    sol_s = solve(prob_s, Euler(), dt = dt)
+    sol_a = solve(prob_a, Euler(), dt = dt)
+
+    @test SciMLBase.successful_retcode(sol_s)
+    @test SciMLBase.successful_retcode(sol_a)
+
+    # Compare using PDE variable access (handles unknowns ordering automatically)
+    @test isapprox(sol_s[ρ(t, x)], sol_a[ρ(t, x)], rtol = 1e-10)
+    @test isapprox(sol_s[ϕ(t, x)], sol_a[ϕ(t, x)], rtol = 1e-10)
+end
+
+# --- 19c: 1D wave equation (periodic BCs) ---
+
+@testset "Staggered ArrayOp: 1D wave equation (periodic BCs)" begin
+    using SymbolicUtils: getmetadata
+
+    @parameters t x
+    @variables ρ(..) ϕ(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    a = 5.0
+    L = 8.0
+    dx = 0.125
+    dt = (dx / a)^2
+    tmax = 0.1  # short run for test speed
+
+    initialFunction(x) = exp(-(x - L / 2)^2)
+    eq = [
+        Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0,
+    ]
+    bcs = [
+        ρ(0, x) ~ initialFunction(x),
+        ϕ(0.0, x) ~ 0.0,
+        ρ(t, L) ~ ρ(t, -L),
+        ϕ(t, -L) ~ ϕ(t, L),
+    ]
+
+    domains = [
+        t in Interval(0.0, tmax),
+        x in Interval(-L, L),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
+
+    disc_scalar = MOLFiniteDifference(
+        [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = ϕ(t, x),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference(
+        [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = ϕ(t, x),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    # Build non-split ODEProblems via symbolic_discretize + mtkcompile
+    sys_s, tspan = MethodOfLines.symbolic_discretize(pdesys, disc_scalar)
+    sys_a, _ = MethodOfLines.symbolic_discretize(pdesys, disc_array)
+
+    csys_s = mtkcompile(sys_s)
+    csys_a = mtkcompile(sys_a)
+
+    # Get u0 from metadata
+    mol_s = getmetadata(csys_s, ModelingToolkit.ProblemTypeCtx, nothing)
+    u0_s = hasproperty(mol_s, :u0) ? mol_s.u0 : []
+    mol_a = getmetadata(csys_a, ModelingToolkit.ProblemTypeCtx, nothing)
+    u0_a = hasproperty(mol_a, :u0) ? mol_a.u0 : []
+
+    # Build regular ODEProblems
+    prob_s = ODEProblem(csys_s, u0_s, tspan; build_initializeprob = false)
+    prob_a = ODEProblem(csys_a, u0_a, tspan; build_initializeprob = false)
+
+    # Solve with explicit Euler
+    sol_s = solve(prob_s, Euler(), dt = dt)
+    sol_a = solve(prob_a, Euler(), dt = dt)
+
+    @test SciMLBase.successful_retcode(sol_s)
+    @test SciMLBase.successful_retcode(sol_a)
+
+    # Compare using PDE variable access
+    @test isapprox(sol_s[ρ(t, x)], sol_a[ρ(t, x)], rtol = 1e-10)
+    @test isapprox(sol_s[ϕ(t, x)], sol_a[ϕ(t, x)], rtol = 1e-10)
+end
+
+# --- 19d: SplitODEProblem works with ArrayOp ---
+
+@testset "Staggered ArrayOp: SplitODEProblem compatibility" begin
+    @parameters t x
+    @variables ρ(..) ϕ(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    a = 5.0
+    L = 4.0
+    dx = 0.25
+    dt = (dx / a)^2
+    tmax = 1.0
+
+    eq = [
+        Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0,
+    ]
+    bcs = [
+        ρ(0, x) ~ exp(-(x)^2),
+        ϕ(0.0, x) ~ 0.0,
+        Dx(ρ(t, L)) ~ 0.0,
+        ϕ(t, -L) ~ 0.0,
+    ]
+
+    domains = [
+        t in Interval(0.0, tmax),
+        x in Interval(-L, L),
+    ]
+
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
+
+    disc = MOLFiniteDifference(
+        [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = ϕ(t, x),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob = discretize(pdesys, disc)
+
+    # discretize for StaggeredGrid returns SplitODEProblem (which is an
+    # ODEProblem with SplitFunction)
+    @test prob.f isa SplitFunction
+
+    sol = solve(prob, SplitEuler(), dt = dt)
+    @test SciMLBase.successful_retcode(sol)
+
+    # Verify solution is physically reasonable (bounded, not NaN)
+    @test all(isfinite, sol.u[end])
+    @test maximum(abs, sol.u[end]) < 100.0
 end
