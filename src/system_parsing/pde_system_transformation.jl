@@ -7,6 +7,26 @@ Modified copilot explanation:
 function PDEBase.transform_pde_system!(
         v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLFiniteDifference
     )
+    all_vars_in_eqs = ModelingToolkit.get_variables(sys.eqs)
+    
+    safe_ps = (sys.ps isa SciMLBase.NullParameters || sys.ps === nothing) ? [] : sys.ps
+    safe_ivs = sys.ivs === nothing ? [] : sys.ivs
+    safe_dvs = sys.dvs === nothing ? [] : sys.dvs
+
+    for var in all_vars_in_eqs
+        if Symbolics.iscall(var) && Symbolics.operation(var) isa Differential
+            continue
+        end
+
+        in_ps = any(p -> isequal(var, p), safe_ps)
+        in_ivs = any(iv -> isequal(var, iv), safe_ivs)
+        in_dvs = any(dv -> isequal(var, dv), safe_dvs)
+
+        if !in_ps && !in_ivs && !in_dvs
+            error("[MethodOfLines Bug Fix] Variable '$(var)' is used in the equations but not defined in the PDESystem (ps, ivs, or dvs). Infinite loop (Issue #475) prevented.")
+        end
+    end
+
     eqs = copy(get_eqs(sys))
     bcs = copy(get_bcs(sys))
     done = false
