@@ -69,7 +69,7 @@ This is a catch all ruleset, as such it does not use @rule. Any even ordered der
         II::CartesianIndex, s::DiscreteSpace, depvars,
         derivweights::DifferentialDiscretizer, bcmap, indexmap, terms
     )
-    central_ufunc(u, I, x) = s.discvars[u][I]
+    central_ufunc(u, I, x) = _disc_gather(s.discvars[u], I)
     return reduce(
         safe_vcat,
         [
@@ -101,7 +101,7 @@ function generate_cartesian_rules(
         depvars, derivweights::DifferentialDiscretizer, bcmap,
         indexmap, terms
     ) where {N, M, G <: StaggeredGrid}
-    central_ufunc(u, I, x) = s.discvars[u][I]
+    central_ufunc(u, I, x) = _disc_gather(s.discvars[u], I)
     ufunc = central_ufunc
     xs = unique(reduce(safe_vcat, [ivs(u, s) for u in depvars], init = []))
     odd_orders = unique(

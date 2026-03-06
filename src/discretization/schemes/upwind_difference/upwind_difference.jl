@@ -35,14 +35,12 @@ end
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     I1 = unitindex(ndims(u, s), j)
     if !ispositive
-        @assert D.offside == 0
-
         if (II[j] > (length(s, x) - D.boundary_point_count))
             weights = D.high_boundary_coefs[length(s, x) - II[j] + 1]
             offset = length(s, x) - II[j]
             Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):0]
         else
-            weights = D.stencil_coefs[II[j]]
+            weights = D.stencil_coefs[II[j] - D.offside]
             Itap = [II + i * I1 for i in 0:(D.stencil_length - 1)]
         end
     else
@@ -99,7 +97,7 @@ end
         II::CartesianIndex, s::DiscreteSpace, depvars,
         derivweights::DifferentialDiscretizer, bcmap, indexmap, terms; skip = []
     )
-    wind_ufunc(v, I, x) = s.discvars[v][I]
+    wind_ufunc(v, I, x) = _disc_gather(s.discvars[v], I)
     # for all independent variables and dependant variables
     rules = safe_vcat(#Catch multiplication
         reduce(

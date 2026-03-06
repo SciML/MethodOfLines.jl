@@ -54,7 +54,7 @@ end
         F::FunctionalScheme, II::CartesianIndex, s::DiscreteSpace, depvars,
         derivweights::DifferentialDiscretizer, bcmap, indexmap, terms
     )
-    central_ufunc(u, I, x) = s.discvars[u][I]
+    central_ufunc(u, I, x) = _disc_gather(s.discvars[u], I)
     return reduce(
         safe_vcat,
         [

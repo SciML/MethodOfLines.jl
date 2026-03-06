@@ -53,7 +53,7 @@ end
 @inline function generate_euler_integration_rules(
         II::CartesianIndex, s::DiscreteSpace, depvars, indexmap, terms
     )
-    ufunc(u, I, x) = s.discvars[u][I]
+    ufunc(u, I, x) = _disc_gather(s.discvars[u], I)
 
     eulerrules = reduce(
         safe_vcat,
@@ -88,7 +88,7 @@ end
 @inline function generate_whole_domain_integration_rules(
         II::CartesianIndex, s::DiscreteSpace, depvars, indexmap, terms, bvar = nothing
     )
-    ufunc(u, I, x) = s.discvars[u][I]
+    ufunc(u, I, x) = _disc_gather(s.discvars[u], I)
     wholedomainrules = reduce(
         safe_vcat,
         [
