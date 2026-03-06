@@ -109,7 +109,7 @@ uses `[-1, 0]` (backward half-shift).  No wind-direction switching is needed.
 Currently supported on uniform grids only.
 """
 struct StaggeredStencilInfo
-    alignment::Any        # CenterAlignedVar or EdgeAlignedVar (Type)
+    alignment::Type{<:AbstractVarAlign}   # CenterAlignedVar or EdgeAlignedVar
     interior_offsets::Vector{Int}   # [0,1] for CenterAligned, [-1,0] for EdgeAligned
     D_wind::DerivativeOperator      # from windmap[1]
     is_uniform::Bool
@@ -1157,6 +1157,47 @@ fall back to per-point computation via `discretize_equation_at_point`.
 Generic user-defined `FunctionalScheme` falls back entirely to per-point
 computation, which supports ALL scheme types.
 """
+
+"""
+    _validate_arrayop_or_fallback(candidate, eq_first, lo, hi, ndim,
+                                   is_periodic, s, depvars, pde, derivweights,
+                                   bcmap, eqvar, indexmap, boundaryvalfuncs;
+                                   debug_label="ArrayOp")
+
+Validate the ArrayOp `candidate` equations by comparing `eq_first` against
+a scalar-path equation at the first point.  If validation fails, fall back
+to per-point scalar discretization over `lo[d]:hi[d]`.
+
+Skips validation for periodic dimensions (the two paths use structurally
+different wrapping that prevents `_equations_match` from succeeding even
+when numerics agree).
+"""
+function _validate_arrayop_or_fallback(candidate, eq_first, lo, hi, ndim,
+                                        is_periodic, s, depvars, pde, derivweights,
+                                        bcmap, eqvar, indexmap, boundaryvalfuncs;
+                                        debug_label="ArrayOp")
+    has_periodic = any(is_periodic)
+    if !has_periodic
+        II_check = CartesianIndex(Tuple(lo))
+        eq_scalar = discretize_equation_at_point(
+            II_check, s, depvars, pde, derivweights, bcmap,
+            eqvar, indexmap, boundaryvalfuncs
+        )
+    end
+    if has_periodic || _equations_match(eq_first, eq_scalar)
+        return candidate
+    else
+        @debug "$debug_label validation failed" eq_first eq_scalar
+        fallback_rect = CartesianIndices(Tuple(lo[d]:hi[d] for d in 1:ndim))
+        return collect(vec(map(fallback_rect) do II
+            discretize_equation_at_point(
+                II, s, depvars, pde, derivweights, bcmap,
+                eqvar, indexmap, boundaryvalfuncs
+            )
+        end))
+    end
+end
+
 function generate_array_interior_eqs(
         s, depvars, pde, derivweights, bcmap, eqvar,
         indexmap, boundaryvalfuncs, interior_ranges
@@ -1230,10 +1271,8 @@ function generate_array_interior_eqs(
     max_lower_bpc = zeros(Int, ndim)
     max_upper_bpc = zeros(Int, ndim)
     for u in depvars
-        for (_, x) in enumerate(ivs(u, s))
+        for x in ivs(u, s)
             eq_dim = indexmap[x]  # dimension index in eqvar's ordering
-            bs = filter_interfaces(bcmap[operation(u)][x])
-            haslower, hasupper = haslowerupper(bs, x)
             for d in derivweights.orders[x]
                 if iseven(d)
                     bpc = stencil_cache[(u, x, d)].D_op.boundary_point_count
@@ -1336,30 +1375,12 @@ function generate_array_interior_eqs(
                 staggered_cache=staggered_cache
             )
             candidate, eq_first = result
-            # Validate at the first point (which is a frame point in this mode).
-            # Skip validation for periodic: the scalar path uses IfElse-based
-            # wrapping which differs structurally from full-interior's Const-matrix
-            # approach, so _equations_match would fail even though numerics match.
-            has_any_periodic = any(is_periodic)
-            if !has_any_periodic
-                II_check = CartesianIndex(Tuple(lo_vec))
-                eq_scalar = discretize_equation_at_point(
-                    II_check, s, depvars, pde, derivweights, bcmap,
-                    eqvar, indexmap, boundaryvalfuncs
-                )
-            end
-            if has_any_periodic || _equations_match(eq_first, eq_scalar)
-                candidate
-            else
-                @debug "Full-interior ArrayOp validation failed" eq_first eq_scalar
-                # Fall back to standard centered + frame path
-                collect(vec(map(CartesianIndices(Tuple(lo_vec[d]:hi_vec[d] for d in 1:ndim))) do II
-                    discretize_equation_at_point(
-                        II, s, depvars, pde, derivweights, bcmap,
-                        eqvar, indexmap, boundaryvalfuncs
-                    )
-                end))
-            end
+            _validate_arrayop_or_fallback(
+                candidate, eq_first, lo_vec, hi_vec, ndim,
+                is_periodic, s, depvars, pde, derivweights,
+                bcmap, eqvar, indexmap, boundaryvalfuncs;
+                debug_label="Full-interior ArrayOp"
+            )
         else
             Equation[]
         end
@@ -1396,32 +1417,11 @@ function generate_array_interior_eqs(
                 staggered_cache=staggered_cache
             )
             candidate, eq_first = result
-            begin
-                # Validate: compare the first instantiated equation against the
-                # scalar path for the same point.
-                has_periodic = any(is_periodic)
-                if !has_periodic
-                    II_check = CartesianIndex(Tuple(lo_centered))
-                    eq_scalar = discretize_equation_at_point(
-                        II_check, s, depvars, pde, derivweights, bcmap,
-                        eqvar, indexmap, boundaryvalfuncs
-                    )
-                end
-                if has_periodic || _equations_match(eq_first, eq_scalar)
-                    candidate
-                else
-                    @debug "ArrayOp validation failed" eq_first eq_scalar
-                    centered_rect = CartesianIndices(
-                        Tuple(lo_centered[d]:hi_centered[d] for d in 1:ndim)
-                    )
-                    collect(vec(map(centered_rect) do II
-                        discretize_equation_at_point(
-                            II, s, depvars, pde, derivweights, bcmap,
-                            eqvar, indexmap, boundaryvalfuncs
-                        )
-                    end))
-                end
-            end
+            _validate_arrayop_or_fallback(
+                candidate, eq_first, lo_centered, hi_centered, ndim,
+                is_periodic, s, depvars, pde, derivweights,
+                bcmap, eqvar, indexmap, boundaryvalfuncs
+            )
         else
             Equation[]
         end
@@ -1495,6 +1495,23 @@ Otherwise return `raw_idx` unchanged.
 _maybe_wrap(raw_idx, dim, is_periodic, gl_vec) =
     is_periodic[dim] ? _wrap_periodic_idx(raw_idx, gl_vec[dim]) : raw_idx
 
+# --- Time derivative detection ------------------------------------------------
+
+"""
+    _contains_time_diff(expr_raw, time)
+
+Recursively check whether `expr_raw` contains a time derivative `Differential(time)(...)`.
+Used to distinguish ODE equations from algebraic equations after PDE rearrangement.
+"""
+function _contains_time_diff(expr_raw, time)
+    SymbolicUtils.iscall(expr_raw) || return false
+    op = SymbolicUtils.operation(expr_raw)
+    if op isa Differential && isequal(op.x, time)
+        return true
+    end
+    return any(a -> _contains_time_diff(a, time), SymbolicUtils.arguments(expr_raw))
+end
+
 # --- ArrayOp construction for interior region --------------------------------
 
 """
@@ -1545,7 +1562,7 @@ function _build_interior_arrayop(
         u_raw = Symbolics.unwrap(s.discvars[u])
         u_c = _ConstSR(u_raw)
         u_spatial = ivs(u, s)
-        for (_, x) in enumerate(u_spatial)
+        for x in u_spatial
             for d in derivweights.orders[x]
                 # Staggered odd-order derivatives: fixed offset per alignment
                 if !iseven(d)
@@ -1713,16 +1730,6 @@ function _build_interior_arrayop(
     end
 
     # -- Detect algebraic equations (no time derivative of eqvar) ---------------
-    # After PDE rearrangement, equations have the form `lhs ~ 0`.  For ODEs,
-    # `lhs` contains `Dt(eqvar(...))`.  For algebraic equations it does not.
-    function _contains_time_diff(expr_raw, time)
-        SymbolicUtils.iscall(expr_raw) || return false
-        op = SymbolicUtils.operation(expr_raw)
-        if op isa Differential && isequal(op.x, time)
-            return true
-        end
-        return any(a -> _contains_time_diff(a, time), SymbolicUtils.arguments(expr_raw))
-    end
     # Check both sides — the time derivative could be on either side of the
     # rearranged equation (though typically lhs after rearrangement).
     is_algebraic = !_contains_time_diff(Symbolics.unwrap(pde.lhs), s.time) &&
