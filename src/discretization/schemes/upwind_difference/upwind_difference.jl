@@ -33,11 +33,14 @@ end
     ) where {T, N, Wind, DX <: AbstractVector}
     j, x = jx
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
+    
     I1 = unitindex(ndims(u, s), j)
-    if !ispositive
-        @assert D.offside == 0
+    haslower, hasupper = haslowerupper(bs, x)
+    
+    actual_offside = D.stencil_length - 1
 
-        if (II[j] > (length(s, x) - D.boundary_point_count))
+    if !ispositive
+        if (II[j] > (length(s, x) - actual_offside)) & !hasupper
             weights = D.high_boundary_coefs[length(s, x) - II[j] + 1]
             offset = length(s, x) - II[j]
             Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):0]
@@ -46,12 +49,12 @@ end
             Itap = [II + i * I1 for i in 0:(D.stencil_length - 1)]
         end
     else
-        if (II[j] <= D.offside)
+        if (II[j] <= actual_offside) & !haslower
             weights = D.low_boundary_coefs[II[j]]
             offset = 1 - II[j]
             Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length - 1)]
         else
-            weights = D.stencil_coefs[II[j] - D.offside]
+            weights = D.stencil_coefs[II[j] - actual_offside]
             Itap = [II + i * I1 for i in (-D.stencil_length + 1):0]
         end
     end
