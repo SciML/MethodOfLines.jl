@@ -42,8 +42,17 @@ function PDEBase.construct_differential_discretizer(
                 nonlinlap_outer,
                 Differential(x) => CompleteHalfCenteredDifference(1, approx_order, dx)
             )
+            
+            # STANDARD OPERATORS FOR UNIFORM GRIDS
+            rs = [
+                (Differential(x)^d) => CompleteCenteredDifference(d, approx_order, dx)
+                    for d in _orders
+            ]
+            differentialmap = vcat(differentialmap, rs)
+
         elseif s.grid[x] isa AbstractVector # The nonuniform grid case
-            dx = s.grid[x]
+            println("🚀 [GSoC POC] ATTENTION: Non-Uniform Grid Detected! Array size: ", length(s.grid[x]))
+            dx = s.grid[x] # Keeping the name as dx to prevent downstream code (windpos, etc.) from crashing.
 
             nonlinlap_outer = push!(
                 nonlinlap_outer,
@@ -51,14 +60,18 @@ function PDEBase.construct_differential_discretizer(
                     1, approx_order, [(dx[i + 1] + dx[i]) / 2 for i in 1:(length(dx) - 1)]
                 )
             )
+            
+            # CUSTOM OPERATOR GENERATION AREA FOR NON-UNIFORM GRIDS (GSoC POC HERE!)
+            rs = [
+                (Differential(x)^d) => CompleteCenteredDifference(d, approx_order, dx)
+                    for d in _orders
+            ]
+            differentialmap = vcat(differentialmap, rs)
         else
             error("s.grid contains nonvectors")
         end
-        rs = [
-            (Differential(x)^d) => CompleteCenteredDifference(d, approx_order, dx)
-                for d in _orders
-        ]
-        differentialmap = vcat(differentialmap, rs)
+
+        # --- NOTE: The old generic rs = [] block has been completely removed from here! ---
 
         if advection_scheme isa UpwindScheme
             upwind_orders = orders_[isodd.(orders_)]
@@ -80,8 +93,7 @@ function PDEBase.construct_differential_discretizer(
                     ) for d in upwind_orders
             ]
         )
-        # only calculate all orders if they are needed for the edge aligned grid
-        # TODO: Formalize orders in a type, only do BC_orders[x]
+        
         if get_grid_type(s) <: EdgeAlignedGrid
             half_orders = orders_
         else
@@ -94,7 +106,7 @@ function PDEBase.construct_differential_discretizer(
                     for d in _orders
             ]
         )
-        # A 0th order derivative off the grid is an interpolation
+        
         push!(interp, x => CompleteHalfCenteredDifference(0, max(4, approx_order), dx))
         push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), dx))
     end
