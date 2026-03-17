@@ -23,6 +23,9 @@ function PDEBase.transform_pde_system!(
         in_dvs = any(dv -> isequal(Symbolics.unwrap(var), Symbolics.unwrap(dv)), safe_dvs)
 
         if !in_ps && !in_ivs && !in_dvs
+            if occursin("MOLDiscCallback", string(Symbolics.unwrap(var)))
+                continue
+            end
             error("[MethodOfLines Bug Fix] Variable '$(var)' is used in the equations but not defined in the PDESystem (ps, ivs, or dvs). Infinite loop (Issue #475) prevented.")
         end
     end
