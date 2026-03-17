@@ -8,7 +8,7 @@ function PDEBase.transform_pde_system!(
         v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLFiniteDifference
     )
     all_vars_in_eqs = ModelingToolkit.get_variables(sys.eqs)
-    
+
     safe_ps = (sys.ps isa SciMLBase.NullParameters || sys.ps === nothing) ? [] : sys.ps
     safe_ivs = sys.ivs === nothing ? [] : sys.ivs
     safe_dvs = sys.dvs === nothing ? [] : sys.dvs
