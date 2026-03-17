@@ -18,9 +18,9 @@ function PDEBase.transform_pde_system!(
             continue
         end
 
-        in_ps = any(p -> isequal(var, p), safe_ps)
-        in_ivs = any(iv -> isequal(var, iv), safe_ivs)
-        in_dvs = any(dv -> isequal(var, dv), safe_dvs)
+        in_ps = any(p -> isequal(Symbolics.unwrap(var), Symbolics.unwrap(p)), safe_ps)
+        in_ivs = any(iv -> isequal(Symbolics.unwrap(var), Symbolics.unwrap(iv)), safe_ivs)
+        in_dvs = any(dv -> isequal(Symbolics.unwrap(var), Symbolics.unwrap(dv)), safe_dvs)
 
         if !in_ps && !in_ivs && !in_dvs
             error("[MethodOfLines Bug Fix] Variable '$(var)' is used in the equations but not defined in the PDESystem (ps, ivs, or dvs). Infinite loop (Issue #475) prevented.")
