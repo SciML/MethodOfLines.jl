@@ -33,10 +33,10 @@ end
     ) where {T, N, Wind, DX <: AbstractVector}
     j, x = jx
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
-    
+
     I1 = unitindex(ndims(u, s), j)
     haslower, hasupper = haslowerupper(bs, x)
-    
+
     actual_offside = D.stencil_length - 1
 
     if !ispositive
