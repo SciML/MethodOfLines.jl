@@ -14,16 +14,25 @@ function PDEBase.transform_pde_system!(
     safe_dvs = sys.dvs === nothing ? [] : sys.dvs
 
     for var in all_vars_in_eqs
-        if Symbolics.iscall(var) && Symbolics.operation(var) isa Differential
+        var_u = Symbolics.unwrap(var)
+
+        if Symbolics.iscall(var_u) && Symbolics.operation(var_u) isa Differential
             continue
         end
 
-        in_ps = any(p -> isequal(Symbolics.unwrap(var), Symbolics.unwrap(p)), safe_ps)
-        in_ivs = any(iv -> isequal(Symbolics.unwrap(var), Symbolics.unwrap(iv)), safe_ivs)
-        in_dvs = any(dv -> isequal(Symbolics.unwrap(var), Symbolics.unwrap(dv)), safe_dvs)
+        in_ps = any(p -> isequal(var_u, Symbolics.unwrap(p)), safe_ps)
+        in_ivs = any(iv -> isequal(var_u, Symbolics.unwrap(iv)), safe_ivs)
+        in_dvs = any(safe_dvs) do dv
+            dv_u = Symbolics.unwrap(dv)
+            isequal(var_u, dv_u) || (
+                Symbolics.iscall(var_u) &&
+                Symbolics.iscall(dv_u) &&
+                isequal(Symbolics.operation(var_u), Symbolics.operation(dv_u))
+            )
+        end
 
         if !in_ps && !in_ivs && !in_dvs
-            if occursin("MOLDiscCallback", string(Symbolics.unwrap(var)))
+            if occursin("MOLDiscCallback", string(var_u))
                 continue
             end
             error("[MethodOfLines Bug Fix] Variable '$(var)' is used in the equations but not defined in the PDESystem (ps, ivs, or dvs). Infinite loop (Issue #475) prevented.")
