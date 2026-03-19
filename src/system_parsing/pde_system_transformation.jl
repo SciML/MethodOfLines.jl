@@ -26,8 +26,8 @@ function PDEBase.transform_pde_system!(
             dv_u = Symbolics.unwrap(dv)
             isequal(var_u, dv_u) || (
                 Symbolics.iscall(var_u) &&
-                Symbolics.iscall(dv_u) &&
-                isequal(Symbolics.operation(var_u), Symbolics.operation(dv_u))
+                    Symbolics.iscall(dv_u) &&
+                    isequal(Symbolics.operation(var_u), Symbolics.operation(dv_u))
             )
         end
 
