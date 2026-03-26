@@ -1207,6 +1207,14 @@ function generate_array_interior_eqs(
     weno_cache = precompute_weno_stencils(s, depvars, derivweights)
     staggered_cache = precompute_staggered_stencils(s, depvars, derivweights)
 
+    # -- Fast path for equations with no spatial derivatives --------------------
+    # If the current equation has no spatial derivatives (e.g., algebraic
+    # equations like R ~ f(params)), bypass the can_template check below.
+    # derivweights.orders[x] is global (all PDEs in the system), so it would
+    # incorrectly force scalar fallback for these equations.
+    eq_has_spatial_derivs = _contains_spatial_diff(Symbolics.unwrap(pde.lhs), s.x̄) ||
+                           _contains_spatial_diff(Symbolics.unwrap(pde.rhs), s.x̄)
+
     # -- determine whether the ArrayOp path can handle this PDE ---------------
     has_odd_orders = any(
         any(isodd(d) for d in derivweights.orders[x])
@@ -1235,9 +1243,35 @@ function generate_array_interior_eqs(
     has_nonlinlap = !isempty(nonlinlap_terms) && !isempty(nonlinlap_cache)
 
     has_weno = !isempty(weno_cache)
-    can_template = !has_odd_orders || can_upwind || has_nonlinlap || has_spherical || has_weno || is_staggered
+    can_template = !eq_has_spatial_derivs || !has_odd_orders || can_upwind || has_nonlinlap || has_spherical || has_weno || is_staggered
 
     ndim = length(interior_ranges)
+
+    if !eq_has_spatial_derivs
+        # Fast path for equations with no spatial derivatives (e.g., algebraic
+        # equations like R(t,x) ~ f(params)).  These need no boundary frame,
+        # no WENO/upwind handling, and no validation against the scalar path.
+        # Build a simple ArrayOp using variable substitution rules only.
+        # Note: stencil_cache is still needed because _build_interior_arrayop
+        # iterates over derivweights.orders[x] (global) for all depvars.
+        lo_vec = [r[1] for r in interior_ranges]
+        hi_vec = [r[2] for r in interior_ranges]
+        n_region = [hi_vec[d] - lo_vec[d] + 1 for d in 1:ndim]
+        if all(n_region .> 0)
+            sc = precompute_stencils(s, depvars, derivweights)
+            empty_cache = Dict{Any,Any}()
+            result = _build_interior_arrayop(
+                n_region, lo_vec, s, depvars, pde, derivweights,
+                sc, empty_cache, empty_cache,
+                empty_cache, empty_cache, bcmap, eqvar, indexmap,
+                falses(ndim), zeros(Int, ndim)
+            )
+            candidate, _ = result
+            return candidate
+        else
+            return Equation[]
+        end
+    end
 
     if !can_template
         # Full per-point fallback: delegate every interior point to the
@@ -1510,6 +1544,22 @@ function _contains_time_diff(expr_raw, time)
         return true
     end
     return any(a -> _contains_time_diff(a, time), SymbolicUtils.arguments(expr_raw))
+end
+
+"""
+    _contains_spatial_diff(expr_raw, spatial_vars)
+
+Recursively check whether `expr_raw` contains a spatial derivative
+`Differential(x)(...)` where `x` is one of `spatial_vars`.
+Used to detect whether an equation has any spatial derivatives at all.
+"""
+function _contains_spatial_diff(expr_raw, spatial_vars)
+    SymbolicUtils.iscall(expr_raw) || return false
+    op = SymbolicUtils.operation(expr_raw)
+    if op isa Differential && any(v -> isequal(op.x, v), spatial_vars)
+        return true
+    end
+    return any(a -> _contains_spatial_diff(a, spatial_vars), SymbolicUtils.arguments(expr_raw))
 end
 
 # --- ArrayOp construction for interior region --------------------------------

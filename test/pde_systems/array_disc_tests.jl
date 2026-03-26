@@ -5680,3 +5680,186 @@ end
     @test all(isfinite, sol[u(t, x)])
     @test maximum(abs, sol[u(t, x)]) < 2.0
 end
+
+# ─── Fix: algebraic equations without spatial derivatives get ArrayOp ──────────
+
+# When a system has odd-order spatial derivatives (e.g., WENO convection for ψ)
+# AND algebraic equations with NO spatial derivatives (e.g., R ~ const),
+# the algebraic equations should still produce ArrayOp equations rather than
+# falling back to per-point scalar discretization.  Previously, the global
+# `has_odd_orders` flag caused `can_template = false` for these equations
+# because their scheme-specific caches (WENO, upwind, etc.) were empty.
+
+@testset "Algebraic eq without spatial derivs produces ArrayOp (1D WENO, structural)" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+
+    @parameters t x
+    @variables u(..) R(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    # PDE with first-order spatial derivative (WENO) + algebraic equation (no spatial derivs)
+    eqs = [
+        Dt(u(t, x)) ~ -R(t, x) * Dx(u(t, x)),   # Convection PDE
+        R(t, x) ~ 1.5,                             # Algebraic, no spatial derivs
+    ]
+    bcs = [
+        u(0, x) ~ exp(-((x - 0.5) / 0.1)^2),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+        R(0, x) ~ 1.5,
+        R(t, 0) ~ 1.5,
+        R(t, 1) ~ 1.5,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        x ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), R(t, x)])
+
+    dx = 0.05
+    disc = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    # Check that algebraic equation produces ArrayOp, not scalar equations
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs_out = equations(sys)
+    arrayop_count = count(eqs_out) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test arrayop_count >= 2  # Both u (ODE) and R (algebraic) should be ArrayOps
+end
+
+@testset "Algebraic eq without spatial derivs: upwind solution matches scalar (1D)" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+
+    @parameters t x
+    @variables u(..) R(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    # Advection-diffusion PDE with upwind + algebraic equation (no spatial derivs)
+    eqs = [
+        Dt(u(t, x)) ~ -R(t, x) * Dx(u(t, x)) + 0.01 * Dxx(u(t, x)),
+        R(t, x) ~ 1.5,
+    ]
+    bcs = [
+        u(0, x) ~ exp(-((x - 0.5) / 0.1)^2),
+        u(t, 0) ~ 0.0,
+        u(t, 1) ~ 0.0,
+        R(0, x) ~ 1.5,
+        R(t, 0) ~ 1.5,
+        R(t, 1) ~ 1.5,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05),
+        x ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), R(t, x)])
+
+    dx = 0.05
+    disc_array = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+
+    # Structural check: ArrayOp for both u and R
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc_array)
+    eqs_out = equations(sys)
+    arrayop_count = count(eqs_out) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test arrayop_count >= 2
+
+    # Numerical comparison
+    prob_array = discretize(pdesys, disc_array)
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_array = solve(prob_array, Rodas4(), saveat = 0.01)
+    sol_scalar = solve(prob_scalar, Rodas4(), saveat = 0.01)
+
+    @test SciMLBase.successful_retcode(sol_array)
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test isapprox(sol_scalar[u(t, x)], sol_array[u(t, x)], rtol = 1e-2)
+end
+
+@testset "Algebraic eq without spatial derivs produces ArrayOp (2D + upwind)" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+
+    @parameters t x y
+    @variables u(..) S(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+
+    # 2D advection PDE with spatially-varying speed from algebraic eq
+    eqs = [
+        Dt(u(t, x, y)) ~ -S(t, x, y) * Dx(u(t, x, y)) - S(t, x, y) * Dy(u(t, x, y)),
+        S(t, x, y) ~ 1.0,
+    ]
+    bcs = [
+        u(0, x, y) ~ exp(-((x - 0.5)^2 + (y - 0.5)^2) / 0.01),
+        u(t, 0, y) ~ 0.0,
+        u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0,
+        u(t, x, 1) ~ 0.0,
+        S(0, x, y) ~ 1.0,
+        S(t, 0, y) ~ 1.0,
+        S(t, 1, y) ~ 1.0,
+        S(t, x, 0) ~ 1.0,
+        S(t, x, 1) ~ 1.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y],
+        [u(t, x, y), S(t, x, y)])
+
+    dx = 0.1
+    disc = MOLFiniteDifference([x => dx, y => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    # Check ArrayOp count
+    sys, tspan = MethodOfLines.symbolic_discretize(pdesys, disc)
+    eqs_out = equations(sys)
+    arrayop_count = count(eqs_out) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test arrayop_count >= 2  # Both u and S should have ArrayOp equations
+
+    # Verify solution matches scalar path
+    disc_scalar = MOLFiniteDifference([x => dx, y => dx], t;
+        advection_scheme = UpwindScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    prob_array = discretize(pdesys, disc)
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_array = solve(prob_array, Rodas4(), saveat = 0.02)
+    sol_scalar = solve(prob_scalar, Rodas4(), saveat = 0.02)
+
+    @test SciMLBase.successful_retcode(sol_array)
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test isapprox(sol_scalar[u(t, x, y)], sol_array[u(t, x, y)], rtol = 1e-2)
+end
