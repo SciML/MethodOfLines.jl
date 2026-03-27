@@ -203,7 +203,6 @@ function precompute_stencils(s, depvars, derivweights; spherical_vars=nothing)
     for u in depvars
         for x in ivs(u, s)
             for d in derivweights.orders[x]
-                iseven(d) || continue
                 D_op = derivweights.map[Differential(x)^d]
                 is_uniform = D_op.dx isa Number
                 wmat = if !is_uniform
@@ -1243,7 +1242,8 @@ function generate_array_interior_eqs(
     has_nonlinlap = !isempty(nonlinlap_terms) && !isempty(nonlinlap_cache)
 
     has_weno = !isempty(weno_cache)
-    can_template = !eq_has_spatial_derivs || !has_odd_orders || can_upwind || has_nonlinlap || has_spherical || has_weno || is_staggered
+    can_centered = !(derivweights.advection_scheme isa FunctionalScheme) || has_weno
+    can_template = !eq_has_spatial_derivs || !has_odd_orders || can_upwind || can_centered || has_nonlinlap || has_spherical || has_weno || is_staggered
 
     ndim = length(interior_ranges)
 
@@ -1615,21 +1615,19 @@ function _build_interior_arrayop(
         for x in u_spatial
             for d in derivweights.orders[x]
                 # Staggered odd-order derivatives: fixed offset per alignment
-                if !iseven(d)
-                    if staggered_cache !== nothing && haskey(staggered_cache, (u, x, d))
-                        ssi = staggered_cache[(u, x, d)]
-                        taps = map(ssi.interior_offsets) do off
-                            idx_exprs = map(u_spatial) do xv
-                                eq_d = indexmap[xv]
-                                raw_idx = _idxs[eq_d] + bases[eq_d]
-                                raw_idx = isequal(xv, x) ? raw_idx + off : raw_idx
-                                _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-                            end
-                            Symbolics.wrap(u_c[idx_exprs...])
+                if !iseven(d) && staggered_cache !== nothing && haskey(staggered_cache, (u, x, d))
+                    ssi = staggered_cache[(u, x, d)]
+                    taps = map(ssi.interior_offsets) do off
+                        idx_exprs = map(u_spatial) do xv
+                            eq_d = indexmap[xv]
+                            raw_idx = _idxs[eq_d] + bases[eq_d]
+                            raw_idx = isequal(xv, x) ? raw_idx + off : raw_idx
+                            _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
                         end
-                        expr = sym_dot(ssi.D_wind.stencil_coefs, taps)
-                        push!(fd_rules, (Differential(x)^d)(u) => expr)
+                        Symbolics.wrap(u_c[idx_exprs...])
                     end
+                    expr = sym_dot(ssi.D_wind.stencil_coefs, taps)
+                    push!(fd_rules, (Differential(x)^d)(u) => expr)
                     continue
                 end
                 si = stencil_cache[(u, x, d)]
@@ -1708,12 +1706,20 @@ function _build_interior_arrayop(
     # matching the scalar path which sets advection_rules = [] for StaggeredGrid.
     upwind_rules = Pair[]
     if !isempty(upwind_cache) && (staggered_cache === nothing || isempty(staggered_cache))
-        upwind_rules = _build_upwind_rules(
+        upwind_term_rules, upwind_fallback_rules = _build_upwind_rules(
             pde, s, depvars, derivweights, upwind_cache,
             bcmap, indexmap, _idxs, bases, var_rules,
             is_periodic, gl_vec;
             full_interior_upwind_cache=full_interior_upwind_cache
         )
+        upwind_rules = upwind_term_rules
+        # Upwind fallback rules are expression-level (they replace bare
+        # derivatives like Dx(u), not entire PDE terms).  Put them in
+        # fd_rules so they are applied via pde_substitute, matching the
+        # scalar path's generate_winding_rules fallback behaviour.
+        # They overwrite the centred FD rules for the same derivatives
+        # added above (Dict keeps the last entry for duplicate keys).
+        append!(fd_rules, upwind_fallback_rules)
     end
 
     # -- Mixed derivative rules -----------------------------------------------
@@ -2070,7 +2076,7 @@ function _build_upwind_rules(
         end
     end
 
-    return vcat(wind_rules, fallback_rules)
+    return wind_rules, fallback_rules
 end
 
 # --- Mixed derivative ArrayOp rules -----------------------------------------

@@ -5863,3 +5863,72 @@ end
     @test SciMLBase.successful_retcode(sol_scalar)
     @test isapprox(sol_scalar[u(t, x, y)], sol_array[u(t, x, y)], rtol = 1e-2)
 end
+
+# --- Gradient magnitude (non-advective first-order derivatives) ---
+
+@testset "Gradient magnitude |∇u| produces ArrayOp (2D)" begin
+    using SymbolicUtils
+    using Symbolics: unwrap
+
+    @parameters t x y
+    @parameters Sp
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+
+    # Level-set equation with gradient magnitude: non-advective use of Dx, Dy
+    eq1 = Dt(u(t, x, y)) ~ -Sp * sqrt(Dx(u(t, x, y))^2 + Dy(u(t, x, y))^2)
+    # Algebraic equation without spatial derivatives
+    eq2 = v(t, x, y) ~ Sp^2 + 1.0
+
+    bcs = [
+        u(0, x, y) ~ sqrt((x - 5.0)^2 + (y - 5.0)^2) - 1.0,
+        u(t, 0, y) ~ sqrt(25.0 + (y - 5.0)^2) - 1.0,
+        u(t, 10, y) ~ sqrt(25.0 + (y - 5.0)^2) - 1.0,
+        u(t, x, 0) ~ sqrt((x - 5.0)^2 + 25.0) - 1.0,
+        u(t, x, 10) ~ sqrt((x - 5.0)^2 + 25.0) - 1.0,
+        v(0, x, y) ~ 0.0,
+        v(t, 0, y) ~ 0.0,
+        v(t, 10, y) ~ 0.0,
+        v(t, x, 0) ~ 0.0,
+        v(t, x, 10) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 10.0),
+        y ∈ Interval(0.0, 10.0),
+    ]
+    @named pdesys = PDESystem([eq1, eq2], bcs, domains, [t, x, y],
+        [u(t, x, y), v(t, x, y)], [Sp];
+        initial_conditions = Dict(Symbolics.unwrap(Sp) => 1.0))
+
+    dx = 1.0
+    disc = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    # Check ArrayOp count — both equations should be ArrayOp
+    sys, tspan = SciMLBase.symbolic_discretize(pdesys, disc)
+    eqs_out = equations(sys)
+    arrayop_count = count(eqs_out) do eq
+        lhs_raw = unwrap(eq.lhs)
+        rhs_raw = unwrap(eq.rhs)
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(lhs_raw)) ||
+        SymbolicUtils.is_array_shape(SymbolicUtils.shape(rhs_raw))
+    end
+    @test arrayop_count >= 2  # Both u (gradient mag) and v (algebraic) should be ArrayOp
+
+    # Verify solution matches scalar path
+    disc_scalar = MOLFiniteDifference([x => dx, y => dx], t;
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    prob_array = discretize(pdesys, disc)
+    prob_scalar = discretize(pdesys, disc_scalar)
+    sol_array = solve(prob_array, Rodas4(), saveat = 0.2)
+    sol_scalar = solve(prob_scalar, Rodas4(), saveat = 0.2)
+
+    @test SciMLBase.successful_retcode(sol_array)
+    @test SciMLBase.successful_retcode(sol_scalar)
+    @test isapprox(sol_scalar[u(t, x, y)], sol_array[u(t, x, y)], rtol = 1e-2)
+end
