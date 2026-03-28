@@ -18,7 +18,7 @@ function showcase_prototype()
     # Calculate weights
     d_k = get_nonuniform_ideal_weights(x_local, x_eval)
     beta_k = get_nonuniform_smoothness_indicators(x_local)
-    omega_k = get_nonuniform_nonlinear_weights(d_k, beta_k)
+    omega_k = get_split_nonlinear_weights(d_k, beta_k)
 
     println("Ideal Weights (d_k): ", d_k)
     println("Smoothness Indicators (beta_k): ", beta_k)
@@ -30,7 +30,7 @@ function showcase_prototype()
     x_f32 = Float32[0.0, 0.05, 0.2]
     x_eval_f32 = 0.1f0
 
-    omega_f32 = get_nonuniform_nonlinear_weights(
+    omega_f32 = get_split_nonlinear_weights(
         get_nonuniform_ideal_weights(x_f32, x_eval_f32),
         get_nonuniform_smoothness_indicators(x_f32)
     )
@@ -40,7 +40,7 @@ function showcase_prototype()
     # 3. Performance Benchmark
     println("\n[3] PERFORMANCE BENCHMARK (Float64)")
     print("Execution time: ")
-    @btime get_nonuniform_nonlinear_weights(
+    @btime get_split_nonlinear_weights(
         get_nonuniform_ideal_weights($x_local, $x_eval),
         get_nonuniform_smoothness_indicators($x_local)
     )
@@ -70,23 +70,21 @@ function showcase_prototype()
     println("Min d_k: ", minimum(d_k_extreme))
 
     # 4.2 Check Non-Linear Weights (Our regulator should save us)
-    omega_k_extreme = get_nonuniform_nonlinear_weights(
+    omega_k_extreme = get_split_nonlinear_weights(
         d_k_extreme,
         get_nonuniform_smoothness_indicators(x_extreme)
     )
 
     println("\n--> Final Non-Linear Weights (omega_k) after regularization:")
     println(omega_k_extreme)
-    println("Min omega_k: ", minimum(omega_k_extreme), " (Must be >= 0.0)")
+    println("Min omega_k: ", minimum(omega_k_extreme), " (Safely handled negative weights via Splitting!)")
     println("Sum of Weights: ", sum(omega_k_extreme), " (Must be 1.0)")
 
-    # Verify mathematical correctness
-    if sum(omega_k_extreme) ≈ 1.0 && minimum(omega_k_extreme) >= -1e-12
-        println("\n[RESULT] BLACK OPS STRESS TEST: SUCCESS! Regulator salvaged the extreme weights.")
+    if isapprox(sum(omega_k_extreme), 1.0, atol=1e-10)
+        println("\n[RESULT] BLACK OPS STRESS TEST: SUCCESS! Splitting technique perfectly maintained Partition of Unity despite extreme negative weights.")
     else
-        error("\n[RESULT] BLACK OPS STRESS TEST: FAILED! Regulator did not work.")
+        error("\n[RESULT] BLACK OPS STRESS TEST: FAILED! Partition of Unity is broken.")
     end
-    println("="^60)
 
 end
 

@@ -1,6 +1,6 @@
 module WENOWeights
 
-export get_nonuniform_ideal_weights, get_nonuniform_smoothness_indicators, get_nonuniform_nonlinear_weights
+export get_nonuniform_ideal_weights, get_nonuniform_smoothness_indicators, get_split_nonlinear_weights
 
 # 1. AUXILIARY MATHEMATICAL FUNCTIONS (PRIVATE)
 
@@ -32,11 +32,11 @@ Type-stable and AD-compatible.
 function get_nonuniform_ideal_weights(x_local::AbstractVector{T}, x_eval::T) where T<:Real
     n = length(x_local)
     weights = zeros(T, n) # Pre-allocate with type T
-    
+
     for k in 1:n
         weights[k] = lagrange_basis(x_local, k, x_eval)
     end
-    
+
     return weights
 end
 
@@ -48,11 +48,11 @@ Uses eltype(x_local) to maintain precision across different float types.
 """
 function get_nonuniform_smoothness_indicators(x_local::AbstractVector{T}) where T<:Real
     n = length(x_local)
-    
+
     if n == 3
         h1 = x_local[2] - x_local[1]
         h2 = x_local[3] - x_local[2]
-        
+
         # Geometrically derived factor for non-uniform stencils
         w_dynamic = (h1^2 + h1*h2 + h2^2) / (h1 + h2)^2
         return fill(w_dynamic, n)
@@ -62,38 +62,48 @@ function get_nonuniform_smoothness_indicators(x_local::AbstractVector{T}) where 
 end
 
 """
-    get_nonuniform_nonlinear_weights(d_k, beta_k; epsilon=1e-6)
+    get_split_nonlinear_weights(d_k, beta_k; epsilon=1e-6)
 
-Calculates final non-linear WENO weights (ω_k) with Negative Weight Treatment.
-Fully generic and optimized for zero-cost abstraction.
+Implements the Shi-Hu-Shu (2002) splitting technique with proper scaling factors.
+Splits the weights into positive sets and recombines them using their mass sums (sigma)
+to guarantee high-order accuracy without negative weight instabilities.
 """
-function get_nonuniform_nonlinear_weights(d_k::AbstractVector{T}, beta_k::AbstractVector{T}; 
-                                         epsilon::Real=1e-6) where T<:Real
+function get_split_nonlinear_weights(d_k::AbstractVector{T}, beta_k::AbstractVector{T}; 
+                                     epsilon::Real=1e-6) where T<:Real
     n = length(d_k)
-    eps_T = T(epsilon) # Convert epsilon to type T to prevent promotion overhead
-    
-    # --- NEGATIVE WEIGHT REGULARIZATION ---
-    min_d = minimum(d_k)
-    # Using a local safe copy that respects type T
-    d_k_safe = copy(d_k)
-    
-    if min_d < zero(T)
-        shift = abs(min_d) + T(1e-4)
-        d_k_safe .= d_k_safe .+ shift
-        d_k_safe ./= sum(d_k_safe)
-    end
-    
-    # Step 1: Calculate unscaled alpha_k
-    # We use similar(d_k) to ensure the output vector matches input type
-    alpha_k = similar(d_k)
+    eps_T = T(epsilon)
+    theta = T(3.0) # Splitting factor
+
+    # 1. SPLIT THE WEIGHTS
+    d_plus = similar(d_k)
+    d_minus = similar(d_k)
     for k in 1:n
-        alpha_k[k] = d_k_safe[k] / (eps_T + beta_k[k])^2
+        d_plus[k] = zero(T) + T(0.5) * (d_k[k] + theta * abs(d_k[k]))
+        d_minus[k] = d_plus[k] - d_k[k]
     end
-    
-    # Step 2: Normalize to get omega_k
-    sum_alpha = sum(alpha_k)
-    omega_k = alpha_k ./ sum_alpha
-    
+
+    sigma_plus = sum(d_plus)
+    sigma_minus = sum(d_minus)
+
+    # 2. CALCULATE OMEGA PLUS
+    alpha_plus = similar(d_k)
+    for k in 1:n
+        alpha_plus[k] = d_plus[k] / (eps_T + beta_k[k])^2
+    end
+    omega_plus = alpha_plus ./ sum(alpha_plus)
+
+    # 3. CALCULATE OMEGA MINUS
+    alpha_minus = similar(d_k)
+    for k in 1:n
+        alpha_minus[k] = d_minus[k] / (eps_T + beta_k[k])^2
+    end
+    omega_minus = alpha_minus ./ sum(alpha_minus)
+
+    omega_k = similar(d_k)
+    for k in 1:n
+        omega_k[k] = sigma_plus * omega_plus[k] - sigma_minus * omega_minus[k]
+    end
+
     return omega_k
 end
 
