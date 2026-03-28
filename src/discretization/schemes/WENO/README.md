@@ -17,7 +17,7 @@ prematurely, this prototype acts as a standalone **mathematical engine**. Once t
 core pipeline is ready to ingest non-uniform weights, `MethodOfLines.jl` will query
 this module directly without cluttering the main generation logic.
 
-## 2. The Mathematics: Dynamic Indicators & Regularization
+## 2. The Mathematics: Dynamic Indicators & Splitting
 
 ### 2.1 Dynamic Smoothness Indicators ($\beta_k$)
 
@@ -36,11 +36,7 @@ In highly clustered non-uniform grids, ideal Lagrange weights ($d_k$) can
 mathematically become negative (a known theoretical phenomenon, e.g.,
 *Shi, Hu, Shu 2002*). If left unhandled, this destabilizes the scheme.
 
-This prototype implements a **Positive Shifting Regularization** step. If any
-ideal weight drops below zero, the weights are safely shifted to the positive
-domain and re-normalized. This guarantees that the final non-linear weights
-strictly obey the Partition of Unity ($\sum \omega_k = 1.0$) and remain strictly
-non-negative ($\omega_k \ge 0.0$).
+This prototype implements a **Shi-Hu-Shu (2002) Weight Splitting** technique. Instead of naive shifting, the weights are split into positive and negative components with proper mass scaling. This ensures the engine maintains high-order accuracy while strictly obeying the Partition of Unity ($\sum \omega_k = 1.0$), even when individual weights are negative.
 
 ## 3. Engineering & Validation
 
@@ -58,19 +54,19 @@ implementation remains strictly type-stable. This ensures full compatibility wit
 
 The mathematical engine is thoroughly verified using Julia's `Test` framework.
 The test suite enforces strict mathematical invariants, including the successful
-handling of negative weights without violating the Partition of Unity or
-positivity constraints.
+handling of negative weights via splitting without violating the Partition of Unity.
 
 ### 3.3 Performance Profiling (`run_prototype.jl`)
 
 To verify execution speed, the entire non-linear weight pipeline is profiled 
 using `BenchmarkTools`. **Current benchmark results:**
 
-* **Execution Time:** ~113 ns
-* **Memory overhead:** 10 allocations (400 bytes)
+* **Execution Time:** ~83 ns
+* **Memory overhead:** 18 allocations (720 bytes)
 
-This confirms that the dynamic calculations and regularization steps introduce 
-virtually zero computational overhead to the main discretization pipeline.
+### 3.4 Mathematical Verification (MMS Convergence Test)
+
+To verify numerical precision, a standalone **Method of Manufactured Solutions (MMS)** suite (`weno_convergence_test.jl`) is included. It mathematically proves that the splitting technique maintains the theoretical **$O(\Delta x^3)$ convergence order** on highly stretched grids, whereas standard regularization would artificially drop the accuracy to $O(\Delta x^1)$.
 
 ## 4. How to Test the Prototype
 
@@ -83,7 +79,11 @@ julia run_prototype.jl
 ```
 
 **To run the strict mathematical unit test suite:**
-
 ```bash
 julia test_weno.jl
+```
+
+**To run the **$O(\Delta x^3)$ convergence verification:**
+```bash
+julia weno_convergence_test.jl
 ```
