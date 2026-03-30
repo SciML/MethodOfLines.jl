@@ -53,6 +53,8 @@ function PDEBase.discretize_equation!(
     for boundary in eqvarbcs
         if boundary isa InterfaceBoundary
             generate_bc_eqs_arrayop!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary)
+        elseif boundary isa AbstractTruncatingBoundary
+            generate_bc_eqs_arrayop!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary, derivweights)
         else
             generate_bc_eqs!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary)
         end
