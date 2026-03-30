@@ -2180,6 +2180,107 @@ end
     @test isapprox(u_scalar, u_array, rtol = 1e-10)
 end
 
+# --- 10d: WENO boundary stencil unit tests ---
+
+@testset "WENO boundary stencil accuracy" begin
+    # Verify each boundary function produces exact derivatives for polynomials
+    # up to degree 3 (the formal 3rd-order accuracy of the Fornberg weights).
+    dx = 0.25
+    p = [1e-6]  # epsilon (unused by linear boundary stencils)
+    t_dummy = 0.0
+    x_dummy = [0.0, dx, 2dx, 3dx]
+
+    # Test polynomial: f(x) = a + b*x + c*x^2 + d*x^3
+    # f'(x) = b + 2c*x + 3d*x^2
+    a, b, c, d = 1.0, 2.0, -0.5, 0.3
+
+    f(x) = a + b * x + c * x^2 + d * x^3
+    fp(x) = b + 2c * x + 3d * x^2
+
+    # Lower boundary functions: grid points at x = 0, dx, 2dx, 3dx
+    u_lower = [f(0.0), f(dx), f(2dx), f(3dx)]
+
+    # weno_boundary_lower_1: f'(x_0) = f'(0)
+    @test isapprox(
+        MethodOfLines.weno_boundary_lower_1(u_lower, p, t_dummy, x_dummy, dx),
+        fp(0.0), atol = 1e-12
+    )
+
+    # weno_boundary_lower_2: f'(x_1) = f'(dx)
+    @test isapprox(
+        MethodOfLines.weno_boundary_lower_2(u_lower, p, t_dummy, x_dummy, dx),
+        fp(dx), atol = 1e-12
+    )
+
+    # Upper boundary functions: taps are the last 4 grid points
+    # For consistency with get_f_and_taps, u[1:4] maps to u[N-3:N]
+    xN = 5.0
+    u_upper = [f(xN - 3dx), f(xN - 2dx), f(xN - dx), f(xN)]
+
+    # weno_boundary_upper_2: f'(x_{N-1}) = f'(xN - dx)
+    @test isapprox(
+        MethodOfLines.weno_boundary_upper_2(u_upper, p, t_dummy, x_dummy, dx),
+        fp(xN - dx), atol = 1e-12
+    )
+
+    # weno_boundary_upper_1: f'(x_N) = f'(xN)
+    @test isapprox(
+        MethodOfLines.weno_boundary_upper_1(u_upper, p, t_dummy, x_dummy, dx),
+        fp(xN), atol = 1e-12
+    )
+end
+
+# --- 10e: WENO boundary stencils exercise through discretization (non-periodic) ---
+
+@testset "WENO boundary stencils: non-periodic Dirichlet BCs" begin
+    # This test exercises the WENO boundary functions through the full
+    # discretization pipeline. With non-periodic Dirichlet BCs, the frame
+    # points near boundaries use the boundary stencil functions instead of
+    # the interior WENO5 stencil.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+
+    bcs = [
+        u(0, x) ~ exp(-100.0 * (x - 0.5)^2),
+        u(t, 0) ~ 0.0,
+        u(t, 2) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.3),
+        x ∈ Interval(0.0, 2.0),
+    ]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    dx = 0.05
+
+    # Both scalar and array discretization should work and agree
+    disc_scalar = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ScalarizedDiscretization()
+    )
+    disc_array = MOLFiniteDifference([x => dx], t;
+        advection_scheme = WENOScheme(),
+        discretization_strategy = ArrayDiscretization()
+    )
+
+    prob_scalar = discretize(pdesys, disc_scalar)
+    prob_array = discretize(pdesys, disc_array)
+
+    sol_scalar = solve(prob_scalar, SSPRK33(), dt = 0.005, saveat = 0.1)
+    sol_array = solve(prob_array, SSPRK33(), dt = 0.005, saveat = 0.1)
+
+    u_scalar = sol_scalar[u(t, x)]
+    u_array = sol_array[u(t, x)]
+
+    @test size(u_scalar) == size(u_array)
+    @test isapprox(u_scalar, u_array, rtol = 1e-10)
+end
+
 # ─── Phase 11: Periodic BCs, Multi-Variable Systems, and Neumann/Robin BC Tests ───
 
 # --- 11a: Periodic BC centered derivative ---
