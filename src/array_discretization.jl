@@ -51,7 +51,11 @@ function PDEBase.discretize_equation!(
     )
     eqvarbcs = mapreduce(x -> bcmap[operation(eqvar)][x], vcat, s.x̄)
     for boundary in eqvarbcs
-        generate_bc_eqs!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary)
+        if boundary isa InterfaceBoundary
+            generate_bc_eqs_arrayop!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary)
+        else
+            generate_bc_eqs!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary)
+        end
     end
     generate_extrap_eqs!(
         disc_state, pde, eqvar, s, derivweights, scalar_interiormap, bcmap

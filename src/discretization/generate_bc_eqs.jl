@@ -57,6 +57,94 @@ function generate_bc_eqs!(
     )
 end
 
+"""
+    generate_bc_eqs_arrayop!(disc_state, s, boundaryvalfuncs, interiormap,
+                             boundary::InterfaceBoundary)
+
+ArrayOp version of periodic/interface BC generation. Instead of producing one
+scalar equation per edge point, emits a single ArrayOp equation that tiles
+`disc1[boundary, tang...] ~ disc2[boundary+offset, tang...]` along the
+tangential dimensions.
+
+Falls back to the scalar path for 1D (single-point edges) or if the edge
+is not contiguous.
+"""
+function generate_bc_eqs_arrayop!(
+        disc_state, s::DiscreteSpace, boundaryvalfuncs,
+        interiormap, boundary::InterfaceBoundary
+    )
+    isupper(boundary) && return
+    u_ = boundary.u
+    x_ = boundary.x
+    u__ = boundary.u2
+    x__ = boundary.x2
+    N = ndims(u_, s)
+    j = x2i(s, depvar(u_, s), x_)
+
+    edge_points = edge(s, boundary, interiormap)
+
+    # For 1D or very small edges, use the scalar path
+    if length(edge_points) <= 1
+        return generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+    end
+
+    Ioffset_val = length(s, x__) - 1
+    disc1_raw = Symbolics.unwrap(s.discvars[depvar(u_, s)])
+    disc2_raw = Symbolics.unwrap(s.discvars[depvar(u__, s)])
+    disc1_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(disc1_raw)
+    disc2_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(disc2_raw)
+
+    # Determine tangential dimensions and their ranges from the edge points
+    # The edge has a fixed index in dimension j and varying indices in all others
+    tang_dims = setdiff(1:N, [j])
+    boundary_idx = edge_points[1][j]  # fixed index in the boundary-normal dimension
+
+    # Compute the tangential ranges from the edge points
+    tang_ranges = Vector{StepRange{Int,Int}}(undef, length(tang_dims))
+    for (k, d) in enumerate(tang_dims)
+        vals = [II[d] for II in edge_points]
+        tang_ranges[k] = minimum(vals):1:maximum(vals)
+    end
+
+    # Create symbolic index variables for the tangential dimensions
+    n_tang = length(tang_dims)
+    _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
+    _tang_idxs = [_idxs_arr[k] for k in 1:n_tang]
+    tang_bases = [tang_ranges[k][1] - 1 for k in 1:n_tang]
+
+    # Build full index expressions for disc1 and disc2
+    # disc1 uses boundary_idx in dimension j, symbolic indices in tangential dims
+    # disc2 uses boundary_idx + offset in dimension j, same tangential indices
+    idx1_exprs = Vector{Any}(undef, N)
+    idx2_exprs = Vector{Any}(undef, N)
+    tang_k = 0
+    for d in 1:N
+        if d == j
+            idx1_exprs[d] = boundary_idx
+            idx2_exprs[d] = boundary_idx + Ioffset_val
+        else
+            tang_k += 1
+            idx_expr = _tang_idxs[tang_k] + tang_bases[tang_k]
+            idx1_exprs[d] = idx_expr
+            idx2_exprs[d] = idx_expr
+        end
+    end
+
+    lhs_expr = disc1_c[idx1_exprs...]
+    rhs_expr = disc2_c[idx2_exprs...]
+
+    ao_ranges = Dict(_tang_idxs[k] => (1:1:length(tang_ranges[k])) for k in 1:n_tang)
+
+    lhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+        _tang_idxs, lhs_expr, +, nothing, ao_ranges
+    )
+    rhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+        _tang_idxs, rhs_expr, +, nothing, ao_ranges
+    )
+
+    return vcat!(disc_state.bceqs, [Symbolics.wrap(lhs_ao) ~ Symbolics.wrap(rhs_ao)])
+end
+
 function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
     return mapreduce(vcat, values(boundarymap)) do boundaries
         map(mapreduce(x -> boundaries[x], vcat, s.x̄)) do b
