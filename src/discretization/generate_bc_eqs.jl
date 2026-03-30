@@ -668,11 +668,9 @@ function generate_bc_eqs_arrayop!(
     sub_first = Dict(_tang_idxs[k] => 1 for k in 1:n_tang)
     eq_first_arrayop = pde_substitute(template_lhs, sub_first) ~ pde_substitute(template_rhs, sub_first)
 
-    if !isequal(
-            Symbolics.unwrap(eq_first_scalar.lhs - eq_first_arrayop.lhs + eq_first_scalar.rhs - eq_first_arrayop.rhs),
-            0
-        )
+    if !_equations_match(eq_first_arrayop, eq_first_scalar)
         # Validation failed — fall back to scalar
+        @debug "BC ArrayOp validation failed, falling back to scalar" boundary
         return generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
     end
 
