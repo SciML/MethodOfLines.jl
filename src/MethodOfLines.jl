@@ -105,6 +105,7 @@ include("discretization/schemes/WENO/WENO.jl")
 include("discretization/schemes/integral_expansion/integral_expansion.jl")
 
 # System Discretization
+include("discretization/boundary_validation.jl")
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
