@@ -1246,6 +1246,8 @@ function generate_array_interior_eqs(
     can_template = !eq_has_spatial_derivs || !has_odd_orders || can_upwind || can_centered || has_nonlinlap || has_spherical || has_weno || is_staggered
 
     ndim = length(interior_ranges)
+    lo_vec = [r[1] for r in interior_ranges]
+    hi_vec = [r[2] for r in interior_ranges]
 
     if !eq_has_spatial_derivs
         # Fast path for equations with no spatial derivatives (e.g., algebraic
@@ -1254,15 +1256,12 @@ function generate_array_interior_eqs(
         # Build a simple ArrayOp using variable substitution rules only.
         # Note: stencil_cache is still needed because _build_interior_arrayop
         # iterates over derivweights.orders[x] (global) for all depvars.
-        lo_vec = [r[1] for r in interior_ranges]
-        hi_vec = [r[2] for r in interior_ranges]
         n_region = [hi_vec[d] - lo_vec[d] + 1 for d in 1:ndim]
         if all(n_region .> 0)
-            sc = precompute_stencils(s, depvars, derivweights)
             empty_cache = Dict{Any,Any}()
             result = _build_interior_arrayop(
                 n_region, lo_vec, s, depvars, pde, derivweights,
-                sc, empty_cache, empty_cache,
+                stencil_cache, empty_cache, empty_cache,
                 empty_cache, empty_cache, bcmap, eqvar, indexmap,
                 falses(ndim), zeros(Int, ndim)
             )
@@ -1287,8 +1286,6 @@ function generate_array_interior_eqs(
     end
 
     # -- N-D ArrayOp path ------------------------------------------------------
-    lo_vec = [r[1] for r in interior_ranges]
-    hi_vec = [r[2] for r in interior_ranges]
     eqvar_ivs = ivs(eqvar, s)
     gl_vec = [length(s, x) for x in eqvar_ivs]
 
