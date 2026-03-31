@@ -44,6 +44,7 @@ function PDEBase.discretize_equation!(
 
     # Convert tuple-range interior map to CartesianIndices for boundary code
     scalar_interiormap = _to_scalar_interiormap(interiormap)
+    should_validate = discretization.disc_strategy.validate
 
     # ── boundary handling (uses scalar-compatible interior map) ───────────────
     boundaryvalfuncs = generate_boundary_val_funcs(
@@ -54,7 +55,7 @@ function PDEBase.discretize_equation!(
         if boundary isa InterfaceBoundary
             generate_bc_eqs_arrayop!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary)
         elseif boundary isa AbstractTruncatingBoundary
-            generate_bc_eqs_arrayop!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary, derivweights)
+            generate_bc_eqs_arrayop!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary, derivweights; validate=should_validate)
         else
             generate_bc_eqs!(disc_state, s, boundaryvalfuncs, scalar_interiormap, boundary)
         end
@@ -79,7 +80,8 @@ function PDEBase.discretize_equation!(
     else
         generate_array_interior_eqs(
             s, depvars, pde, derivweights, bcmap, eqvar,
-            indexmap, boundaryvalfuncs, interior_ranges
+            indexmap, boundaryvalfuncs, interior_ranges;
+            validate=should_validate
         )
     end
 

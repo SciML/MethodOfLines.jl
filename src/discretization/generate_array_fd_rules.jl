@@ -1174,7 +1174,8 @@ when numerics agree).
 function _validate_arrayop_or_fallback(candidate, eq_first, lo, hi, ndim,
                                         is_periodic, s, depvars, pde, derivweights,
                                         bcmap, eqvar, indexmap, boundaryvalfuncs;
-                                        debug_label="ArrayOp")
+                                        debug_label="ArrayOp", validate=false)
+    !validate && return candidate
     has_periodic = any(is_periodic)
     if !has_periodic
         II_check = CartesianIndex(Tuple(lo))
@@ -1199,51 +1200,13 @@ end
 
 function generate_array_interior_eqs(
         s, depvars, pde, derivweights, bcmap, eqvar,
-        indexmap, boundaryvalfuncs, interior_ranges
+        indexmap, boundaryvalfuncs, interior_ranges;
+        validate=false
     )
-    upwind_cache = precompute_upwind_stencils(s, depvars, derivweights)
-    nonlinlap_cache = precompute_nonlinlap_stencils(s, depvars, derivweights)
-    weno_cache = precompute_weno_stencils(s, depvars, derivweights)
-    staggered_cache = precompute_staggered_stencils(s, depvars, derivweights)
 
     # -- Fast path for equations with no spatial derivatives --------------------
-    # If the current equation has no spatial derivatives (e.g., algebraic
-    # equations like R ~ f(params)), bypass the can_template check below.
-    # derivweights.orders[x] is global (all PDEs in the system), so it would
-    # incorrectly force scalar fallback for these equations.
     eq_has_spatial_derivs = _contains_spatial_diff(Symbolics.unwrap(pde.lhs), s.x̄) ||
                            _contains_spatial_diff(Symbolics.unwrap(pde.rhs), s.x̄)
-
-    # -- determine whether the ArrayOp path can handle this PDE ---------------
-    has_odd_orders = any(
-        any(isodd(d) for d in derivweights.orders[x])
-        for u in depvars for x in ivs(u, s)
-    )
-    can_upwind = has_odd_orders && derivweights.advection_scheme isa UpwindScheme
-    is_staggered = !isempty(staggered_cache)
-
-    # Detect spherical Laplacian terms first (they take priority over nonlinlap).
-    spherical_terms_info = _detect_spherical_terms(pde, s, depvars)
-    has_spherical = !isempty(spherical_terms_info) && !isempty(nonlinlap_cache)
-
-    # Precompute stencils, including D1 entries for spherical variables so that
-    # precompute_full_interior_stencils can build full-interior D1 info.
-    sph_vars = if has_spherical
-        unique([(info.u, info.r) for info in values(spherical_terms_info)])
-    else
-        nothing
-    end
-    stencil_cache = precompute_stencils(s, depvars, derivweights; spherical_vars=sph_vars)
-
-    # Detect nonlinear Laplacian terms -- their odd-order derivatives are
-    # handled internally, so they don't block the template path.
-    # Exclude spherical-matched terms to prevent double-matching.
-    nonlinlap_terms = _detect_nonlinlap_terms(pde, s, depvars, spherical_terms_info)
-    has_nonlinlap = !isempty(nonlinlap_terms) && !isempty(nonlinlap_cache)
-
-    has_weno = !isempty(weno_cache)
-    can_centered = !(derivweights.advection_scheme isa FunctionalScheme) || has_weno
-    can_template = !eq_has_spatial_derivs || !has_odd_orders || can_upwind || can_centered || has_nonlinlap || has_spherical || has_weno || is_staggered
 
     ndim = length(interior_ranges)
     lo_vec = [r[1] for r in interior_ranges]
@@ -1258,6 +1221,7 @@ function generate_array_interior_eqs(
         # iterates over derivweights.orders[x] (global) for all depvars.
         n_region = [hi_vec[d] - lo_vec[d] + 1 for d in 1:ndim]
         if all(n_region .> 0)
+            stencil_cache = precompute_stencils(s, depvars, derivweights)
             empty_cache = Dict{Any,Any}()
             result = _build_interior_arrayop(
                 n_region, lo_vec, s, depvars, pde, derivweights,
@@ -1272,6 +1236,34 @@ function generate_array_interior_eqs(
         end
     end
 
+    # -- determine whether the ArrayOp path can handle this PDE ---------------
+    # Use lightweight checks that avoid full stencil precomputation.
+    has_odd_orders = any(
+        any(isodd(d) for d in derivweights.orders[x])
+        for u in depvars for x in ivs(u, s)
+    )
+    can_upwind = has_odd_orders && derivweights.advection_scheme isa UpwindScheme
+    is_staggered = s.staggeredvars !== nothing
+    _is_weno = derivweights.advection_scheme isa FunctionalScheme &&
+               derivweights.advection_scheme.name == "WENO"
+    _has_halfoffset = any(
+        haskey(derivweights.halfoffsetmap[1], Differential(x)) &&
+        haskey(derivweights.halfoffsetmap[2], Differential(x)) &&
+        haskey(derivweights.interpmap, x)
+        for u in depvars for x in ivs(u, s)
+    )
+
+    # Detect spherical Laplacian terms first (they take priority over nonlinlap).
+    spherical_terms_info = _detect_spherical_terms(pde, s, depvars)
+    has_spherical = !isempty(spherical_terms_info) && _has_halfoffset
+
+    # Detect nonlinear Laplacian terms.
+    nonlinlap_terms = _detect_nonlinlap_terms(pde, s, depvars, spherical_terms_info)
+    has_nonlinlap = !isempty(nonlinlap_terms) && _has_halfoffset
+
+    can_centered = !(derivweights.advection_scheme isa FunctionalScheme) || _is_weno
+    can_template = !has_odd_orders || can_upwind || can_centered || has_nonlinlap || has_spherical || _is_weno || is_staggered
+
     if !can_template
         # Full per-point fallback: delegate every interior point to the
         # scalar path's discretize_equation_at_point.
@@ -1284,6 +1276,25 @@ function generate_array_interior_eqs(
             )
         end))
     end
+
+    # -- Precompute stencil caches (only reached for equations that use ArrayOps)
+    upwind_cache = precompute_upwind_stencils(s, depvars, derivweights)
+    nonlinlap_cache = precompute_nonlinlap_stencils(s, depvars, derivweights)
+    weno_cache = precompute_weno_stencils(s, depvars, derivweights)
+    staggered_cache = precompute_staggered_stencils(s, depvars, derivweights)
+
+    # Refine lightweight checks with actual cache results
+    has_weno = !isempty(weno_cache)
+    has_nonlinlap = !isempty(nonlinlap_terms) && !isempty(nonlinlap_cache)
+    has_spherical = !isempty(spherical_terms_info) && !isempty(nonlinlap_cache)
+    is_staggered = !isempty(staggered_cache)
+
+    sph_vars = if has_spherical
+        unique([(info.u, info.r) for info in values(spherical_terms_info)])
+    else
+        nothing
+    end
+    stencil_cache = precompute_stencils(s, depvars, derivweights; spherical_vars=sph_vars)
 
     # -- N-D ArrayOp path ------------------------------------------------------
     eqvar_ivs = ivs(eqvar, s)
@@ -1410,7 +1421,7 @@ function generate_array_interior_eqs(
                 candidate, eq_first, lo_vec, hi_vec, ndim,
                 is_periodic, s, depvars, pde, derivweights,
                 bcmap, eqvar, indexmap, boundaryvalfuncs;
-                debug_label="Full-interior ArrayOp"
+                debug_label="Full-interior ArrayOp", validate=validate
             )
         else
             Equation[]
@@ -1451,7 +1462,8 @@ function generate_array_interior_eqs(
             _validate_arrayop_or_fallback(
                 candidate, eq_first, lo_centered, hi_centered, ndim,
                 is_periodic, s, depvars, pde, derivweights,
-                bcmap, eqvar, indexmap, boundaryvalfuncs
+                bcmap, eqvar, indexmap, boundaryvalfuncs;
+                validate=validate
             )
         else
             Equation[]

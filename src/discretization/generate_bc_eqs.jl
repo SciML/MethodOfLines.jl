@@ -497,7 +497,8 @@ Falls back to the scalar path for:
 """
 function generate_bc_eqs_arrayop!(
         disc_state, s::DiscreteSpace{N_s, M, G}, boundaryvalfuncs,
-        interiormap, boundary::AbstractTruncatingBoundary, derivweights
+        interiormap, boundary::AbstractTruncatingBoundary, derivweights;
+        validate=false
     ) where {N_s, M, G}
     u_ = boundary.u
     x_ = boundary.x
@@ -663,15 +664,17 @@ function generate_bc_eqs_arrayop!(
     )
 
     # --- Validate against scalar path at first point ---
-    indexmap_bc = Dict([args[i] => i for i in 1:N])
-    eq_first_scalar = first(generate_bc_eqs(s, boundaryvalfuncs, boundary, interiormap, indexmap_bc))
-    sub_first = Dict(_tang_idxs[k] => 1 for k in 1:n_tang)
-    eq_first_arrayop = pde_substitute(template_lhs, sub_first) ~ pde_substitute(template_rhs, sub_first)
+    if validate
+        indexmap_bc = Dict([args[i] => i for i in 1:N])
+        eq_first_scalar = first(generate_bc_eqs(s, boundaryvalfuncs, boundary, interiormap, indexmap_bc))
+        sub_first = Dict(_tang_idxs[k] => 1 for k in 1:n_tang)
+        eq_first_arrayop = pde_substitute(template_lhs, sub_first) ~ pde_substitute(template_rhs, sub_first)
 
-    if !_equations_match(eq_first_arrayop, eq_first_scalar)
-        # Validation failed — fall back to scalar
-        @debug "BC ArrayOp validation failed, falling back to scalar" boundary
-        return generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+        if !_equations_match(eq_first_arrayop, eq_first_scalar)
+            # Validation failed — fall back to scalar
+            @debug "BC ArrayOp validation failed, falling back to scalar" boundary
+            return generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+        end
     end
 
     return vcat!(disc_state.bceqs, [Symbolics.wrap(lhs_ao) ~ Symbolics.wrap(rhs_ao)])

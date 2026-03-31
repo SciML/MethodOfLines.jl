@@ -19,4 +19,7 @@ struct ScalarizedDiscretization <: AbstractDiscretizationStrategy end
 # This discretization strategy discretizes the PDESystem into an ArrayMaker of ODEs.
 # This method means that Symbolics.build_function can generate looped code, which compiles
 # much faster than the scalar method.
-struct ArrayDiscretization <: AbstractDiscretizationStrategy end
+struct ArrayDiscretization <: AbstractDiscretizationStrategy
+    validate::Bool
+end
+ArrayDiscretization(; validate=true) = ArrayDiscretization(validate)
