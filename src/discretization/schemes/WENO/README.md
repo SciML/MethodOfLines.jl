@@ -9,7 +9,7 @@ This prototype was built as a proof-of-concept for the GSoC 2026 proposal:
 
 Following technical discussions with the SciML core team regarding `MethodOfLines.jl`'s rule-based multidimensional machinery, this prototype has been evolved into a strictly isolated, two-stage architecture:
 
-1. **The Numerical Ground Truth (`weno_weights.jl`):** Handles the heavy mathematical derivation, resolving negative weight instabilities, and proving theoretical convergence limits.
+1. **Numerical Reference Implementation (`weno_weights.jl`):** Handles the heavy mathematical derivation, resolving negative weight instabilities, and proving theoretical convergence limits.
 2. **The Symbolic Codegen Engine (`weno_symbolic.jl`):** Translates the numerical mathematics into pure Abstract Syntax Tree (AST) rules. It generates multidimensional-ready equations via `Symbolics.jl` to ensure zero-allocation runtime performance.
 
 ## 2. Stage 1: The Numerical Core (Mathematics)
@@ -34,13 +34,13 @@ The prototype is guarded by a comprehensive, multi-layered `Test` suite:
 
 * **Mathematical Invariants (`test_weno.jl`):** Verifies the Partition of Unity and numerical splitting bounds.
 * **MMS Convergence (`weno_convergence_test.jl`):** Mathematically proves that the splitting technique maintains the theoretical **$O(\Delta x^3)$ convergence order** on highly stretched grids.
-* **The Ultimate Crucible (`test_weno_symbolic.jl`):** A strict profiling suite that enforces zero-allocations, validates `ForwardDiff` Jacobian compatibility, and tests for graceful `NaN` propagation and `ArgumentError` boundary fallbacks.
+* **Rigorous Validation Suite (`test_weno_symbolic.jl`):** A strict profiling suite that enforces zero-allocations, validates `ForwardDiff` Jacobian compatibility, and tests for graceful `NaN` propagation and `ArgumentError` boundary fallbacks.
 
 ## 5. How to Test the Prototype
 
 You can interact with the prototype directly from the terminal.
 
-**To run the Symbolic Codegen Profiling & Stress Tests (Zero-Allocation & AD):**
+**To run the Symbolic Codegen Profiling & AD Verification (Zero-Allocation & AD):**
 ```bash
 julia test_weno_symbolic.jl
 ```
