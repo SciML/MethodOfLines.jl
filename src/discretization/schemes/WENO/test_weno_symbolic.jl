@@ -5,7 +5,7 @@ using ForwardDiff
 include("weno_symbolic.jl")
 using .WENOSymbolic
 
-@testset "WENOSymbolic Module: The Final Crucible (Ultimate Stress Test)" begin
+@testset "WENOSymbolic Module: Rigorous AD & Stability Verification" begin
     @variables u[1:5] x[1:5] x_eval
 
     @testset "1. AST Generation and Boundary Fallbacks" begin
