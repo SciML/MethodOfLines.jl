@@ -7,32 +7,33 @@ using Symbolics: unwrap
     validate_system_wellposedness(pdes, bmap, s, disc)
 
 Validates the well-posedness of the PDE system. 
-If a variable has a spatial derivative with respect to a given dimension, 
-this function ensures that boundary conditions are provided for both ends of that domain.
+Dynamically checks the maximum spatial derivative order for each variable in a given dimension, 
+and ensures that at least that many boundary conditions are provided.
 """
 function validate_system_wellposedness(pdes, bmap, s, disc)
-    for u_call in s.ū
+    for u_call in s.ū
         u_op = operation(u_call)
         spatial_ivs = s.x̄ 
 
         for x in spatial_ivs
-            has_deriv = false
+            max_order = 0
             for eq in pdes
-                if occursin_derivative_of(eq.lhs, u_op, x) || occursin_derivative_of(eq.rhs, u_op, x)
-                    has_deriv = true
-                    break
-                end
+                order_lhs = get_max_derivative_order(eq.lhs, u_op, x)
+                order_rhs = get_max_derivative_order(eq.rhs, u_op, x)
+
+                max_order = max(max_order, order_lhs, order_rhs)
             end
 
-            if has_deriv
+            if max_order > 0
                 u_bcs = get(bmap, u_op, nothing)
                 u_bcs_x = u_bcs !== nothing ? get(u_bcs, x, nothing) : nothing
+                bc_count = u_bcs_x === nothing ? 0 : length(u_bcs_x)
 
-                if u_bcs_x === nothing || length(u_bcs_x) < 2
+                if bc_count < max_order
                     throw(ArgumentError(
-                        "Missing boundary condition for variable $(u_op) in dimension $(x). " *
-                        "The system is ill-posed. Since $(u_op) has spatial derivatives with respect to $(x), " *
-                        "you must provide boundary conditions for both ends of the domain."
+                        "Missing boundary conditions for variable $(u_op) in dimension $(x). " *
+                        "The system is ill-posed. The highest spatial derivative order is $(max_order), " *
+                        "but only $(bc_count) boundary condition(s) were provided."
                     ))
                 end
             end
@@ -40,29 +41,39 @@ function validate_system_wellposedness(pdes, bmap, s, disc)
     end
 end
 
-function occursin_derivative_of(expr, u_op, x)
+"""
+    get_max_derivative_order(expr, u_op, x)
+
+Recursively scans the expression tree in a single pass to find the maximum 
+derivative order of `u_op` with respect to `x`. 
+Accounts for higher-order symbolic derivatives natively.
+"""
+function get_max_derivative_order(expr, u_op, x)
     expr = unwrap(expr)
     if iscall(expr)
         op = operation(expr)
-        args = arguments(expr)
 
-        if op isa Differential && isequal(op.x, x)
-            if any(arg -> occursin_variable(arg, u_op), args)
-                return true
+        if isequal(op, u_op)
+            return 0
+        end
+
+        inner_max = -1
+        for arg in arguments(expr)
+            m = get_max_derivative_order(arg, u_op, x)
+            if m > inner_max
+                inner_max = m
             end
         end
-        return any(arg -> occursin_derivative_of(arg, u_op, x), args)
-    end
-    return false
-end
 
-function occursin_variable(expr, u_op)
-    expr = unwrap(expr)
-    if iscall(expr)
-        if isequal(operation(expr), u_op)
-            return true
+        if op isa Differential && isequal(op.x, x)
+            if inner_max >= 0
+                diff_order = hasproperty(op, :order) ? op.order : 1
+                return diff_order + inner_max
+            end
         end
-        return any(arg -> occursin_variable(arg, u_op), arguments(expr))
+
+        return inner_max
     end
-    return isequal(expr, u_op)
+
+    return isequal(expr, u_op) ? 0 : -1
 end
