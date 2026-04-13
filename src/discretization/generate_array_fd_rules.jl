@@ -118,8 +118,139 @@ end
 
 # --- module-level aliases ---------------------------------------------------
 
-"""Alias for the Const wrapper type used throughout ArrayOp construction."""
-const _ConstSR = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}
+"""
+Alias for the `Const` wrapper type used throughout ArrayOp construction.
+
+`SymbolicUtils.Const{SymReal}` is the top-level alias for `BSImpl.Const{SymReal}`
+exposed via re-export in `Symbolics.jl`.  Reaching through `SymbolicUtils.Const`
+rather than `SymbolicUtils.BSImpl.Const` avoids a dependency on the internal
+Moshi `@data` module path, which is the more likely identifier to move in a
+SymbolicUtils minor rewrite.
+"""
+const _ConstSR = SymbolicUtils.Const{SymbolicUtils.SymReal}
+
+"""
+    ArrayOpContext
+
+Bundle of state threaded through every `_build_*_rules` helper.  Exists so
+rule-builder signatures don't each have to repeat the 8-tuple
+`(s, depvars, derivweights, indexmap, idxs, bases, is_periodic, gl_vec)`.
+
+- `idxs`: per-dimension symbolic ArrayOp index variables (`_i1`, `_i2`, …)
+- `bases`: `lo_local[d] - 1` — absolute grid index = local index + base
+- `is_periodic`: one bool per spatial dim
+- `gl_vec`: full grid length per spatial dim (used for periodic wrapping)
+"""
+struct ArrayOpContext{S, DV, DW, IM}
+    s::S
+    depvars::DV
+    derivweights::DW
+    indexmap::IM
+    idxs::Vector
+    bases::Vector{Int}
+    is_periodic::Vector{Bool}
+    gl_vec::Vector{Int}
+end
+
+"""
+    ArrayOpContext(n_local, lo_local, s, depvars, derivweights, indexmap;
+                   is_periodic, gl_vec)
+
+Construct an `ArrayOpContext` for an ArrayOp region of shape `n_local`
+whose first local index maps to absolute grid index `lo_local[d]`.
+Allocates the symbolic index variables and computes `bases`.
+"""
+function ArrayOpContext(n_local, lo_local, s, depvars, derivweights, indexmap;
+                        is_periodic = falses(length(n_local)),
+                        gl_vec = zeros(Int, length(n_local)))
+    ndim = length(n_local)
+    _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
+    idxs = [_idxs_arr[d] for d in 1:ndim]
+    bases = [lo_local[d] - 1 for d in 1:ndim]
+    return ArrayOpContext(s, depvars, derivweights, indexmap,
+                          idxs, bases, collect(is_periodic), collect(gl_vec))
+end
+
+"""
+    StencilCaches
+
+Bundle of the eight precomputed-stencil dictionaries threaded through the
+ArrayOp build pipeline.  Unused slots hold empty dicts or `nothing` so we
+don't need a separate "present / absent" field per cache.
+"""
+struct StencilCaches
+    centered::Dict{Any, Any}
+    upwind::Dict{Any, Any}
+    nonlinlap::Dict{Any, Any}
+    weno::Dict{Any, Any}
+    staggered::Dict{Any, Any}
+    full_centered::Any     # Dict or nothing
+    full_upwind::Any       # Dict or nothing
+    full_nonlinlap::Any    # Dict or nothing
+    spherical_terms::Dict{Any, Any}
+end
+
+"""Default empty `StencilCaches` for PDE paths with no spatial derivatives."""
+function StencilCaches(; centered = Dict{Any,Any}(), upwind = Dict{Any,Any}(),
+                         nonlinlap = Dict{Any,Any}(), weno = Dict{Any,Any}(),
+                         staggered = Dict{Any,Any}(),
+                         full_centered = nothing, full_upwind = nothing,
+                         full_nonlinlap = nothing,
+                         spherical_terms = Dict{Any,Any}())
+    return StencilCaches(centered, upwind, nonlinlap, weno, staggered,
+                         full_centered, full_upwind, full_nonlinlap,
+                         spherical_terms)
+end
+
+"""
+    _tap_expr(ctx, u_c, u_spatial)              # at-point (no shift, no wrap)
+    _tap_expr(ctx, u_c, u_spatial, x, off)      # single-dim shift, wrapped
+    _tap_expr(ctx, u_c, u_spatial, shifts::Dict)# multi-dim shifts, wrapped
+
+Build the symbolic tap expression `u[base + local_idx + shift]` for the
+grid-function array `u_c` indexed by `u_spatial` spatial variables.
+
+- The no-shift variant is used for `var_rules` (depvar value at the ArrayOp
+  point itself).  It **does not** thread through `_maybe_wrap`: in periodic
+  mode the ArrayOp range already covers every physical point, and wrapping
+  the at-point index with `IfElse.ifelse` causes `pde_substitute`'s
+  `maketerm` reconstruction to choke on nested `getindex` branches.
+- The single-dim variant is used by every centered / upwind / staggered
+  stencil builder — one `off` integer applied to the named `x` dimension.
+  Shifted indices need periodic wrapping since stencil taps can reach past
+  the ArrayOp boundary.
+- The multi-dim variant is used by mixed cross-derivatives (`Dxy`), where
+  different offsets apply along different dimensions simultaneously.
+"""
+function _tap_expr(ctx::ArrayOpContext, u_c, u_spatial)
+    idx_exprs = [ctx.idxs[ctx.indexmap[xv]] + ctx.bases[ctx.indexmap[xv]]
+                 for xv in u_spatial]
+    return Symbolics.wrap(u_c[idx_exprs...])
+end
+
+function _tap_expr(ctx::ArrayOpContext, u_c, u_spatial, x, off)
+    idx_exprs = map(u_spatial) do xv
+        eq_d = ctx.indexmap[xv]
+        raw_idx = ctx.idxs[eq_d] + ctx.bases[eq_d]
+        if isequal(xv, x)
+            raw_idx = raw_idx + off
+        end
+        _maybe_wrap(raw_idx, eq_d, ctx.is_periodic, ctx.gl_vec)
+    end
+    return Symbolics.wrap(u_c[idx_exprs...])
+end
+
+function _tap_expr(ctx::ArrayOpContext, u_c, u_spatial, shifts::AbstractDict)
+    idx_exprs = map(u_spatial) do xv
+        eq_d = ctx.indexmap[xv]
+        raw_idx = ctx.idxs[eq_d] + ctx.bases[eq_d]
+        if haskey(shifts, xv)
+            raw_idx = raw_idx + shifts[xv]
+        end
+        _maybe_wrap(raw_idx, eq_d, ctx.is_periodic, ctx.gl_vec)
+    end
+    return Symbolics.wrap(u_c[idx_exprs...])
+end
 
 """Extract the element type `T` from a `DerivativeOperator{T, ...}`."""
 _op_eltype(::DerivativeOperator{T}) where {T} = T
@@ -1261,15 +1392,11 @@ function generate_array_interior_eqs(
         # iterates over derivweights.orders[x] (global) for all depvars.
         n_region = [hi_vec[d] - lo_vec[d] + 1 for d in 1:ndim]
         if all(n_region .> 0)
-            stencil_cache = precompute_stencils(s, depvars, derivweights)
-            empty_cache = Dict{Any,Any}()
-            result = _build_interior_arrayop(
-                n_region, lo_vec, s, depvars, pde, derivweights,
-                stencil_cache, empty_cache, empty_cache,
-                empty_cache, empty_cache, bcmap, eqvar, indexmap,
-                falses(ndim), zeros(Int, ndim)
+            ctx = ArrayOpContext(n_region, lo_vec, s, depvars, derivweights, indexmap)
+            caches = StencilCaches(
+                centered = precompute_stencils(s, depvars, derivweights),
             )
-            candidate, _ = result
+            candidate, _ = _build_interior_arrayop(ctx, caches, n_region, pde, bcmap, eqvar)
             return candidate
         else
             return Equation[]
@@ -1445,18 +1572,20 @@ function generate_array_interior_eqs(
         n_region = [hi_vec[d] - lo_vec[d] + 1 for d in 1:ndim]
         eqs_boundary = Equation[]  # No frame loop needed
 
+        ctx = ArrayOpContext(n_region, lo_vec, s, depvars, derivweights, indexmap;
+                              is_periodic=is_periodic, gl_vec=gl_vec)
+        caches = StencilCaches(
+            centered = stencil_cache, upwind = upwind_cache,
+            nonlinlap = nonlinlap_cache, weno = weno_cache,
+            staggered = staggered_cache,
+            full_centered = fi_centered, full_upwind = fi_upwind,
+            full_nonlinlap = fi_nonlinlap,
+            spherical_terms = spherical_terms_info,
+        )
+
         eqs_centered = if all(n_region .> 0)
-            result = _build_interior_arrayop(
-                n_region, lo_vec, s, depvars, pde, derivweights,
-                stencil_cache, upwind_cache, nonlinlap_cache,
-                spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
-                is_periodic, gl_vec;
-                full_interior_centered_cache=fi_centered,
-                full_interior_upwind_cache=fi_upwind,
-                full_nonlinlap_cache=fi_nonlinlap,
-                staggered_cache=staggered_cache
-            )
-            candidate, sample_at = result
+            candidate, sample_at = _build_interior_arrayop(ctx, caches, n_region,
+                                                            pde, bcmap, eqvar)
             _validate_arrayop_or_fallback(
                 candidate, sample_at, n_region, lo_vec, hi_vec, ndim,
                 is_periodic, s, depvars, pde, derivweights,
@@ -1491,14 +1620,16 @@ function generate_array_interior_eqs(
 
         # -- ArrayOp equation for interior region ---------------------------------
         eqs_centered = if centered_nonempty && all(n_centered .> 0)
-            result = _build_interior_arrayop(
-                n_centered, lo_centered, s, depvars, pde, derivweights,
-                stencil_cache, upwind_cache, nonlinlap_cache,
-                spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
-                is_periodic, gl_vec;
-                staggered_cache=staggered_cache
+            ctx = ArrayOpContext(n_centered, lo_centered, s, depvars, derivweights,
+                                  indexmap; is_periodic=is_periodic, gl_vec=gl_vec)
+            caches = StencilCaches(
+                centered = stencil_cache, upwind = upwind_cache,
+                nonlinlap = nonlinlap_cache, weno = weno_cache,
+                staggered = staggered_cache,
+                spherical_terms = spherical_terms_info,
             )
-            candidate, sample_at = result
+            candidate, sample_at = _build_interior_arrayop(ctx, caches, n_centered,
+                                                            pde, bcmap, eqvar)
             _validate_arrayop_or_fallback(
                 candidate, sample_at, n_centered, lo_centered, hi_centered, ndim,
                 is_periodic, s, depvars, pde, derivweights,
@@ -1587,38 +1718,16 @@ Otherwise return `raw_idx` unchanged.
 _maybe_wrap(raw_idx, dim, is_periodic, gl_vec) =
     is_periodic[dim] ? _wrap_periodic_idx(raw_idx, gl_vec[dim]) : raw_idx
 
-# --- Time derivative detection ------------------------------------------------
+# --- Derivative detection ---------------------------------------------------
+#
+# These thin wrappers exist so call sites read naturally; the heavy lifting is
+# done by `PDEBase.differential_order`, which shares recursion logic with the
+# rest of the PDEBase / MOL pipeline.
 
-"""
-    _contains_time_diff(expr_raw, time)
+_contains_time_diff(expr_raw, time) = !isempty(differential_order(expr_raw, time))
 
-Recursively check whether `expr_raw` contains a time derivative `Differential(time)(...)`.
-Used to distinguish ODE equations from algebraic equations after PDE rearrangement.
-"""
-function _contains_time_diff(expr_raw, time)
-    SymbolicUtils.iscall(expr_raw) || return false
-    op = SymbolicUtils.operation(expr_raw)
-    if op isa Differential && isequal(op.x, time)
-        return true
-    end
-    return any(a -> _contains_time_diff(a, time), SymbolicUtils.arguments(expr_raw))
-end
-
-"""
-    _contains_spatial_diff(expr_raw, spatial_vars)
-
-Recursively check whether `expr_raw` contains a spatial derivative
-`Differential(x)(...)` where `x` is one of `spatial_vars`.
-Used to detect whether an equation has any spatial derivatives at all.
-"""
-function _contains_spatial_diff(expr_raw, spatial_vars)
-    SymbolicUtils.iscall(expr_raw) || return false
-    op = SymbolicUtils.operation(expr_raw)
-    if op isa Differential && any(v -> isequal(op.x, v), spatial_vars)
-        return true
-    end
-    return any(a -> _contains_spatial_diff(a, spatial_vars), SymbolicUtils.arguments(expr_raw))
-end
+_contains_spatial_diff(expr_raw, spatial_vars) =
+    any(x -> !isempty(differential_order(expr_raw, x)), spatial_vars)
 
 # --- ArrayOp construction for interior region --------------------------------
 
@@ -1652,21 +1761,29 @@ within the ArrayOp region (local index 1 maps to absolute grid index
 [`_validate_arrayop_or_fallback`](@ref), which samples multiple points to
 catch position-dependent bugs.
 """
-function _build_interior_arrayop(
-        n_centered, lo_centered, s, depvars, pde, derivweights,
-        stencil_cache, upwind_cache, nonlinlap_cache,
-        spherical_terms_info, weno_cache, bcmap, eqvar, indexmap,
-        is_periodic=falses(length(n_centered)),
-        gl_vec=zeros(Int, length(n_centered));
-        full_interior_centered_cache=nothing,
-        full_interior_upwind_cache=nothing,
-        full_nonlinlap_cache=nothing,
-        staggered_cache=nothing
-    )
+function _build_interior_arrayop(ctx::ArrayOpContext, caches::StencilCaches,
+                                  n_centered, pde, bcmap, eqvar)
+    # Destructure for brevity below.  Names retain their historical meaning.
+    s            = ctx.s
+    depvars      = ctx.depvars
+    derivweights = ctx.derivweights
+    indexmap     = ctx.indexmap
+    _idxs        = ctx.idxs
+    bases        = ctx.bases
+    is_periodic  = ctx.is_periodic
+    gl_vec       = ctx.gl_vec
+
+    stencil_cache                 = caches.centered
+    upwind_cache                  = caches.upwind
+    nonlinlap_cache               = caches.nonlinlap
+    weno_cache                    = caches.weno
+    staggered_cache               = caches.staggered
+    full_interior_centered_cache  = caches.full_centered
+    full_interior_upwind_cache    = caches.full_upwind
+    full_nonlinlap_cache          = caches.full_nonlinlap
+    spherical_terms_info          = caches.spherical_terms
+
     ndim = length(n_centered)
-    _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
-    _idxs = [_idxs_arr[d] for d in 1:ndim]
-    bases = [lo_centered[d] - 1 for d in 1:ndim]
 
     # -- FD rules for centred (even-order) and staggered (odd-order) derivatives
     fd_rules = Pair[]
@@ -1679,15 +1796,7 @@ function _build_interior_arrayop(
                 # Staggered odd-order derivatives: fixed offset per alignment
                 if !iseven(d) && staggered_cache !== nothing && haskey(staggered_cache, (u, x, d))
                     ssi = staggered_cache[(u, x, d)]
-                    taps = map(ssi.interior_offsets) do off
-                        idx_exprs = map(u_spatial) do xv
-                            eq_d = indexmap[xv]
-                            raw_idx = _idxs[eq_d] + bases[eq_d]
-                            raw_idx = isequal(xv, x) ? raw_idx + off : raw_idx
-                            _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-                        end
-                        Symbolics.wrap(u_c[idx_exprs...])
-                    end
+                    taps = [_tap_expr(ctx, u_c, u_spatial, x, off) for off in ssi.interior_offsets]
                     expr = sym_dot(ssi.D_wind.stencil_coefs, taps)
                     push!(fd_rules, (Differential(x)^d)(u) => expr)
                     continue
@@ -1703,25 +1812,11 @@ function _build_interior_arrayop(
                     expr = sum(1:fisi.padded_len) do j
                         w = Symbolics.wrap(wm_c[j, _idxs[dim]])
                         off_val = Symbolics.wrap(om_c[j, _idxs[dim]])
-                        idx_exprs = map(u_spatial) do xv
-                            eq_d = indexmap[xv]
-                            raw_idx = _idxs[eq_d] + bases[eq_d]
-                            combined = isequal(xv, x) ? raw_idx + off_val : raw_idx
-                            _maybe_wrap(combined, eq_d, is_periodic, gl_vec)
-                        end
-                        w * Symbolics.wrap(u_c[idx_exprs...])
+                        w * _tap_expr(ctx, u_c, u_spatial, x, off_val)
                     end
                 else
                     # Standard centered-only mode
-                    taps = map(si.offsets) do off
-                        idx_exprs = map(u_spatial) do xv
-                            eq_d = indexmap[xv]
-                            raw_idx = _idxs[eq_d] + bases[eq_d]
-                            raw_idx = isequal(xv, x) ? raw_idx + off : raw_idx
-                            _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-                        end
-                        Symbolics.wrap(u_c[idx_exprs...])
-                    end
+                    taps = [_tap_expr(ctx, u_c, u_spatial, x, off) for off in si.offsets]
                     if si.is_uniform
                         expr = sym_dot(si.D_op.stencil_coefs, taps)
                     else
@@ -1753,13 +1848,14 @@ function _build_interior_arrayop(
         u_raw = Symbolics.unwrap(s.discvars[u])
         u_c = _ConstSR(u_raw)
         u_spatial = ivs(u, s)
-        idx_exprs = [_idxs[indexmap[xv]] + bases[indexmap[xv]] for xv in u_spatial]
-        push!(var_rules, u => Symbolics.wrap(u_c[idx_exprs...]))
+        push!(var_rules, u => _tap_expr(ctx, u_c, u_spatial))
     end
     eqvar_ivs = ivs(eqvar, s)
     for x in eqvar_ivs
         grid_c = _ConstSR(collect(s.grid[x]))
         dim = indexmap[x]
+        # grid vectors are 1-D so we build the index by hand rather than
+        # calling `_tap_expr` (which assumes a depvar's full spatial tuple).
         push!(var_rules, x => Symbolics.wrap(grid_c[_idxs[dim] + bases[dim]]))
     end
 
@@ -1768,12 +1864,8 @@ function _build_interior_arrayop(
     # matching the scalar path which sets advection_rules = [] for StaggeredGrid.
     upwind_rules = Pair[]
     if !isempty(upwind_cache) && (staggered_cache === nothing || isempty(staggered_cache))
-        upwind_term_rules, upwind_fallback_rules = _build_upwind_rules(
-            pde, s, depvars, derivweights, upwind_cache,
-            bcmap, indexmap, _idxs, bases, var_rules,
-            is_periodic, gl_vec;
-            full_interior_upwind_cache=full_interior_upwind_cache
-        )
+        upwind_term_rules, upwind_fallback_rules =
+            _build_upwind_rules(ctx, caches, pde, bcmap, var_rules)
         upwind_rules = upwind_term_rules
         # Upwind fallback rules are expression-level (they replace bare
         # derivatives like Dx(u), not entire PDE terms).  Put them in
@@ -1785,42 +1877,24 @@ function _build_interior_arrayop(
     end
 
     # -- Mixed derivative rules -----------------------------------------------
-    mixed_rules = _build_mixed_derivative_rules(
-        s, depvars, derivweights, indexmap, _idxs, bases,
-        is_periodic, gl_vec
-    )
+    mixed_rules = _build_mixed_derivative_rules(ctx)
 
     # -- Nonlinear Laplacian rules --------------------------------------------
     nl_rules = Pair[]
     if !isempty(nonlinlap_cache)
-        nl_rules = _build_nonlinlap_rules(
-            pde, s, depvars, derivweights, nonlinlap_cache,
-            indexmap, _idxs, bases, var_rules,
-            is_periodic, gl_vec;
-            full_nonlinlap_cache=full_nonlinlap_cache
-        )
+        nl_rules = _build_nonlinlap_rules(ctx, caches, pde, var_rules)
     end
 
     # -- Spherical Laplacian rules -------------------------------------------
     sph_rules = Pair[]
     if !isempty(spherical_terms_info) && !isempty(nonlinlap_cache)
-        sph_rules = _build_spherical_rules(
-            pde, s, depvars, derivweights, nonlinlap_cache,
-            spherical_terms_info, indexmap, _idxs, bases, var_rules,
-            is_periodic, gl_vec;
-            full_nonlinlap_cache=full_nonlinlap_cache,
-            full_interior_centered_cache=full_interior_centered_cache
-        )
+        sph_rules = _build_spherical_rules(ctx, caches, pde, var_rules)
     end
 
     # -- WENO rules ----------------------------------------------------------
     weno_rules = Pair[]
     if !isempty(weno_cache)
-        weno_rules = _build_weno_rules(
-            pde, s, depvars, weno_cache,
-            indexmap, _idxs, bases, var_rules,
-            is_periodic, gl_vec
-        )
+        weno_rules = _build_weno_rules(ctx, caches, pde, var_rules)
     end
 
     # -- Build templates (once) -----------------------------------------------
@@ -1947,31 +2021,28 @@ symbolic grid indices via `var_rules`.
 Returns a vector of `Pair{term => IfElse_expr}` for matched terms, plus
 fallback rules for unmatched standalone derivatives.
 """
-function _build_upwind_rules(
-        pde, s, depvars, derivweights, upwind_cache,
-        bcmap, indexmap, _idxs, bases, var_rules,
-        is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases));
-        full_interior_upwind_cache=nothing
-    )
+function _build_upwind_rules(ctx::ArrayOpContext, caches::StencilCaches,
+                              pde, bcmap, var_rules)
+    s            = ctx.s
+    depvars      = ctx.depvars
+    derivweights = ctx.derivweights
+    indexmap     = ctx.indexmap
+    _idxs        = ctx.idxs
+    bases        = ctx.bases
+    is_periodic  = ctx.is_periodic
+    gl_vec       = ctx.gl_vec
+    upwind_cache = caches.upwind
+    full_interior_upwind_cache = caches.full_upwind
     # Helper: build stencil expression for a given variable, dimension, offsets, weights.
     # For non-uniform grids, weight_matrix is a stencil_length × num_interior Matrix
     # and bpc is the offside (= low_boundary_point_count) used to align weight matrix
     # column indexing: stencil_coefs[j] corresponds to grid index (j + bpc).
-    function _upwind_stencil_expr(u, x, offsets, weights, _idxs, bases, indexmap, s;
+    function _upwind_stencil_expr(u, x, offsets, weights;
                                    weight_matrix=nothing, bpc=0, D_op=nothing)
         u_raw = Symbolics.unwrap(s.discvars[u])
         u_c = _ConstSR(u_raw)
         u_spatial = ivs(u, s)
-        taps = map(offsets) do off
-            idx_exprs = map(u_spatial) do xv
-                eq_d = indexmap[xv]
-                raw_idx = _idxs[eq_d] + bases[eq_d]
-                raw_idx = isequal(xv, x) ? raw_idx + off : raw_idx
-                _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-            end
-            Symbolics.wrap(u_c[idx_exprs...])
-        end
+        taps = [_tap_expr(ctx, u_c, u_spatial, x, off) for off in offsets]
         if weight_matrix === nothing
             # Uniform: constant weights
             return sym_dot(weights, taps)
@@ -1994,9 +2065,7 @@ function _build_upwind_rules(
     end
 
     # Helper: build full-interior stencil expression using weight+offset matrices.
-    function _upwind_full_interior_expr(u, x, wmat, omat, padded_len,
-                                         _idxs, bases, indexmap, s,
-                                         is_periodic, gl_vec)
+    function _upwind_full_interior_expr(u, x, wmat, omat, padded_len)
         u_raw = Symbolics.unwrap(s.discvars[u])
         u_c = _ConstSR(u_raw)
         u_spatial = ivs(u, s)
@@ -2006,13 +2075,7 @@ function _build_upwind_rules(
         return sum(1:padded_len) do j
             w = Symbolics.wrap(wm_c[j, _idxs[dim]])
             off_val = Symbolics.wrap(om_c[j, _idxs[dim]])
-            idx_exprs = map(u_spatial) do xv
-                eq_d = indexmap[xv]
-                raw_idx = _idxs[eq_d] + bases[eq_d]
-                combined = isequal(xv, x) ? raw_idx + off_val : raw_idx
-                _maybe_wrap(combined, eq_d, is_periodic, gl_vec)
-            end
-            w * Symbolics.wrap(u_c[idx_exprs...])
+            w * _tap_expr(ctx, u_c, u_spatial, x, off_val)
         end
     end
 
@@ -2035,25 +2098,21 @@ function _build_upwind_rules(
                     fiusi = full_interior_upwind_cache[(u, x, d)]
                     neg_expr = _upwind_full_interior_expr(
                         u, x, fiusi.neg_weight_matrix, fiusi.neg_offset_matrix,
-                        fiusi.padded_neg, _idxs, bases, indexmap, s,
-                        is_periodic, gl_vec
+                        fiusi.padded_neg
                     )
                     pos_expr = _upwind_full_interior_expr(
                         u, x, fiusi.pos_weight_matrix, fiusi.pos_offset_matrix,
-                        fiusi.padded_pos, _idxs, bases, indexmap, s,
-                        is_periodic, gl_vec
+                        fiusi.padded_pos
                     )
                 else
                     neg_expr = _upwind_stencil_expr(
-                        u, x, usi.neg_offsets, usi.D_neg.stencil_coefs,
-                        _idxs, bases, indexmap, s;
+                        u, x, usi.neg_offsets, usi.D_neg.stencil_coefs;
                         weight_matrix=usi.neg_weight_matrix,
                         bpc=usi.D_neg.offside,
                         D_op=usi.D_neg
                     )
                     pos_expr = _upwind_stencil_expr(
-                        u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
-                        _idxs, bases, indexmap, s;
+                        u, x, usi.pos_offsets, usi.D_pos.stencil_coefs;
                         weight_matrix=usi.pos_weight_matrix,
                         bpc=usi.D_pos.offside,
                         D_op=usi.D_pos
@@ -2120,13 +2179,11 @@ function _build_upwind_rules(
                     fiusi = full_interior_upwind_cache[(u, x, d)]
                     pos_expr = _upwind_full_interior_expr(
                         u, x, fiusi.pos_weight_matrix, fiusi.pos_offset_matrix,
-                        fiusi.padded_pos, _idxs, bases, indexmap, s,
-                        is_periodic, gl_vec
+                        fiusi.padded_pos
                     )
                 else
                     pos_expr = _upwind_stencil_expr(
-                        u, x, usi.pos_offsets, usi.D_pos.stencil_coefs,
-                        _idxs, bases, indexmap, s;
+                        u, x, usi.pos_offsets, usi.D_pos.stencil_coefs;
                         weight_matrix=usi.pos_weight_matrix,
                         bpc=usi.D_pos.offside,
                         D_op=usi.D_pos
@@ -2143,14 +2200,20 @@ end
 # --- Mixed derivative ArrayOp rules -----------------------------------------
 
 """
-    _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs, bases)
+    _build_mixed_derivative_rules(ctx::ArrayOpContext)
 
 Build FD rules for mixed cross-derivatives `(Dx * Dy)(u)` using the Cartesian
 product of two 1D centred stencils.
 """
-function _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs, bases,
-        is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases)))
+function _build_mixed_derivative_rules(ctx::ArrayOpContext)
+    s            = ctx.s
+    depvars      = ctx.depvars
+    derivweights = ctx.derivweights
+    indexmap     = ctx.indexmap
+    _idxs        = ctx.idxs
+    bases        = ctx.bases
+    is_periodic  = ctx.is_periodic
+    gl_vec       = ctx.gl_vec
     mixed_rules = Pair[]
     for u in depvars
         u_raw = Symbolics.unwrap(s.discvars[u])
@@ -2203,17 +2266,7 @@ function _build_mixed_derivative_rules(s, depvars, derivweights, indexmap, _idxs
                 # Double sum: Σ_i Σ_j wx[i] * wy[j] * u[... + x_off[i] + y_off[j] ...]
                 mixed_expr = sum(enumerate(x_offsets)) do (kx, x_off)
                     sum(enumerate(y_offsets)) do (ky, y_off)
-                        idx_exprs = map(u_spatial) do xv
-                            eq_d = indexmap[xv]
-                            raw_idx = _idxs[eq_d] + bases[eq_d]
-                            if isequal(xv, x)
-                                raw_idx = raw_idx + x_off
-                            elseif isequal(xv, y)
-                                raw_idx = raw_idx + y_off
-                            end
-                            _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-                        end
-                        tap = Symbolics.wrap(u_c[idx_exprs...])
+                        tap = _tap_expr(ctx, u_c, u_spatial, Dict{Any,Any}(x => x_off, y => y_off))
 
                         wx = if x_is_uniform
                             x_weights[kx]
@@ -2242,7 +2295,7 @@ end
 # --- Nonlinear Laplacian ArrayOp rules --------------------------------------
 
 """
-    _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases)
+    _nonlinlap_template(ctx::ArrayOpContext, expr_sym, u, x, nsi)
 
 Build the ArrayOp-indexed discretization of `Dx(expr_sym * Dx(u))` using the
 precomputed `NonlinlapStencilInfo`.
@@ -2254,9 +2307,15 @@ At each outer stencil half-point:
 
 Then take the outer finite difference across the inner expressions.
 """
-function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases,
-        is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases)))
+function _nonlinlap_template(ctx::ArrayOpContext, expr_sym, u, x, nsi)
+    s           = ctx.s
+    depvars     = ctx.depvars
+    indexmap    = ctx.indexmap
+    _idxs       = ctx.idxs
+    bases       = ctx.bases
+    is_periodic = ctx.is_periodic
+    gl_vec      = ctx.gl_vec
+
     u_raw = Symbolics.unwrap(s.discvars[u])
     u_c = _ConstSR(u_raw)
     u_spatial = ivs(u, s)
@@ -2280,16 +2339,9 @@ function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, b
             v_raw = Symbolics.unwrap(s.discvars[v])
             v_c = _ConstSR(v_raw)
             v_spatial = ivs(v, s)
-            taps = map(nsi.interp_offsets) do ioff
-                idx_exprs = map(v_spatial) do xv
-                    eq_d = indexmap[xv]
-                    raw_idx = _idxs[eq_d] + bases[eq_d]
-                    # Offset: -1 for clipped grid, + outer_off, + interp offset
-                    raw_idx = isequal(xv, x) ? raw_idx + outer_off + ioff - 1 : raw_idx
-                    _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-                end
-                Symbolics.wrap(v_c[idx_exprs...])
-            end
+            # Offset: -1 for clipped grid, + outer_off, + interp offset
+            taps = [_tap_expr(ctx, v_c, v_spatial, x, outer_off + ioff - 1)
+                    for ioff in nsi.interp_offsets]
             if nsi.is_uniform
                 push!(interp_var_rules, v => sym_dot(nsi.interp_weights, taps))
             else
@@ -2326,15 +2378,8 @@ function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, b
         end
 
         # --- Inner derivative of u at this half-point: Dx(u) ---
-        inner_deriv_taps = map(nsi.inner_offsets) do ioff
-            idx_exprs = map(u_spatial) do xv
-                eq_d = indexmap[xv]
-                raw_idx = _idxs[eq_d] + bases[eq_d]
-                raw_idx = isequal(xv, x) ? raw_idx + outer_off + ioff - 1 : raw_idx
-                _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-            end
-            Symbolics.wrap(u_c[idx_exprs...])
-        end
+        inner_deriv_taps = [_tap_expr(ctx, u_c, u_spatial, x, outer_off + ioff - 1)
+                            for ioff in nsi.inner_offsets]
         if nsi.is_uniform
             inner_deriv = sym_dot(nsi.inner_weights, inner_deriv_taps)
         else
@@ -2362,8 +2407,7 @@ function _nonlinlap_template(expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, b
 end
 
 """
-    _nonlinlap_full_template(expr_sym, u, x, nsi, fi_nlap, s, depvars, indexmap,
-                              _idxs, bases_full)
+    _nonlinlap_full_template(ctx::ArrayOpContext, expr_sym, u, x, nsi, fi_nlap)
 
 Full-interior version of `_nonlinlap_template`.  Uses pre-expanded 3D
 weight+tap matrices from `fi_nlap` (a `FullNonlinlapInfo`) so that a single
@@ -2373,8 +2417,13 @@ Tap positions are absolute (from `interp_tap_3d` and `inner_tap_3d`).
 For periodic dimensions, tap indices are pre-wrapped at precompute time
 (see `precompute_full_nonlinlap`), so no symbolic `_maybe_wrap` is needed.
 """
-function _nonlinlap_full_template(expr_sym, u, x, nsi, fi_nlap, s, depvars, indexmap,
-                                   _idxs, bases_full)
+function _nonlinlap_full_template(ctx::ArrayOpContext, expr_sym, u, x, nsi, fi_nlap)
+    s          = ctx.s
+    depvars    = ctx.depvars
+    indexmap   = ctx.indexmap
+    _idxs      = ctx.idxs
+    bases_full = ctx.bases
+
     u_raw = Symbolics.unwrap(s.discvars[u])
     u_c = _ConstSR(u_raw)
     u_spatial = ivs(u, s)
@@ -2482,13 +2531,19 @@ instead of `_nonlinlap_template` to eliminate boundary-proximity frame equations
 
 Returns a vector of `Pair{term => discretized_expr}`.
 """
-function _build_nonlinlap_rules(
-        pde, s, depvars, derivweights, nonlinlap_cache,
-        indexmap, _idxs, bases, var_rules,
-        is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases));
-        full_nonlinlap_cache=nothing
-    )
+function _build_nonlinlap_rules(ctx::ArrayOpContext, caches::StencilCaches,
+                                 pde, var_rules)
+    s                    = ctx.s
+    depvars              = ctx.depvars
+    derivweights         = ctx.derivweights
+    indexmap             = ctx.indexmap
+    _idxs                = ctx.idxs
+    bases                = ctx.bases
+    is_periodic          = ctx.is_periodic
+    gl_vec               = ctx.gl_vec
+    nonlinlap_cache      = caches.nonlinlap
+    full_nonlinlap_cache = caches.full_nonlinlap
+
     terms = split_terms(pde, s.x̄)
     vr_dict = Dict(var_rules)
     nonlinlap_rules = Pair[]
@@ -2502,14 +2557,9 @@ function _build_nonlinlap_rules(
             fi_nlap = (full_nonlinlap_cache !== nothing && haskey(full_nonlinlap_cache, (u, x))) ?
                       full_nonlinlap_cache[(u, x)] : nothing
             _nlap(expr_sym) = if fi_nlap !== nothing
-                _nonlinlap_full_template(
-                    expr_sym, u, x, nsi, fi_nlap, s, depvars, indexmap, _idxs, bases
-                )
+                _nonlinlap_full_template(ctx, expr_sym, u, x, nsi, fi_nlap)
             else
-                _nonlinlap_template(
-                    expr_sym, u, x, nsi, s, depvars, indexmap, _idxs, bases,
-                    is_periodic, gl_vec
-                )
+                _nonlinlap_template(ctx, expr_sym, u, x, nsi)
             end
 
             # Pattern 1: *(~~c, Dx(*(~~a, Dx(u), ~~b)), ~~d)
@@ -2586,8 +2636,7 @@ end
 # --- Spherical Laplacian ArrayOp rules --------------------------------------
 
 """
-    _spherical_template(info, nsi, s, depvars, derivweights,
-                         indexmap, _idxs, bases, var_rules;
+    _spherical_template(ctx::ArrayOpContext, info, nsi, var_rules;
                          full_nonlinlap_cache=nothing,
                          full_interior_centered_cache=nothing)
 
@@ -2604,12 +2653,18 @@ When `full_nonlinlap_cache` is provided, uses `_nonlinlap_full_template` for
 the nonlinlap term.  When `full_interior_centered_cache` is provided, uses
 position-dependent weight+offset matrices for the D1 derivative.
 """
-function _spherical_template(info, nsi, s, depvars, derivweights,
-                              indexmap, _idxs, bases, var_rules,
-                              is_periodic=falses(length(bases)),
-                              gl_vec=zeros(Int, length(bases));
+function _spherical_template(ctx::ArrayOpContext, info, nsi, var_rules;
                               full_nonlinlap_cache=nothing,
                               full_interior_centered_cache=nothing)
+    s            = ctx.s
+    depvars      = ctx.depvars
+    derivweights = ctx.derivweights
+    indexmap     = ctx.indexmap
+    _idxs        = ctx.idxs
+    bases        = ctx.bases
+    is_periodic  = ctx.is_periodic
+    gl_vec       = ctx.gl_vec
+
     u = info.u
     r = info.r
     innerexpr = info.innerexpr
@@ -2646,28 +2701,14 @@ function _spherical_template(info, nsi, s, depvars, derivweights,
         D1_template = sum(1:fi_d1.padded_len) do j
             w = Symbolics.wrap(wm_c[j, _idxs[dim]])
             off_val = Symbolics.wrap(om_c[j, _idxs[dim]])
-            idx_exprs = map(u_spatial) do xv
-                eq_d = indexmap[xv]
-                raw_idx = _idxs[eq_d] + bases[eq_d]
-                combined = isequal(xv, r) ? raw_idx + off_val : raw_idx
-                _maybe_wrap(combined, eq_d, is_periodic, gl_vec)
-            end
-            w * Symbolics.wrap(u_c[idx_exprs...])
+            w * _tap_expr(ctx, u_c, u_spatial, r, off_val)
         end
     else
         # Standard centered D1 template
         D1_op = derivweights.map[Differential(r)]
         d1_is_uniform = D1_op.dx isa Number
         d1_offsets = collect(half_range(D1_op.stencil_length))
-        d1_taps = map(d1_offsets) do off
-            idx_exprs = map(u_spatial) do xv
-                eq_d = indexmap[xv]
-                raw_idx = _idxs[eq_d] + bases[eq_d]
-                raw_idx = isequal(xv, r) ? raw_idx + off : raw_idx
-                _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-            end
-            Symbolics.wrap(u_c[idx_exprs...])
-        end
+        d1_taps = [_tap_expr(ctx, u_c, u_spatial, r, off) for off in d1_offsets]
         if d1_is_uniform
             D1_template = sym_dot(D1_op.stencil_coefs, d1_taps)
         else
@@ -2685,14 +2726,9 @@ function _spherical_template(info, nsi, s, depvars, derivweights,
     fi_nlap = (full_nonlinlap_cache !== nothing && haskey(full_nonlinlap_cache, (u, r))) ?
               full_nonlinlap_cache[(u, r)] : nothing
     if fi_nlap !== nothing
-        nlap_template = _nonlinlap_full_template(
-            innerexpr, u, r, nsi, fi_nlap, s, depvars, indexmap, _idxs, bases
-        )
+        nlap_template = _nonlinlap_full_template(ctx, innerexpr, u, r, nsi, fi_nlap)
     else
-        nlap_template = _nonlinlap_template(
-            innerexpr, u, r, nsi, s, depvars, indexmap, _idxs, bases,
-            is_periodic, gl_vec
-        )
+        nlap_template = _nonlinlap_template(ctx, innerexpr, u, r, nsi)
     end
 
     # --- Substitute innerexpr variables at the current point ---
@@ -2716,14 +2752,21 @@ using `_spherical_template` and multiplies by the outer coefficient.
 
 Returns a vector of `Pair{term => discretized_expr}`.
 """
-function _build_spherical_rules(
-        pde, s, depvars, derivweights, nonlinlap_cache,
-        spherical_terms_info, indexmap, _idxs, bases, var_rules,
-        is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases));
-        full_nonlinlap_cache=nothing,
-        full_interior_centered_cache=nothing
-    )
+function _build_spherical_rules(ctx::ArrayOpContext, caches::StencilCaches,
+                                 pde, var_rules)
+    s                             = ctx.s
+    depvars                       = ctx.depvars
+    derivweights                  = ctx.derivweights
+    indexmap                      = ctx.indexmap
+    _idxs                         = ctx.idxs
+    bases                         = ctx.bases
+    is_periodic                   = ctx.is_periodic
+    gl_vec                        = ctx.gl_vec
+    nonlinlap_cache               = caches.nonlinlap
+    spherical_terms_info          = caches.spherical_terms
+    full_nonlinlap_cache          = caches.full_nonlinlap
+    full_interior_centered_cache  = caches.full_centered
+
     vr_dict = Dict(var_rules)
     spherical_rules = Pair[]
 
@@ -2732,9 +2775,7 @@ function _build_spherical_rules(
         nsi = nonlinlap_cache[(info.u, info.r)]
 
         sph_expr = _spherical_template(
-            info, nsi, s, depvars, derivweights,
-            indexmap, _idxs, bases, var_rules,
-            is_periodic, gl_vec;
+            ctx, info, nsi, var_rules;
             full_nonlinlap_cache=full_nonlinlap_cache,
             full_interior_centered_cache=full_interior_centered_cache
         )
@@ -2751,7 +2792,7 @@ end
 # --- WENO ArrayOp rules ----------------------------------------------------
 
 """
-    _weno_template(u, x, wsi, s, indexmap, _idxs, bases)
+    _weno_template(ctx::ArrayOpContext, u, x, wsi)
 
 Build the WENO5 (Jiang-Shu) formula as a symbolic ArrayOp expression.
 
@@ -2759,23 +2800,15 @@ Transcribes the `weno_f` function from `WENO.jl` using Const-wrapped array
 taps instead of runtime values.  All coefficients are Float64 literals to
 match the scalar path exactly (for `_equations_match` validation).
 """
-function _weno_template(u, x, wsi, s, indexmap, _idxs, bases,
-        is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases)))
+function _weno_template(ctx::ArrayOpContext, u, x, wsi)
+    s = ctx.s
+
     u_raw = Symbolics.unwrap(s.discvars[u])
     u_c = _ConstSR(u_raw)
     u_spatial = ivs(u, s)
 
     # Build the 5 shifted taps: u[i-2], u[i-1], u[i], u[i+1], u[i+2]
-    taps = map(wsi.offsets) do off
-        idx_exprs = map(u_spatial) do xv
-            eq_d = indexmap[xv]
-            raw_idx = _idxs[eq_d] + bases[eq_d]
-            raw_idx = isequal(xv, x) ? raw_idx + off : raw_idx
-            _maybe_wrap(raw_idx, eq_d, is_periodic, gl_vec)
-        end
-        Symbolics.wrap(u_c[idx_exprs...])
-    end
+    taps = [_tap_expr(ctx, u_c, u_spatial, x, off) for off in wsi.offsets]
     # Map to weno_f naming: u_m2, u_m1, u_0, u_p1, u_p2
     u_m2, u_m1, u_0, u_p1, u_p2 = taps
 
@@ -2837,9 +2870,17 @@ The result is the numerical derivative itself; coefficients simply scale it.
 
 Returns a vector of `Pair{term => discretized_expr}`.
 """
-function _build_weno_rules(pde, s, depvars, weno_cache, indexmap, _idxs, bases, var_rules,
-        is_periodic=falses(length(bases)),
-        gl_vec=zeros(Int, length(bases)))
+function _build_weno_rules(ctx::ArrayOpContext, caches::StencilCaches,
+                            pde, var_rules)
+    s           = ctx.s
+    depvars     = ctx.depvars
+    indexmap    = ctx.indexmap
+    _idxs       = ctx.idxs
+    bases       = ctx.bases
+    is_periodic = ctx.is_periodic
+    gl_vec      = ctx.gl_vec
+    weno_cache  = caches.weno
+
     terms = split_terms(pde, s.x̄)
     vr_dict = Dict(var_rules)
     weno_rules = Pair[]
@@ -2851,8 +2892,7 @@ function _build_weno_rules(pde, s, depvars, weno_cache, indexmap, _idxs, bases, 
             haskey(weno_cache, (u, x)) || continue
             wsi = weno_cache[(u, x)]
 
-            weno_expr = _weno_template(u, x, wsi, s, indexmap, _idxs, bases,
-                is_periodic, gl_vec)
+            weno_expr = _weno_template(ctx, u, x, wsi)
             weno_expr_cache[(u, x)] = weno_expr
 
             # Pattern 1: *(~~a, Dx(u), ~~b) — coefficient-multiplied 1st-order

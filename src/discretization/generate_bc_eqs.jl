@@ -91,8 +91,8 @@ function generate_bc_eqs_arrayop!(
     Ioffset_val = length(s, x__) - 1
     disc1_raw = Symbolics.unwrap(s.discvars[depvar(u_, s)])
     disc2_raw = Symbolics.unwrap(s.discvars[depvar(u__, s)])
-    disc1_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(disc1_raw)
-    disc2_c = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}(disc2_raw)
+    disc1_c = _ConstSR(disc1_raw)
+    disc2_c = _ConstSR(disc2_raw)
 
     # Determine tangential dimensions and their ranges from the edge points
     # The edge has a fixed index in dimension j and varying indices in all others
@@ -550,8 +550,6 @@ function generate_bc_eqs_arrayop!(
             end
         end
     end
-
-    _ConstSR = SymbolicUtils.BSImpl.Const{SymbolicUtils.SymReal}
 
     # --- Build substitution rules ---
     rules = Pair[]
