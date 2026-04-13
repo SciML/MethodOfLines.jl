@@ -39,3 +39,34 @@ using .WENOWeights
         @test sum(omega_k) ≈ 1.0 atol=1e-14
     end
 end
+
+@testset "Sanity Check: Analytical Reduction to Uniform WENO" begin
+    # ==============================================================================
+    # MATHEMATICAL INVARIANT TEST
+    # Proves that the Shi-Hu-Shu (2002) non-linear dynamic weights analytically 
+    # reduce to the ideal linear Lagrange weights when the grid is perfectly uniform.
+    # This guarantees zero mathematical regression for legacy uniform grids.
+    # ==============================================================================
+
+    # 1. Perfectly Uniform Grid Configuration
+    h = 0.1
+    x_uni = collect(0.0:h:2h) # 3-point stencil [0.0, 0.1, 0.2]
+    x_eval = 0.05
+
+    # 2. Legacy Linear Weights
+    d_k = get_nonuniform_ideal_weights(x_uni, x_eval)
+
+    # 3. Dynamic Smoothness Indicators
+    beta_k = get_nonuniform_smoothness_indicators(x_uni)
+
+    # INVARIANT 1: On a uniform grid, all smoothness indicators MUST equalize.
+    @test isapprox(beta_k[1], beta_k[2], atol=1e-14)
+    @test isapprox(beta_k[2], beta_k[3], atol=1e-14)
+
+    # 4. Shi-Hu-Shu Non-Linear Weights
+    omega_k = get_split_nonlinear_weights(d_k, beta_k)
+
+    # INVARIANT 2: The non-linear splitting must perfectly cancel out,
+    # reducing omega_k exactly to the ideal weights d_k down to machine precision.
+    @test isapprox(omega_k, d_k, atol=1e-14)
+end
