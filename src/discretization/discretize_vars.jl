@@ -53,7 +53,7 @@ julia> discretization = MOLFiniteDifference([x => dx], t)
 julia> ds = DiscreteSpace(domain, [u(t,x).val], [x.val], discretization)
 
 julia> ds.discvars[u(t,x)]
-11-element Vector{Num}:
+Symbolics.Arr{Num, 1} with 11 elements:
   u[1](t)
   u[2](t)
   u[3](t)
@@ -261,16 +261,25 @@ map dependent variables
         sym = nameof(op)
         if t === nothing
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
-            u => unwrap.(collect(first(@variables $sym[uaxes...])))
+            u => first(@variables $sym[uaxes...])
         elseif isequal(SymbolicUtils.arguments(u), [t])
             u => fill(safe_unwrap(u), ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            u => unwrap.(collect(first(@variables $sym(t)[uaxes...])))
+            u => first(@variables $sym(t)[uaxes...])
         end
     end
     return depvarsdisc
 end
+
+"""
+    _disc_gather(arr, I)
+Index into a discretized variable array. Handles both scalar indices (CartesianIndex)
+and vector indices (Vector{CartesianIndex}) since Symbolics.Arr only supports scalar indexing.
+Also handles RefCartesianIndex for interface boundary stencils (method added in interface_boundary.jl).
+"""
+_disc_gather(arr, I::CartesianIndex) = arr[I]
+_disc_gather(arr, I::AbstractVector) = [_disc_gather(arr, i) for i in I]
 
 """
 Gets the parameter symbols of the system

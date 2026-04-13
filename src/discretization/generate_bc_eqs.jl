@@ -57,6 +57,94 @@ function generate_bc_eqs!(
     )
 end
 
+"""
+    generate_bc_eqs_arrayop!(disc_state, s, boundaryvalfuncs, interiormap,
+                             boundary::InterfaceBoundary)
+
+ArrayOp version of periodic/interface BC generation. Instead of producing one
+scalar equation per edge point, emits a single ArrayOp equation that tiles
+`disc1[boundary, tang...] ~ disc2[boundary+offset, tang...]` along the
+tangential dimensions.
+
+Falls back to the scalar path for 1D (single-point edges) or if the edge
+is not contiguous.
+"""
+function generate_bc_eqs_arrayop!(
+        disc_state, s::DiscreteSpace, boundaryvalfuncs,
+        interiormap, boundary::InterfaceBoundary
+    )
+    isupper(boundary) && return
+    u_ = boundary.u
+    x_ = boundary.x
+    u__ = boundary.u2
+    x__ = boundary.x2
+    N = ndims(u_, s)
+    j = x2i(s, depvar(u_, s), x_)
+
+    edge_points = edge(s, boundary, interiormap)
+
+    # For 1D or very small edges, use the scalar path
+    if length(edge_points) <= 1
+        return generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+    end
+
+    Ioffset_val = length(s, x__) - 1
+    disc1_raw = Symbolics.unwrap(s.discvars[depvar(u_, s)])
+    disc2_raw = Symbolics.unwrap(s.discvars[depvar(u__, s)])
+    disc1_c = _ConstSR(disc1_raw)
+    disc2_c = _ConstSR(disc2_raw)
+
+    # Determine tangential dimensions and their ranges from the edge points
+    # The edge has a fixed index in dimension j and varying indices in all others
+    tang_dims = setdiff(1:N, [j])
+    boundary_idx = edge_points[1][j]  # fixed index in the boundary-normal dimension
+
+    # Compute the tangential ranges from the edge points
+    tang_ranges = Vector{StepRange{Int,Int}}(undef, length(tang_dims))
+    for (k, d) in enumerate(tang_dims)
+        vals = [II[d] for II in edge_points]
+        tang_ranges[k] = minimum(vals):1:maximum(vals)
+    end
+
+    # Create symbolic index variables for the tangential dimensions
+    n_tang = length(tang_dims)
+    _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
+    _tang_idxs = [_idxs_arr[k] for k in 1:n_tang]
+    tang_bases = [tang_ranges[k][1] - 1 for k in 1:n_tang]
+
+    # Build full index expressions for disc1 and disc2
+    # disc1 uses boundary_idx in dimension j, symbolic indices in tangential dims
+    # disc2 uses boundary_idx + offset in dimension j, same tangential indices
+    idx1_exprs = Vector{Any}(undef, N)
+    idx2_exprs = Vector{Any}(undef, N)
+    tang_k = 0
+    for d in 1:N
+        if d == j
+            idx1_exprs[d] = boundary_idx
+            idx2_exprs[d] = boundary_idx + Ioffset_val
+        else
+            tang_k += 1
+            idx_expr = _tang_idxs[tang_k] + tang_bases[tang_k]
+            idx1_exprs[d] = idx_expr
+            idx2_exprs[d] = idx_expr
+        end
+    end
+
+    lhs_expr = disc1_c[idx1_exprs...]
+    rhs_expr = disc2_c[idx2_exprs...]
+
+    ao_ranges = Dict(_tang_idxs[k] => (1:1:length(tang_ranges[k])) for k in 1:n_tang)
+
+    lhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+        _tang_idxs, lhs_expr, +, nothing, ao_ranges
+    )
+    rhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+        _tang_idxs, rhs_expr, +, nothing, ao_ranges
+    )
+
+    return vcat!(disc_state.bceqs, [Symbolics.wrap(lhs_ao) ~ Symbolics.wrap(rhs_ao)])
+end
+
 function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
     return mapreduce(vcat, values(boundarymap)) do boundaries
         map(mapreduce(x -> boundaries[x], vcat, s.x̄)) do b
@@ -82,7 +170,7 @@ function boundary_value_maps(
     ) where {N, M, G <: EdgeAlignedGrid}
     u_, x_ = getvars(boundary)
 
-    ufunc(v, I, x) = s.discvars[v][I]
+    ufunc(v, I, x) = _disc_gather(s.discvars[v], I)
 
     # depvarbcmaps will dictate what to replace the variable terms with in the bcs
     # replace u(t,0) with u₁, etc
@@ -165,7 +253,7 @@ function boundary_value_maps(
         indexmap
     ) where {N, M, G <: StaggeredGrid}
     u_, x_ = getvars(boundary)
-    ufunc(v, I, x) = s.discvars[v][I]
+    ufunc(v, I, x) = _disc_gather(s.discvars[v], I)
 
     depvarderivbcmaps = []
     depvarbcmaps = []
@@ -240,7 +328,7 @@ function boundary_value_maps(
         indexmap
     ) where {N, M, G <: CenterAlignedGrid}
     u_, x_ = getvars(boundary)
-    ufunc(v, I, x) = s.discvars[v][I]
+    ufunc(v, I, x) = _disc_gather(s.discvars[v], I)
 
     depvarderivbcmaps = []
     depvarbcmaps = []
@@ -340,7 +428,7 @@ function generate_extrap_eqs!(disc_state, pde, u, s, derivweights, interiormap, 
     lowerextents, upperextents = interiormap.stencil_extents[pde]
     vlower = interiormap.lower[pde]
     vupper = interiormap.upper[pde]
-    ufunc(u, I, x) = s.discvars[u][I]
+    ufunc(u, I, x) = _disc_gather(s.discvars[u], I)
 
     eqmap = [[] for _ in CartesianIndices(s.discvars[u])]
     for (j, x) in enumerate(args)
@@ -393,6 +481,203 @@ end
 
 #TODO: Benchmark and optimize this
 
+"""
+    generate_bc_eqs_arrayop!(disc_state, s, boundaryvalfuncs, interiormap,
+                             boundary::AbstractTruncatingBoundary, derivweights)
+
+ArrayOp version of truncating BC (Dirichlet/Neumann/Robin) generation for 2D+.
+Builds symbolic substitution rules using ArrayOp index variables and applies them
+to the BC equation, producing a single ArrayOp instead of per-point scalar equations.
+
+Falls back to the scalar path for:
+- 1D (single-point edges)
+- EdgeAlignedGrid (half-offset interpolation not yet supported)
+- HigherOrderInterfaceBoundary
+- BCs involving integral terms
+"""
+function generate_bc_eqs_arrayop!(
+        disc_state, s::DiscreteSpace{N_s, M, G}, boundaryvalfuncs,
+        interiormap, boundary::AbstractTruncatingBoundary, derivweights;
+        validate=false
+    ) where {N_s, M, G}
+    u_ = boundary.u
+    x_ = boundary.x
+    u = depvar(u_, s)
+    args = ivs(u, s)
+    N = length(args)
+
+    # Fall back to scalar for unsupported cases
+    if N <= 1 || G <: EdgeAlignedGrid || boundary isa HigherOrderInterfaceBoundary
+        return generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+    end
+
+    edge_points = edge(s, boundary, interiormap)
+    if length(edge_points) <= 1
+        return generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+    end
+
+    # --- Edge geometry ---
+    j = x2i(s, u, x_)
+    tang_dims = setdiff(1:N, [j])
+    n_tang = length(tang_dims)
+
+    tang_ranges = Vector{StepRange{Int,Int}}(undef, n_tang)
+    for (k, d) in enumerate(tang_dims)
+        vals = [II[d] for II in edge_points]
+        tang_ranges[k] = minimum(vals):1:maximum(vals)
+    end
+
+    # --- Symbolic index variables ---
+    _idxs_arr = SymbolicUtils.idxs_for_arrayop(SymbolicUtils.SymReal)
+    _tang_idxs = [_idxs_arr[k] for k in 1:n_tang]
+    tang_bases = [tang_ranges[k][1] - 1 for k in 1:n_tang]
+
+    # Boundary-normal grid index
+    boundary_idx = newindex(u_, edge_points[1], s,
+        Dict([args[i] => i for i in 1:N]))
+
+    # Helper: build full index expressions for a variable v given its spatial args
+    function symbolic_idx_exprs(v)
+        v_args = ivs(v, s)
+        tang_k = 0
+        return map(v_args) do xv
+            d_v = findfirst(isequal(xv), args)
+            if d_v == j
+                boundary_idx[d_v]
+            else
+                tang_k += 1
+                _tang_idxs[tang_k] + tang_bases[tang_k]
+            end
+        end
+    end
+
+    # --- Build substitution rules ---
+    rules = Pair[]
+
+    # 1. Variable value maps: u(t, x_boundary, y) => Const(discvar)[boundary_idx, _i + base]
+    val = unwrap_const(first(filter(z -> unwrap_const(z) isa Number, arguments(u_))))
+    r = x_ => val
+    othervars = map(boundary.depvars) do v
+        substitute(v, r)
+    end
+    othervars = filter(
+        v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
+        othervars
+    )
+
+    for v_ in [u_; othervars]
+        v = depvar(v_, s)
+        v_raw = Symbolics.unwrap(s.discvars[v])
+        v_c = _ConstSR(v_raw)
+        idx_e = symbolic_idx_exprs(v)
+        push!(rules, v_ => Symbolics.wrap(v_c[idx_e...]))
+    end
+
+    # 2. Derivative maps: Dx^d(u_) => boundary stencil with symbolic tangential indices
+    boundary_j = boundary_idx[j]
+    for d in get(derivweights.orders, x_, Int[])
+        D_key = Differential(x_)^d
+        haskey(derivweights.map, D_key) || continue
+        D_op = derivweights.map[D_key]
+
+        # Determine boundary stencil weights and offsets
+        # (same logic as central_difference_weights_and_stencil with bs=[])
+        if boundary_j <= D_op.boundary_point_count
+            weights = D_op.low_boundary_coefs[boundary_j]
+            offset = 1 - boundary_j
+            normal_offsets = collect(0:(D_op.boundary_stencil_length - 1)) .+ offset
+        elseif boundary_j > (length(s, x_) - D_op.boundary_point_count)
+            idx_from_end = length(s, x_) - boundary_j + 1
+            weights = D_op.high_boundary_coefs[idx_from_end]
+            offset = length(s, x_) - boundary_j
+            normal_offsets = collect((-D_op.boundary_stencil_length + 1):0) .+ offset
+        else
+            weights = D_op.stencil_coefs
+            normal_offsets = collect(half_range(D_op.stencil_length))
+        end
+
+        # Build symbolic stencil: Σ w_k * Const(discvar)[boundary_j + off_k, _i_tang + base]
+        u_raw = Symbolics.unwrap(s.discvars[u])
+        u_c = _ConstSR(u_raw)
+        taps = map(normal_offsets) do off
+            tang_k = 0
+            idx_e = map(args) do xv
+                if isequal(xv, x_)
+                    boundary_j + off
+                else
+                    tang_k += 1
+                    _tang_idxs[tang_k] + tang_bases[tang_k]
+                end
+            end
+            Symbolics.wrap(u_c[idx_e...])
+        end
+        push!(rules, D_key(u_) => sym_dot(weights, taps))
+    end
+
+    # 3. Grid value maps: x => boundary_val, y => Const(grid_y)[_i + base]
+    tang_k = 0
+    for xv in args
+        if isequal(xv, x_)
+            push!(rules, xv => (boundary_idx[j] == 1 ? first(s.axies[xv]) : last(s.axies[xv])))
+        else
+            tang_k += 1
+            grid_c = _ConstSR(collect(s.grid[xv]))
+            push!(rules, xv => Symbolics.wrap(grid_c[_tang_idxs[tang_k] + tang_bases[tang_k]]))
+        end
+    end
+
+    # 4. Dependent variable maps for other depvars in the BC (varmaps equivalent)
+    indexmap = Dict([args[i] => i for i in 1:N])
+    for v in boundary.depvars
+        haskey(s.discvars, v) || continue
+        v_raw = Symbolics.unwrap(s.discvars[v])
+        v_c = _ConstSR(v_raw)
+        # Use the edge point to determine the correct index for this variable
+        II_sym = symbolic_idx_exprs(v)
+        push!(rules, v => Symbolics.wrap(v_c[II_sym...]))
+    end
+
+    # --- Apply rules and build ArrayOp ---
+    bc = boundary.eq
+    rules_dict = Dict(rules)
+    template_lhs = pde_substitute(bc.lhs, rules_dict)
+    template_rhs = pde_substitute(bc.rhs, rules_dict)
+
+    lhs_raw = Symbolics.unwrap(template_lhs)
+    rhs_raw = Symbolics.unwrap(template_rhs)
+    if !(lhs_raw isa SymbolicUtils.BasicSymbolic)
+        lhs_raw = _ConstSR(lhs_raw)
+    end
+    if !(rhs_raw isa SymbolicUtils.BasicSymbolic)
+        rhs_raw = _ConstSR(rhs_raw)
+    end
+
+    ao_ranges = Dict(_tang_idxs[k] => (1:1:length(tang_ranges[k])) for k in 1:n_tang)
+
+    lhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+        _tang_idxs, lhs_raw, +, nothing, ao_ranges
+    )
+    rhs_ao = SymbolicUtils.ArrayOp{SymbolicUtils.SymReal}(
+        _tang_idxs, rhs_raw, +, nothing, ao_ranges
+    )
+
+    # --- Validate against scalar path at first point ---
+    if validate
+        indexmap_bc = Dict([args[i] => i for i in 1:N])
+        eq_first_scalar = first(generate_bc_eqs(s, boundaryvalfuncs, boundary, interiormap, indexmap_bc))
+        sub_first = Dict(_tang_idxs[k] => 1 for k in 1:n_tang)
+        eq_first_arrayop = pde_substitute(template_lhs, sub_first) ~ pde_substitute(template_rhs, sub_first)
+
+        if !_equations_match(eq_first_arrayop, eq_first_scalar)
+            # Validation failed — fall back to scalar
+            @debug "BC ArrayOp validation failed, falling back to scalar" boundary
+            return generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+        end
+    end
+
+    return vcat!(disc_state.bceqs, [Symbolics.wrap(lhs_ao) ~ Symbolics.wrap(rhs_ao)])
+end
+
 @inline function generate_corner_eqs!(disc_state, s, interiormap, N, u)
     interior = interiormap.I[interiormap.pde[u]]
     ndims(u, s) == 0 && return
@@ -412,7 +697,7 @@ end
             setdiff!(domain, vec(copy(edge) .+ [I1 * k]))
         end
     end
-    return append!(disc_state.bceqs, s.discvars[u][domain] .~ 0)
+    return append!(disc_state.bceqs, [s.discvars[u][I] ~ 0 for I in domain])
 end
 
 """
@@ -452,7 +737,7 @@ end
         return
     elseif N == 2
         Icorners = findcorners(s, interiormap.lower[pde], interiormap.upper[pde], u)
-        append!(disc_state.bceqs, s.discvars[u][Icorners] .~ 0)
+        append!(disc_state.bceqs, [s.discvars[u][I] ~ 0 for I in Icorners])
     else
         generate_corner_eqs!(disc_state, s, interiormap, N, u)
     end

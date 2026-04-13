@@ -13,6 +13,9 @@ function Base.getindex(A::Array, Is::Vector{<:RefCartesianIndex})
     end
 end
 
+# Support _disc_gather for RefCartesianIndex (Symbolics.Arr does not support custom index types)
+_disc_gather(arr, I::RefCartesianIndex) = I.A === nothing ? arr[I.I] : I.A[I.I]
+
 Base.:+(I::RefCartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I.I + J.I, I.A)
 Base.:-(I::RefCartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I.I - J.I, I.A)
 Base.:+(I::RefCartesianIndex, J::CartesianIndex) = RefCartesianIndex(I.I + J, I.A)

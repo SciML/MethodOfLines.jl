@@ -56,14 +56,55 @@ function weno_f(u, p, t, x, dx)
     return (hp - hm) / dx
 end
 
+# Boundary stencil functions for WENO5.
+# Near domain boundaries where the full 5-point stencil doesn't fit,
+# these 3rd-order one-sided finite differences (Fornberg weights) are used.
+# Each receives 4 tap values from the boundary side of the domain.
+
+# Lower boundary, point 1 (closest to boundary):
+# Fornberg weights for f'(x_0) on [x_0, x_1, x_2, x_3]
+function weno_boundary_lower_1(u, p, t, x, dx)
+    return (-11 * u[1] + 18 * u[2] - 9 * u[3] + 2 * u[4]) / (6 * dx)
+end
+
+# Lower boundary, point 2:
+# Fornberg weights for f'(x_1) on [x_0, x_1, x_2, x_3]
+function weno_boundary_lower_2(u, p, t, x, dx)
+    return (-2 * u[1] - 3 * u[2] + 6 * u[3] - u[4]) / (6 * dx)
+end
+
+# Upper boundary, point N (closest to boundary):
+# Fornberg weights for f'(x_3) on [x_0, x_1, x_2, x_3]
+function weno_boundary_upper_1(u, p, t, x, dx)
+    return (-2 * u[1] + 9 * u[2] - 18 * u[3] + 11 * u[4]) / (6 * dx)
+end
+
+# Upper boundary, point N-1:
+# Fornberg weights for f'(x_2) on [x_0, x_1, x_2, x_3]
+function weno_boundary_upper_2(u, p, t, x, dx)
+    return (u[1] - 6 * u[2] + 3 * u[3] + 2 * u[4]) / (6 * dx)
+end
+
 """
 `WENOScheme` of Jiang and Shu
 ## Keyword Arguments
 - `epsilon`: A quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. More sensitive problems will benefit from a smaller value. It is defined as a functional scheme.
+
+## Boundary behaviour
+
+Near domain boundaries the full 5-point WENO stencil does not fit, so the two
+points closest to each boundary are discretised with a 3rd-order one-sided
+finite-difference stencil (Fornberg weights) instead.  Prior versions of
+`WENOScheme` provided no boundary stencils at all, which forced the user to
+supply extra BCs or rely on periodic wrapping.  This means the *interior*
+order of accuracy is still 5, but the *boundary* order of accuracy is 3 —
+if this affects your convergence study, set up your problem with periodic
+boundaries so only the interior stencil is exercised.
 """
 function WENOScheme(; epsilon = 1.0e-6)
-    boundary_f = [nothing, nothing]
-    return FunctionalScheme{5, 0}(
-        weno_f, boundary_f, boundary_f, false, [epsilon], name = "WENO"
+    lower_f = [weno_boundary_lower_1, weno_boundary_lower_2]
+    upper_f = [weno_boundary_upper_1, weno_boundary_upper_2]
+    return FunctionalScheme{5, 4}(
+        weno_f, lower_f, upper_f, false, [epsilon], name = "WENO"
     )
 end
