@@ -28,30 +28,42 @@ scheme types.
 # --- stencil pre-computation ------------------------------------------------
 
 """
-    StencilInfo
+    StencilInfo{T}
 
-Pre-computed information for a particular centred derivative operator.
+Pre-computed information for a single directional finite-difference stencil
+(one per derivative order).  Reused for both centred even-order stencils and
+the individual wind directions of an upwind odd-order operator.
+
+- `D_op`: the full `DerivativeOperator`, kept around for boundary stencils.
+- `offsets`: the signed grid shifts of each tap.  For centred stencils this
+  is `half_range(stencil_length)`; for negative-wind upwind it is
+  `0:(stencil_length-1)`; for positive-wind upwind it is
+  `(-stencil_length+1):0`.
+- `is_uniform`: `true` if `D_op.dx isa Number`.
+- `weight_matrix`: `nothing` for uniform grids.  For non-uniform grids,
+  `stencil_length × num_interior` matrix of per-point weights.
 """
 struct StencilInfo{T<:Real}
     D_op::DerivativeOperator     # full operator, needed for boundary stencils
-    offsets::Vector{Int}         # half_range(stencil_length)
+    offsets::Vector{Int}         # signed grid shifts of each tap
     is_uniform::Bool             # true if dx is a Number
     weight_matrix::Union{Nothing, Matrix{T}}  # non-uniform: stencil_length × num_interior
 end
 
 """
-    UpwindStencilInfo
+    UpwindStencilInfo{T}
 
-Pre-computed information for upwind derivative operators (both wind directions).
+Pre-computed information for upwind derivative operators, one `StencilInfo`
+per wind direction (`neg` with `offside=0`, `pos` with `offside=d+upwind_order-1`).
+
+Replaces the previous layout that flattened seven parallel fields
+(`D_neg`, `D_pos`, `neg_offsets`, …) into a single struct.  Each half is
+shape-identical to a centred `StencilInfo`, so the tap-building helpers
+can treat them uniformly.
 """
 struct UpwindStencilInfo{T<:Real}
-    D_neg::DerivativeOperator    # negative-wind (offside=0)
-    D_pos::DerivativeOperator    # positive-wind (offside=d+upwind_order-1)
-    neg_offsets::Vector{Int}     # 0:(stencil_length-1) for neg
-    pos_offsets::Vector{Int}     # (-stencil_length+1):0 for pos
-    is_uniform::Bool
-    neg_weight_matrix::Union{Nothing, Matrix{T}}  # non-uniform: stencil_length × num_interior
-    pos_weight_matrix::Union{Nothing, Matrix{T}}  # non-uniform: stencil_length × num_interior
+    neg::StencilInfo{T}
+    pos::StencilInfo{T}
 end
 
 """
@@ -401,16 +413,16 @@ function precompute_upwind_stencils(s, depvars, derivweights)
                 D_neg = derivweights.windmap[1][Dx_d]  # offside=0
                 D_pos = derivweights.windmap[2][Dx_d]  # offside=d+upwind_order-1
                 is_uniform = D_neg.dx isa Number
+                T = _op_eltype(D_neg)
                 neg_wmat = !is_uniform ? _stencil_coefs_to_matrix(D_neg) : nothing
                 pos_wmat = !is_uniform ? _stencil_coefs_to_matrix(D_pos) : nothing
-                info[(u, x, d)] = UpwindStencilInfo{_op_eltype(D_neg)}(
-                    D_neg,
-                    D_pos,
-                    collect(0:(D_neg.stencil_length - 1)),
-                    collect((-D_pos.stencil_length + 1):0),
-                    is_uniform,
-                    neg_wmat, pos_wmat
-                )
+                neg = StencilInfo{T}(D_neg,
+                                      collect(0:(D_neg.stencil_length - 1)),
+                                      is_uniform, neg_wmat)
+                pos = StencilInfo{T}(D_pos,
+                                      collect((-D_pos.stencil_length + 1):0),
+                                      is_uniform, pos_wmat)
+                info[(u, x, d)] = UpwindStencilInfo{T}(neg, pos)
             end
         end
     end
@@ -712,11 +724,11 @@ function precompute_full_interior_upwind(s, depvars, derivweights, upwind_cache,
 
         # Process both neg and pos directions
         neg_wmat, neg_omat, padded_neg = _build_upwind_full_matrices(
-            usi.D_neg, N, lo_vec[dim], gl, usi.neg_offsets, usi.is_uniform;
+            usi.neg.D_op, N, lo_vec[dim], gl, usi.neg.offsets, usi.neg.is_uniform;
             dim_periodic=is_periodic[dim]
         )
         pos_wmat, pos_omat, padded_pos = _build_upwind_full_matrices(
-            usi.D_pos, N, lo_vec[dim], gl, usi.pos_offsets, usi.is_uniform;
+            usi.pos.D_op, N, lo_vec[dim], gl, usi.pos.offsets, usi.pos.is_uniform;
             dim_periodic=is_periodic[dim]
         )
 
@@ -1489,8 +1501,8 @@ function generate_array_interior_eqs(
                     max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], bpc)
                 elseif isodd(d) && haskey(upwind_cache, (u, x, d))
                     usi = upwind_cache[(u, x, d)]
-                    lower_bpc = max(usi.D_neg.offside, usi.D_pos.offside)
-                    upper_bpc = max(usi.D_neg.boundary_point_count, usi.D_pos.boundary_point_count)
+                    lower_bpc = max(usi.neg.D_op.offside, usi.pos.D_op.offside)
+                    upper_bpc = max(usi.neg.D_op.boundary_point_count, usi.pos.D_op.boundary_point_count)
                     max_lower_bpc[eq_dim] = max(max_lower_bpc[eq_dim], lower_bpc)
                     max_upper_bpc[eq_dim] = max(max_upper_bpc[eq_dim], upper_bpc)
                 elseif isodd(d) && haskey(staggered_cache, (u, x, d))
@@ -2106,16 +2118,16 @@ function _build_upwind_rules(ctx::ArrayOpContext, caches::StencilCaches,
                     )
                 else
                     neg_expr = _upwind_stencil_expr(
-                        u, x, usi.neg_offsets, usi.D_neg.stencil_coefs;
-                        weight_matrix=usi.neg_weight_matrix,
-                        bpc=usi.D_neg.offside,
-                        D_op=usi.D_neg
+                        u, x, usi.neg.offsets, usi.neg.D_op.stencil_coefs;
+                        weight_matrix=usi.neg.weight_matrix,
+                        bpc=usi.neg.D_op.offside,
+                        D_op=usi.neg.D_op
                     )
                     pos_expr = _upwind_stencil_expr(
-                        u, x, usi.pos_offsets, usi.D_pos.stencil_coefs;
-                        weight_matrix=usi.pos_weight_matrix,
-                        bpc=usi.D_pos.offside,
-                        D_op=usi.D_pos
+                        u, x, usi.pos.offsets, usi.pos.D_op.stencil_coefs;
+                        weight_matrix=usi.pos.weight_matrix,
+                        bpc=usi.pos.D_op.offside,
+                        D_op=usi.pos.D_op
                     )
                 end
 
@@ -2183,10 +2195,10 @@ function _build_upwind_rules(ctx::ArrayOpContext, caches::StencilCaches,
                     )
                 else
                     pos_expr = _upwind_stencil_expr(
-                        u, x, usi.pos_offsets, usi.D_pos.stencil_coefs;
-                        weight_matrix=usi.pos_weight_matrix,
-                        bpc=usi.D_pos.offside,
-                        D_op=usi.D_pos
+                        u, x, usi.pos.offsets, usi.pos.D_op.stencil_coefs;
+                        weight_matrix=usi.pos.weight_matrix,
+                        bpc=usi.pos.D_op.offside,
+                        D_op=usi.pos.D_op
                     )
                 end
                 push!(fallback_rules, (Differential(x)^d)(u) => pos_expr)
