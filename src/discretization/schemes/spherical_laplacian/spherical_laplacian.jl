@@ -19,7 +19,10 @@ function spherical_diffusion(innerexpr, II, derivweights, s, indexmap, bcmap, de
     _rsubs(x, I) = x => s.grid[x][I[s.x2i[x]]]
     # Full rules for substituting parameters in the inner expression
     function rsubs(I)
-        return safe_vcat([v => s.discvars[v][I] for v in depvars], [_rsubs(x, I) for x in s.x̄])
+        return safe_vcat(
+            [v => _disc_gather(s.discvars[v], I) for v in depvars],
+            [_rsubs(x, I) for x in s.x̄]
+        )
     end
     # Discretization func for u
     ufunc_u(v, I, x) = _disc_gather(s.discvars[v], I)

@@ -34,6 +34,14 @@ end
     j, x = jx
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     I1 = unitindex(ndims(u, s), j)
+    # On non-uniform grids the per-point stencil weights in
+    # `D.stencil_coefs` are stored densely for interior points only, ordered
+    # from `low_boundary_point_count + 1 == 1 + D.offside` to
+    # `length(x) - high_boundary_point_count`.  Hence interior indexing is
+    # `stencil_coefs[II[j] - D.offside]` — the same for both wind directions.
+    # A previous version of this function hard-coded `offside == 0` via an
+    # assertion on the negative-wind branch; that assertion was dropped in
+    # tandem with the `offside = 0` bug fix in `upwind_diff_weights.jl`.
     if !ispositive
         if (II[j] > (length(s, x) - D.boundary_point_count))
             weights = D.high_boundary_coefs[length(s, x) - II[j] + 1]

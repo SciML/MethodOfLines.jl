@@ -151,6 +151,13 @@ function CompleteUpwindDifference(
 
     # _high_boundary_coefs    = SVector{boundary_stencil_length, T}[convert(SVector{boundary_stencil_length, T}, (1/dx^derivative_order) * calculate_weights(derivative_order, oneunit(T)*x0, reverse(right_boundary_x))) for x0 in R_boundary_deriv_spots]
 
+    # NOTE: the caller-supplied `offside` parameter is stored on the returned
+    # DerivativeOperator below.  A previous version of this function locally
+    # reassigned `offside = 0` here, which silently clobbered the parameter
+    # for non-uniform grids.  That bug was masked on the scalar path by an
+    # `@assert D.offside == 0` in `_upwind_difference`, and only surfaced
+    # once `ArrayDiscretization` began threading `offside` through as an
+    # index shift on `stencil_coefs`.
     coefficients = nothing
 
     return DerivativeOperator{

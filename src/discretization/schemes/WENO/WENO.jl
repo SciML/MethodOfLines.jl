@@ -90,8 +90,16 @@ end
 ## Keyword Arguments
 - `epsilon`: A quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. More sensitive problems will benefit from a smaller value. It is defined as a functional scheme.
 
-Near domain boundaries, 3rd-order one-sided finite differences (Fornberg weights)
-are used where the full 5-point WENO stencil does not fit.
+## Boundary behaviour
+
+Near domain boundaries the full 5-point WENO stencil does not fit, so the two
+points closest to each boundary are discretised with a 3rd-order one-sided
+finite-difference stencil (Fornberg weights) instead.  Prior versions of
+`WENOScheme` provided no boundary stencils at all, which forced the user to
+supply extra BCs or rely on periodic wrapping.  This means the *interior*
+order of accuracy is still 5, but the *boundary* order of accuracy is 3 —
+if this affects your convergence study, set up your problem with periodic
+boundaries so only the interior stencil is exercised.
 """
 function WENOScheme(; epsilon = 1.0e-6)
     lower_f = [weno_boundary_lower_1, weno_boundary_lower_2]

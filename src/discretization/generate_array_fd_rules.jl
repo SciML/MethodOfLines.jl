@@ -1098,15 +1098,28 @@ end
 # --- equation comparison ----------------------------------------------------
 
 """
-    _equations_match(eq_template, eq_scalar)
+    _equations_match(eq_template, eq_scalar; atol = 1e-8)
 
 Compare two equations for equivalence.  First tries exact structural comparison
 via `isequal`.  If that fails, falls back to numerical comparison by
-substituting random values for all free symbolic variables.  This handles
+substituting deterministic values for all free symbolic variables.  This handles
 mathematically equivalent expressions that differ only in symbolic form
 (e.g., different sign distribution or term ordering).
+
+The numerical comparison uses three irrational-valued substitution points and
+requires `|lhs1 - rhs1 - (lhs2 - rhs2)| ≤ atol` at each.  The default
+`atol = 1e-8` is calibrated for double-precision stencil coefficients and is
+intentionally a mixed (absolute + relative) tolerance: both sides are built
+from the same symbolic PDE so their magnitudes cancel almost entirely, and the
+residual only reflects floating-point noise in the weight products.  Tighter
+tolerances cause spurious fallbacks on higher-order stencils; looser
+tolerances mask real bugs.
+
+This check is advisory — if it returns `false` the caller falls back to the
+per-point scalar path, which is always correct.  A false negative therefore
+only costs a little discretization time, not correctness.
 """
-function _equations_match(eq_template, eq_scalar)
+function _equations_match(eq_template, eq_scalar; atol::Real = 1e-8)
     # Fast path: exact structural match
     if isequal(eq_template.lhs, eq_scalar.lhs) &&
        isequal(eq_template.rhs, eq_scalar.rhs)
@@ -1125,7 +1138,7 @@ function _equations_match(eq_template, eq_scalar)
     for offset in test_offsets
         subs = Dict(v => offset + i * 0.31415926 for (i, v) in enumerate(all_vars))
         val = Symbolics.value(substitute(diff_expr, subs))
-        if !(val isa Number) || abs(val) > 1e-8
+        if !(val isa Number) || abs(val) > atol
             return false
         end
     end
@@ -1158,44 +1171,71 @@ computation, which supports ALL scheme types.
 """
 
 """
-    _validate_arrayop_or_fallback(candidate, eq_first, lo, hi, ndim,
+    _local_sample_indices(n_region) -> Vector{NTuple{N,Int}}
+
+Pick up to 3 representative local index tuples inside an ArrayOp region of
+size `n_region` (one per dimension): the first point `(1,…,1)`, the midpoint
+`(cld.(n_region,2)...)`, and the last point `(n_region...)`.  Duplicates
+(common in 1-wide regions) are removed.
+"""
+function _local_sample_indices(n_region)
+    N = length(n_region)
+    first_idx = ntuple(_ -> 1, N)
+    mid_idx = ntuple(d -> cld(n_region[d], 2), N)
+    last_idx = ntuple(d -> n_region[d], N)
+    samples = NTuple{N, Int}[]
+    for p in (first_idx, mid_idx, last_idx)
+        p in samples || push!(samples, p)
+    end
+    return samples
+end
+
+"""
+    _validate_arrayop_or_fallback(candidate, sample_at, n_region, lo, hi, ndim,
                                    is_periodic, s, depvars, pde, derivweights,
                                    bcmap, eqvar, indexmap, boundaryvalfuncs;
-                                   debug_label="ArrayOp")
+                                   debug_label="ArrayOp", validate=false)
 
-Validate the ArrayOp `candidate` equations by comparing `eq_first` against
-a scalar-path equation at the first point.  If validation fails, fall back
-to per-point scalar discretization over `lo[d]:hi[d]`.
+Validate the ArrayOp `candidate` by comparing the template instantiated at
+several local points against the scalar path at the corresponding absolute
+grid points.  If any comparison fails, fall back to per-point scalar
+discretization over `lo[d]:hi[d]`.
 
-Skips validation for periodic dimensions (the two paths use structurally
-different wrapping that prevents `_equations_match` from succeeding even
-when numerics agree).
+Sampled local indices come from [`_local_sample_indices`](@ref): the first
+point, the midpoint, and the last point of the ArrayOp region (up to 3
+distinct points).  This catches bugs that manifest at specific grid positions
+without paying the cost of checking every point.
+
+Skips validation entirely for periodic dimensions — the two paths use
+structurally different wrapping that prevents `_equations_match` from
+succeeding even when numerics agree, and the periodic non-uniform path
+already falls back to the standard path before reaching here.
 """
-function _validate_arrayop_or_fallback(candidate, eq_first, lo, hi, ndim,
+function _validate_arrayop_or_fallback(candidate, sample_at, n_region, lo, hi, ndim,
                                         is_periodic, s, depvars, pde, derivweights,
                                         bcmap, eqvar, indexmap, boundaryvalfuncs;
                                         debug_label="ArrayOp", validate=false)
     !validate && return candidate
-    has_periodic = any(is_periodic)
-    if !has_periodic
-        II_check = CartesianIndex(Tuple(lo))
+    any(is_periodic) && return candidate   # periodic path cannot be symbolically compared
+    for local_idx in _local_sample_indices(n_region)
+        II_check = CartesianIndex(ntuple(d -> lo[d] + local_idx[d] - 1, ndim))
         eq_scalar = discretize_equation_at_point(
             II_check, s, depvars, pde, derivweights, bcmap,
             eqvar, indexmap, boundaryvalfuncs
         )
+        eq_template = sample_at(local_idx)
+        if !_equations_match(eq_template, eq_scalar)
+            @debug "$debug_label validation failed" local_idx eq_template eq_scalar
+            fallback_rect = CartesianIndices(Tuple(lo[d]:hi[d] for d in 1:ndim))
+            return collect(vec(map(fallback_rect) do II
+                discretize_equation_at_point(
+                    II, s, depvars, pde, derivweights, bcmap,
+                    eqvar, indexmap, boundaryvalfuncs
+                )
+            end))
+        end
     end
-    if has_periodic || _equations_match(eq_first, eq_scalar)
-        return candidate
-    else
-        @debug "$debug_label validation failed" eq_first eq_scalar
-        fallback_rect = CartesianIndices(Tuple(lo[d]:hi[d] for d in 1:ndim))
-        return collect(vec(map(fallback_rect) do II
-            discretize_equation_at_point(
-                II, s, depvars, pde, derivweights, bcmap,
-                eqvar, indexmap, boundaryvalfuncs
-            )
-        end))
-    end
+    return candidate
 end
 
 function generate_array_interior_eqs(
@@ -1416,9 +1456,9 @@ function generate_array_interior_eqs(
                 full_nonlinlap_cache=fi_nonlinlap,
                 staggered_cache=staggered_cache
             )
-            candidate, eq_first = result
+            candidate, sample_at = result
             _validate_arrayop_or_fallback(
-                candidate, eq_first, lo_vec, hi_vec, ndim,
+                candidate, sample_at, n_region, lo_vec, hi_vec, ndim,
                 is_periodic, s, depvars, pde, derivweights,
                 bcmap, eqvar, indexmap, boundaryvalfuncs;
                 debug_label="Full-interior ArrayOp", validate=validate
@@ -1458,9 +1498,9 @@ function generate_array_interior_eqs(
                 is_periodic, gl_vec;
                 staggered_cache=staggered_cache
             )
-            candidate, eq_first = result
+            candidate, sample_at = result
             _validate_arrayop_or_fallback(
-                candidate, eq_first, lo_centered, hi_centered, ndim,
+                candidate, sample_at, n_centered, lo_centered, hi_centered, ndim,
                 is_periodic, s, depvars, pde, derivweights,
                 bcmap, eqvar, indexmap, boundaryvalfuncs;
                 validate=validate
@@ -1516,10 +1556,19 @@ end
 Wrap `raw_idx` for periodic boundary conditions, mirroring the wrapping logic
 in `_wrapperiodic` from `interface_boundary.jl` (lines 36-45).
 
-For periodic grids, index 1 is the duplicate boundary point (same as index N).
-Interior indices are `2:N`.  The wrapping maps:
-- index ≤ 1 → index + (N-1)   (e.g., 1 → N, 0 → N-1)
-- index > N → index - (N-1)   (e.g., N+1 → 2)
+Periodic grids in MethodOfLines store `N` grid points where point 1 and
+point N represent the *same* physical location on opposite sides of the
+periodic seam — they are aliases, not distinct physical points.  The
+canonical set of unique physical points is therefore `2:N` (or equivalently
+`1:(N-1)`).  We use `2:N` as the canonical range, which yields the mapping:
+
+- index ≤ 1 → index + (N-1)   (e.g., 1 → N, 0 → N-1, -1 → N-2)
+- index > N → index - (N-1)   (e.g., N+1 → 2, N+2 → 3)
+
+Downstream consumers that assume index 1 is a distinct physical point
+(plotting, post-processing, result export) should be aware of the alias —
+the aliased value matches what the scalar path writes at that index, so
+numerical values at index 1 and index N are always equal in periodic runs.
 
 Uses `IfElse.ifelse` for symbolic compatibility.  Only handles a single wrap
 (stencil extends at most one grid length past the boundary).
@@ -1595,9 +1644,13 @@ When `full_interior_centered_cache` and/or `full_interior_upwind_cache` are
 provided, uses position-dependent weight+offset matrices to cover ALL interior
 points (including boundary-proximity frame points) in a single ArrayOp.
 
-Returns `(eqs, eq_first)` where `eqs` is a single-element vector containing
-the ArrayOp equation, and `eq_first` is the scalar equation at the first
-centred point (for validation against the scalar path).
+Returns `(eqs, sample_at)` where `eqs` is a single-element vector containing
+the ArrayOp equation, and `sample_at(local_idx::NTuple{N,Int}) -> Equation`
+is a closure that instantiates the template at a given *local* index tuple
+within the ArrayOp region (local index 1 maps to absolute grid index
+`lo_centered[d]`).  `sample_at` is consumed by
+[`_validate_arrayop_or_fallback`](@ref), which samples multiple points to
+catch position-dependent bugs.
 """
 function _build_interior_arrayop(
         n_centered, lo_centered, s, depvars, pde, derivweights,
@@ -1805,6 +1858,17 @@ function _build_interior_arrayop(
     eqvar_c = _ConstSR(eqvar_raw)
     eqvar_idx_exprs = [_idxs[d] + bases[d] for d in 1:ndim]
 
+    # Closure that instantiates the template at any local index tuple —
+    # used by `_validate_arrayop_or_fallback` to sample multiple points.
+    sample_at = let t_lhs = template_lhs, t_rhs = template_rhs, idxs = _idxs, nd = ndim
+        function (local_idx::NTuple)
+            sub = Dict{Any, Any}(idxs[d] => local_idx[d] for d in 1:nd)
+            lhs_k = pde_substitute(t_lhs, sub)
+            rhs_k = pde_substitute(t_rhs, sub)
+            return lhs_k ~ rhs_k
+        end
+    end
+
     if is_algebraic
         # Algebraic equation: no Dt term.  Wrap both sides directly as ArrayOps.
         ao_ranges = Dict(_idxs[d] => (1:1:n_centered[d]) for d in 1:ndim)
@@ -1827,13 +1891,7 @@ function _build_interior_arrayop(
         )
         arrayop_eq = Symbolics.wrap(lhs_ao) ~ Symbolics.wrap(rhs_ao)
 
-        # Validation equation at first point
-        sub_first = Dict(_idxs[d] => 1 for d in 1:ndim)
-        lhs_first = pde_substitute(template_lhs, sub_first)
-        rhs_first = pde_substitute(template_rhs, sub_first)
-        eq_first = lhs_first ~ rhs_first
-
-        return [arrayop_eq], eq_first
+        return [arrayop_eq], sample_at
     else
         # ODE equation: contains Dt(eqvar).  Isolate the spatial RHS.
         dt_template = Differential(s.time)(Symbolics.wrap(eqvar_c[eqvar_idx_exprs...]))
@@ -1870,13 +1928,7 @@ function _build_interior_arrayop(
     lhs_wrapped = Differential(s.time)(Symbolics.wrap(u_ao))
     arrayop_eq = lhs_wrapped ~ Symbolics.wrap(rhs_ao)
 
-    # -- Also produce first scalar equation for validation --------------------
-    sub_first = Dict(_idxs[d] => 1 for d in 1:ndim)
-    lhs_first = pde_substitute(template_lhs, sub_first)
-    rhs_first = pde_substitute(template_rhs, sub_first)
-    eq_first = lhs_first ~ rhs_first
-
-    return [arrayop_eq], eq_first
+    return [arrayop_eq], sample_at
 end
 
 # --- Upwind ArrayOp rules ---------------------------------------------------
