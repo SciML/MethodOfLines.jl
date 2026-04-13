@@ -114,14 +114,23 @@ structurally different wrapping that prevents `_equations_match` from
 succeeding even when numerics agree, and the periodic non-uniform path
 already falls back to the standard path before reaching here.
 """
-function _validate_arrayop_or_fallback(candidate, sample_at, n_region, lo, hi, ndim,
-                                        is_periodic, s, depvars, pde, derivweights,
+function _validate_arrayop_or_fallback(candidate, sample_at,
+                                        n_region::AbstractVector{Int},
+                                        lo::AbstractVector{Int},
+                                        hi::AbstractVector{Int},
+                                        ndim::Int,
+                                        is_periodic::AbstractVector{Bool},
+                                        s, depvars, pde, derivweights,
                                         bcmap, eqvar, indexmap, boundaryvalfuncs;
-                                        debug_label="ArrayOp", validate=false)
+                                        debug_label="ArrayOp", validate::Bool=false)
     !validate && return candidate
     any(is_periodic) && return candidate   # periodic path cannot be symbolically compared
     for local_idx in _local_sample_indices(n_region)
-        II_check = CartesianIndex(ntuple(d -> lo[d] + local_idx[d] - 1, ndim))
+        # `Val(ndim)` forces `ntuple` to specialize on the statically-known
+        # dimension count — without this the return type widens to `Tuple`
+        # and the downstream `CartesianIndex(...)` / `discretize_equation_at_point`
+        # calls hit runtime dispatch (JET-flagged).
+        II_check = CartesianIndex(ntuple(d -> lo[d] + local_idx[d] - 1, Val(ndim)))
         eq_scalar = discretize_equation_at_point(
             II_check, s, depvars, pde, derivweights, bcmap,
             eqvar, indexmap, boundaryvalfuncs

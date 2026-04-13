@@ -5,16 +5,28 @@ Convert an `InteriorMap` whose `.I` dict stores `[(lo, hi), …]` tuples
 (as produced by `generate_interior` for `ArrayDiscretization`) into one
 that stores `CartesianIndices` so that the existing boundary-equation code
 can consume it unchanged.
+
+The output dict is typed `Dict{Any, CartesianIndices}` so subsequent
+iteration in `generate_bc_eqs!` / `generate_extrap_eqs!` /
+`generate_corner_eqs!` sees concrete value types instead of `Any`.
 """
 function _to_scalar_interiormap(interiormap)
-    scalar_I = Dict()
+    # Use an `Any` key type because the PDE-equation key is typed
+    # heterogeneously upstream in `InteriorMap`; narrowing the value type
+    # is enough to lift the value-side type instability JET flagged.
+    scalar_I = Dict{Any, CartesianIndices}()
     for (pde, ranges) in interiormap.I
-        if ranges isa AbstractVector && !isempty(ranges) && first(ranges) isa Tuple
-            cart_ranges = Tuple(r[1]:r[2] for r in ranges)
-            scalar_I[pde] = CartesianIndices(cart_ranges)
+        cart_ranges = if ranges isa AbstractVector && !isempty(ranges) && first(ranges) isa Tuple
+            # ArrayDiscretization path: `ranges` is `Vector{Tuple{Int,Int}}`.
+            Tuple(r[1]:r[2] for r in ranges)
+        elseif ranges isa CartesianIndices
+            ranges.indices
         else
-            scalar_I[pde] = ranges
+            # Defensive: any other shape we don't handle gets re-wrapped
+            # so downstream `CartesianIndices` iteration keeps working.
+            (ranges,)
         end
+        scalar_I[pde] = CartesianIndices(cart_ranges)
     end
     return InteriorMap(
         interiormap.var, interiormap.pde, scalar_I,
