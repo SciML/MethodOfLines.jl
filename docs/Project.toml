@@ -25,7 +25,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 [compat]
 Combinatorics = "1"
 DiffEqBase = "6, 7"
-DifferentialEquations = "7"
+DifferentialEquations = "7, 8"
 Documenter = "1"
 DomainSets = "0.7"
 IfElse = "0.1"
