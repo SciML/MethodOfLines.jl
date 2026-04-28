@@ -1,3 +1,6 @@
+include("weno_weights.jl")
+include("weno_symbolic.jl")
+
 """
 Implements the WENO scheme of Jiang and Shu.
 Specified in https://repository.library.brown.edu/studio/item/bdr:297524/PDF/ (Page 8-9)
@@ -67,3 +70,5 @@ function WENOScheme(; epsilon = 1.0e-6)
         weno_f, boundary_f, boundary_f, false, [epsilon], name = "WENO"
     )
 end
+
+export generate_weno_ast
