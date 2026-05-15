@@ -96,6 +96,9 @@ function PDEBase.construct_differential_discretizer(
         )
         # A 0th order derivative off the grid is an interpolation
         push!(interp, x => CompleteHalfCenteredDifference(0, max(4, approx_order), dx))
+        if length(dx) < 7
+            throw(ArgumentError("The provided non-uniform grid for dimension $(x) is too small. Boundary extrapolation requires at least 7 points. Please refine your grid."))
+        end
         push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), dx))
     end
 
