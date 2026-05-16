@@ -34,7 +34,6 @@ function PDEBase.construct_differential_discretizer(
     for x in s.x̄
         orders_ = orders[x]
         _orders = Set(vcat(orders_, [1, 2]))
-
         if s.grid[x] isa StepRangeLen # Uniform grid case
             dx = s.dxs[x]
 
@@ -42,24 +41,34 @@ function PDEBase.construct_differential_discretizer(
                 nonlinlap_outer,
                 Differential(x) => CompleteHalfCenteredDifference(1, approx_order, dx)
             )
+            
+            # # Standard operators for uniform grids
+            rs = [
+                (Differential(x)^d) => CompleteCenteredDifference(d, approx_order, dx)
+                    for d in _orders
+            ]
+            differentialmap = vcat(differentialmap, rs)
+            
         elseif s.grid[x] isa AbstractVector # The nonuniform grid case
-            dx = s.grid[x]
-
+            println("🚀 [GSoC POC] ATTENTION: Non-Uniform Grid Detected! Array size: ", length(s.grid[x]))
+            dx = s.grid[x] # Keeping the name as dx to prevent downstream code (windpos, etc.) from crashing.
             nonlinlap_outer = push!(
                 nonlinlap_outer,
                 Differential(x) => CompleteHalfCenteredDifference(
                     1, approx_order, [(dx[i + 1] + dx[i]) / 2 for i in 1:(length(dx) - 1)]
                 )
             )
+            # Custom operator generation for non-uniform grids (GSoC POC)
+            rs = [
+                (Differential(x)^d) => CompleteCenteredDifference(d, approx_order, dx)
+                    for d in _orders
+            ]
+            differentialmap = vcat(differentialmap, rs)
         else
             error("s.grid contains nonvectors")
         end
-        rs = [
-            (Differential(x)^d) => CompleteCenteredDifference(d, approx_order, dx)
-                for d in _orders
-        ]
-        differentialmap = vcat(differentialmap, rs)
 
+        # Note: The default generic rs = [] block is handled within the conditional branches above
         if advection_scheme isa UpwindScheme
             upwind_orders = orders_[isodd.(orders_)]
         else
@@ -98,7 +107,7 @@ function PDEBase.construct_differential_discretizer(
         push!(interp, x => CompleteHalfCenteredDifference(0, max(4, approx_order), dx))
         push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), dx))
     end
-
+    
     return DifferentialDiscretizer{
         eltype(orders), typeof(Dict(differentialmap)), typeof(advection_scheme),
     }(
