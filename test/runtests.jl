@@ -50,6 +50,18 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         end
     end
 
+    if GROUP == "All" || GROUP == "NonUniform_Upwind"
+        @time @safetestset "Non-Uniform Upwind: Convergence (MMS)" begin
+            include("pde_systems/MOL_1D_NonUniform_Upwind_Convergence.jl")
+        end
+        @time @safetestset "Non-Uniform Upwind: Performance & Type Stability" begin
+            include("pde_systems/MOL_1D_NonUniform_Upwind_Performance.jl")
+        end
+        @time @safetestset "Non-Uniform Upwind: Chaotic Variable Wind" begin
+            include("pde_systems/MOL_1D_NonUniform_Upwind_Chaotic.jl")
+        end
+    end
+
     if GROUP == "All" || GROUP == "Nonlinlap_ADV"
         @time @safetestset "MOLFiniteDifference Interface: Advanced Nonlinear Diffusion" begin
             include("pde_systems/nonlinear_laplacian_advanced.jl")

@@ -43,11 +43,13 @@ Symbolics = "7"
 julia = "1.10"
 
 [extras]
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "NonlinearSolve", "SafeTestsets", "StableRNGs", "Pkg"]
+test = ["Test", "ForwardDiff", "NonlinearSolve", "SafeTestsets", "StableRNGs", "Pkg", "Printf"]
