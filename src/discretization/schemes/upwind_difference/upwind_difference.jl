@@ -35,8 +35,6 @@ end
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     I1 = unitindex(ndims(u, s), j)
     if !ispositive
-        @assert D.offside == 0
-
         if (II[j] > (length(s, x) - D.boundary_point_count))
             weights = D.high_boundary_coefs[length(s, x) - II[j] + 1]
             offset = length(s, x) - II[j]
@@ -59,6 +57,47 @@ end
 end
 
 """
+Zero-allocation first-order upwind stencil for non-uniform grids using the Fornberg
+half-node formula. Builds the symbolic expression directly into the AST without
+allocating any weight or tap-point vector.
+
+  v > 0  (left-biased):  (u_i - u_{i-1}) / (x_i - x_{i-1})
+  v < 0  (right-biased): (u_{i+1} - u_i) / (x_{i+1} - x_i)
+
+Boundary fallback: at i == 1 the right-biased stencil is used; at i == n the
+left-biased stencil is used. In practice the PDE solver never evaluates interior
+upwind rules at the boundary nodes (those are handled by BC equations), so these
+branches are defensive only.
+"""
+@inline function _fornberg_upwind(
+        II::CartesianIndex, s::DiscreteSpace,
+        (j, x), u, ufunc, ispositive
+    )
+    I1 = unitindex(ndims(u, s), j)
+    i = II[j]
+    xgrid = s.grid[x]
+    n = length(xgrid)
+
+    if ispositive
+        if i > 1
+            Δx = xgrid[i] - xgrid[i - 1]
+            return (ufunc(u, II, x) - ufunc(u, II - I1, x)) / Δx
+        else
+            Δx = xgrid[i + 1] - xgrid[i]
+            return (ufunc(u, II + I1, x) - ufunc(u, II, x)) / Δx
+        end
+    else
+        if i < n
+            Δx = xgrid[i + 1] - xgrid[i]
+            return (ufunc(u, II + I1, x) - ufunc(u, II, x)) / Δx
+        else
+            Δx = xgrid[i] - xgrid[i - 1]
+            return (ufunc(u, II, x) - ufunc(u, II - I1, x)) / Δx
+        end
+    end
+end
+
+"""
 # upwind_difference
 Generate a finite difference expression in `u` using the upwind difference at point `II::CartesianIndex`
 in the direction of `x`
@@ -70,10 +109,13 @@ function upwind_difference(
     j, x = jx
     # return if this is an ODE
     ndims(u, s) == 0 && return 0
+
+    if d == 1 && !(s.grid[x] isa StepRangeLen)
+        return _fornberg_upwind(II, s, jx, u, ufunc, ispositive)
+    end
+
     D = !ispositive ? derivweights.windmap[1][Differential(x)^d] :
         derivweights.windmap[2][Differential(x)^d]
-    #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
-    # unit index in direction of the derivative
     weights, Itap = _upwind_difference(D, II, s, bs, ispositive, u, jx)
     return sym_dot(weights, ufunc(u, Itap, x))
 end
