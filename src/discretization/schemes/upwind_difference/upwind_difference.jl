@@ -35,6 +35,8 @@ end
     @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     I1 = unitindex(ndims(u, s), j)
     if !ispositive
+        @assert D.offside == 0
+
         if (II[j] > (length(s, x) - D.boundary_point_count))
             weights = D.high_boundary_coefs[length(s, x) - II[j] + 1]
             offset = length(s, x) - II[j]
@@ -116,6 +118,8 @@ function upwind_difference(
 
     D = !ispositive ? derivweights.windmap[1][Differential(x)^d] :
         derivweights.windmap[2][Differential(x)^d]
+    #@show D.stencil_coefs, D.stencil_length, D.boundary_stencil_length, D.boundary_point_count
+    # unit index in direction of the derivative
     weights, Itap = _upwind_difference(D, II, s, bs, ispositive, u, jx)
     return sym_dot(weights, ufunc(u, Itap, x))
 end
