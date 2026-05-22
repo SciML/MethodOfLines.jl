@@ -112,7 +112,10 @@ function upwind_difference(
     # return if this is an ODE
     ndims(u, s) == 0 && return 0
 
-    if d == 1 && !(s.grid[x] isa StepRangeLen)
+    upwind_order = derivweights.advection_scheme isa UpwindScheme ?
+        derivweights.advection_scheme.order : 1
+    if d == 1 && upwind_order == 1 && !(s.grid[x] isa StepRangeLen)
+        @assert length(bs) == 0 "Periodic/interface BCs are not yet supported for non-uniform first-order upwind."
         return _fornberg_upwind(II, s, jx, u, ufunc, ispositive)
     end
 
