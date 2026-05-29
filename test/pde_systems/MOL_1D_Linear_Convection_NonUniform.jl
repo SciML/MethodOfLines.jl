@@ -373,3 +373,45 @@ end
         @test s_step.dxs[x] isa Number
     end
 end
+
+@testset "Periodic boundary conditions" begin
+    L = 1.0
+    v = 1.0
+    tspan = (0.0, 0.4)
+    xgrid = symmetric_cluster_grid(0.0, L, 101; stretch = 7.0)
+    u0 = x -> sin(2π * x / L)
+    u_exact = (x, t) -> translating_sine_exact(x, t, v, L)
+
+    @test stretching_ratio(xgrid) >= 50.0
+
+    t0, tf = tspan
+    x0, xL = xgrid[1], xgrid[end]
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -v * Dx(u(t, x))
+    bcs = [
+        u(t0, x) ~ u0(x),
+        u(t, x0) ~ u(t, xL),
+    ]
+    domains = [t ∈ Interval(t0, tf), x ∈ Interval(x0, xL)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc = MOLFiniteDifference(
+        [x => xgrid], t; advection_scheme = UpwindScheme(),
+    )
+
+    # Periodic conditions are routed as interface boundaries, which currently
+    # throw an AssertionError on non-uniform grids.
+    @test_throws AssertionError discretize(pdesys, disc)
+
+    # TODO: Uncomment and verify convergence once supported.
+    # prob = discretize(pdesys, disc)
+    # dt = advection_timestep(xgrid, v)
+    # sol = solve(prob, SSPRK33(); dt = dt, saveat = [tf], adaptive = false)
+    # xs = sol[x]
+    # u_num = sol[u(t, x)][end, :]
+    # u_ref = u_exact(xs, tf)
+    # @test all(isfinite, u_num)
+    # @test rel_l2(u_num, u_ref, xs) < L2_RTOL
+end
