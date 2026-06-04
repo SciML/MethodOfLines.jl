@@ -1,5 +1,6 @@
 using DomainSets
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
+using OrdinaryDiffEqSDIRK: TRBDF2
 
 # using Plots
 

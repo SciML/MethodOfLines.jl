@@ -94,6 +94,34 @@ Base.@propagate_inbounds function Base.getindex(
     end
 end
 
+# The PDE solution stores `u` as a `Dict` of dependent variable => array, so the generic
+# `AbstractVectorOfArray` size/length machinery (which iterates `sol.u` expecting a vector
+# of arrays) does not apply. A MOL time series solution is indexed over its saved time
+# points, so report length/size/ndims accordingly.
+Base.length(
+    A::SciMLBase.PDETimeSeriesSolution{T, N, S, D}
+) where {T, N, S, D <: MOLMetadata} = length(A.t)
+
+Base.size(
+    A::SciMLBase.PDETimeSeriesSolution{T, N, S, D}
+) where {T, N, S, D <: MOLMetadata} = (length(A.t),)
+
+Base.ndims(
+    ::SciMLBase.PDETimeSeriesSolution{T, N, S, D}
+) where {T, N, S, D <: MOLMetadata} = 1
+
+Base.axes(
+    A::SciMLBase.PDETimeSeriesSolution{T, N, S, D}
+) where {T, N, S, D <: MOLMetadata} = (Base.OneTo(length(A.t)),)
+
+Base.firstindex(
+    ::SciMLBase.PDETimeSeriesSolution{T, N, S, D}
+) where {T, N, S, D <: MOLMetadata} = 1
+
+Base.lastindex(
+    A::SciMLBase.PDETimeSeriesSolution{T, N, S, D}
+) where {T, N, S, D <: MOLMetadata} = length(A.t)
+
 function Base.display(
         pdesol::SciMLBase.PDESolution{
             T, N, S, D,

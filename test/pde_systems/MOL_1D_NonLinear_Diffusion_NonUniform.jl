@@ -5,6 +5,8 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using OrdinaryDiffEqRosenbrock: Rosenbrock32
+using SciMLBase
 using ModelingToolkit: Differential
 using StableRNGs
 

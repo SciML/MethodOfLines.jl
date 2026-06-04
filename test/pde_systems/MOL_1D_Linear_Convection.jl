@@ -2,6 +2,7 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSets
+using OrdinaryDiffEqLowOrderRK: Euler
 #using Plots
 # Tests
 

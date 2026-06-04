@@ -1,4 +1,6 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
+using OrdinaryDiffEqRosenbrock: Rodas4, Rodas4P
+using SciMLBase
 using ModelingToolkit: operation, iscall, arguments
 using DomainSets
 using NonlinearSolve

@@ -2,6 +2,8 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSets
+using OrdinaryDiffEqSSPRK: SSPRK33
+using OrdinaryDiffEqRosenbrock: Rodas4P
 #using Plots
 # Tests
 
