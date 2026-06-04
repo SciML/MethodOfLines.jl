@@ -5,6 +5,23 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 using OrdinaryDiffEqRosenbrock: Rodas4
 using ModelingToolkit: Differential
 
+# Composite trapezoidal-rule weights for a (possibly non-uniform) 1D grid `xs`.
+# `dot(trapezoidal_weights(xs), u)` approximates ∫u dx: each interior node gets the
+# half-spacing on either side, and the two endpoints get a single half-spacing. Unlike a
+# plain `sum(u)` rectangle rule this carries no O(Δx) boundary bias, so it tracks a
+# conserved integral down to the time-integration error rather than the spatial scheme's
+# quadrature error.
+function trapezoidal_weights(xs)
+    n = length(xs)
+    w = zeros(eltype(xs), n)
+    for i in 1:n
+        lo = i == 1 ? zero(eltype(xs)) : (xs[i] - xs[i - 1]) / 2
+        hi = i == n ? zero(eltype(xs)) : (xs[i + 1] - xs[i]) / 2
+        w[i] = lo + hi
+    end
+    return w
+end
+
 # Tests
 @testset "Test 00: Dt(u(t,x)) ~ Dxx(u(t,x))" begin
     # Method of Manufactured Solutions
@@ -215,17 +232,21 @@ end
         # end
 
         u_approx = sol[u(t, x)]
+        # Homogeneous Neumann BCs make ∫u dx a conserved quantity; here ∫₀^π cos(x) dx = 0.
+        # Integrate with composite trapezoidal weights built from the actual grid spacing
+        # (so it is correct on both the center-aligned and the half-step-offset edge-aligned
+        # grids). A plain `sum(u)` rectangle rule carries an O(Δx) boundary bias that drifts
+        # to ~1e-7 on the edge-aligned grid; the trapezoidal integral instead conserves down
+        # to the Tsit5 time-integration error (~6e-10 edge / ~4e-13 center at the default
+        # tolerances, both → ~1e-15 when the solver tolerance is tightened), so a strict
+        # atol holds honestly.
+        w = trapezoidal_weights(x_sol)
+        integral0 = dot(w, u_approx[1, :])
         # Test against exact solution
         for i in 1:length(sol)
             exact = u_exact(x_sol, t_sol[i])
             @test all(isapprox.(u_approx[i, :], exact, atol = 0.01))
-            # `sum(u)` is a rectangle-rule proxy for the conserved integral ∫u dx = 0.
-            # The edge-aligned grid places nodes offset by half a step, so its rectangle
-            # sum drifts to ~1e-7 at the default Tsit5 tolerances (the center-aligned grid
-            # stays ~1e-11). 1e-6 still verifies conservation to six digits across both
-            # alignments. (Previously this assertion only ran at i=1 because length(sol)
-            # incorrectly returned 1 for single-variable solutions.)
-            @test sum(u_approx[i, :]) ≈ 0 atol = 1.0e-6
+            @test dot(w, u_approx[i, :]) ≈ integral0 atol = 1.0e-9
         end
     end
 end
