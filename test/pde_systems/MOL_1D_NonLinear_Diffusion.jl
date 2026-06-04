@@ -5,6 +5,8 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using OrdinaryDiffEqRosenbrock: Rosenbrock32
+using SciMLBase
 using ModelingToolkit: Differential
 # Tests
 @testset "Test 00: Dt(u(t,x)) ~ Dx(u(t,x)^(-1) * Dx(u(t,x)))" begin

@@ -2,6 +2,7 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using OrdinaryDiffEqRosenbrock: Rodas4
 using ModelingToolkit: Differential
 
 # Tests

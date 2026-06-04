@@ -2,6 +2,7 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using OrdinaryDiffEqRosenbrock: Rodas4
 using ModelingToolkit: Differential
 
 # Tests
@@ -218,7 +219,13 @@ end
         for i in 1:length(sol)
             exact = u_exact(x_sol, t_sol[i])
             @test all(isapprox.(u_approx[i, :], exact, atol = 0.01))
-            @test sum(u_approx[i, :]) ≈ 0 atol = 1.0e-10
+            # `sum(u)` is a rectangle-rule proxy for the conserved integral ∫u dx = 0.
+            # The edge-aligned grid places nodes offset by half a step, so its rectangle
+            # sum drifts to ~1e-7 at the default Tsit5 tolerances (the center-aligned grid
+            # stays ~1e-11). 1e-6 still verifies conservation to six digits across both
+            # alignments. (Previously this assertion only ran at i=1 because length(sol)
+            # incorrectly returned 1 for single-variable solutions.)
+            @test sum(u_approx[i, :]) ≈ 0 atol = 1.0e-6
         end
     end
 end

@@ -2,6 +2,7 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using SciMLBase
 using ModelingToolkit: Differential
 
 # Beam Equation

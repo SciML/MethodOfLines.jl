@@ -1,6 +1,7 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils,
     LinearAlgebra
 using OrdinaryDiffEq
+using OrdinaryDiffEqLowOrderRK: SplitEuler
 
 @testset "1D wave equation, staggered grid, Mixed BC" begin
     @parameters t x

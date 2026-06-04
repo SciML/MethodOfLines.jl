@@ -1,5 +1,6 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets,
     NonlinearSolve
+using SciMLBase
 using ModelingToolkit: Differential
 
 # Broken in MTK - second-order time derivatives cause order lowering in mtkcompile,
