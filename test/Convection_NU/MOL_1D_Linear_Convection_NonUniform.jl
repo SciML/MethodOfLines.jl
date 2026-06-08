@@ -379,6 +379,7 @@ end
         @test s_step.dxs[x] isa Number
     end
 end
+<<<<<<< HEAD
 
 @testset "Coarse grid error" begin
     L = 1.0
@@ -436,3 +437,5 @@ end
     # @test all(isfinite, u_num)
     # @test rel_l2(u_num, u_ref, xs) < L2_RTOL
 end
+=======
+>>>>>>> ba1fa421 (feat: non-uniform support for interface and periodic boundaries via UpwindScheme)

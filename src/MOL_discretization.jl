@@ -27,18 +27,36 @@ function mismatched_interface_dxs(b, discretization::MOLFiniteDifference)
     return discretization.dxs[Num(b.x)] != discretization.dxs[Num(b.x2)]
 end
 
+function _interface_physical_coords(b, grid1, grid2)
+    if isupper(b)
+        return grid1[end], grid2[1]
+    else
+        return grid1[1], grid2[end]
+    end
+end
+
 function PDEBase.check_boundarymap(boundarymap, discretization::MOLFiniteDifference)
     bs = filter_interfaces(flatten_vardict(boundarymap))
     ascheme = discretization.advection_scheme
     for b in bs
-        if mismatched_interface_dxs(b, discretization)
+        mismatched_interface_dxs(b, discretization) || continue
+        dx1 = discretization.dxs[Num(b.x)]
+        dx2 = discretization.dxs[Num(b.x2)]
+        if dx1 isa AbstractVector && dx2 isa AbstractVector
             # NU FunctionalScheme uses exact interface coordinates (bcoord) for advection;
             # dx match waived. Non-advection orders are rejected by validate_interface_orders.
-            if ascheme isa FunctionalScheme && ascheme.is_nonuniform &&
-                    discretization.dxs[Num(b.x)] isa AbstractVector &&
-                    discretization.dxs[Num(b.x2)] isa AbstractVector
+            if ascheme isa FunctionalScheme && ascheme.is_nonuniform
                 continue
             end
+            # UpwindScheme supports nonuniform grids across the interface as long as the
+            # physical coordinates align at the interface boundary.
+            coord1, coord2 = _interface_physical_coords(b, dx1, dx2)
+            if !isapprox(coord1, coord2)
+                throw(ArgumentError(
+                    "The physical coordinates at the interface between $(b.x) and $(b.x2) must match for nonuniform grids, got $coord1 and $coord2 at the interface. Please ensure the grids align at the interface boundary."
+                ))
+            end
+        else
             throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
         end
     end
