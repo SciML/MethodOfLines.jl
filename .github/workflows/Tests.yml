@@ -19,37 +19,5 @@ concurrency:
 
 jobs:
   tests:
-    name: "Tests"
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-          - "1"
-          - "lts"
-          - "pre"
-        group:
-          - "Components"
-          - "Sol_Interface"
-          - "MOL_Interface1"
-          # "MOL_Interface2" - disabled: stalls for 6+ hours on lts/pre, see issue
-          - "Diffusion"
-          - "Diffusion_NU"
-          - "Nonlinear_Diffusion"
-          - "Nonlinear_Diffusion_NU"
-          - "2D_Diffusion"
-          - "Convection"
-          - "Convection_WENO"
-          - "Higher_Order"
-          - "Stationary"
-          - "DAE"
-          - "Integrals"
-          - "Burgers"
-          # "Brusselator" - disabled: stalls in runner queue for hours, see #521
-          - "Mixed_Derivatives"
-          - "Wave_Eq_Staggered"
-          - "Complex"
-    uses: "SciML/.github/.github/workflows/tests.yml@v1"
-    with:
-      julia-version: "${{ matrix.version }}"
-      group: "${{ matrix.group }}"
+    uses: "SciML/.github/.github/workflows/grouped-tests.yml@v1"
     secrets: "inherit"
