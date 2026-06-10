@@ -1,4 +1,6 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using OrdinaryDiffEqSSPRK: SSPRK33
+using SciMLBase
 using ModelingToolkit: Differential
 
 @parameters t x x1 x2 x3 x4
@@ -47,7 +49,9 @@ function one_sided_cluster_grid(a, b, n::Integer; ratio = 1000.0)
     r = ratio^(1 / (m - 1))
     dx = collect(r .^ (0:(m - 1)))
     dx .*= (b - a) / sum(dx)
-    return collect(a .+ [0.0; cumsum(dx)])
+    x = collect(a .+ [0.0; cumsum(dx)])
+    x[end] = b
+    return x
 end
 
 function right_cluster_grid(a, b, n::Integer; ratio = 1000.0)
@@ -55,7 +59,9 @@ function right_cluster_grid(a, b, n::Integer; ratio = 1000.0)
     r = ratio^(1 / (m - 1))
     dx = reverse(collect(r .^ (0:(m - 1))))
     dx .*= (b - a) / sum(dx)
-    return collect(a .+ [0.0; cumsum(dx)])
+    x = collect(a .+ [0.0; cumsum(dx)])
+    x[end] = b
+    return x
 end
 
 stretching_ratio(x::AbstractVector) = maximum(diff(x)) / minimum(diff(x))
@@ -263,6 +269,8 @@ end
     )
 
     @test_throws ArgumentError get_discrete(pdesys, disc)
+    # The validation must fire on the real user entry point, not just get_discrete.
+    @test_throws ArgumentError discretize(pdesys, disc)
 end
 
 @testset "Mismatched scalar step size rejects vector interface pairing" begin
@@ -296,6 +304,51 @@ end
     )
 
     @test_throws ArgumentError get_discrete(pdesys, disc)
+    @test_throws ArgumentError discretize(pdesys, disc)
+end
+
+@testset "Cross-domain periodic ring topology rejects discretization" begin
+    x1grid = one_sided_cluster_grid(0.0, 0.5, 31; ratio = 50.0)
+    x2grid = one_sided_cluster_grid(0.5, 1.0, 31; ratio = 50.0)
+
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+
+    eqs = [
+        Dt(u1(t, x1)) ~ -Dx1(u1(t, x1)),
+        Dt(u2(t, x2)) ~ -Dx2(u2(t, x2)),
+    ]
+    bcs = [
+        u1(0.0, x1) ~ sin(2π * x1),
+        u2(0.0, x2) ~ sin(2π * x2),
+        u1(t, 0.5) ~ u2(t, 0.5),
+        u2(t, 1.0) ~ u1(t, 0.0),
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1),
+        x1 ∈ Interval(0.0, 0.5),
+        x2 ∈ Interval(0.5, 1.0),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)],
+    )
+    disc = MOLFiniteDifference(
+        [x1 => x1grid, x2 => x2grid], t; advection_scheme = UpwindScheme(),
+    )
+
+    @test_throws ArgumentError discretize(pdesys, disc)
+end
+
+@testset "UpwindScheme order > 1 on nonuniform interface fails gracefully" begin
+    pdesys = build_mismatch_interface_system(; u0 = x -> sin(2π * x))
+    x1grid = one_sided_cluster_grid(0.0, 0.5, 21; ratio = 50.0)
+    x2grid = one_sided_cluster_grid(0.5, 1.0, 21; ratio = 50.0)
+    disc = MOLFiniteDifference(
+        [x1 => x1grid, x2 => x2grid], t; advection_scheme = UpwindScheme(2),
+    )
+
+    @test_throws ArgumentError discretize(pdesys, disc)
 end
 
 @testset "Nonuniform interface grids route to AbstractVector topology" begin
