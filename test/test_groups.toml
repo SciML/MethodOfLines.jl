@@ -25,6 +25,9 @@ versions = ["lts", "1", "pre"]
 [Convection]
 versions = ["lts", "1", "pre"]
 
+[Convection_Interface_NU]
+versions = ["lts", "1", "pre"]
+
 [Convection_WENO]
 versions = ["lts", "1", "pre"]
 
