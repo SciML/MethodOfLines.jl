@@ -54,20 +54,18 @@ end
 
 # Physical coordinate of stencil tap I on the nonuniform grid, resolving
 # RefCartesianIndex taps to the correct domain. When `raw_j` is supplied
-# (index before bwrap), shift by ±L on same-domain periodic wraps so
-# Fornberg stencils stay monotone.
+# (index before bwrap), a same-domain periodic wrap is detected as
+# tap_j != raw_j and the coordinate is shifted by ±L so Fornberg stencils
+# stay monotone; bwrap also wraps raw_j == 1 (u[1] ~ u[end]), which a
+# bounds test on raw_j alone would miss.
 @inline function _upwind_stencil_coord(I, s, bs, j, x; raw_j = nothing)
     grid_iv = I isa RefCartesianIndex ? _upwind_stencil_grid_iv(I, s, bs, j, x) : x
     tap_j = I isa RefCartesianIndex ? I.I[j] : I[j]
     coord = s.grid[grid_iv][tap_j]
-    if raw_j !== nothing && isequal(grid_iv, x)
+    if raw_j !== nothing && isequal(grid_iv, x) && tap_j != raw_j
         L = _upwind_stencil_periodic_length(s, bs, j, x)
         if L !== nothing
-            if raw_j > length(s, x)
-                coord += L
-            elseif raw_j < 1
-                coord -= L
-            end
+            coord += raw_j > tap_j ? L : -L
         end
     end
     return coord
@@ -114,6 +112,12 @@ end
     offsets = _nonuniform_upwind_stencil_offsets(D, ispositive)
     raw_js = [(II + offsets[k] * I1)[j] for k in eachindex(offsets)]
     Itap = [bwrap(II + offsets[k] * I1, bs, s, jx) for k in eachindex(offsets)]
+    for It in Itap
+        iv = It isa RefCartesianIndex ? _upwind_stencil_grid_iv(It, s, bs, j, x) : x
+        if !(1 <= It[j] <= length(s, iv))
+            throw(ArgumentError("The upwind stencil for $u along $x extends past a non-interface boundary on a nonuniform grid. Stencils wider than first order upwind (higher approximation or derivative orders) are not yet supported with nonuniform interface boundaries."))
+        end
+    end
     x0 = _upwind_stencil_coord(II, s, bs, j, x)
     coords = [
         _upwind_stencil_coord(Itap[k], s, bs, j, x; raw_j = raw_js[k]) for k in eachindex(Itap)
