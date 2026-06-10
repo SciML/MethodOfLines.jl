@@ -1,4 +1,6 @@
-using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, DomainSets
+using OrdinaryDiffEqSSPRK: SSPRK33
+using SciMLBase
 using ModelingToolkit: Differential
 
 @parameters t x
@@ -47,7 +49,9 @@ function one_sided_cluster_grid(a, b, n::Integer; ratio = 1000.0)
     r = ratio^(1 / (m - 1))
     dx = collect(r .^ (0:(m - 1)))
     dx .*= (b - a) / sum(dx)
-    return collect(a .+ [0.0; cumsum(dx)])
+    g = collect(a .+ [0.0; cumsum(dx)])
+    g[end] = b
+    return g
 end
 
 function right_cluster_grid(a, b, n::Integer; ratio = 1000.0)
@@ -55,7 +59,9 @@ function right_cluster_grid(a, b, n::Integer; ratio = 1000.0)
     r = ratio^(1 / (m - 1))
     dx = reverse(collect(r .^ (0:(m - 1))))
     dx .*= (b - a) / sum(dx)
-    return collect(a .+ [0.0; cumsum(dx)])
+    g = collect(a .+ [0.0; cumsum(dx)])
+    g[end] = b
+    return g
 end
 
 stretching_ratio(x::AbstractVector) = maximum(diff(x)) / minimum(diff(x))
