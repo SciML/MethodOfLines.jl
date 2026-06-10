@@ -8,6 +8,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
 # Start Test Script
 
 @time begin
+    if GROUP == "QA"
+        @time include("qa/qa.jl")
+    end
     if GROUP == "All" || GROUP == "Components"
         @time @safetestset "MOLFiniteDifference Utils" begin
             include("utils_test.jl")

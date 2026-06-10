@@ -1,0 +1,56 @@
+[Components]
+versions = ["lts", "1", "pre"]
+
+[Sol_Interface]
+versions = ["lts", "1", "pre"]
+
+[MOL_Interface1]
+versions = ["lts", "1", "pre"]
+
+[Diffusion]
+versions = ["lts", "1", "pre"]
+
+[Diffusion_NU]
+versions = ["lts", "1", "pre"]
+
+[Nonlinear_Diffusion]
+versions = ["lts", "1", "pre"]
+
+[Nonlinear_Diffusion_NU]
+versions = ["lts", "1", "pre"]
+
+[2D_Diffusion]
+versions = ["lts", "1", "pre"]
+
+[Convection]
+versions = ["lts", "1", "pre"]
+
+[Convection_WENO]
+versions = ["lts", "1", "pre"]
+
+[Higher_Order]
+versions = ["lts", "1", "pre"]
+
+[Stationary]
+versions = ["lts", "1", "pre"]
+
+[DAE]
+versions = ["lts", "1", "pre"]
+
+[Integrals]
+versions = ["lts", "1", "pre"]
+
+[Burgers]
+versions = ["lts", "1", "pre"]
+
+[Mixed_Derivatives]
+versions = ["lts", "1", "pre"]
+
+[Wave_Eq_Staggered]
+versions = ["lts", "1", "pre"]
+
+[Complex]
+versions = ["lts", "1", "pre"]
+
+[QA]
+versions = ["lts", "1"]
