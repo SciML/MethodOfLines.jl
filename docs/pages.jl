@@ -9,6 +9,7 @@ pages = [
         "tutorials/icbc_sampled.md",
         "tutorials/PIDE.md",
         "tutorials/schroedinger.md",
+        "tutorials/nonuniform_grid.md",
     ],
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
     "Solution Interface - PDESolutions" => "solutions.md",
