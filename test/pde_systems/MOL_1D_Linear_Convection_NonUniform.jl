@@ -7,7 +7,7 @@ using ModelingToolkit: Differential
 @variables u(..)
 
 const L2_RTOL = 0.2
-const MASS_RTOL = 5e-2
+const MASS_RTOL = 5.0e-2
 
 cell_widths(x::AbstractVector) = [diff(x)...; diff(x)[end]]
 
