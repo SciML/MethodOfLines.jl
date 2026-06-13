@@ -151,6 +151,11 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
             include("pde_systems/MOL_1D_Linear_Convection_NonUniform.jl")
         end
     end
+    if GROUP == "All" || GROUP == "Convection_Interface_NU"
+        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Convection, Upwind Non-Uniform Interfaces" begin
+            include("pde_systems/MOL_1D_Interface_Upwind_NonUniform.jl")
+        end
+    end
     if GROUP == "All" || GROUP == "Wave_Eq_Staggered"
         @time @safetestset "MOLFiniteDifference Interface: 1D Wave Equation, Staggered" begin
             include("pde_systems/wave_eq_staggered.jl")
