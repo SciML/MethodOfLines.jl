@@ -24,6 +24,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         @time @safetestset "Fornberg" begin
             include("components/MOLfornberg_weights.jl")
         end
+        @time @safetestset "WENO dispatch" begin
+            include("components/weno_dispatch.jl")
+        end
         @time @safetestset "ODEFunction" begin
             include("components/ODEFunction_test.jl")
         end
