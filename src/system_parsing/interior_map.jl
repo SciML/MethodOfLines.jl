@@ -31,6 +31,7 @@ function PDEBase.construct_var_equation_mapping(
         pdes::Vector{Equation}, boundarymap, s::DiscreteSpace{N, M},
         discretization::MOLFiniteDifference
     ) where {N, M}
+    validate_system_wellposedness(pdes, boundarymap, s, discretization)
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
