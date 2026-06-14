@@ -33,6 +33,9 @@ const is_TRAVIS = haskey(ENV, "TRAVIS")
         @time @safetestset "Discrete Callbacks" begin
             include("components/callbacks.jl")
         end
+        @time @safetestset "Boundary validation" begin
+            include("components/boundary_validation_test.jl")
+        end
         #@time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
     end
     if GROUP == "All" || GROUP == "Complex"
