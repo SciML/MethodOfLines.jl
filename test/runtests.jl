@@ -1,159 +1,79 @@
 using SafeTestsets
-using Pkg
+using SciMLTesting
 
-const GROUP = get(ENV, "GROUP", "All")
-const is_APPVEYOR = Sys.iswindows() && haskey(ENV, "APPVEYOR")
-const is_TRAVIS = haskey(ENV, "TRAVIS")
+const FUNCTIONAL_GROUPS = [
+    "Components",
+    "Complex",
+    "Brusselator",
+    "Diffusion_NU",
+    "Nonlinlap_ADV",
+    "Sol_Interface",
+    "MOL_Interface2",
+    "Diffusion",
+    "Integrals",
+    "Convection_WENO",
+    "Higher_Order",
+    "Stationary",
+    "Mixed_Derivatives",
+    "DAE",
+    "Nonlinear_Diffusion",
+    "Nonlinear_Diffusion_NU",
+    "MOL_Interface1",
+    "2D_Diffusion",
+    "Burgers",
+    "Convection",
+    "Convection_NU",
+    "Wave_Eq_Staggered",
+]
 
-# Start Test Script
-
-@time begin
-    if GROUP == "QA"
-        @time include("qa/qa.jl")
-    end
-    if GROUP == "All" || GROUP == "Components"
-        @time @safetestset "MOLFiniteDifference Utils" begin
-            include("utils_test.jl")
-        end
-        @time @safetestset "Discretization of space and grid types" begin
-            include("components/DiscreteSpace.jl")
-        end
-        @time @safetestset "Variable PDE mapping and interior construction" begin
-            include("components/interiormap_test.jl")
-        end
-        @time @safetestset "Fornberg" begin
-            include("components/MOLfornberg_weights.jl")
-        end
-        @time @safetestset "ODEFunction" begin
-            include("components/ODEFunction_test.jl")
-        end
-        @time @safetestset "MOLFiniteDifference Interface: Staggered constructors" begin
-            include("components/staggered_constructors.jl")
-        end
-        @time @safetestset "Discrete Callbacks" begin
-            include("components/callbacks.jl")
-        end
-        #@time @safetestset "Finite Difference Schemes" begin include("components/finite_diff_schemes.jl") end
-    end
-    if GROUP == "All" || GROUP == "Complex"
-        @time @safetestset "MOLFiniteDifference Interface" begin
-            include("pde_systems/schroedinger.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Brusselator"
-        @time @safetestset "MOLFiniteDifference Interface: 2D Brusselator Equation" begin
-            include("pde_systems/brusselator_eq.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Diffusion_NU"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion, Non-Uniform" begin
-            include("pde_systems/MOL_1D_Linear_Diffusion_NonUniform.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Nonlinlap_ADV"
-        @time @safetestset "MOLFiniteDifference Interface: Advanced Nonlinear Diffusion" begin
-            include("pde_systems/nonlinear_laplacian_advanced.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Sol_Interface"
-        @time @safetestset "MOLFiniteDifference Interface: Solution interface" begin
-            include("components/solution_interface.jl")
-        end
-    end
-    if GROUP == "All" || GROUP == "MOL_Interface2"
-        @time @safetestset "MOLFiniteDifference Interface" begin
-            include("pde_systems/MOLtest2.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Diffusion"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Linear Diffusion" begin
-            include("pde_systems/MOL_1D_Linear_Diffusion.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Integrals"
-        @time @safetestset "MOLFiniteDifference Interface: Integrals" begin
-            include("pde_systems/MOL_1D_Integration.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Convection_WENO"
-        @time @safetestset "MOLFiniteDifference Interface: Linear Convection, WENO Scheme." begin
-            include("pde_systems/MOL_1D_Linear_Convection_WENO.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Higher_Order"
-        @time @safetestset "MOLFiniteDifference Interface: 1D HigherOrder" begin
-            include("pde_systems/MOL_1D_HigherOrder.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Stationary"
-        @time @safetestset "MOLFiniteDifference Interface: Stationary Nonlinear Problems" begin
-            include("pde_systems/MOL_NonlinearProblem.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Mixed_Derivatives"
-        @time @safetestset "MOLFiniteDifference Interface: Mixed Derivatives" begin
-            include("pde_systems/MOL_Mixed_Deriv.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "DAE"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Partial DAE" begin
-            include("pde_systems/MOL_1D_PDAE.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Nonlinear_Diffusion"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Non-Linear Diffusion" begin
-            include("pde_systems/MOL_1D_NonLinear_Diffusion.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Nonlinear_Diffusion_NU"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Non-Linear Diffusion, Non-Uniform" begin
-            include("pde_systems/MOL_1D_NonLinear_Diffusion_NonUniform.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "MOL_Interface1"
-        @time @safetestset "MOLFiniteDifference Interface" begin
-            include("pde_systems/MOLtest1.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "2D_Diffusion"
-        @time @safetestset "MOLFiniteDifference Interface: 2D Diffusion" begin
-            include("pde_systems/MOL_2D_Diffusion.jl")
-        end
-    end
-
-    if GROUP == "All" || GROUP == "Burgers"
-        @time @safetestset "MOLFiniteDifference Interface: 2D Burger's Equation" begin
-            include("pde_systems/burgers_eq.jl")
-        end
-    end
-    if GROUP == "All" || GROUP == "Convection"
-        @time @safetestset "MOLFiniteDifference Interface: Linear Convection" begin
-            include("pde_systems/MOL_1D_Linear_Convection.jl")
-        end
-    end
-    if GROUP == "All" || GROUP == "Convection_NU"
-        @time @safetestset "MOLFiniteDifference Interface: Linear Convection, NonUniform" begin
-            include("pde_systems/MOL_1D_Linear_Convection_NonUniform.jl")
-        end
-    end
-    if GROUP == "All" || GROUP == "Wave_Eq_Staggered"
-        @time @safetestset "MOLFiniteDifference Interface: 1D Wave Equation, Staggered" begin
-            include("pde_systems/wave_eq_staggered.jl")
-        end
-    end
-end
+run_tests(;
+    core = () -> nothing,
+    groups = Dict(
+        "Components" => function ()
+            @safetestset "MOLFiniteDifference Utils" begin
+                include(joinpath(@__DIR__, "Components", "utils_test.jl"))
+            end
+            @safetestset "Discretization of space and grid types" begin
+                include(joinpath(@__DIR__, "Components", "DiscreteSpace.jl"))
+            end
+            @safetestset "Variable PDE mapping and interior construction" begin
+                include(joinpath(@__DIR__, "Components", "interiormap_test.jl"))
+            end
+            @safetestset "Fornberg" begin
+                include(joinpath(@__DIR__, "Components", "MOLfornberg_weights.jl"))
+            end
+            @safetestset "ODEFunction" begin
+                include(joinpath(@__DIR__, "Components", "ODEFunction_test.jl"))
+            end
+            @safetestset "MOLFiniteDifference Interface: Staggered constructors" begin
+                include(joinpath(@__DIR__, "Components", "staggered_constructors.jl"))
+            end
+            return @safetestset "Discrete Callbacks" begin
+                include(joinpath(@__DIR__, "Components", "callbacks.jl"))
+            end
+        end,
+        "Complex" => joinpath(@__DIR__, "Complex", "schroedinger.jl"),
+        "Brusselator" => joinpath(@__DIR__, "Brusselator", "brusselator_eq.jl"),
+        "Diffusion_NU" => joinpath(@__DIR__, "Diffusion_NU", "MOL_1D_Linear_Diffusion_NonUniform.jl"),
+        "Nonlinlap_ADV" => joinpath(@__DIR__, "Nonlinlap_ADV", "nonlinear_laplacian_advanced.jl"),
+        "Sol_Interface" => joinpath(@__DIR__, "Sol_Interface", "solution_interface.jl"),
+        "MOL_Interface2" => joinpath(@__DIR__, "MOL_Interface2", "MOLtest2.jl"),
+        "Diffusion" => joinpath(@__DIR__, "Diffusion", "MOL_1D_Linear_Diffusion.jl"),
+        "Integrals" => joinpath(@__DIR__, "Integrals", "MOL_1D_Integration.jl"),
+        "Convection_WENO" => joinpath(@__DIR__, "Convection_WENO", "MOL_1D_Linear_Convection_WENO.jl"),
+        "Higher_Order" => joinpath(@__DIR__, "Higher_Order", "MOL_1D_HigherOrder.jl"),
+        "Stationary" => joinpath(@__DIR__, "Stationary", "MOL_NonlinearProblem.jl"),
+        "Mixed_Derivatives" => joinpath(@__DIR__, "Mixed_Derivatives", "MOL_Mixed_Deriv.jl"),
+        "DAE" => joinpath(@__DIR__, "DAE", "MOL_1D_PDAE.jl"),
+        "Nonlinear_Diffusion" => joinpath(@__DIR__, "Nonlinear_Diffusion", "MOL_1D_NonLinear_Diffusion.jl"),
+        "Nonlinear_Diffusion_NU" => joinpath(@__DIR__, "Nonlinear_Diffusion_NU", "MOL_1D_NonLinear_Diffusion_NonUniform.jl"),
+        "MOL_Interface1" => joinpath(@__DIR__, "MOL_Interface1", "MOLtest1.jl"),
+        "2D_Diffusion" => joinpath(@__DIR__, "2D_Diffusion", "MOL_2D_Diffusion.jl"),
+        "Burgers" => joinpath(@__DIR__, "Burgers", "burgers_eq.jl"),
+        "Convection" => joinpath(@__DIR__, "Convection", "MOL_1D_Linear_Convection.jl"),
+        "Convection_NU" => joinpath(@__DIR__, "Convection_NU", "MOL_1D_Linear_Convection_NonUniform.jl"),
+        "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
+    ),
+    qa = joinpath(@__DIR__, "qa", "qa.jl"),
+    all = FUNCTIONAL_GROUPS,
+)
