@@ -2,10 +2,11 @@ using Pkg
 Pkg.activate(@__DIR__)
 Pkg.instantiate()
 
-using MethodOfLines, Aqua, JET, Test
+using SafeTestsets
 
 # Aqua/JET findings tracked at https://github.com/SciML/MethodOfLines.jl/issues/574
-@testset "Aqua" begin
+@safetestset "Aqua" begin
+    using MethodOfLines, Aqua, Test
     # Passing sub-checks run normally.
     Aqua.test_unbound_args(MethodOfLines)
     Aqua.test_project_extras(MethodOfLines)
@@ -19,6 +20,7 @@ using MethodOfLines, Aqua, JET, Test
     @test_broken false  # Aqua piracies: PDEBase.AbstractBoundary/InterfaceBoundary call ops in interface_boundary.jl — see https://github.com/SciML/MethodOfLines.jl/issues/574
 end
 
-@testset "JET" begin
+@safetestset "JET" begin
+    using MethodOfLines, JET, Test
     @test_broken false  # JET: 10 possible errors (DiscreteSpace fields, otherderivmaps, staggered_discretize) — see https://github.com/SciML/MethodOfLines.jl/issues/574
 end
