@@ -91,10 +91,12 @@ end
     l = length(s, x)
     ij = II[j]
     offsets = _nonuniform_upwind_stencil_offsets(D, ispositive)
-    is_crossing = any(i -> begin
-        idx = (II + i * I1)[j]
-        return idx < 1 || idx > l
-    end, offsets)
+    is_crossing = any(
+        i -> begin
+            idx = (II + i * I1)[j]
+            return idx < 1 || idx > l
+        end, offsets
+    )
     is_boundary_blindspot = ispositive ? ij == l : ij == 1
     return is_crossing || is_boundary_blindspot
 end

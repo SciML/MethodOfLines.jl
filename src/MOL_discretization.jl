@@ -54,9 +54,11 @@ function _check_interface_boundarymap(boundarymap, discretization::MOLFiniteDiff
             isequal(b.x, b.x2) && continue
             coord1, coord2 = _interface_physical_coords(b, dx1, dx2)
             if !_interface_coords_aligned(coord1, coord2, dx1, dx2)
-                throw(ArgumentError(
-                    "The physical coordinates at the interface between $(b.x) and $(b.x2) must match for nonuniform grids, got $coord1 and $coord2 at the interface. Please ensure the grids align at the interface boundary. Note that cross-domain periodic (ring) topologies are not supported on nonuniform grids."
-                ))
+                throw(
+                    ArgumentError(
+                        "The physical coordinates at the interface between $(b.x) and $(b.x2) must match for nonuniform grids, got $coord1 and $coord2 at the interface. Please ensure the grids align at the interface boundary. Note that cross-domain periodic (ring) topologies are not supported on nonuniform grids."
+                    )
+                )
             end
         elseif dx1 isa AbstractVector || dx2 isa AbstractVector
             throw(ArgumentError("The interface between $(b.x) and $(b.x2) mixes a scalar step size with a nonuniform grid vector, please supply the same kind of grid on both sides."))

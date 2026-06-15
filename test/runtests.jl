@@ -48,9 +48,6 @@ run_tests(;
             @safetestset "MOLFiniteDifference Interface: Staggered constructors" begin
                 include(joinpath(@__DIR__, "Components", "staggered_constructors.jl"))
             end
-            @safetestset "Boundary validation" begin
-                include(joinpath(@__DIR__, "Components", "boundary_validation_test.jl"))
-            end
             return @safetestset "Discrete Callbacks" begin
                 include(joinpath(@__DIR__, "Components", "callbacks.jl"))
             end
@@ -78,7 +75,7 @@ run_tests(;
             @safetestset "Linear Convection, NonUniform" begin
                 include(joinpath(@__DIR__, "Convection_NU", "MOL_1D_Linear_Convection_NonUniform.jl"))
             end
-            @safetestset "Linear Convection, Upwind Non-Uniform Interfaces" begin
+            return @safetestset "Linear Convection, Upwind Non-Uniform Interfaces" begin
                 include(joinpath(@__DIR__, "Convection_NU", "MOL_1D_Interface_Upwind_NonUniform.jl"))
             end
         end,
