@@ -7,7 +7,7 @@ using ModelingToolkit: Differential
 @variables u(..) u1(..) u2(..) u3(..) u4(..)
 
 const L2_RTOL = 0.2
-const MASS_RTOL = 5e-2
+const MASS_RTOL = 5.0e-2
 
 cell_widths(x::AbstractVector) = [diff(x)...; diff(x)[end]]
 
@@ -574,8 +574,8 @@ end
     @test size(sol_u2, 1) == 2
     @test size(sol_u1, 2) == length(x1grid)
     @test size(sol_u2, 2) == length(x2grid)
-    @test sol_u1[1, 2:(end - 1)] ≈ u0.(x1grid[2:(end - 1)]) atol = 1e-10
-    @test sol_u2[1, 1:(end - 1)] ≈ u0.(x2grid[1:(end - 1)]) atol = 1e-10
+    @test sol_u1[1, 2:(end - 1)] ≈ u0.(x1grid[2:(end - 1)]) atol = 1.0e-10
+    @test sol_u2[1, 1:(end - 1)] ≈ u0.(x2grid[1:(end - 1)]) atol = 1.0e-10
     @test isapprox(sol_u1[end, end], sol_u2[end, 1]; rtol = 0.1, atol = 0.1)
 
     interior_u1 = sol_u1[end, 2:(end - 2)]
@@ -607,8 +607,10 @@ end
         grids, v, tspan, u0, u_exact,
     )
 
-    sols = [sol[u1(t, x1)][end, :], sol[u2(t, x2)][end, :],
-        sol[u3(t, x3)][end, :], sol[u4(t, x4)][end, :]]
+    sols = [
+        sol[u1(t, x1)][end, :], sol[u2(t, x2)][end, :],
+        sol[u3(t, x3)][end, :], sol[u4(t, x4)][end, :],
+    ]
 
     @test all(g -> disc.dxs[g] isa Vector, (x1, x2, x3, x4))
     for (k, sk) in enumerate(sols)
