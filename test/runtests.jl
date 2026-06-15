@@ -74,6 +74,6 @@ run_tests(;
         "Convection_NU" => joinpath(@__DIR__, "Convection_NU", "MOL_1D_Linear_Convection_NonUniform.jl"),
         "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
     ),
-    qa = joinpath(@__DIR__, "qa", "qa.jl"),
+    qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),
     all = FUNCTIONAL_GROUPS,
 )
