@@ -1,7 +1,3 @@
-using Pkg
-Pkg.activate(@__DIR__)
-Pkg.instantiate()
-
 using MethodOfLines, Aqua, JET, Test
 
 # Aqua/JET findings tracked at https://github.com/SciML/MethodOfLines.jl/issues/574
