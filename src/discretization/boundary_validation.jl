@@ -29,15 +29,17 @@ function validate_system_wellposedness(pdes, bmap, s, _disc)
             has_dynamic_advection = false
 
             for eq in pdes
-                max_order = max(max_order,
+                max_order = max(
+                    max_order,
                     get_max_derivative_order(eq.lhs, u_op, x),
-                    get_max_derivative_order(eq.rhs, u_op, x))
+                    get_max_derivative_order(eq.rhs, u_op, x)
+                )
             end
 
             if max_order == 1
                 for eq in pdes
                     if is_dynamic_advection(eq.lhs, u_op, x) ||
-                       is_dynamic_advection(eq.rhs, u_op, x)
+                            is_dynamic_advection(eq.rhs, u_op, x)
                         has_dynamic_advection = true
                         break
                     end
@@ -51,33 +53,42 @@ function validate_system_wellposedness(pdes, bmap, s, _disc)
 
                 if max_order >= 2
                     effective_bcs = count_effective_boundary_conditions(
-                        u_bcs_x, u_call, u_op, x)
+                        u_bcs_x, u_call, u_op, x
+                    )
                     if effective_bcs < max_order
-                        throw(ArgumentError(
-                            "Ill-posed PDE: $(u_op) in $(x) has order-$(max_order) " *
-                            "spatial derivatives but only $(effective_bcs) effective " *
-                            "boundary constraint(s) provided; need $(max_order)."
-                        ))
+                        throw(
+                            ArgumentError(
+                                "Ill-posed PDE: $(u_op) in $(x) has order-$(max_order) " *
+                                    "spatial derivatives but only $(effective_bcs) effective " *
+                                    "boundary constraint(s) provided; need $(max_order)."
+                            )
+                        )
                     end
                 elseif max_order == 1 && has_dynamic_advection
                     provided_locations = count_boundary_locations(
-                        u_bcs_x, u_call, u_op, x)
+                        u_bcs_x, u_call, u_op, x
+                    )
                     if provided_locations < 2
-                        throw(ArgumentError(
-                            "Ill-posed PDE: $(u_op) in $(x) has a non-constant advection " *
-                            "coefficient, so the upwind direction is not fixed and boundary " *
-                            "data is required at BOTH ends; only $(provided_locations) provided."
-                        ))
+                        throw(
+                            ArgumentError(
+                                "Ill-posed PDE: $(u_op) in $(x) has a non-constant advection " *
+                                    "coefficient, so the upwind direction is not fixed and boundary " *
+                                    "data is required at BOTH ends; only $(provided_locations) provided."
+                            )
+                        )
                     end
                 elseif max_order == 1 && !has_dynamic_advection && provided_bcs < 1
-                    throw(ArgumentError(
-                        "Ill-posed PDE: $(u_op) in $(x) has a 1st-order spatial " *
-                        "derivative but no boundary condition was provided."
-                    ))
+                    throw(
+                        ArgumentError(
+                            "Ill-posed PDE: $(u_op) in $(x) has a 1st-order spatial " *
+                                "derivative but no boundary condition was provided."
+                        )
+                    )
                 end
             end
         end
     end
+    return
 end
 
 """
@@ -147,7 +158,7 @@ function count_effective_boundary_conditions(u_bcs_x, u_call, u_op, x)
 
     function structurally_equal(a, b)
         if hasproperty(a, :lhs) && hasproperty(a, :rhs) &&
-           hasproperty(b, :lhs) && hasproperty(b, :rhs)
+                hasproperty(b, :lhs) && hasproperty(b, :rhs)
             return isequal(a.lhs, b.lhs) && isequal(a.rhs, b.rhs)
         end
         return isequal(a, b)
@@ -183,10 +194,12 @@ function extract_boundary_locations!(unique_bounds::Set, expr, u_op, x_index, x)
                 normalized_val = raw_val isa Number ? Float64(raw_val) : raw_val
                 push!(unique_bounds, normalized_val)
             else
-                throw(ArgumentError(
-                    "Malformed boundary condition: $(u_op) needs at least $(x_index) " *
-                    "arguments for dimension $(x), got $(length(args))."
-                ))
+                throw(
+                    ArgumentError(
+                        "Malformed boundary condition: $(u_op) needs at least $(x_index) " *
+                            "arguments for dimension $(x), got $(length(args))."
+                    )
+                )
             end
             return
         end
@@ -286,7 +299,7 @@ function is_dynamic_advection(expr, u_op, x)
                     arg_unwrapped = unwrap(arg)
                     arg_op = iscall(arg_unwrapped) ? operation(arg_unwrapped) : nothing
                     is_deriv = arg_op isa Differential && isequal(arg_op.x, x) &&
-                               get_max_derivative_order(arg_unwrapped, u_op, arg_op.x) == 1
+                        get_max_derivative_order(arg_unwrapped, u_op, arg_op.x) == 1
                     if !is_deriv && !is_static_numeric_constant(arg_unwrapped)
                         return true
                     end

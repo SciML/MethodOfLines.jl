@@ -17,11 +17,11 @@ function run_boundary_validation(pdesys, disc)
 end
 
 function standard_1d_disc(;
-    xspan = (0.0, 1.0),
-    tspan = (0.0, 1.0),
-    dx = 0.1,
-    advection = nothing,
-)
+        xspan = (0.0, 1.0),
+        tspan = (0.0, 1.0),
+        dx = 0.1,
+        advection = nothing,
+    )
     t0, t1 = tspan
     x0, x1 = xspan
     disc_kwargs = advection === nothing ? () : (; advection_scheme = advection)
@@ -43,12 +43,12 @@ function build_1d_pdesys_multi(eqs, bcs, depvars; xspan = (0.0, 1.0), tspan = (0
 end
 
 function standard_2d_disc(;
-    xspan = (0.0, 1.0),
-    yspan = (0.0, 1.0),
-    tspan = (0.0, 1.0),
-    dx = 0.1,
-    dy = 0.1,
-)
+        xspan = (0.0, 1.0),
+        yspan = (0.0, 1.0),
+        tspan = (0.0, 1.0),
+        dx = 0.1,
+        dy = 0.1,
+    )
     t0, t1 = tspan
     x0, x1b = xspan
     y0, y1b = yspan
@@ -75,10 +75,12 @@ end
         _, disc = standard_1d_disc(; advection = UpwindScheme())
 
         @test run_boundary_validation(
-            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0]), disc) === nothing
+            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0]), disc
+        ) === nothing
 
         @test_throws ArgumentError run_boundary_validation(
-            build_1d_pdesys(eq, [u(0, x) ~ 0.0]), disc)
+            build_1d_pdesys(eq, [u(0, x) ~ 0.0]), disc
+        )
     end
 
     @testset "1st-order dynamic advection" begin
@@ -91,13 +93,16 @@ end
             disc,
         ) === nothing
         @test_throws ArgumentError run_boundary_validation(
-            build_1d_pdesys(eq_burgers, [u(0, x) ~ 1.0, u(t, 0) ~ 1.0]), disc)
+            build_1d_pdesys(eq_burgers, [u(0, x) ~ 1.0, u(t, 0) ~ 1.0]), disc
+        )
 
         eq_param = Dt(u(t, x)) ~ -vel * Dx(u(t, x))
         @test run_boundary_validation(
-            build_1d_pdesys(eq_param, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]), disc) === nothing
+            build_1d_pdesys(eq_param, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]), disc
+        ) === nothing
         @test_throws ArgumentError run_boundary_validation(
-            build_1d_pdesys(eq_param, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0]), disc)
+            build_1d_pdesys(eq_param, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0]), disc
+        )
     end
 
     @testset "2nd-order spatial derivatives" begin
@@ -106,9 +111,11 @@ end
         _, disc = standard_1d_disc()
 
         @test_throws ArgumentError run_boundary_validation(
-            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0]), disc)
+            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0]), disc
+        )
         @test run_boundary_validation(
-            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]), disc) === nothing
+            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]), disc
+        ) === nothing
     end
 
     @testset "3rd-order spatial derivatives" begin
@@ -117,14 +124,18 @@ end
         _, disc = standard_1d_disc()
 
         @test_throws ArgumentError run_boundary_validation(
-            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]), disc)
+            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]), disc
+        )
         @test run_boundary_validation(
-            build_1d_pdesys(eq, [
-                u(0, x) ~ 0.0,
-                u(t, 0) ~ 0.0,
-                u(t, 1) ~ 0.0,
-                Dx(u(t, 0)) ~ 0.0,
-            ]), disc) === nothing
+            build_1d_pdesys(
+                eq, [
+                    u(0, x) ~ 0.0,
+                    u(t, 0) ~ 0.0,
+                    u(t, 1) ~ 0.0,
+                    Dx(u(t, 0)) ~ 0.0,
+                ]
+            ), disc
+        ) === nothing
     end
 
     @testset "4th-order spatial derivatives" begin
@@ -133,20 +144,26 @@ end
         _, disc = standard_1d_disc()
 
         @test_throws ArgumentError run_boundary_validation(
-            build_1d_pdesys(eq, [
-                u(0, x) ~ 0.0,
-                u(t, 0) ~ 0.0,
-                u(t, 1) ~ 0.0,
-                Dx(u(t, 0)) ~ 0.0,
-            ]), disc)
+            build_1d_pdesys(
+                eq, [
+                    u(0, x) ~ 0.0,
+                    u(t, 0) ~ 0.0,
+                    u(t, 1) ~ 0.0,
+                    Dx(u(t, 0)) ~ 0.0,
+                ]
+            ), disc
+        )
         @test run_boundary_validation(
-            build_1d_pdesys(eq, [
-                u(0, x) ~ 0.0,
-                u(t, 0) ~ 0.0,
-                Dx(u(t, 0)) ~ 0.0,
-                u(t, 1) ~ 0.0,
-                Dx(u(t, 1)) ~ 0.0,
-            ]), disc) === nothing
+            build_1d_pdesys(
+                eq, [
+                    u(0, x) ~ 0.0,
+                    u(t, 0) ~ 0.0,
+                    Dx(u(t, 0)) ~ 0.0,
+                    u(t, 1) ~ 0.0,
+                    Dx(u(t, 1)) ~ 0.0,
+                ]
+            ), disc
+        ) === nothing
     end
 
     @testset "Periodic boundaries" begin
@@ -156,17 +173,22 @@ end
 
         periodic_bcs = [u(0, x) ~ 0.0, u(t, 0) ~ u(t, 1)]
         @test run_boundary_validation(
-            build_1d_pdesys(Dt(u(t, x)) ~ Dxx(u(t, x)), periodic_bcs), disc) === nothing
+            build_1d_pdesys(Dt(u(t, x)) ~ Dxx(u(t, x)), periodic_bcs), disc
+        ) === nothing
 
         @test_throws ArgumentError run_boundary_validation(
-            build_1d_pdesys(Dt(u(t, x)) ~ -Dxxxx(u(t, x)), periodic_bcs), disc)
+            build_1d_pdesys(Dt(u(t, x)) ~ -Dxxxx(u(t, x)), periodic_bcs), disc
+        )
 
         @test run_boundary_validation(
-            build_1d_pdesys(Dt(u(t, x)) ~ -Dxxxx(u(t, x)), [
-                u(0, x) ~ 0.0,
-                u(t, 0) ~ u(t, 1),
-                Dx(u(t, 0)) ~ Dx(u(t, 1)),
-            ]), disc) === nothing
+            build_1d_pdesys(
+                Dt(u(t, x)) ~ -Dxxxx(u(t, x)), [
+                    u(0, x) ~ 0.0,
+                    u(t, 0) ~ u(t, 1),
+                    Dx(u(t, 0)) ~ Dx(u(t, 1)),
+                ]
+            ), disc
+        ) === nothing
     end
 
     @testset "Coupled systems" begin
@@ -220,17 +242,22 @@ end
         by1 = u(t, x, 1) ~ 0.0
 
         @test_throws ArgumentError run_boundary_validation(
-            build_2d_pdesys(eq_heat, [ic, bx0, by0, by1]), disc)
+            build_2d_pdesys(eq_heat, [ic, bx0, by0, by1]), disc
+        )
         @test_throws ArgumentError run_boundary_validation(
-            build_2d_pdesys(eq_heat, [ic, bx0, bx1, by0]), disc)
+            build_2d_pdesys(eq_heat, [ic, bx0, bx1, by0]), disc
+        )
         @test run_boundary_validation(
-            build_2d_pdesys(eq_heat, [ic, bx0, bx1, by0, by1]), disc) === nothing
+            build_2d_pdesys(eq_heat, [ic, bx0, bx1, by0, by1]), disc
+        ) === nothing
 
         eq_mixed = Dt(u(t, x, y)) ~ Dxxy(u(t, x, y))
         @test_throws ArgumentError run_boundary_validation(
-            build_2d_pdesys(eq_mixed, [ic, bx0, by0]), disc)
+            build_2d_pdesys(eq_mixed, [ic, bx0, by0]), disc
+        )
         @test run_boundary_validation(
-            build_2d_pdesys(eq_mixed, [ic, bx0, bx1, by0]), disc) === nothing
+            build_2d_pdesys(eq_mixed, [ic, bx0, bx1, by0]), disc
+        ) === nothing
     end
 
     @testset "Time-dependent boundaries" begin
@@ -239,11 +266,14 @@ end
         _, disc = standard_1d_disc()
 
         @test run_boundary_validation(
-            build_1d_pdesys(eq, [
-                u(0, x) ~ 0.0,
-                u(t, 0) ~ sin(t) * exp(-t),
-                u(t, 1) ~ 0.0,
-            ]), disc) === nothing
+            build_1d_pdesys(
+                eq, [
+                    u(0, x) ~ 0.0,
+                    u(t, 0) ~ sin(t) * exp(-t),
+                    u(t, 1) ~ 0.0,
+                ]
+            ), disc
+        ) === nothing
     end
 
     @testset "Nested nonlinear advection" begin
@@ -252,8 +282,10 @@ end
         _, disc = standard_1d_disc(; advection = UpwindScheme())
 
         @test_throws ArgumentError run_boundary_validation(
-            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0]), disc)
+            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0]), disc
+        )
         @test run_boundary_validation(
-            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]), disc) === nothing
+            build_1d_pdesys(eq, [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]), disc
+        ) === nothing
     end
 end
