@@ -42,6 +42,9 @@ run_tests(;
             @safetestset "Fornberg" begin
                 include(joinpath(@__DIR__, "Components", "MOLfornberg_weights.jl"))
             end
+            @safetestset "WENO non-uniform" begin
+                include(joinpath(@__DIR__, "Components", "weno_nonuniform_test.jl"))
+            end
             @safetestset "ODEFunction" begin
                 include(joinpath(@__DIR__, "Components", "ODEFunction_test.jl"))
             end

@@ -1,9 +1,11 @@
+include("weno_nonuniform.jl")
+
 """
 Implements the WENO scheme of Jiang and Shu.
 Specified in https://repository.library.brown.edu/studio/item/bdr:297524/PDF/ (Page 8-9)
 Implementation *heavily* inspired by https://github.com/ranocha/HyperbolicDiffEq.jl/blob/84c2d882e0c8956457c7d662bf7f18e3c27cfa3d/src/finite_volumes/weno_jiang_shu.jl by H. Ranocha.
 """
-function weno_f(u, p, t, x, dx)
+Base.@propagate_inbounds @inline function weno_f_uniform(u, p, t, x, dx::Real)
     ε = p[1]
 
     u_m2 = u[1]
@@ -56,6 +58,24 @@ function weno_f(u, p, t, x, dx)
     return (hp - hm) / dx
 end
 
+Base.@propagate_inbounds @inline function weno_f(u, p, t, x, dx::Real)
+    weno_f_uniform(u, p, t, x, dx)
+end
+
+Base.@propagate_inbounds @inline function weno_f(u, p, t, x, dx::AbstractVector)
+    weno_f_nonuniform(u, p, t, x, dx)
+end
+
+@noinline function weno_f(u, p, t, x, dx)
+    throw(ArgumentError(
+        "WENO expects dx to be a scalar (uniform) or AbstractVector (non-uniform); got $(typeof(dx))."
+    ))
+end
+
+Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::Real)
+    weno_f_uniform(u, p, t, x, dx)
+end
+
 """
 `WENOScheme` of Jiang and Shu
 ## Keyword Arguments
@@ -64,6 +84,6 @@ end
 function WENOScheme(; epsilon = 1.0e-6)
     boundary_f = [nothing, nothing]
     return FunctionalScheme{5, 0}(
-        weno_f, boundary_f, boundary_f, false, [epsilon], name = "WENO"
+        weno_f, boundary_f, boundary_f, true, [epsilon], name = "WENO"
     )
 end
