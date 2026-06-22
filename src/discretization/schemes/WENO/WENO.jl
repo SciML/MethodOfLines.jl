@@ -59,21 +59,23 @@ Base.@propagate_inbounds @inline function weno_f_uniform(u, p, t, x, dx::Real)
 end
 
 Base.@propagate_inbounds @inline function weno_f(u, p, t, x, dx::Real)
-    weno_f_uniform(u, p, t, x, dx)
+    return weno_f_uniform(u, p, t, x, dx)
 end
 
 Base.@propagate_inbounds @inline function weno_f(u, p, t, x, dx::AbstractVector)
-    weno_f_nonuniform(u, p, t, x, dx)
+    return weno_f_nonuniform(u, p, t, x, dx)
 end
 
 @noinline function weno_f(u, p, t, x, dx)
-    throw(ArgumentError(
-        "WENO expects dx to be a scalar (uniform) or AbstractVector (non-uniform); got $(typeof(dx))."
-    ))
+    throw(
+        ArgumentError(
+            "WENO expects dx to be a scalar (uniform) or AbstractVector (non-uniform); got $(typeof(dx))."
+        )
+    )
 end
 
 Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::Real)
-    weno_f_uniform(u, p, t, x, dx)
+    return weno_f_uniform(u, p, t, x, dx)
 end
 
 """

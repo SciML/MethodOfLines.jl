@@ -10,8 +10,8 @@ Analytic Jiang-Shu smoothness indicator on a non-uniform 3-point sub-stencil, ob
 via Simpson quadrature over `[xL, xR]` (CSE-applied; zero allocation).
 """
 @inline function compute_beta_nonuniform(
-    u1::U, u2::U, u3::U, x1::X, x2::X, x3::X, xL::X, xR::X,
-) where {U<:Real, X<:Real}
+        u1::U, u2::U, u3::U, x1::X, x2::X, x3::X, xL::X, xR::X,
+    ) where {U <: Real, X <: Real}
     dx_face = xR - xL
     V = (x1 - x2) * (x1 - x3) * (x2 - x3)
     inv_V2 = one(X) / (V * V)
@@ -43,7 +43,7 @@ via Simpson quadrature over `[xL, xR]` (CSE-applied; zero allocation).
     return (term_d2 + term_d1) * inv_V2
 end
 
-@inline function _lagrange_weight(x1::T, x2::T, x3::T, k::Int, x_eval::T) where {T<:Real}
+@inline function _lagrange_weight(x1::T, x2::T, x3::T, k::Int, x_eval::T) where {T <: Real}
     if k == 1
         return ((x_eval - x2) * (x_eval - x3)) / ((x1 - x2) * (x1 - x3))
     elseif k == 2
@@ -59,15 +59,15 @@ end
 Intra-stencil Lagrange weights `(w1, w2, w3)` at `x_eval`; partition of unity.
 """
 @inline function ideal_weights_lagrange(
-    x1::T, x2::T, x3::T, x_eval::T,
-) where {T<:Real}
+        x1::T, x2::T, x3::T, x_eval::T,
+    ) where {T <: Real}
     w1 = _lagrange_weight(x1, x2, x3, 1, x_eval)
     w2 = _lagrange_weight(x1, x2, x3, 2, x_eval)
     w3 = _lagrange_weight(x1, x2, x3, 3, x_eval)
     return w1, w2, w3
 end
 
-@inline function _stencil_taylor_moment3(x1::T, x2::T, x3::T, x_eval::T) where {T<:Real}
+@inline function _stencil_taylor_moment3(x1::T, x2::T, x3::T, x_eval::T) where {T <: Real}
     w1, w2, w3 = ideal_weights_lagrange(x1, x2, x3, x_eval)
     inv6 = one(T) / T(6)
     d1 = x1 - x_eval
@@ -79,7 +79,7 @@ end
     return inv6 * (w1 * d1_sq * d1 + w2 * d2_sq * d2 + w3 * d3_sq * d3)
 end
 
-@inline function _stencil_taylor_moment4(x1::T, x2::T, x3::T, x_eval::T) where {T<:Real}
+@inline function _stencil_taylor_moment4(x1::T, x2::T, x3::T, x_eval::T) where {T <: Real}
     w1, w2, w3 = ideal_weights_lagrange(x1, x2, x3, x_eval)
     inv24 = one(T) / T(24)
     d1 = x1 - x_eval
@@ -110,11 +110,11 @@ Enforced constraints (Taylor moment matching on Lagrange sub-stencil operators):
 where `c_{k,n}` is `_stencil_taylor_moment` on sub-stencil k.
 """
 @inline function ideal_weno_linear_weights(
-    x1_S1::T, x2_S1::T, x3_S1::T,
-    x1_S2::T, x2_S2::T, x3_S2::T,
-    x1_S3::T, x2_S3::T, x3_S3::T,
-    x_f::T,
-) where {T<:Real}
+        x1_S1::T, x2_S1::T, x3_S1::T,
+        x1_S2::T, x2_S2::T, x3_S2::T,
+        x1_S3::T, x2_S3::T, x3_S3::T,
+        x_f::T,
+    ) where {T <: Real}
     c13 = _stencil_taylor_moment3(x1_S1, x2_S1, x3_S1, x_f)
     c23 = _stencil_taylor_moment3(x1_S2, x2_S2, x3_S2, x_f)
     c33 = _stencil_taylor_moment3(x1_S3, x2_S3, x3_S3, x_f)
@@ -131,7 +131,7 @@ where `c_{k,n}` is `_stencil_taylor_moment` on sub-stencil k.
     return d1, d2, d3
 end
 
-@inline function _positive_part(d::T) where {T<:Real}
+@inline function _positive_part(d::T) where {T <: Real}
     return IfElse.ifelse(d >= zero(T), d, -d)
 end
 
@@ -141,10 +141,10 @@ end
 Shi-Hu-Shu (2002) splitting for nonlinear WENO weights; partition of unity enforced.
 """
 @inline function shi_hu_shu_weights(
-    d1::D, d2::D, d3::D,
-    b1::B, b2::B, b3::B,
-    epsilon::Real,
-) where {D<:Real, B<:Real}
+        d1::D, d2::D, d3::D,
+        b1::B, b2::B, b3::B,
+        epsilon::Real,
+    ) where {D <: Real, B <: Real}
     T = promote_type(D, B)
     θ = T(3)
     ε = T(epsilon)
@@ -193,9 +193,9 @@ Jiang-Shu WENO-5 semidiscrete flux derivative at the central node on a non-unifo
 Returns `(hp - hm) / dx_face` for direct insertion into MOL finite-difference rules.
 """
 Base.@propagate_inbounds @inline function weno_f_nonuniform(
-    u, p, t, x, _dx::AbstractVector,
-)
-    # Note: Grid geometry is explicitly computed from coordinates (x) to prevent floating-point mismatch. 
+        u, p, t, x, _dx::AbstractVector,
+    )
+    # Note: Grid geometry is explicitly computed from coordinates (x) to prevent floating-point mismatch.
     # _dx is required by the FunctionalScheme signature but intentionally ignored.
     ε = p[1]
 

@@ -94,9 +94,11 @@ end
     u = xv .^ 3
     x_face_l, x_face_r = face_geometry(xv)
 
-    @test @inferred(compute_beta_nonuniform(
-        u[3], u[4], u[5], xv[3], xv[4], xv[5], x_face_l, x_face_r,
-    )) ≈ jiang_shu_beta(u[3], u[4], u[5], 1)
+    @test @inferred(
+        compute_beta_nonuniform(
+            u[3], u[4], u[5], xv[3], xv[4], xv[5], x_face_l, x_face_r,
+        )
+    ) ≈ jiang_shu_beta(u[3], u[4], u[5], 1)
 
     w_lag = @inferred ideal_weights_lagrange(xv[3], xv[4], xv[5], x_face_l)
     @test sum(w_lag) ≈ 1.0
@@ -130,12 +132,16 @@ end
     shi_hu_shu_weights(0.1, 0.6, 0.3, 1.0e-8, 1.0e-8, 1.0e-8, WENO_EPS)
 
     @test @allocated(weno_f_nonuniform(u, p, t, xv, dx_vec)) == 0
-    @test @allocated(compute_beta_nonuniform(
-        u[3], u[4], u[5], xv[3], xv[4], xv[5], x_face_l, x_face_r,
-    )) == 0
-    @test @allocated(ideal_weno_linear_weights(
-        xv[3], xv[4], xv[5], xv[2], xv[3], xv[4], xv[1], xv[2], xv[3], x_face_l,
-    )) == 0
+    @test @allocated(
+        compute_beta_nonuniform(
+            u[3], u[4], u[5], xv[3], xv[4], xv[5], x_face_l, x_face_r,
+        )
+    ) == 0
+    @test @allocated(
+        ideal_weno_linear_weights(
+            xv[3], xv[4], xv[5], xv[2], xv[3], xv[4], xv[1], xv[2], xv[3], x_face_l,
+        )
+    ) == 0
     @test @allocated(shi_hu_shu_weights(0.1, 0.6, 0.3, 1.0e-8, 1.0e-8, 1.0e-8, WENO_EPS)) == 0
 
     x_view = @view xv[1:5]
@@ -154,11 +160,11 @@ end
             for (x1, x2, x3) in ((xv[3], xv[4], xv[5]), (xv[2], xv[3], xv[4]), (xv[1], xv[2], xv[3]))
                 w = ideal_weights_lagrange(x1, x2, x3, x_eval)
                 @test sum(w) ≈ 1.0
-                @test w[1] * x1 + w[2] * x2 + w[3] * x3 ≈ x_eval atol = 1e-12
+                @test w[1] * x1 + w[2] * x2 + w[3] * x3 ≈ x_eval atol = 1.0e-12
                 for (j, xj) in enumerate((x1, x2, x3))
                     wj = ideal_weights_lagrange(x1, x2, x3, xj)
                     for k in 1:3
-                        @test wj[k] ≈ (j == k ? 1.0 : 0.0) atol = 1e-12
+                        @test wj[k] ≈ (j == k ? 1.0 : 0.0) atol = 1.0e-12
                     end
                 end
             end
@@ -188,8 +194,8 @@ end
                 _stencil_taylor_moment4(xv[1], xv[2], xv[3], x_f),
             )
             @test sum(d) ≈ 1.0
-            @test dot(d, c3) ≈ 0.0 atol = 1e-12
-            @test dot(d, c4) ≈ 0.0 atol = 1e-12
+            @test dot(d, c3) ≈ 0.0 atol = 1.0e-12
+            @test dot(d, c4) ≈ 0.0 atol = 1.0e-12
         end
     end
 
@@ -202,12 +208,12 @@ end
     dp = ideal_weno_linear_weights(
         xv[3], xv[4], xv[5], xv[2], xv[3], xv[4], xv[1], xv[2], xv[3], x_face_r,
     )
-    @test dm[1] ≈ 1 / 16 atol = 1e-12
-    @test dm[2] ≈ 5 / 8 atol = 1e-12
-    @test dm[3] ≈ 5 / 16 atol = 1e-12
-    @test dp[1] ≈ 5 / 16 atol = 1e-12
-    @test dp[2] ≈ 5 / 8 atol = 1e-12
-    @test dp[3] ≈ 1 / 16 atol = 1e-12
+    @test dm[1] ≈ 1 / 16 atol = 1.0e-12
+    @test dm[2] ≈ 5 / 8 atol = 1.0e-12
+    @test dm[3] ≈ 5 / 16 atol = 1.0e-12
+    @test dp[1] ≈ 5 / 16 atol = 1.0e-12
+    @test dp[2] ≈ 5 / 8 atol = 1.0e-12
+    @test dp[3] ≈ 1 / 16 atol = 1.0e-12
 end
 
 @testset "Non-uniform WENO — extreme grid Taylor conditioning (known limitation)" begin
@@ -230,8 +236,8 @@ end
         @test sum(d) ≈ 1.0
         @test all(isfinite, d)
         scale = max(1.0, maximum(abs.(c4)))
-        @test abs(dot(d, c3)) / scale < 1e-6
-        @test abs(dot(d, c4)) / scale < 1e-6
+        @test abs(dot(d, c3)) / scale < 1.0e-6
+        @test abs(dot(d, c4)) / scale < 1.0e-6
     end
 end
 
@@ -245,13 +251,13 @@ end
     β2 = compute_beta_nonuniform(u[2], u[3], u[4], xv[2], xv[3], xv[4], x_face_l, x_face_r)
     β3 = compute_beta_nonuniform(u[1], u[2], u[3], xv[1], xv[2], xv[3], x_face_l, x_face_r)
 
-    @test β1 ≈ jiang_shu_beta(u[3], u[4], u[5], 1) atol = 1e-10
-    @test β2 ≈ jiang_shu_beta(u[2], u[3], u[4], 2) atol = 1e-10
-    @test β3 ≈ jiang_shu_beta(u[1], u[2], u[3], 3) atol = 1e-10
+    @test β1 ≈ jiang_shu_beta(u[3], u[4], u[5], 1) atol = 1.0e-10
+    @test β2 ≈ jiang_shu_beta(u[2], u[3], u[4], 2) atol = 1.0e-10
+    @test β3 ≈ jiang_shu_beta(u[1], u[2], u[3], 3) atol = 1.0e-10
 
     u_const = fill(3.7, 5)
     β_const = left_face_betas(u_const, xv)
-    @test all(x -> abs(x) < 1e-20, β_const)
+    @test all(x -> abs(x) < 1.0e-20, β_const)
 
     xv_nu = stretched_stencil(1.0, 0.08, 0.35)
     x_face_l_nu, x_face_r_nu = face_geometry(xv_nu)
@@ -259,7 +265,7 @@ end
     β_nu = compute_beta_nonuniform(
         u_nu[3], u_nu[4], u_nu[5], xv_nu[3], xv_nu[4], xv_nu[5], x_face_l_nu, x_face_r_nu,
     )
-    @test β_nu ≈ 0.0002295868746123596 atol = 1e-12
+    @test β_nu ≈ 0.0002295868746123596 atol = 1.0e-12
     @test β_nu >= 0.0
 
     u_jump = [0.0, 0.0, 0.0, 1.0, 1.0]
@@ -276,22 +282,22 @@ end
     for d in ((0.1, 0.6, 0.3), (1 / 16, 5 / 8, 5 / 16), (-0.2, 0.9, 0.3))
         ω_s = shi_hu_shu_weights(d..., smooth_β..., WENO_EPS)
         ω_h = shi_hu_shu_weights(d..., shock_β..., WENO_EPS)
-        @test sum(ω_s) ≈ 1.0 atol = 1e-12
-        @test sum(ω_h) ≈ 1.0 atol = 1e-12
+        @test sum(ω_s) ≈ 1.0 atol = 1.0e-12
+        @test sum(ω_h) ≈ 1.0 atol = 1.0e-12
         @test all(isfinite, ω_s)
         @test all(isfinite, ω_h)
     end
 
     d_extreme = (-9.22, 9.22, 0.9999)
     ω_ext = shi_hu_shu_weights(d_extreme..., smooth_β..., WENO_EPS)
-    @test sum(ω_ext) ≈ 1.0 atol = 1e-3
+    @test sum(ω_ext) ≈ 1.0 atol = 1.0e-3
     @test all(isfinite, ω_ext)
 
     d_neg = (-0.2, 0.9, 0.3)
     ω_lin = shi_hu_shu_weights(d_neg..., smooth_β..., WENO_EPS)
-    @test ω_lin[1] ≈ d_neg[1] atol = 1e-10
-    @test ω_lin[2] ≈ d_neg[2] atol = 1e-10
-    @test ω_lin[3] ≈ d_neg[3] atol = 1e-10
+    @test ω_lin[1] ≈ d_neg[1] atol = 1.0e-10
+    @test ω_lin[2] ≈ d_neg[2] atol = 1.0e-10
+    @test ω_lin[3] ≈ d_neg[3] atol = 1.0e-10
 
     xv_neg = [0.0, 2.0, 2.000001, 1.000002000001e6, 1.000002000101e6]
     x_face_r = (xv_neg[3] + xv_neg[4]) / 2
@@ -302,7 +308,7 @@ end
     @test minimum(dr) < 0.0
     β = left_face_betas(ones(5), xv_neg)
     ω = shi_hu_shu_weights(dr..., β..., 1.0e-6)
-    @test sum(ω) ≈ 1.0 atol = 1e-3
+    @test sum(ω) ≈ 1.0 atol = 1.0e-3
     @test all(isfinite, ω)
 
     flux = weno_f_nonuniform(ones(5), [1.0e-6], 0.0, xv_neg, diff(xv_neg))
@@ -320,9 +326,9 @@ end
     @test all(errors[i] > errors[i + 1] for i in 1:(length(errors) - 1))
 
     for (g, fp) in (
-        (sin, h -> cos(2h)),
-        (exp, h -> exp(2h)),
-    )
+            (sin, h -> cos(2h)),
+            (exp, h -> exp(2h)),
+        )
         errors = [abs(weno_derivative(g, uniform_stencil(h)) - fp(h)) for h in hs]
         @test all(errors[i] > errors[i + 1] for i in 1:(length(errors) - 1))
         min_rate, _ = halving_order(errors)
@@ -334,7 +340,7 @@ end
     u_linear = [1.0, 2.0, 3.0, 4.0, 5.0]
     flux_nu = weno_f_nonuniform(u_linear, [1.0e-6], 0.0, xv, diff(xv))
     flux_uni = weno_f_uniform(u_linear, [1.0e-6], 0.0, xv, h)
-    @test flux_nu ≈ flux_uni rtol = 1e-10
+    @test flux_nu ≈ flux_uni rtol = 1.0e-10
 end
 
 @testset "Non-uniform WENO — stretched grid convergence" begin
@@ -392,7 +398,7 @@ end
     @test sum(abs, ω_shock .- d) > 0.05
 
     flux_asymmetric = weno_f_nonuniform(u_asymmetric, WENO_PARAMS, 0.0, xv, diff(xv))
-    @test flux_asymmetric ≈ 3.8291328236980453 rtol = 1e-12
+    @test flux_asymmetric ≈ 3.8291328236980453 rtol = 1.0e-12
     @test abs(flux_asymmetric) > 0.1
 end
 
@@ -444,12 +450,16 @@ end
         xv[3], xv[4], xv[5], xv[2], xv[3], xv[4], xv[1], xv[2], xv[3], x_face_l,
     )
     @test @allocated(weno_f_nonuniform(u, p32, t, xv, dx_vec)) == 0
-    @test @allocated(compute_beta_nonuniform(
-        u[3], u[4], u[5], xv[3], xv[4], xv[5], x_face_l, x_face_r,
-    )) == 0
-    @test @allocated(ideal_weno_linear_weights(
-        xv[3], xv[4], xv[5], xv[2], xv[3], xv[4], xv[1], xv[2], xv[3], x_face_l,
-    )) == 0
+    @test @allocated(
+        compute_beta_nonuniform(
+            u[3], u[4], u[5], xv[3], xv[4], xv[5], x_face_l, x_face_r,
+        )
+    ) == 0
+    @test @allocated(
+        ideal_weno_linear_weights(
+            xv[3], xv[4], xv[5], xv[2], xv[3], xv[4], xv[1], xv[2], xv[3], x_face_l,
+        )
+    ) == 0
 end
 
 @testset "Non-uniform WENO — low-degree polynomial exactness" begin
@@ -459,7 +469,7 @@ end
         f = x -> x^p
         exact = p == 0 ? 0.0 : 1.0
         approx = weno_derivative(f, xv)
-        @test abs(approx - exact) < 1e-12
+        @test abs(approx - exact) < 1.0e-12
     end
 end
 
@@ -473,9 +483,11 @@ end
         du[3], du[4], du[5], dx[3], dx[4], dx[5], xL, xR,
     )
     @test β_dual isa Dual{1, Float64, 1}
-    @test @inferred(compute_beta_nonuniform(
-        du[3], du[4], du[5], dx[3], dx[4], dx[5], xL, xR,
-    )) isa Dual{1, Float64, 1}
+    @test @inferred(
+        compute_beta_nonuniform(
+            du[3], du[4], du[5], dx[3], dx[4], dx[5], xL, xR,
+        )
+    ) isa Dual{1, Float64, 1}
     @test isfinite(ForwardDiff.value(β_dual))
     @test isfinite(ForwardDiff.partials(β_dual, 1))
 
@@ -498,9 +510,9 @@ end
     u_m = copy(u); u_m[3] -= ε_fd
     fd_u3 = (
         weno_f_nonuniform(u_p, [1.0e-14], 0.0, xv, diff(xv)) -
-        weno_f_nonuniform(u_m, [1.0e-14], 0.0, xv, diff(xv))
+            weno_f_nonuniform(u_m, [1.0e-14], 0.0, xv, diff(xv))
     ) / (2ε_fd)
-    @test ForwardDiff.partials(flux_u3, 1) ≈ fd_u3 rtol = 1e-5
+    @test ForwardDiff.partials(flux_u3, 1) ≈ fd_u3 rtol = 1.0e-5
 
     for j in 1:5
         seeds = zeros(5)
@@ -540,7 +552,7 @@ end
         b1 => 1.0e-10, b2 => 1.0e-10, b3 => 1.0e-10,
     )
     ω_eval = evaluate_symbolic.(ω_sym, Ref(subs_smooth))
-    @test sum(ω_eval) ≈ 1.0 atol = 1e-12
+    @test sum(ω_eval) ≈ 1.0 atol = 1.0e-12
     @test all(isfinite, ω_eval)
 
     subs_ifelse = Dict(
@@ -548,7 +560,7 @@ end
         b1 => 1.0e-10, b2 => 1.0e-10, b3 => 1.0e-10,
     )
     ω_neg = evaluate_symbolic.(ω_sym, Ref(subs_ifelse))
-    @test sum(ω_neg) ≈ 1.0 atol = 1e-10
+    @test sum(ω_neg) ≈ 1.0 atol = 1.0e-10
     @test all(isfinite, ω_neg)
 
     flux_sym = weno_f_nonuniform(u_sym, [1.0e-6], 0.0, x_sym, dx_sym)
@@ -567,16 +579,16 @@ end
     xv = uniform_stencil(0.1)
     flux_num = evaluate_symbolic(flux_sym, subs)
     flux_ref = weno_f_nonuniform([1.0, 2.0, 3.0, 4.0, 5.0], [1.0e-6], 0.0, xv, diff(xv))
-    @test flux_num ≈ flux_ref rtol = 1e-10
+    @test flux_num ≈ flux_ref rtol = 1.0e-10
 
     d_num = ideal_weno_linear_weights(
         subs[x3], subs[x4], subs[x5], subs[x2], subs[x3], subs[x4],
         subs[x1], subs[x2], subs[x3], (subs[x2] + subs[x3]) / 2,
     )
     d_sub = evaluate_symbolic.(d_sym, Ref(subs))
-    @test d_sub[1] ≈ d_num[1] rtol = 1e-10
-    @test d_sub[2] ≈ d_num[2] rtol = 1e-10
-    @test d_sub[3] ≈ d_num[3] rtol = 1e-10
+    @test d_sub[1] ≈ d_num[1] rtol = 1.0e-10
+    @test d_sub[2] ≈ d_num[2] rtol = 1.0e-10
+    @test d_sub[3] ≈ d_num[3] rtol = 1.0e-10
 end
 
 @testset "Non-uniform WENO — mixed-type grid contract (MOL pipeline)" begin
