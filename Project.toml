@@ -52,7 +52,7 @@ Test = "1"
 julia = "1.10"
 
 [extras]
-ForwardDiff = "f6369f11-e1e1-58d1-9d65-5b1a3e3d3b3b"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
 OrdinaryDiffEqLowOrderRK = "1344f307-1e59-4825-a18e-ace9aa3fa4c6"
 OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
