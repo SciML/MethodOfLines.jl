@@ -52,7 +52,7 @@ order = 2
 discretization = MOLFiniteDifference([x => 30], t)
 
 prob = MethodOfLines.discretize(pde_system, discretization)
-sol = solve(prob, QNDF(), saveat = 0.1);
+sol = solve(prob, FBDF(), saveat = 0.1);
 
 solu = sol[u(t, x)]
 

@@ -1,6 +1,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using OrdinaryDiffEqRosenbrock: Rodas4
 using OrdinaryDiffEqSDIRK: TRBDF2
+using DiffEqBase: BrownFullBasicInit
 using ModelingToolkit: operation, iscall, arguments
 using DomainSets
 using NonlinearSolve
@@ -225,7 +226,10 @@ end
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, Rodas4())
+    # The Robin BC is an algebraic constraint, so the raw finite-difference ICs do not
+    # satisfy it and the default `CheckInit` rejects them; `BrownFullBasicInit` solves
+    # the algebraic equations holding the differential variables fixed.
+    sol = solve(prob, Rodas4(), initializealg = BrownFullBasicInit())
 end
 
 @testset "Array u" begin

@@ -3,6 +3,7 @@
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using SciMLBase
+using DiffEqBase: BrownFullBasicInit
 using ModelingToolkit: Differential
 
 # Beam Equation
@@ -131,7 +132,10 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, FBDF(), saveat = 0.1)
+    # The over-determined boundary (Dirichlet + Neumann + 2nd-derivative at both ends)
+    # makes the discretization a DAE whose raw ICs are inconsistent with the algebraic
+    # boundary equations, so the default `CheckInit` rejects them; use `BrownFullBasicInit`.
+    sol = solve(prob, FBDF(), saveat = 0.1, initializealg = BrownFullBasicInit())
 
     @test SciMLBase.successful_retcode(sol)
 

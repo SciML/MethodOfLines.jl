@@ -27,7 +27,7 @@ where ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 Note here elliptic problem has condition ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 
 ```@example sispde
-using DifferentialEquations, ModelingToolkit, MethodOfLines, DomainSets, Plots
+using DifferentialEquations, SteadyStateDiffEq, ModelingToolkit, MethodOfLines, DomainSets, Plots
 
 # Parameters, variables, and derivatives
 @parameters t x

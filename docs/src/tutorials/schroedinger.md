@@ -4,6 +4,7 @@ MethodOfLines can solve linear complex PDEs like the Schrödinger equation:
 
 ```@example schro
 using MethodOfLines, OrdinaryDiffEq, Plots, DomainSets, ModelingToolkit
+using DiffEqBase: BrownFullBasicInit
 
 @parameters t, x
 @variables ψ(..)
@@ -32,7 +33,10 @@ disc = MOLFiniteDifference([x => 100], t)
 
 prob = discretize(sys, disc)
 
-sol = solve(prob, FBDF(), saveat = 0.01)
+# Splitting the complex equation into real and imaginary parts leaves the boundary
+# rows as algebraic constraints, so the raw initial condition does not satisfy them and
+# the default `CheckInit` rejects it; `BrownFullBasicInit` solves the algebraic part.
+sol = solve(prob, FBDF(), saveat = 0.01, initializealg = BrownFullBasicInit())
 
 discx = sol[x]
 disct = sol[t]

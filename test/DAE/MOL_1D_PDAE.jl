@@ -3,6 +3,7 @@
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using OrdinaryDiffEqRosenbrock: Rodas4
+using DiffEqBase: BrownFullBasicInit
 using ModelingToolkit: Differential
 
 # Tests
@@ -50,8 +51,10 @@ using ModelingToolkit: Differential
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
-    # Solve ODE problem
-    sol = solve(prob, Rodas4(), saveat = 0.1)
+    # Solve ODE problem. This is a DAE (the `0 ~ Dxx(v) + ...` constraint), so the raw
+    # finite-difference ICs do not satisfy the algebraic equations and the default
+    # `CheckInit` rejects them; `BrownFullBasicInit` solves the algebraic part first.
+    sol = solve(prob, Rodas4(), saveat = 0.1, initializealg = BrownFullBasicInit())
 
     x_sol = sol[x]
     t_sol = sol[t]
