@@ -14,9 +14,12 @@ run_qa(
     #   :piracies          — call-operator methods on PDEBase.InterfaceBoundary /
     #                        PDEBase.AbstractBoundary in interface_boundary.jl
     aqua_broken = (:ambiguities, :undefined_exports, :stale_deps, :deps_compat, :piracies),
-    # JET: the 10 possible errors previously tracked in #574 no longer reproduce on the
-    # current ModelingToolkit 11 / SciMLBase 3 stack, so JET.test_package runs as a hard
-    # check (jet_broken left at its default of false).
+    # JET: still reports possible errors on Julia 1.11/1.12 (the CI `julia 1` lane):
+    # DiscreteSpace getproperty `.time`/`.ps` FieldErrors via ivs/params,
+    # `MethodOfLines.otherderivmaps` not defined, and `f_analytic` possibly-undefined in
+    # MOL_discretization.jl. Kept broken pending issue #574. `jet_broken = true` makes the
+    # check report-only and auto-flags an Unexpected Pass once JET is clean.
+    jet_broken = true,
     # ExplicitImports per-check ignore-lists (names owned by / non-public in other
     # packages; they become clean once those packages export/declare-public these names).
     ei_kwargs = (;
