@@ -72,8 +72,52 @@ end
     return β, r
 end
 
+# Simpson cell (xi, xL, xph) per Val{Target}; xM, Δx in core. Val{1}/Val{2}: half-cell contracted inward.
+@inline _weno_target_geometry(::Val{1}, x1, x2, x3, x4, x5) = (x1, x1, (x1 + x2) / 2)
+@inline _weno_target_geometry(::Val{2}, x1, x2, x3, x4, x5) = (x2, (x1 + x2) / 2, (x2 + x3) / 2)
+@inline _weno_target_geometry(::Val{3}, x1, x2, x3, x4, x5) = (x3, (x2 + x3) / 2, (x3 + x4) / 2)
+# Val{4}/Val{5}: cell contracted inward; Val{5} uses xph = x5.
+@inline _weno_target_geometry(::Val{4}, x1, x2, x3, x4, x5) = (x4, (x3 + x4) / 2, (x4 + x5) / 2)
+@inline _weno_target_geometry(::Val{5}, x1, x2, x3, x4, x5) = (x5, (x4 + x5) / 2, x5)
+
+# Closed-form ideal weights d_k (d0, d2); d1 = 1 - d0 - d2 in core. Exact Σ d_k p_k' = P'_{5pt}; Σ d_k = 1.
+@inline function _weno_ideal_d0d2(::Val{3}, x1, x2, x3, x4, x5)
+    # Center node target x_i = x3; reduces to (1/6, 2/3, 1/6) on a uniform grid.
+    d0 = ((x3 - x4) * (x3 - x5)) / ((x1 - x4) * (x1 - x5))
+    d2 = ((x3 - x1) * (x3 - x2)) / ((x5 - x1) * (x5 - x2))
+    return d0, d2
+end
+
+@inline function _weno_ideal_d0d2(::Val{1}, x1, x2, x3, x4, x5)
+    # Left wall, target = x1.
+    d0 = ((x1 - x4) * (x1 - x5) * (x1 - x2) + (x1 - x4) * (x1 - x3) * (x1 - x2) + (2 * x1 - x2 - x4) * (x1 - x3) * (x1 - x5)) / ((2 * x1 - x2 - x3) * (x1 - x4) * (x1 - x5))
+    d2 = (-(x1^3) + (x1^2) * x2 + (x1^2) * x3 + (x1^2) * x4 - x1 * x2 * x3 - x1 * x2 * x4 - x1 * x3 * x4 + x2 * x3 * x4) / (-2 * (x1^2) * x2 + 2 * (x1^2) * x5 + x1 * x2 * x3 + x1 * x2 * x4 + 2 * x1 * x2 * x5 - x1 * x3 * x5 - x1 * x4 * x5 - 2 * x1 * (x5^2) - x2 * x3 * x5 - x2 * x4 * x5 + x3 * (x5^2) + x4 * (x5^2))
+    return d0, d2
+end
+
+@inline function _weno_ideal_d0d2(::Val{2}, x1, x2, x3, x4, x5)
+    # Second node, target = x2.
+    d0 = ((x2 - x4) * (x2 - x5)) / ((x1 - x4) * (x1 - x5))
+    d2 = (x1 * (x2^2) - x1 * x2 * x3 - x1 * x2 * x4 + x1 * x3 * x4 - (x2^3) + (x2^2) * x3 + (x2^2) * x4 - x2 * x3 * x4) / (-2 * x1 * (x2^2) + x1 * x2 * x3 + x1 * x2 * x4 + 2 * x1 * x2 * x5 - x1 * x3 * x5 - x1 * x4 * x5 + 2 * (x2^2) * x5 - x2 * x3 * x5 - x2 * x4 * x5 - 2 * x2 * (x5^2) + x3 * (x5^2) + x4 * (x5^2))
+    return d0, d2
+end
+
+@inline function _weno_ideal_d0d2(::Val{4}, x1, x2, x3, x4, x5)
+    # Inner-right node, target = x4.
+    d0 = ((-x2 + x4) * (-x3 + x4) * (x4 - x5)) / ((x1 - x4) * (x1 - x5) * (-x2 - x3 + 2 * x4))
+    d2 = ((-x1 + x4) * (-x2 + x4)) / ((-x1 + x5) * (-x2 + x5))
+    return d0, d2
+end
+
+@inline function _weno_ideal_d0d2(::Val{5}, x1, x2, x3, x4, x5)
+    # Right wall, target = x5.
+    d0 = ((-x2 + x5) * (-x3 + x5) * (-x4 + x5)) / ((x1 - x4) * (x1 - x5) * (-x2 - x3 + 2 * x5))
+    d2 = ((-x1 + x5) * (-x2 + x5) * (-x3 - x4 + 2 * x5) + (-x1 - x2 + 2 * x5) * (-x3 + x5) * (-x4 + x5)) / ((-x1 + x5) * (-x2 + x5) * (-x3 - x4 + 2 * x5))
+    return d0, d2
+end
+
 # Geometry and weights formed in Tx = eltype(x); promotion against eltype(u) occurs at the dot products.
-@inline function _weno_f_nonuniform_core(u, ε, x)
+@inline function _weno_f_nonuniform_core(u, ε, x, ::Val{T}) where {T}
     Tx = eltype(x)
     θ = Tx(3)
     half = Tx(1) / 2
@@ -83,11 +127,8 @@ end
         u1 = u[1]; u2 = u[2]; u3 = u[3]; u4 = u[4]; u5 = u[5]
     end
 
-    xi = x3
-    xph = (x3 + x4) / 2
-    xmh = (x2 + x3) / 2
-    Δx = xph - xmh
-    xL = xmh
+    xi, xL, xph = _weno_target_geometry(Val(T), x1, x2, x3, x4, x5)
+    Δx = xph - xL
     xM = (xL + xph) / 2
 
     αS0 = (x1, x2, x3)
@@ -98,9 +139,7 @@ end
     β1, r1 = _substencil_beta_r(αS1, u2, u3, u4, xi, xL, xM, xph, Δx)
     β2, r2 = _substencil_beta_r(αS2, u3, u4, u5, xi, xL, xM, xph, Δx)
 
-    # Closed-form derivative-ideal weights; reduce to (1/6, 2/3, 1/6) on a uniform grid, Σ d_k = 1.
-    d0 = ((x3 - x4) * (x3 - x5)) / ((x1 - x4) * (x1 - x5))
-    d2 = ((x3 - x1) * (x3 - x2)) / ((x5 - x1) * (x5 - x2))
+    d0, d2 = _weno_ideal_d0d2(Val(T), x1, x2, x3, x4, x5)
     d1 = one(Tx) - d0 - d2
 
     # Shi, Hu & Shu (2002) positive/negative weight splitting (θ = 3).
@@ -124,20 +163,36 @@ end
 end
 
 """
-    weno_f_nonuniform(u, p, t, x, dx)
+    weno_f_nonuniform(u, p, t, x, dx[, ::Val{Target}])
 
-Node-centered WENO-5 reconstruction of `du/dx` at the center node `x[3]` from the length-5 interior
-stencil `u`, 4th-order accurate on non-uniform grids; non-conservative. `ε = p[1]` regularizes the
-nonlinear weights; `t` and `dx` are unused, accepted for the `FunctionalScheme{5,0}` contract. `x`
-must be strictly increasing and distinct (`Δx_i > 0`).
+Node-centered WENO-5 reconstruction of `du/dx` from the length-5 stencil `u`/`x`, 4th-order accurate
+on non-uniform grids; non-conservative. `ε = p[1]` regularizes the nonlinear weights; `t` and `dx`
+are unused, accepted for the `FunctionalScheme{5,0}` contract. `x` must be strictly increasing and
+distinct (`Δx_i > 0`).
+
+`Target` selects the reconstruction node within the stencil:
+`Val(1)` left wall (target `x[1]`), `Val(2)` second node (target `x[2]`), `Val(3)` interior center
+node (target `x[3]`, the default for the 5-arg methods), `Val(4)` inner-right node (target `x[4]`),
+`Val(5)` right wall (target `x[5]`). Boundary targets use shifted Simpson cells and target-specific
+ideal weights so the scheme is one-sided within the physical domain.
 
 References: Fornberg (1988); Jiang & Shu (1996); Shi, Hu & Shu (2002).
 """
+# 5-arg methods default to the interior target Val(3).
 Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::AbstractVector)
-    return _weno_f_nonuniform_core(u, p[1], x)
+    return _weno_f_nonuniform_core(u, p[1], x, Val(3))
 end
 
 # Scalar-dx method required by the FunctionalScheme{5,0} contract.
 Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::Number)
-    return _weno_f_nonuniform_core(u, p[1], x)
+    return _weno_f_nonuniform_core(u, p[1], x, Val(3))
+end
+
+# 6-arg: explicit Val{Target}; dx unused (FunctionalScheme{5,0} contract).
+Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::AbstractVector, ::Val{T}) where {T}
+    return _weno_f_nonuniform_core(u, p[1], x, Val(T))
+end
+
+Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::Number, ::Val{T}) where {T}
+    return _weno_f_nonuniform_core(u, p[1], x, Val(T))
 end
