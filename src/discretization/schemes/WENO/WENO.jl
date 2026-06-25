@@ -83,3 +83,6 @@ function WENOScheme(; epsilon = 1.0e-6)
         weno_f, boundary_f, boundary_f, true, [epsilon], name = "WENO"
     )
 end
+
+# Non-uniform node-centered Lagrange WENO-5 dispatch (struct/constructor wiring handled separately).
+include("weno_nonuniform.jl")
