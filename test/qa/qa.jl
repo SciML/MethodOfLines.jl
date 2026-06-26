@@ -43,15 +43,13 @@ run_qa(
                 :Interval, :add_metadata!, :error_analysis, :get_ops, :insert, :remove,
                 :sym_dot, :unitindex, :unitindices, :update_varmap!, :vcat!,
                 # non-public in Symbolics:
-                :diff2term, :unwrap,
-                # non-public in ModelingToolkit:
-                :get_bcs, :get_dvs, :get_eqs, :get_ivs, :get_unknowns,
+                :diff2term,
             ),
         ),
         all_qualified_accesses_are_public = (;
             ignore = (
                 # non-public in Base:
-                :var"@propagate_inbounds", :AbstractCartesianIndex, :OneTo,
+                :AbstractCartesianIndex,
                 # non-public in SciMLBase:
                 :AbstractDiscretizationMetadata, :AbstractODESolution, :AbstractPDESolution,
                 :PDESolution, :observed,
@@ -66,10 +64,6 @@ run_qa(
                 :ProblemTypeCtx,
                 # non-public in IfElse:
                 :ifelse,
-                # non-public in RuntimeGeneratedFunctions:
-                :init,
-                # non-public in Symbolics:
-                :unwrap, :variable,
             ),
         ),
     ),
