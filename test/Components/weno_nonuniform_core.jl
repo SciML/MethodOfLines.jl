@@ -24,6 +24,12 @@ bench_weno_f32(u::Vector{Float32}, x::AbstractVector{Float32}, dx::AbstractVecto
 bench_weno_sub(u::Vector{Float64}, x::SubArray{Float64, 1}, dx::SubArray{Float64, 1}) =
     MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F64,), 0.0, x, dx)
 
+# Allocation must be measured from inside a fully specialized function barrier. On Julia 1.10 LTS,
+# evaluating `@allocated f(...)` directly in (or under) the `@testset` scope boxes the Float64 result
+# (16 bytes); `begin ...; nothing end` and `let` wrappers do not prevent this. Parametrizing on the
+# callable `F` forces specialization so the call and its return value stay unboxed -> a true 0.
+@inline measure_alloc(f::F, args::Vararg{Any, N}) where {F, N} = @allocated f(args...)
+
 # Public-API helpers (vector / scalar dx). `dx` is unused by the kernel but required by the contract.
 wf(u, x) = WF(u, P, 0.0, x, diff(x))
 wf_scalar(u, x) = WF(u, P, 0.0, x, 0.5)
@@ -159,23 +165,20 @@ end
         u = sin.(xs)
         dxv = diff(xs)
 
-        # Warmup (compile) every form exercised under @allocated, including the direct invocation.
+        # Warmup (compile) every form measured below, including the direct invocation.
         bench_weno_f64(u, xs, dxv)
         bench_weno_f64(u, xs, 0.5)
         MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F64,), 0.0, xs, dxv)
+        measure_alloc(bench_weno_f64, u, xs, dxv)
 
-        # `let` blocks isolate the locals from the @testset scope so LTS does not box captured globals.
-        let u_loc = u, xs_loc = xs, dxv_loc = dxv
-            @test @allocated(bench_weno_f64(u_loc, xs_loc, dxv_loc)) == 0
-            @test @allocated(bench_weno_f64(u_loc, xs_loc, 0.5)) == 0
-            @test @allocated(MethodOfLines.weno_f_nonuniform(u_loc, (WENO_EPS_F64,), 0.0, xs_loc, dxv_loc)) == 0
-        end
+        @test measure_alloc(bench_weno_f64, u, xs, dxv) == 0
+        @test measure_alloc(bench_weno_f64, u, xs, 0.5) == 0
+        @test measure_alloc(MethodOfLines.weno_f_nonuniform, u, (WENO_EPS_F64,), 0.0, xs, dxv) == 0
 
         xs32 = Float32.(xs); u32 = Float32.(u); dxv32 = Float32.(dxv)
         bench_weno_f32(u32, xs32, dxv32)
-        let u_loc = u32, xs_loc = xs32, dxv_loc = dxv32
-            @test @allocated(bench_weno_f32(u_loc, xs_loc, dxv_loc)) == 0
-        end
+        measure_alloc(bench_weno_f32, u32, xs32, dxv32)
+        @test measure_alloc(bench_weno_f32, u32, xs32, dxv32) == 0
     end
 
     @testset "Type stability" begin
@@ -232,8 +235,7 @@ end
         @test (@inferred WF(u, P, 0.0, xs_view, dxv_view)) isa Float64
 
         bench_weno_sub(u, xs_view, dxv_view)   # warmup
-        let u_loc = u, xs_loc = xs_view, dxv_loc = dxv_view
-            @test @allocated(bench_weno_sub(u_loc, xs_loc, dxv_loc)) == 0
-        end
+        measure_alloc(bench_weno_sub, u, xs_view, dxv_view)
+        @test measure_alloc(bench_weno_sub, u, xs_view, dxv_view) == 0
     end
 end
