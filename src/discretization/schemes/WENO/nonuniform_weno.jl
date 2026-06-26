@@ -53,6 +53,9 @@ end
 
 @inline _dot3(w::SVector{3}, a, b, c) = w[1] * a + w[2] * b + w[3] * c
 
+@inline _beta_nonneg(val::T) where {T<:AbstractFloat} = max(val, zero(val))
+@inline _beta_nonneg(val) = IfElse.ifelse(val < zero(val), zero(val), val)
+
 # Smoothness indicator β_k (Jiang & Shu 1996) via Simpson's rule over cell i, exact for the
 # degree-2 sub-stencil integrand, together with the sub-stencil derivative estimate r_k = p_k'(x_i).
 @inline function _substencil_beta_r(
@@ -72,15 +75,14 @@ end
     I1 = (Δx / 6) * (pL^2 + 4 * pM^2 + pR^2)   # ∫ (p')^2 dx  (Simpson, exact)
     I2 = Δx * pp^2                              # ∫ (p'')^2 dx
     val = Δx * I1 + Δx^3 * I2
-    β = IfElse.ifelse(val < zero(val), zero(val), val)
+    β = _beta_nonneg(val)
     return β, r
 end
 
 # Zero-allocation core. Geometry and weights are formed in Tx = eltype(x); promotion against
 # eltype(u) (Symbolics.Num, ForwardDiff.Dual, Float32) occurs at the dot products.
-@inline function _weno_f_nonuniform_core(u, p, x)
+@inline function _weno_f_nonuniform_core(u, ε, x)
     Tx = eltype(x)
-    ε = p[1]
     θ = Tx(3)
     half = Tx(1) / 2
 
@@ -151,15 +153,11 @@ formulation divides by node differences and is undefined on degenerate grids.
 
 References: Fornberg (1988); Jiang & Shu (1996); Shi, Hu & Shu (2002).
 """
-@inline function weno_f_nonuniform(u, p, t, x, dx::AbstractVector)
-    @boundscheck (length(u) == 5 && length(x) == 5) ||
-        throw(ArgumentError("weno_f_nonuniform requires a length-5 interior stencil (got length(u)=$(length(u)), length(x)=$(length(x)))."))
-    return _weno_f_nonuniform_core(u, p, x)
+Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::AbstractVector)
+    return _weno_f_nonuniform_core(u, p[1], x)
 end
 
 # Scalar dx method: uniform-stepsize fallback required by the FunctionalScheme contract.
-@inline function weno_f_nonuniform(u, p, t, x, dx::Number)
-    @boundscheck (length(u) == 5 && length(x) == 5) ||
-        throw(ArgumentError("weno_f_nonuniform requires a length-5 interior stencil (got length(u)=$(length(u)), length(x)=$(length(x)))."))
-    return _weno_f_nonuniform_core(u, p, x)
+Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::Number)
+    return _weno_f_nonuniform_core(u, p[1], x)
 end

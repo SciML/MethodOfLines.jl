@@ -13,6 +13,16 @@ using ForwardDiff
 
 const WF = MethodOfLines.weno_f_nonuniform
 const P = [1.0e-6]
+const WENO_EPS_F64 = 1.0e-6
+const WENO_EPS_F32 = 1.0f-6
+
+# Typed function barriers for @allocated tests (avoid closure boxing on LTS).
+bench_weno_f64(u::Vector{Float64}, x::AbstractVector{Float64}, dx) =
+    MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F64,), 0.0, x, dx)
+bench_weno_f32(u::Vector{Float32}, x::AbstractVector{Float32}, dx::AbstractVector{Float32}) =
+    MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F32,), 0.0f0, x, dx)
+bench_weno_sub(u::Vector{Float64}, x::SubArray{Float64,1}, dx::SubArray{Float64,1}) =
+    MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F64,), 0.0, x, dx)
 
 # Public-API helpers (vector / scalar dx). `dx` is unused by the kernel but required by the contract.
 wf(u, x) = WF(u, P, 0.0, x, diff(x))
@@ -149,17 +159,16 @@ end
         u = sin.(xs)
         dxv = diff(xs)
 
-        bench(uu, x, dx) = WF(uu, P, 0.0, x, dx)
-        bench(u, xs, dxv)        # warmup (compile)
-        bench(u, xs, 0.5)
+        bench_weno_f64(u, xs, dxv)        # warmup (compile)
+        bench_weno_f64(u, xs, 0.5)
 
-        @test @allocated(bench(u, xs, dxv)) == 0
-        @test @allocated(bench(u, xs, 0.5)) == 0
+        @test @allocated(bench_weno_f64(u, xs, dxv)) == 0
+        @test @allocated(bench_weno_f64(u, xs, 0.5)) == 0
+        @test @allocated(MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F64,), 0.0, xs, dxv)) == 0
 
-        xs32 = Float32.(xs); u32 = Float32.(u); dxv32 = Float32.(dxv); p32 = Float32[1.0f-6]
-        bench32(uu, x, dx) = WF(uu, p32, 0.0f0, x, dx)
-        bench32(u32, xs32, dxv32)
-        @test @allocated(bench32(u32, xs32, dxv32)) == 0
+        xs32 = Float32.(xs); u32 = Float32.(u); dxv32 = Float32.(dxv)
+        bench_weno_f32(u32, xs32, dxv32)
+        @test @allocated(bench_weno_f32(u32, xs32, dxv32)) == 0
     end
 
     @testset "Type stability" begin
@@ -215,8 +224,7 @@ end
         @test Dview isa Float64
         @test (@inferred WF(u, P, 0.0, xs_view, dxv_view)) isa Float64
 
-        benchv(uu, x, dx) = WF(uu, P, 0.0, x, dx)
-        benchv(u, xs_view, dxv_view)   # warmup
-        @test @allocated(benchv(u, xs_view, dxv_view)) == 0
+        bench_weno_sub(u, xs_view, dxv_view)   # warmup
+        @test @allocated(bench_weno_sub(u, xs_view, dxv_view)) == 0
     end
 end
