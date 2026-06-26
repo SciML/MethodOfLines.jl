@@ -53,7 +53,7 @@ end
 
 @inline _dot3(w::SVector{3}, a, b, c) = w[1] * a + w[2] * b + w[3] * c
 
-@inline _beta_nonneg(val::T) where {T<:AbstractFloat} = max(val, zero(val))
+@inline _beta_nonneg(val::T) where {T <: AbstractFloat} = max(val, zero(val))
 @inline _beta_nonneg(val) = IfElse.ifelse(val < zero(val), zero(val), val)
 
 # Smoothness indicator β_k (Jiang & Shu 1996) via Simpson's rule over cell i, exact for the

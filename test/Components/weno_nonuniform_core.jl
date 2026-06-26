@@ -21,7 +21,7 @@ bench_weno_f64(u::Vector{Float64}, x::AbstractVector{Float64}, dx) =
     MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F64,), 0.0, x, dx)
 bench_weno_f32(u::Vector{Float32}, x::AbstractVector{Float32}, dx::AbstractVector{Float32}) =
     MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F32,), 0.0f0, x, dx)
-bench_weno_sub(u::Vector{Float64}, x::SubArray{Float64,1}, dx::SubArray{Float64,1}) =
+bench_weno_sub(u::Vector{Float64}, x::SubArray{Float64, 1}, dx::SubArray{Float64, 1}) =
     MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F64,), 0.0, x, dx)
 
 # Public-API helpers (vector / scalar dx). `dx` is unused by the kernel but required by the contract.
@@ -63,32 +63,32 @@ end
         f1(x) = 1.7 + 0.9x;           df1(x) = 0.9
         f2(x) = 1.7 + 0.9x - 0.4x^2;  df2(x) = 0.9 - 0.8x
 
-        @test wf(f0.(xs), xs) ≈ df0(xc) atol = 1e-14
-        @test wf(f1.(xs), xs) ≈ df1(xc) atol = 1e-13
-        @test wf(f2.(xs), xs) ≈ df2(xc) atol = 1e-12
+        @test wf(f0.(xs), xs) ≈ df0(xc) atol = 1.0e-14
+        @test wf(f1.(xs), xs) ≈ df1(xc) atol = 1.0e-13
+        @test wf(f2.(xs), xs) ≈ df2(xc) atol = 1.0e-12
 
         # Scalar-dx fallback hits the identical core: bit-for-bit equal.
         @test wf_scalar(f2.(xs), xs) == wf(f2.(xs), xs)
 
         # The nonlinear scheme is not exact for degree 3 at finite h (ω_k != d_k).
         f3(x) = x^3
-        @test !isapprox(wf(f3.(xs), xs), 3xc^2; atol = 1e-6)
+        @test !isapprox(wf(f3.(xs), xs), 3xc^2; atol = 1.0e-6)
     end
 
     @testset "Linear ideal-weight identity (degree <= 4)" begin
         for xs in ([0.0, 0.6, 1.4, 2.1, 3.3], [-0.3, 0.4, 0.55, 1.9, 2.4])
             xc = xs[3]
-            # Convex partition: Σ d_k = 1 and d_k in [0, 1] (the SHS negative branch is inert).
+            # Convex partition: Σ d_k = 1 and d_k in [0, 1] (the Shi-Hu-Shu negative branch is inert).
             d0, d1, d2 = ideal_weights(xs)
-            @test d0 + d1 + d2 ≈ 1.0 atol = 1e-14
+            @test d0 + d1 + d2 ≈ 1.0 atol = 1.0e-14
             @test all(0 .<= (d0, d1, d2) .<= 1)
 
             for (g, dg) in (
-                    (x -> x^3 - 2x,            x -> 3x^2 - 2),
-                    (x -> x^4 - 0.5x^2 + x,    x -> 4x^3 - x + 1),
-                    (x -> 2.3x^4 - 1.1x^3,     x -> 9.2x^3 - 3.3x^2),
+                    (x -> x^3 - 2x, x -> 3x^2 - 2),
+                    (x -> x^4 - 0.5x^2 + x, x -> 4x^3 - x + 1),
+                    (x -> 2.3x^4 - 1.1x^3, x -> 9.2x^3 - 3.3x^2),
                 )
-                @test linear_recon(xs, g.(xs)) ≈ dg(xc) rtol = 1e-11 atol = 1e-11
+                @test linear_recon(xs, g.(xs)) ≈ dg(xc) rtol = 1.0e-11 atol = 1.0e-11
             end
         end
     end
@@ -107,11 +107,11 @@ end
             xs = xc .+ h .* o
             abs(wf(f.(xs), xs) - df(xs[3]))   # evaluated at the actual center node xs[3]
         end
-        orders = [log2(errs[k] / errs[k+1]) for k in 1:length(hs)-1]
+        orders = [log2(errs[k] / errs[k + 1]) for k in 1:(length(hs) - 1)]
 
         # Asymptotic order -> 4 (this FD scheme is 4th order on non-uniform grids).
         @test orders[end] > 3.85
-        @test orders[end-1] > 3.7
+        @test orders[end - 1] > 3.7
         # Least-squares slope over the finest region (h <= 0.05) confirms ~4th order.
         lh = log.(hs[3:end]); le = log.(errs[3:end]); n = length(lh)
         slope = (n * sum(lh .* le) - sum(lh) * sum(le)) / (n * sum(lh .^ 2) - sum(lh)^2)
@@ -122,17 +122,17 @@ end
 
     @testset "Extreme grid stretching (1:1e6)" begin
         grids = (
-            [0.0, 1.0, 1.0 + 1e-6, 2.0 + 1e-6, 3.0 + 1e-6],   # 1e-6 center cell
-            [0.0, 1e-6, 2e-6, 1.0, 2.0],                       # extreme clustering near the center
+            [0.0, 1.0, 1.0 + 1.0e-6, 2.0 + 1.0e-6, 3.0 + 1.0e-6],   # 1e-6 center cell
+            [0.0, 1.0e-6, 2.0e-6, 1.0, 2.0],                       # extreme clustering near the center
         )
         for g in grids
             # Finiteness under severe ill-conditioning.
             @test isfinite(wf((x -> x^2).(g), g))
 
             # A linear field's derivative is exact regardless of the grid (Σ d_k = 1, every r_k
-            # equals the slope), so the SHS recombination must not corrupt it.
+            # equals the slope), so the Shi-Hu-Shu recombination must not corrupt it.
             lin(x) = 2.0 + 3.0x
-            @test wf(lin.(g), g) ≈ 3.0 rtol = 1e-6
+            @test wf(lin.(g), g) ≈ 3.0 rtol = 1.0e-6
 
             # Stability (not accuracy) target for a quadratic on a brutally stretched stencil.
             @test abs(wf((x -> x^2).(g), g) - 2 * g[3]) < 1.0
@@ -141,13 +141,13 @@ end
             d0, d1, d2 = ideal_weights(g)
             @test all(isfinite, (d0, d1, d2))
             @test d1 >= 0
-            @test d0 + d1 + d2 ≈ 1.0 atol = 1e-10
+            @test d0 + d1 + d2 ≈ 1.0 atol = 1.0e-10
         end
 
         # A batch of deterministic extreme-ratio grids must never produce NaN/Inf.
         finite_all = true
         for k in 0:60
-            s = 10.0 ^ (k / 10 - 3)                       # cell-ratio scale spanning 1e-3 .. 1e3
+            s = 10.0^(k / 10 - 3)                       # cell-ratio scale spanning 1e-3 .. 1e3
             g = cumsum([1.0, s, 1.0, s, 1.0]) .- 1.0
             finite_all &= isfinite(wf((x -> sin(x)).(g), g))
         end
@@ -159,16 +159,23 @@ end
         u = sin.(xs)
         dxv = diff(xs)
 
-        bench_weno_f64(u, xs, dxv)        # warmup (compile)
+        # Warmup (compile) every form exercised under @allocated, including the direct invocation.
+        bench_weno_f64(u, xs, dxv)
         bench_weno_f64(u, xs, 0.5)
+        MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F64,), 0.0, xs, dxv)
 
-        @test @allocated(bench_weno_f64(u, xs, dxv)) == 0
-        @test @allocated(bench_weno_f64(u, xs, 0.5)) == 0
-        @test @allocated(MethodOfLines.weno_f_nonuniform(u, (WENO_EPS_F64,), 0.0, xs, dxv)) == 0
+        # `let` blocks isolate the locals from the @testset scope so LTS does not box captured globals.
+        let u_loc = u, xs_loc = xs, dxv_loc = dxv
+            @test @allocated(bench_weno_f64(u_loc, xs_loc, dxv_loc)) == 0
+            @test @allocated(bench_weno_f64(u_loc, xs_loc, 0.5)) == 0
+            @test @allocated(MethodOfLines.weno_f_nonuniform(u_loc, (WENO_EPS_F64,), 0.0, xs_loc, dxv_loc)) == 0
+        end
 
         xs32 = Float32.(xs); u32 = Float32.(u); dxv32 = Float32.(dxv)
         bench_weno_f32(u32, xs32, dxv32)
-        @test @allocated(bench_weno_f32(u32, xs32, dxv32)) == 0
+        let u_loc = u32, xs_loc = xs32, dxv_loc = dxv32
+            @test @allocated(bench_weno_f32(u_loc, xs_loc, dxv_loc)) == 0
+        end
     end
 
     @testset "Type stability" begin
@@ -192,12 +199,12 @@ end
         ud = ForwardDiff.Dual.(u, seed)
         Dd = WF(ud, P, 0.0, xs, dxv)
         @test Dd isa ForwardDiff.Dual
-        @test ForwardDiff.value(Dd) ≈ D64 atol = 1e-12
-        hfd = 1e-6
+        @test ForwardDiff.value(Dd) ≈ D64 atol = 1.0e-12
+        hfd = 1.0e-6
         up = copy(u); up[3] += hfd
         um = copy(u); um[3] -= hfd
         pfd = (WF(up, P, 0.0, xs, dxv) - WF(um, P, 0.0, xs, dxv)) / (2hfd)
-        @test ForwardDiff.partials(Dd)[1] ≈ pfd rtol = 1e-5
+        @test ForwardDiff.partials(Dd)[1] ≈ pfd rtol = 1.0e-5
 
         # Symbolics.Num: symbolic build then numeric evaluation must equal the direct numeric call.
         @variables uu[1:5]
@@ -205,7 +212,7 @@ end
         Dsym = WF(usym, P, 0.0, xs, dxv)
         @test Dsym isa Num
         gnum = build_function(Dsym, usym; expression = Val{false})
-        @test gnum(u) ≈ D64 atol = 1e-12
+        @test gnum(u) ≈ D64 atol = 1.0e-12
     end
 
     @testset "SubArray view ingestion (production argument types)" begin
@@ -225,6 +232,8 @@ end
         @test (@inferred WF(u, P, 0.0, xs_view, dxv_view)) isa Float64
 
         bench_weno_sub(u, xs_view, dxv_view)   # warmup
-        @test @allocated(bench_weno_sub(u, xs_view, dxv_view)) == 0
+        let u_loc = u, xs_loc = xs_view, dxv_loc = dxv_view
+            @test @allocated(bench_weno_sub(u_loc, xs_loc, dxv_loc)) == 0
+        end
     end
 end
