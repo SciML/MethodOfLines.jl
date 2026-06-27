@@ -17,9 +17,10 @@ run_qa(
     # JET: still reports possible errors on Julia 1.11/1.12 (the CI `julia 1` lane):
     # DiscreteSpace getproperty `.time`/`.ps` FieldErrors via ivs/params,
     # `MethodOfLines.otherderivmaps` not defined, and `f_analytic` possibly-undefined in
-    # MOL_discretization.jl. Kept broken pending issue #574. `jet_broken = true` makes the
-    # check report-only and auto-flags an Unexpected Pass once JET is clean.
-    jet_broken = true,
+    # MOL_discretization.jl. Kept broken there pending issue #574. JET is clean on the
+    # LTS (1.10) lane, so only mark broken on 1.11+; `report_package` auto-flags an
+    # Unexpected Pass once JET is clean on 1.11+ too.
+    jet_broken = VERSION >= v"1.11",
     # ExplicitImports per-check ignore-lists (names owned by / non-public in other
     # packages; they become clean once those packages export/declare-public these names).
     ei_kwargs = (;
