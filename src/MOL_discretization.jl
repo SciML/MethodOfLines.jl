@@ -16,13 +16,54 @@ function PDEBase.interface_errors(
     end
 end
 
+function _interface_physical_coords(b, grid1, grid2)
+    if isupper(b)
+        return grid1[end], grid2[1]
+    else
+        return grid1[1], grid2[end]
+    end
+end
+
+function _interface_coords_aligned(coord1, coord2, grid1, grid2)
+    scale = max(abs(grid1[end] - grid1[1]), abs(grid2[end] - grid2[1]))
+    return isapprox(coord1, coord2; atol = sqrt(eps(float(one(scale)))) * scale)
+end
+
+function PDEBase.check_boundarymap(
+        boundarymap, v::PDEBase.VariableMap, discretization::MOLFiniteDifference
+    )
+    return _check_interface_boundarymap(boundarymap, discretization)
+end
+
+# Kept for backwards compatibility with direct 2-arg calls; the PDEBase
+# discretization pipeline invokes the 3-arg hook above.
 function PDEBase.check_boundarymap(boundarymap, discretization::MOLFiniteDifference)
+    return _check_interface_boundarymap(boundarymap, discretization)
+end
+
+function _check_interface_boundarymap(boundarymap, discretization::MOLFiniteDifference)
     bs = filter_interfaces(flatten_vardict(boundarymap))
+    scheme = discretization.advection_scheme
     for b in bs
         dx1 = discretization.dxs[Num(b.x)]
         dx2 = discretization.dxs[Num(b.x2)]
-        if dx1 != dx2
-            throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
+        if dx1 isa AbstractVector && dx2 isa AbstractVector
+            if scheme isa UpwindScheme && scheme.order > 1
+                throw(ArgumentError("UpwindScheme(order=$(scheme.order)) is not yet supported with interface or periodic boundary conditions on nonuniform grids, please use the default first order `UpwindScheme()`."))
+            end
+            isequal(b.x, b.x2) && continue
+            coord1, coord2 = _interface_physical_coords(b, dx1, dx2)
+            if !_interface_coords_aligned(coord1, coord2, dx1, dx2)
+                throw(
+                    ArgumentError(
+                        "The physical coordinates at the interface between $(b.x) and $(b.x2) must match for nonuniform grids, got $coord1 and $coord2 at the interface. Please ensure the grids align at the interface boundary. Note that cross-domain periodic (ring) topologies are not supported on nonuniform grids."
+                    )
+                )
+            end
+        elseif dx1 isa AbstractVector || dx2 isa AbstractVector
+            throw(ArgumentError("The interface between $(b.x) and $(b.x2) mixes a scalar step size with a nonuniform grid vector, please supply the same kind of grid on both sides."))
+        elseif dx1 != dx2
+            throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same."))
         end
     end
     return
@@ -46,7 +87,7 @@ function get_discrete(pdesys, discretization)
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = PDEBase.parse_bcs(get_bcs(pdesys), v, bcorders)
     # Check that the boundary map is valid
-    PDEBase.check_boundarymap(boundarymap, discretization)
+    PDEBase.check_boundarymap(boundarymap, v, discretization)
 
     # Transform system so that it is compatible with the discretization
     if should_transform(pdesys, discretization, boundarymap)

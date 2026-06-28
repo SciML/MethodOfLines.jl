@@ -74,7 +74,14 @@ run_tests(;
         "2D_Diffusion" => joinpath(@__DIR__, "2D_Diffusion", "MOL_2D_Diffusion.jl"),
         "Burgers" => joinpath(@__DIR__, "Burgers", "burgers_eq.jl"),
         "Convection" => joinpath(@__DIR__, "Convection", "MOL_1D_Linear_Convection.jl"),
-        "Convection_NU" => joinpath(@__DIR__, "Convection_NU", "MOL_1D_Linear_Convection_NonUniform.jl"),
+        "Convection_NU" => function ()
+            @safetestset "Linear Convection, NonUniform" begin
+                include(joinpath(@__DIR__, "Convection_NU", "MOL_1D_Linear_Convection_NonUniform.jl"))
+            end
+            return @safetestset "Linear Convection, Upwind Non-Uniform Interfaces" begin
+                include(joinpath(@__DIR__, "Convection_NU", "MOL_1D_Interface_Upwind_NonUniform.jl"))
+            end
+        end,
         "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
     ),
     qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),

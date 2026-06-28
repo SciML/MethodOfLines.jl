@@ -27,13 +27,116 @@
     return weights, Itap
 end
 
+# Independent variable for a stencil tap on the far side of an interface;
+# returns b.x2 when I.A matches the coupled variable of boundary b, otherwise x.
+@inline function _upwind_stencil_grid_iv(I::RefCartesianIndex, s, bs, j, x)
+    if I.A !== nothing
+        for b in bs
+            if I.A === s.discvars[depvar(b.u2, s)]
+                return b.x2
+            end
+        end
+    end
+    return x
+end
+
+# Domain length L for same-domain periodic interfaces (x ~ x); nothing for
+# cross-domain joints (x1 ~ x2).
+@inline function _upwind_stencil_periodic_length(s, bs, j, x)
+    for b in bs
+        if b isa InterfaceBoundary && isequal(b.x, x) && isequal(b.x2, x)
+            g = s.grid[x]
+            return g[end] - g[firstindex(g)]
+        end
+    end
+    return nothing
+end
+
+# Physical coordinate of stencil tap I on the nonuniform grid, resolving
+# RefCartesianIndex taps to the correct domain. When `raw_j` is supplied
+# (index before bwrap), a same-domain periodic wrap is detected as
+# tap_j != raw_j and the coordinate is shifted by ±L so Fornberg stencils
+# stay monotone; bwrap also wraps raw_j == 1 (u[1] ~ u[end]), which a
+# bounds test on raw_j alone would miss.
+@inline function _upwind_stencil_coord(I, s, bs, j, x; raw_j = nothing)
+    grid_iv = I isa RefCartesianIndex ? _upwind_stencil_grid_iv(I, s, bs, j, x) : x
+    tap_j = I isa RefCartesianIndex ? I.I[j] : I[j]
+    coord = s.grid[grid_iv][tap_j]
+    if raw_j !== nothing && isequal(grid_iv, x) && tap_j != raw_j
+        L = _upwind_stencil_periodic_length(s, bs, j, x)
+        if L !== nothing
+            coord += raw_j > tap_j ? L : -L
+        end
+    end
+    return coord
+end
+
+# Index offsets of the one-sided upwind stencil along the derivative direction.
+@inline function _nonuniform_upwind_stencil_offsets(D, ispositive)
+    return if !ispositive
+        0:(D.stencil_length - 1)
+    else
+        (-D.stencil_length + 1):0
+    end
+end
+
+# True when the stencil leaves the domain or sits at a boundary point where
+# the standard nonuniform upwind stencil does not apply.
+@inline function _nonuniform_upwind_cross_domain_needed(
+        D::DerivativeOperator, II, s, bs, ispositive, u, jx
+    )
+    length(bs) == 0 && return false
+    j, x = jx
+    I1 = unitindex(ndims(u, s), j)
+    l = length(s, x)
+    ij = II[j]
+    offsets = _nonuniform_upwind_stencil_offsets(D, ispositive)
+    is_crossing = any(
+        i -> begin
+            idx = (II + i * I1)[j]
+            return idx < 1 || idx > l
+        end, offsets
+    )
+    is_boundary_blindspot = ispositive ? ij == l : ij == 1
+    return is_crossing || is_boundary_blindspot
+end
+
+# Build (weights, Itap) for nonuniform upwind differencing at interfaces via
+# bwrap and coordinate-based calculate_weights. Weights are calculated
+# dynamically here, as this is the point where the specific variable's
+# boundary map (bs) and cross-domain coordinates are naturally accessible.
+@inline function _nonuniform_upwind_interface_difference(
+        D::DerivativeOperator{T, N, Wind, DX}, II, s, bs,
+        ispositive, u, jx
+    ) where {T, N, Wind, DX <: AbstractVector}
+    j, x = jx
+    I1 = unitindex(ndims(u, s), j)
+    offsets = _nonuniform_upwind_stencil_offsets(D, ispositive)
+    raw_js = [(II + offsets[k] * I1)[j] for k in eachindex(offsets)]
+    Itap = [bwrap(II + offsets[k] * I1, bs, s, jx) for k in eachindex(offsets)]
+    for It in Itap
+        iv = It isa RefCartesianIndex ? _upwind_stencil_grid_iv(It, s, bs, j, x) : x
+        if !(1 <= It[j] <= length(s, iv))
+            throw(ArgumentError("The upwind stencil for $u along $x extends past a non-interface boundary on a nonuniform grid. Stencils wider than first order upwind (higher approximation or derivative orders) are not yet supported with nonuniform interface boundaries."))
+        end
+    end
+    x0 = _upwind_stencil_coord(II, s, bs, j, x)
+    coords = [
+        _upwind_stencil_coord(Itap[k], s, bs, j, x; raw_j = raw_js[k]) for k in eachindex(Itap)
+    ]
+    weights = calculate_weights(D.derivative_order, x0, coords)
+    return weights, Itap
+end
+
 @inline function _upwind_difference(
         D::DerivativeOperator{T, N, Wind, DX}, II, s, bs,
         ispositive, u, jx
     ) where {T, N, Wind, DX <: AbstractVector}
     j, x = jx
-    @assert length(bs) == 0 "Interface boundary conditions are not yet supported for nonuniform dx dimensions, such as $x, please post an issue to https://github.com/SciML/MethodOfLines.jl if you need this functionality."
     I1 = unitindex(ndims(u, s), j)
+    if _nonuniform_upwind_cross_domain_needed(D, II, s, bs, ispositive, u, jx)
+        return _nonuniform_upwind_interface_difference(D, II, s, bs, ispositive, u, jx)
+    end
     if !ispositive
         @assert D.offside == 0
 
