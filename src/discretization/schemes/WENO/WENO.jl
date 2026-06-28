@@ -1,5 +1,3 @@
-include("nonuniform_weno.jl")
-
 """
 Implements the WENO scheme of Jiang and Shu.
 Specified in https://repository.library.brown.edu/studio/item/bdr:297524/PDF/ (Page 8-9)
