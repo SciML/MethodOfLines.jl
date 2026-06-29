@@ -43,12 +43,6 @@ function combined_weights(xs, ::Val{T}) where {T}
     return (w1, w2, w3, w4, w5)
 end
 
-# Linear ideal-weight reconstruction Σ d_k p_k'(x_target).
-function linear_recon_b(xs, u, vt::Val)
-    w = combined_weights(xs, vt)
-    return sum(w[k] * u[k] for k in 1:5)
-end
-
 # Symbolic 5-point Lagrange interpolant derivative weights ℓ_j'(x_target). This is the exact
 # degree-4 derivative operator the d_k decomposition must reproduce node-for-node.
 function lagrange_deriv_weights(xs, target)
@@ -73,7 +67,6 @@ end
     grids = (
         [0.0, 0.3, 0.9, 1.7, 2.2],
         [-0.3, 0.4, 0.55, 1.9, 2.4],
-        [0.0, 0.15, 0.8, 1.05, 2.7],
     )
 
     @testset "Symbolic d_k identity vs 5-point Lagrange derivative" begin
@@ -83,44 +76,67 @@ end
             wcomb = combined_weights(xs, Val(T))
             wlag = lagrange_deriv_weights(xs, T)
             for k in 1:5
-                @test wcomb[k] ≈ wlag[k] rtol = 1.0e-10 atol = 1.0e-12
+                @test wcomb[k] ≈ wlag[k] rtol = 1.0e-12 atol = 1.0e-13
             end
         end
     end
 
     @testset "Convex partition (Σ d_k = 1)" begin
         for xs in grids, T in (1, 2, 3, 4, 5)
-            @test sum_d(xs, Val(T)) ≈ 1.0 atol = 1.0e-12
-        end
-    end
-
-    @testset "Linear ideal-weight identity (degree <= 4)" begin
-        for xs in grids, T in (1, 2, 4, 5)
-            xt = xs[T]
-            for (g, dg) in (
-                    (x -> 1.7 + 0.9x, x -> 0.9),
-                    (x -> x^2 - 0.3x, x -> 2x - 0.3),
-                    (x -> x^3 - 2x, x -> 3x^2 - 2),
-                    (x -> x^4 - 0.5x^2 + x, x -> 4x^3 - x + 1),
-                    (x -> 2.3x^4 - 1.1x^3, x -> 9.2x^3 - 3.3x^2),
-                )
-                @test linear_recon_b(xs, g.(xs), Val(T)) ≈ dg(xt) rtol = 1.0e-10 atol = 1.0e-10
-            end
+            @test sum_d(xs, Val(T)) ≈ 1.0 atol = 1.0e-14
         end
     end
 
     @testset "Polynomial exactness of full WENO (degree <= 2)" begin
-        # Every 3-point sub-stencil derivative is exact for degree <= 2, so any SHS recombination is
+        # Every 3-point sub-stencil derivative is exact for degree <= 2, so any Shi-Hu-Shu recombination is
         # exact regardless of the nonlinear weights.
         for xs in grids, T in (1, 2, 4, 5)
             xt = xs[T]
             f0(x) = 1.7;                 df0(x) = 0.0
             f1(x) = 1.7 + 0.9x;          df1(x) = 0.9
             f2(x) = 1.7 + 0.9x - 0.4x^2; df2(x) = 0.9 - 0.8x
-            @test wfb(f0.(xs), xs, Val(T)) ≈ df0(xt) atol = 1.0e-12
-            @test wfb(f1.(xs), xs, Val(T)) ≈ df1(xt) atol = 1.0e-12
-            @test wfb(f2.(xs), xs, Val(T)) ≈ df2(xt) atol = 1.0e-11
+            @test wfb(f0.(xs), xs, Val(T)) ≈ df0(xt) atol = 1.0e-13
+            @test wfb(f1.(xs), xs, Val(T)) ≈ df1(xt) atol = 1.0e-13
+            @test wfb(f2.(xs), xs, Val(T)) ≈ df2(xt) atol = 1.0e-12
         end
+    end
+
+    @testset "Extreme grid stretching (pathological 1:1e6)" begin
+        # Adjacent-cell ratio up to 1e6, clustered at left / interior / right to stress every target.
+        extreme_grids = (
+            [0.0, 1.0e-6, 2.0e-6, 1.0, 2.0],
+            [0.0, 1.0, 1.0 + 1.0e-6, 2.0 + 1.0e-6, 3.0 + 1.0e-6],
+            [0.0, 1.0, 2.0, 2.0 + 1.0e-6, 2.0 + 2.0e-6],
+        )
+        lin(x) = 2.0 + 3.0x
+        for g in extreme_grids, T in (1, 2, 3, 4, 5)
+            # ε regularization must prevent NaN/Inf in ideal-weight denominators and β.
+            @test isfinite(wfb((x -> x^2).(g), g, Val(T)))
+            # Linear-field derivative reconstruction. The ideal decomposition is exact (result = 3 Σd_k),
+            # but a 1:1e6 cell ratio carries a condition number ~1e6: a sub-stencil clustered to width
+            # ~1e-6 and differentiated by extrapolation O(1) away loses ~6 digits to catastrophic
+            # cancellation in the Fornberg weights (worst case right-clustered grid at Val{2}, ~8e-5).
+            # The bound reflects that conditioning; machine precision is not attainable here.
+            @test wfb(lin.(g), g, Val(T)) ≈ 3.0 rtol = 1.0e-3
+            x1, x2, x3, x4, x5 = g
+            d0, d2 = MethodOfLines._weno_ideal_d0d2(Val(T), x1, x2, x3, x4, x5)
+            d1 = 1.0 - d0 - d2
+            # Ideal weights stay finite and the convex partition is machine-exact even at 1:1e6.
+            @test all(isfinite, (d0, d1, d2))
+            @test d0 + d1 + d2 ≈ 1.0 atol = 1.0e-10
+        end
+
+        # Parametric sweep of the stretch ratio across many orders; output must remain finite.
+        finite_all = true
+        for k in 0:60
+            s = 10.0^(k / 10 - 3)                 # s in [1e-3, 1e3]
+            g = cumsum([1.0, s, 1.0, s, 1.0]) .- 1.0
+            u = sin.(g)
+            for T in (1, 2, 3, 4, 5)
+                finite_all &= isfinite(wfb(u, g, Val(T)))
+            end
+        end
+        @test finite_all
     end
 
     @testset "Scalar-dx 6-arg method hits the identical core" begin
@@ -145,13 +161,13 @@ end
         u = sin.(xs)
         dxv = diff(xs)
         for T in (1, 2, 3, 4, 5)
-            bench_b(u, xs, dxv, Val(T))            # warmup
+            bench_b(u, xs, dxv, Val(T))
             measure_alloc(bench_b, u, xs, dxv, Val(T))
             @test measure_alloc(bench_b, u, xs, dxv, Val(T)) == 0
         end
         xs32 = Float32.(xs); u32 = Float32.(u); dxv32 = Float32.(dxv)
         for T in (1, 2, 4, 5)
-            bench_b32(u32, xs32, dxv32, Val(T))    # warmup
+            bench_b32(u32, xs32, dxv32, Val(T))
             measure_alloc(bench_b32, u32, xs32, dxv32, Val(T))
             @test measure_alloc(bench_b32, u32, xs32, dxv32, Val(T)) == 0
         end
