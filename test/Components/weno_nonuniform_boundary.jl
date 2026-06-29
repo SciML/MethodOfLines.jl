@@ -1,7 +1,4 @@
-# Verification of the asymmetric one-sided node-centered WENO-5 boundary reconstruction via
-# Val{Target} dispatch. Left boundary: Val{1} (target x[1]), Val{2} (target x[2]). Right boundary:
-# Val{4} (target x[4]), Val{5} (target x[5]). The interior Val{3} path is verified in
-# weno_nonuniform_core.jl.
+# Asymmetric node-centered WENO-5 boundary reconstruction (Val{1..5}); Val{3} in weno_nonuniform_core.jl.
 
 using Test
 using MethodOfLines
@@ -25,8 +22,7 @@ wfb(u, x, ::Val{T}) where {T} = WFB(u, PB, 0.0, x, diff(x), Val(T))
 # Fornberg m = 1 (first-derivative) weights of a 3-point sub-stencil evaluated at xt.
 fw(α, xt) = MethodOfLines._fornberg3_weights(α, xt)[2]
 
-# Combined 5-node weights of the linear ideal-weight decomposition Σ d_k p_k'(x_target), assembled
-# from `_weno_ideal_d0d2`.
+# Linear ideal-weight decomposition Σ d_k p_k'(x_target) as 5-node weights from `_weno_ideal_d0d2`.
 function combined_weights(xs, ::Val{T}) where {T}
     x1, x2, x3, x4, x5 = xs
     d0, d2 = MethodOfLines._weno_ideal_d0d2(Val(T), x1, x2, x3, x4, x5)
@@ -43,8 +39,7 @@ function combined_weights(xs, ::Val{T}) where {T}
     return (w1, w2, w3, w4, w5)
 end
 
-# Symbolic 5-point Lagrange interpolant derivative weights ℓ_j'(x_target). This is the exact
-# degree-4 derivative operator the d_k decomposition must reproduce node-for-node.
+# Symbolic 5-point Lagrange derivative weights ℓ_j'(x_target); degree-4 exact reference.
 function lagrange_deriv_weights(xs, target)
     @variables xx
     D = Differential(xx)
@@ -70,8 +65,7 @@ end
     )
 
     @testset "Symbolic d_k identity vs 5-point Lagrange derivative" begin
-        # The decomposition Σ d_k p_k'(x_target) must equal the 5-point Lagrange derivative
-        # P'_{5pt}(x_target) node-for-node for every target.
+        # Σ d_k p_k'(x_target) == P'_{5pt}(x_target) node-for-node.
         for xs in grids, T in (1, 2, 3, 4, 5)
             wcomb = combined_weights(xs, Val(T))
             wlag = lagrange_deriv_weights(xs, T)
@@ -88,8 +82,7 @@ end
     end
 
     @testset "Polynomial exactness of full WENO (degree <= 2)" begin
-        # Every 3-point sub-stencil derivative is exact for degree <= 2, so any Shi-Hu-Shu recombination is
-        # exact regardless of the nonlinear weights.
+        # 3-point sub-stencils are exact for degree <= 2, so any nonlinear recombination is exact.
         for xs in grids, T in (1, 2, 4, 5)
             xt = xs[T]
             f0(x) = 1.7;                 df0(x) = 0.0
@@ -110,26 +103,22 @@ end
         )
         lin(x) = 2.0 + 3.0x
         for g in extreme_grids, T in (1, 2, 3, 4, 5)
-            # ε regularization must prevent NaN/Inf in ideal-weight denominators and β.
+            # Finite output under ε-regularized weights and β.
             @test isfinite(wfb((x -> x^2).(g), g, Val(T)))
-            # Linear-field derivative reconstruction. The ideal decomposition is exact (result = 3 Σd_k),
-            # but a 1:1e6 cell ratio carries a condition number ~1e6: a sub-stencil clustered to width
-            # ~1e-6 and differentiated by extrapolation O(1) away loses ~6 digits to catastrophic
-            # cancellation in the Fornberg weights (worst case right-clustered grid at Val{2}, ~8e-5).
-            # The bound reflects that conditioning; machine precision is not attainable here.
+            # κ ~ 1e6: extrapolated Fornberg derivatives lose ~6 digits (Val{2}, ~8e-5).
             @test wfb(lin.(g), g, Val(T)) ≈ 3.0 rtol = 1.0e-3
             x1, x2, x3, x4, x5 = g
             d0, d2 = MethodOfLines._weno_ideal_d0d2(Val(T), x1, x2, x3, x4, x5)
             d1 = 1.0 - d0 - d2
-            # Ideal weights stay finite and the convex partition is machine-exact even at 1:1e6.
+            # Finite d_k; Σ d_k = 1 at atol = 1e-10.
             @test all(isfinite, (d0, d1, d2))
             @test d0 + d1 + d2 ≈ 1.0 atol = 1.0e-10
         end
 
-        # Parametric sweep of the stretch ratio across many orders; output must remain finite.
+        # Stretch ratio s in [1e-3, 1e3]: finite output for all targets.
         finite_all = true
         for k in 0:60
-            s = 10.0^(k / 10 - 3)                 # s in [1e-3, 1e3]
+            s = 10.0^(k / 10 - 3)
             g = cumsum([1.0, s, 1.0, s, 1.0]) .- 1.0
             u = sin.(g)
             for T in (1, 2, 3, 4, 5)
@@ -149,7 +138,7 @@ end
     end
 
     @testset "Interior backward compatibility (5-arg == Val(3))" begin
-        # The 5-arg methods must match the explicit interior dispatch exactly.
+        # 5-arg dispatch == Val(3).
         xs = grids[2]
         u = sin.(xs)
         @test WFB(u, PB, 0.0, xs, diff(xs)) === WFB(u, PB, 0.0, xs, diff(xs), Val(3))
@@ -200,7 +189,7 @@ end
             pfd = (WFB(up, PB, 0.0, xs, dxv, Val(T)) - WFB(um, PB, 0.0, xs, dxv, Val(T))) / (2hfd)
             @test ForwardDiff.partials(Dd)[1] ≈ pfd rtol = 1.0e-5
 
-            # Symbolics.Num: symbolic build then numeric evaluation.
+            # Symbolics.Num build/eval.
             @variables uu[1:5]
             usym = collect(uu)
             Dsym = WFB(usym, PB, 0.0, xs, dxv, Val(T))
