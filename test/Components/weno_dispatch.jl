@@ -15,16 +15,21 @@ const weno_f_uniform = MethodOfLines.weno_f_uniform
     @test @allocated(weno_f(u, p, t, discx, dx_scalar)) == 0
 end
 
-@testset "WENO dispatch — non-uniform stub" begin
+@testset "WENO dispatch — vector dx routes to non-uniform path" begin
     u = [1.0, 2.0, 3.0, 4.0, 5.0]
     p = [1.0e-6]
     t = 0.0
-    x_vec = collect(0.0:0.1:0.4)
+    x_vec = [0.0, 0.1, 0.25, 0.45, 0.7]
     xv = @view x_vec[1:5]
-    dx_vec = diff(x_vec[1:5])
-    @test_throws ArgumentError("WENO on non-uniform grids is not yet implemented.") weno_f(
-        u, p, t, xv, dx_vec
-    )
+    dx_vec = diff(x_vec)
+
+    m_vec = which(weno_f, (typeof(u), typeof(p), typeof(t), typeof(xv), typeof(dx_vec)))
+    m_scalar = which(weno_f, (typeof(u), typeof(p), typeof(t), typeof(xv), typeof(0.1)))
+    @test m_vec.sig.parameters[end] === AbstractVector
+    @test m_vec !== m_scalar
+
+    @test weno_f(u, p, t, xv, dx_vec) == MethodOfLines.weno_f_nonuniform(u, p, t, xv, dx_vec)
+    @test weno_f(u, p, t, xv, dx_vec) isa Real
 end
 
 @testset "WENO dispatch — scalar fallback on vector grid" begin
