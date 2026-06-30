@@ -9,6 +9,8 @@ end
 
 extent(scheme::UpwindScheme, dorder) = 0 # dorder + scheme.order - 1
 
+extent(scheme::AbstractScheme, dorder, dx) = extent(scheme, dorder)
+
 # Functional Schemes
 
 """

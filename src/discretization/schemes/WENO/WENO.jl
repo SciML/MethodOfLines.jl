@@ -78,8 +78,14 @@ end
 - `epsilon`: A quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. More sensitive problems will benefit from a smaller value. It is defined as a functional scheme.
 """
 function WENOScheme(; epsilon = 1.0e-6)
-    boundary_f = [nothing, nothing]
-    return FunctionalScheme{5, 0}(
-        weno_f, boundary_f, boundary_f, true, [epsilon], name = "WENO"
+    lower = WENONonUniformBoundary[WENONonUniformBoundary{1}(), WENONonUniformBoundary{2}()]
+    upper = WENONonUniformBoundary[WENONonUniformBoundary{5}(), WENONonUniformBoundary{4}()]
+    return FunctionalScheme{5, 5}(
+        weno_f, lower, upper, true, [epsilon], name = "WENO"
     )
 end
+
+# extent: uniform dx -> legacy extrapolation buffer (2); vector dx -> Val boundaries (0).
+const _WENOBoundaryVec = AbstractVector{<:WENONonUniformBoundary}
+extent(::FunctionalScheme{<:Any, <:_WENOBoundaryVec}, dorder, dx::Number) = 2
+extent(::FunctionalScheme{<:Any, <:_WENOBoundaryVec}, dorder, dx::AbstractVector) = 0

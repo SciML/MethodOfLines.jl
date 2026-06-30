@@ -99,8 +99,8 @@ include("discretization/schemes/upwind_difference/upwind_difference.jl")
 include("discretization/schemes/half_offset_centred_difference.jl")
 include("discretization/schemes/nonlinear_laplacian/nonlinear_laplacian.jl")
 include("discretization/schemes/spherical_laplacian/spherical_laplacian.jl")
-include("discretization/schemes/WENO/WENO.jl")
 include("discretization/schemes/WENO/nonuniform_weno.jl")
+include("discretization/schemes/WENO/WENO.jl")
 include("discretization/schemes/integral_expansion/integral_expansion.jl")
 
 # System Discretization
