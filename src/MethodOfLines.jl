@@ -3,13 +3,12 @@ using LinearAlgebra
 using SciMLBase
 using DiffEqBase
 using ModelingToolkit
-using ModelingToolkit: variable, get_unknowns,
-    parameters, varmap_to_vars, get_eqs, get_bcs, get_dvs,
+using ModelingToolkit: get_unknowns,
+    get_eqs, get_bcs, get_dvs,
     get_ivs
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
-using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term, setname,
-    rename
+using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term
 using SymbolicUtils: operation, arguments, iscall, getmetadata, unwrap_const
 using IfElse
 using StaticArrays
@@ -26,8 +25,7 @@ using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, dep
     d_orders, vcat!, update_varmap!, get_ops
 
 # staggered changes
-using PDEBase: cardinalize_eqs!, make_pdesys_compatible, parse_bcs, generate_system,
-    Interval
+using PDEBase: Interval
 using PDEBase: error_analysis, add_metadata!
 
 # To Extend
