@@ -85,7 +85,8 @@ function WENOScheme(; epsilon = 1.0e-6)
     )
 end
 
-# extent: uniform dx -> legacy extrapolation buffer (2); vector dx -> Val boundaries (0).
+# extent dispatch keys on typeof(lower): must stay Vector{<:WENONonUniformBoundary}.
+# Replacing lower/upper with nothing restores 2-arg extent=0 and breaks uniform routing.
 const _WENOBoundaryVec = AbstractVector{<:WENONonUniformBoundary}
 extent(::FunctionalScheme{<:Any, <:_WENOBoundaryVec}, dorder, dx::Number) = 2
 extent(::FunctionalScheme{<:Any, <:_WENOBoundaryVec}, dorder, dx::AbstractVector) = 0

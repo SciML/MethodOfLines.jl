@@ -204,3 +204,9 @@ Base.@propagate_inbounds @inline function (::WENONonUniformBoundary{T})(
     ) where {T}
     return weno_f_nonuniform(u, p, t, x, dx, Val(T))
 end
+
+Base.@propagate_inbounds @inline function (::WENONonUniformBoundary{T})(
+        u, p, t, x, dx::Number
+    ) where {T}
+    return weno_f_nonuniform(u, p, t, x, dx, Val(T))
+end
