@@ -73,7 +73,10 @@ end
 end
 
 """
-`WENOScheme` of Jiang and Shu
+    WENOScheme(; epsilon = 1.0e-6)
+
+Jiang-Shu WENO-5 advection scheme for uniform and non-uniform grids.
+
 ## Keyword Arguments
 - `epsilon`: A quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. More sensitive problems will benefit from a smaller value. It is defined as a functional scheme.
 """
