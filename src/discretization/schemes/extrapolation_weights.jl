@@ -82,6 +82,9 @@ function BoundaryInterpolatorExtrapolator(
     boundary_stencil_length = approximation_order
     boundary_point_count = endpoint = div(stencil_length, 2)
     len = length(x)
+    if len < boundary_stencil_length + 1
+        throw(ArgumentError("grid has $len points, but the boundary extrapolation stencil needs at least $(boundary_stencil_length + 1). Provide a finer grid for this variable."))
+    end
     dx = [x[i + 1] - x[i] for i in 1:(length(x) - 1)]
     interior_x = (endpoint + 1):(len - endpoint)
     low_boundary_x = [zero(T); cumsum(dx[1:(boundary_stencil_length - 1)])]

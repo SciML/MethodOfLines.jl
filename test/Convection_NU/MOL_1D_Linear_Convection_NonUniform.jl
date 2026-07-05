@@ -380,6 +380,21 @@ end
     end
 end
 
+@testset "Coarse grid error" begin
+    L = 1.0
+    v = 1.0
+    tspan = (0.0, 0.25)
+    u0 = x -> sin(2π * x / L)
+    u_exact = (x, t) -> translating_sine_exact(x, t, v, L)
+
+    # A grid this coarse cannot fit the boundary extrapolation stencil. It used
+    # to fail with an opaque BoundsError; now it reports an ArgumentError.
+    xgrid = [0.0, 0.1, 0.3, 0.6, 0.8, 1.0]
+    @test_throws ArgumentError solve_mms_advection(;
+        xgrid, v, tspan, u0, u_exact,
+    )
+end
+
 @testset "Periodic boundary conditions" begin
     L = 1.0
     v = 1.0
