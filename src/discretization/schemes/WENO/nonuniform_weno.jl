@@ -90,15 +90,15 @@ end
 
 @inline function _weno_ideal_d0d2(::Val{1}, x1, x2, x3, x4, x5)
     # Left wall, target = x1.
-    d0 = ((x1 - x4) * (x1 - x5) * (x1 - x2) + (x1 - x4) * (x1 - x3) * (x1 - x2) + (2 * x1 - x2 - x4) * (x1 - x3) * (x1 - x5)) / ((2 * x1 - x2 - x3) * (x1 - x4) * (x1 - x5))
-    d2 = (-(x1^3) + (x1^2) * x2 + (x1^2) * x3 + (x1^2) * x4 - x1 * x2 * x3 - x1 * x2 * x4 - x1 * x3 * x4 + x2 * x3 * x4) / (-2 * (x1^2) * x2 + 2 * (x1^2) * x5 + x1 * x2 * x3 + x1 * x2 * x4 + 2 * x1 * x2 * x5 - x1 * x3 * x5 - x1 * x4 * x5 - 2 * x1 * (x5^2) - x2 * x3 * x5 - x2 * x4 * x5 + x3 * (x5^2) + x4 * (x5^2))
+    d0 = ((2 * x1 - x2 - x3) * (x1 - x4) * (x1 - x5) + (x1 - x3) * (x1 - x5) * (x1 - x2) + (x1 - x3) * (x1 - x4) * (x1 - x2)) / ((2 * x1 - x2 - x3) * (x1 - x4) * (x1 - x5))
+    d2 = ((x1 - x3) * (x1 - x4) * (x1 - x2)) / ((-x1 + x5) * (2 * x1 - x3 - x4) * (-x2 + x5))
     return d0, d2
 end
 
 @inline function _weno_ideal_d0d2(::Val{2}, x1, x2, x3, x4, x5)
     # Second node, target = x2.
     d0 = ((x2 - x4) * (x2 - x5)) / ((x1 - x4) * (x1 - x5))
-    d2 = (x1 * (x2^2) - x1 * x2 * x3 - x1 * x2 * x4 + x1 * x3 * x4 - (x2^3) + (x2^2) * x3 + (x2^2) * x4 - x2 * x3 * x4) / (-2 * x1 * (x2^2) + x1 * x2 * x3 + x1 * x2 * x4 + 2 * x1 * x2 * x5 - x1 * x3 * x5 - x1 * x4 * x5 + 2 * (x2^2) * x5 - x2 * x3 * x5 - x2 * x4 * x5 - 2 * x2 * (x5^2) + x3 * (x5^2) + x4 * (x5^2))
+    d2 = ((-x1 + x2) * (x2 - x3) * (x2 - x4)) / ((-x1 + x5) * (2 * x2 - x3 - x4) * (-x2 + x5))
     return d0, d2
 end
 
@@ -112,7 +112,7 @@ end
 @inline function _weno_ideal_d0d2(::Val{5}, x1, x2, x3, x4, x5)
     # Right wall, target = x5.
     d0 = ((-x2 + x5) * (-x3 + x5) * (-x4 + x5)) / ((x1 - x4) * (x1 - x5) * (-x2 - x3 + 2 * x5))
-    d2 = ((-x1 + x5) * (-x2 + x5) * (-x3 - x4 + 2 * x5) + (-x1 - x2 + 2 * x5) * (-x3 + x5) * (-x4 + x5)) / ((-x1 + x5) * (-x2 + x5) * (-x3 - x4 + 2 * x5))
+    d2 = ((-x1 - x4 + 2 * x5) * (-x2 + x5) * (-x3 + x5) + (-x1 + x5) * (-x2 - x3 + 2 * x5) * (-x4 + x5)) / ((-x1 + x5) * (-x2 + x5) * (-x3 - x4 + 2 * x5))
     return d0, d2
 end
 
