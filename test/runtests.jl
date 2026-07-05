@@ -48,6 +48,9 @@ run_tests(;
             @safetestset "WENO Non-Uniform Core" begin
                 include(joinpath(@__DIR__, "Components", "weno_nonuniform_core.jl"))
             end
+            @safetestset "WENO Non-Uniform Boundary" begin
+                include(joinpath(@__DIR__, "Components", "weno_nonuniform_boundary.jl"))
+            end
             @safetestset "ODEFunction" begin
                 include(joinpath(@__DIR__, "Components", "ODEFunction_test.jl"))
             end
