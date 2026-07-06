@@ -183,16 +183,30 @@ Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::Abst
     return _weno_f_nonuniform_core(u, p[1], x, Val(3))
 end
 
-# Scalar-dx method required by the FunctionalScheme{5,0} contract.
+# Scalar-dx method required by the FunctionalScheme{5,5} contract.
 Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::Number)
     return _weno_f_nonuniform_core(u, p[1], x, Val(3))
 end
 
-# 6-arg: explicit Val{Target}; dx unused (FunctionalScheme{5,0} contract).
+# 6-arg: explicit Val{Target}; dx unused (FunctionalScheme{5,5} contract).
 Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::AbstractVector, ::Val{T}) where {T}
     return _weno_f_nonuniform_core(u, p[1], x, Val(T))
 end
 
 Base.@propagate_inbounds @inline function weno_f_nonuniform(u, p, t, x, dx::Number, ::Val{T}) where {T}
     return _weno_f_nonuniform_core(u, p[1], x, Val(T))
+end
+
+struct WENONonUniformBoundary{T} <: Function end
+
+Base.@propagate_inbounds @inline function (::WENONonUniformBoundary{T})(
+        u, p, t, x, dx::AbstractVector
+    ) where {T}
+    return weno_f_nonuniform(u, p, t, x, dx, Val(T))
+end
+
+Base.@propagate_inbounds @inline function (::WENONonUniformBoundary{T})(
+        u, p, t, x, dx::Number
+    ) where {T}
+    return weno_f_nonuniform(u, p, t, x, dx, Val(T))
 end

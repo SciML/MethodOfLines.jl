@@ -118,10 +118,10 @@ function calculate_stencil_extents(s, u, discretization, orders, bcmap)
         for dorder in filter(isodd, orders[x])
             ascheme = dorder == 1 ? advection_scheme : UpwindScheme()
             if !haslower
-                lowerextents[j] = max(lowerextents[j], extent(ascheme, dorder))
+                lowerextents[j] = max(lowerextents[j], extent(ascheme, dorder, s.dxs[x]))
             end
             if !hasupper
-                upperextents[j] = max(upperextents[j], extent(ascheme, dorder))
+                upperextents[j] = max(upperextents[j], extent(ascheme, dorder, s.dxs[x]))
             end
         end
     end
