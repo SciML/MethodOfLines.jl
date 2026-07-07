@@ -44,7 +44,7 @@ run_qa(
                 :Interval, :add_metadata!, :error_analysis, :get_ops, :insert, :remove,
                 :sym_dot, :unitindex, :unitindices, :update_varmap!, :vcat!,
                 # non-public in Symbolics:
-                :diff2term,
+                :diff2term, :symbolic_to_float,
             ),
         ),
         all_qualified_accesses_are_public = (;

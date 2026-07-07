@@ -8,7 +8,8 @@ using ModelingToolkit: get_unknowns,
     get_ivs
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
-using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term
+using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term,
+    symbolic_to_float
 using SymbolicUtils: operation, arguments, iscall, getmetadata, unwrap_const
 using IfElse
 using StaticArrays

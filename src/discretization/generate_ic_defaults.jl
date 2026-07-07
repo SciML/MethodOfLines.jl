@@ -14,14 +14,17 @@ function PDEBase.generate_ic_defaults(
             D = ic.order == 0 ? identity : (Differential(t)^ic.order)
             defaultvars = D.(s.discvars[depvar(ic.u, s)])
             broadcastable_rhs = [symbolic_linear_solve(ic.eq, D(ic.u))]
-            out = pde_substitute.(
+            rhs_vals = pde_substitute.(
                 broadcastable_rhs, Dict.(valmaps(s, depvar(ic.u, s), ic.depvars, indexmap))
             )
-            vec(
-                defaultvars .=> pde_substitute.(
-                    broadcastable_rhs, Dict.(valmaps(s, depvar(ic.u, s), ic.depvars, indexmap))
-                )
-            )
+            # Substitution in SymbolicUtils v4 no longer constant-folds function calls, so an
+            # IC like `u(0, x) ~ cos(x)` produces stuck terms like `cos(0.108...)`. MTK v11's
+            # `varmap_to_vars` requires literal constants in the u0 map and reports any
+            # unfolded value as "Initial condition underdefined". `symbolic_to_float` folds
+            # fully-constant expressions to numbers and leaves genuinely symbolic values
+            # (e.g. parameter-dependent ICs) untouched for MTK to resolve downstream.
+            fold(v) = v isa Number ? v : symbolic_to_float(v)
+            vec(defaultvars .=> fold.(rhs_vals))
         end
     else
         u0 = []
