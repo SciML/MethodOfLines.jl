@@ -14,14 +14,12 @@ function PDEBase.generate_ic_defaults(
             D = ic.order == 0 ? identity : (Differential(t)^ic.order)
             defaultvars = D.(s.discvars[depvar(ic.u, s)])
             broadcastable_rhs = [symbolic_linear_solve(ic.eq, D(ic.u))]
-            out = pde_substitute.(
+            rhs_vals = pde_substitute.(
                 broadcastable_rhs, Dict.(valmaps(s, depvar(ic.u, s), ic.depvars, indexmap))
             )
-            vec(
-                defaultvars .=> pde_substitute.(
-                    broadcastable_rhs, Dict.(valmaps(s, depvar(ic.u, s), ic.depvars, indexmap))
-                )
-            )
+
+            fold(v) = v isa Number ? v : symbolic_to_float(v)
+            vec(defaultvars .=> fold.(rhs_vals))
         end
     else
         u0 = []
