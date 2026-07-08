@@ -47,5 +47,22 @@ Currently supported options are `grid_align`: `center_align` and `edge_align`. E
 
 `use_ODAE`: MethodOfLines will automatically make use of `ODAEProblem` where relevant, which improves performance for DAEs (as discretized PDEs are in general), if this is set to true. Defaults to false.
 
+### DAE / PDAE initialization
+
+When `discretize` produces an implicit DAE (`0 ~ ...` constraints, over-determined boundary
+conditions, etc.), MethodOfLines automatically attaches `initializealg = BrownFullBasicInit()`
+to the returned `ODEProblem.kwargs`. This makes `solve(prob, alg)` work under OrdinaryDiffEq
+v7's default `CheckInit` path without passing `initializealg` explicitly.
+
+Override at any level (highest priority wins at `solve` time):
+
+- `solve(prob, alg; initializealg = MyInit())`
+- `discretize(pdesys, disc; initializealg = MyInit())`
+- `MOLFiniteDifference(dxs, t; initializealg = MyInit())`
+
+Pure ODE discretizations are unchanged. The fallback is not applied when building an
+`ODEFunction` directly via `ODEFunction(pdesys, discretization)`; construct an
+`ODEProblem` from that function if you need the same behavior.
+
 Any unrecognized keyword arguments will be passed to the `ODEProblem` constructor, see [its documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/#Dynamical-systems) for available options.
 

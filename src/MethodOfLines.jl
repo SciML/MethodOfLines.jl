@@ -108,6 +108,9 @@ include("discretization/schemes/integral_expansion/integral_expansion.jl")
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
+include("discretization/dae_detection.jl")
+include("discretization/dae_init_fallback.jl")
+include("discretization/discretize.jl")
 include("discretization/staggered_discretize.jl")
 
 # Main

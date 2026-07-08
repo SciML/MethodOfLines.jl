@@ -57,6 +57,9 @@ run_tests(;
             @safetestset "ODEFunction" begin
                 include(joinpath(@__DIR__, "Components", "ODEFunction_test.jl"))
             end
+            @safetestset "DAE initialization fallback" begin
+                include(joinpath(@__DIR__, "Components", "dae_init_fallback.jl"))
+            end
             @safetestset "MOLFiniteDifference Interface: Staggered constructors" begin
                 include(joinpath(@__DIR__, "Components", "staggered_constructors.jl"))
             end

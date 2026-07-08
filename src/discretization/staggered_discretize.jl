@@ -23,7 +23,8 @@ function SciMLBase.discretize(
                 discretization.kwargs...,
                 kwargs...
             )
-            return symbolic_trace(prob, simpsys)
+            prob = symbolic_trace(prob, simpsys)
+            return apply_dae_initialization_fallback(prob, discretization; kwargs...)
         end
     catch e
         error_analysis(sys, e)

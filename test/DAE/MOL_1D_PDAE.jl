@@ -2,7 +2,6 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using DiffEqBase: BrownFullBasicInit
 using OrdinaryDiffEqRosenbrock: Rodas4
 using ModelingToolkit: Differential
 
@@ -52,9 +51,7 @@ using ModelingToolkit: Differential
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
     # Solve ODE problem
-    # Semi-discrete algebraic IC v(0,x)=sin(x) satisfies Dxx(v)+f only to O(dx^2);
-    # BrownFullBasicInit projects algebraic variables onto the consistent manifold.
-    sol = solve(prob, Rodas4(), saveat = 0.1, initializealg = BrownFullBasicInit())
+    sol = solve(prob, Rodas4(), saveat = 0.1)
 
     x_sol = sol[x]
     t_sol = sol[t]

@@ -1,6 +1,5 @@
 using MethodOfLines, OrdinaryDiffEq, DomainSets, ModelingToolkit, Test
 using SciMLBase
-using DiffEqBase: BrownFullBasicInit
 
 @testset "Schroedinger" begin
     @parameters t, x
@@ -32,7 +31,7 @@ using DiffEqBase: BrownFullBasicInit
 
     prob = discretize(sys, disc)
 
-    sol = solve(prob, FBDF(), saveat = 0.01, initializealg = BrownFullBasicInit())
+    sol = solve(prob, FBDF(), saveat = 0.01)
 
     discx = sol[x]
     disct = sol[t]
@@ -91,7 +90,7 @@ end
 
     prob = discretize(sys, disc)
 
-    sol = solve(prob, FBDF(), saveat = 0.01, initializealg = BrownFullBasicInit())
+    sol = solve(prob, FBDF(), saveat = 0.01)
 
     @test SciMLBase.successful_retcode(sol)
 end
