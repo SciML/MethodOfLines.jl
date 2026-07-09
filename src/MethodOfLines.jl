@@ -2,6 +2,7 @@ module MethodOfLines
 using LinearAlgebra
 using SciMLBase
 using DiffEqBase
+using DiffEqBase: BrownFullBasicInit
 using ModelingToolkit
 using ModelingToolkit: get_unknowns,
     get_eqs, get_bcs, get_dvs,

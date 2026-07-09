@@ -1,6 +1,19 @@
-using MethodOfLines, ModelingToolkit, DomainSets, Test, OrdinaryDiffEq, SciMLBase
+using MethodOfLines, ModelingToolkit, DomainSets, Test, OrdinaryDiffEq, SciMLBase, LinearAlgebra
 using DiffEqBase: BrownFullBasicInit, CheckInit
 using ModelingToolkit: Differential
+using Symbolics
+
+@testset "is_singular_mass_matrix numeric and symbolic safety" begin
+    @test !MethodOfLines.is_singular_mass_matrix(I)
+    @test !MethodOfLines.is_singular_mass_matrix(UniformScaling(true))
+    @test !MethodOfLines.is_singular_mass_matrix(UniformScaling(2.0))
+    @test MethodOfLines.is_singular_mass_matrix(Diagonal([1.0, 0.0, 2.0]))
+    @test !MethodOfLines.is_singular_mass_matrix(Diagonal([1.0, 2.0, 3.0]))
+
+    @variables m1 m2
+    M_sym = Diagonal([m1, 0, m2])
+    @test !MethodOfLines.is_singular_mass_matrix(M_sym)
+end
 
 @testset "is_implicit_dae" begin
     @parameters t x

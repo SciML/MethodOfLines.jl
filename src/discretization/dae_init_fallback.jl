@@ -1,5 +1,3 @@
-using DiffEqBase: BrownFullBasicInit
-
 function _disc_kwargs_nt(disc::MOLFiniteDifference)
     kw = disc.kwargs
     return kw isa NamedTuple ? kw : NamedTuple()
@@ -28,8 +26,10 @@ function apply_dae_initialization_fallback(
     if _user_provided_initializealg(discretization, discretize_kwargs, prob)
         return prob
     end
-    is_implicit_dae(prob) || return prob
-    return SciMLBase.remake(prob; initializealg = BrownFullBasicInit())
+    if is_implicit_dae(prob)
+        return SciMLBase.remake(prob; initializealg = BrownFullBasicInit())
+    end
+    return prob
 end
 
 apply_dae_initialization_fallback(prob, ::MOLFiniteDifference; kwargs...) = prob
