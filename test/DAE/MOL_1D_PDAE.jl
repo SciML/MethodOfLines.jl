@@ -4,6 +4,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using OrdinaryDiffEqRosenbrock: Rodas4
 using ModelingToolkit: Differential
+using DiffEqBase: BrownFullBasicInit
 
 # Tests
 @testset "Dt(u(t,x)) ~ Dxx(u(t,x)), 0 ~ Dxx(v(t,x)) + sin(x), Dirichlet BCs" begin
@@ -51,7 +52,7 @@ using ModelingToolkit: Differential
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
     # Solve ODE problem
-    sol = solve(prob, Rodas4(), saveat = 0.1)
+    sol = solve(prob, Rodas4(), saveat = 0.1, initializealg = BrownFullBasicInit())
 
     x_sol = sol[x]
     t_sol = sol[t]
