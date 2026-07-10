@@ -6,6 +6,7 @@ using DomainSets
 using NonlinearSolve
 using StableRNGs
 using Test
+using DiffEqBase: BrownFullBasicInit
 
 # # Define some variables
 @testset "Heat Equation 1D 2 variables" begin
@@ -225,7 +226,7 @@ end
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, Rodas4())
+    sol = solve(prob, Rodas4(), initializealg = BrownFullBasicInit())
 end
 
 @testset "Array u" begin
