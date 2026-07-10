@@ -13,6 +13,9 @@ using Symbolics
     @variables m1 m2
     M_sym = Diagonal([m1, 0, m2])
     @test !MethodOfLines.is_singular_mass_matrix(M_sym)
+    @test MethodOfLines.is_singular_mass_matrix(M_sym) isa Bool
+    @test MethodOfLines.safe_is_numeric_zero(0.0)
+    @test !MethodOfLines.safe_is_numeric_zero(m1)
 end
 
 @testset "is_implicit_dae" begin

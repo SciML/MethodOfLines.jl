@@ -53,7 +53,7 @@ run_qa(
                 :AbstractCartesianIndex,
                 # non-public in SciMLBase:
                 :AbstractDiscretizationMetadata, :AbstractODESolution, :AbstractPDESolution,
-                :PDESolution, :observed,
+                :PDESolution, :observed, :has_initializeprob,
                 # non-public in PDEBase:
                 :EquationState, :cardinalize_eqs!, :check_boundarymap,
                 :construct_differential_discretizer, :construct_disc_state,
