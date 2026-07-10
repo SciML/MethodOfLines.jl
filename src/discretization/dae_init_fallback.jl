@@ -13,9 +13,7 @@ end
 """
     apply_dae_initialization_fallback(prob, discretization; kwargs...)
 
-If `prob` is an implicit DAE and the user did not supply `initializealg`,
-attach `BrownFullBasicInit()` to `prob.kwargs` so `solve(prob, alg)` succeeds
-under OrdinaryDiffEq v7's default `CheckInit` path.
+Remake with `BrownFullBasicInit()` when `is_implicit_dae(prob)` and no user `initializealg`.
 """
 function apply_dae_initialization_fallback(
         prob::SciMLBase.ODEProblem,
