@@ -4,6 +4,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using SciMLBase
 using ModelingToolkit: Differential
+using DiffEqBase: BrownFullBasicInit
 
 # Beam Equation
 #! Broken due to overlapping inner corner bc eqs - determine state sharing heuristic; sort by dorder and give precedence to higher
@@ -131,7 +132,7 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, FBDF(), saveat = 0.1)
+    sol = solve(prob, FBDF(), saveat = 0.1, initializealg = BrownFullBasicInit())
 
     @test SciMLBase.successful_retcode(sol)
 
