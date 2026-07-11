@@ -9,6 +9,6 @@ MOLFiniteDifference
 DiscreteSpace
 ```
 
-```@autodocs
+```@autodocs; canonical=false
 Modules = [MethodOfLines]
 ```
