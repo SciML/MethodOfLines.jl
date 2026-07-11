@@ -8,3 +8,7 @@ CurrentModule = MethodOfLines
 MOLFiniteDifference
 DiscreteSpace
 ```
+
+```@autodocs
+Modules = [MethodOfLines]
+```

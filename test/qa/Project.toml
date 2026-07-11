@@ -5,10 +5,10 @@ SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [sources]
-MethodOfLines = {path = "../.."}
+MethodOfLines = {path = "/home/crackauc/sandbox/tmp_20260708_051717_3275/repos/MethodOfLines.jl"}
 
 [compat]
 JET = "0.9,0.10,0.11"
-SciMLTesting = "1.7"
+SciMLTesting = "2.1"
 Test = "1"
 julia = "1.10"

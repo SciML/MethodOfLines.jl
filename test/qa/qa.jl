@@ -6,6 +6,7 @@ using JET
 run_qa(
     MethodOfLines;
     explicit_imports = true,
+    api_docs_kwargs = (; rendered = true, ignore = (:grid_align,)),
     # Aqua sub-checks with genuine findings, marked broken pending fixes (issue #574):
     #   :ambiguities       — 48 method ambiguities involving MethodOfLines methods
     #   :undefined_exports — MethodOfLines.grid_align (a kwarg/field name, not a binding)
