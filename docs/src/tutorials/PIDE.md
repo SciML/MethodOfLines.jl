@@ -49,7 +49,7 @@ domains = [t ∈ Interval(0.0, 2.0), x ∈ Interval(xmin, xmax)]
 @named pde_system = PDESystem(eq, bcs, domains, [t, x], [u(t, x), cumuSum(t, x)])
 
 order = 2
-discretization = MOLFiniteDifference([x => 30], t)
+discretization = MOLFiniteDifference([x => 30], t, approx_order = order)
 
 prob = MethodOfLines.discretize(pde_system, discretization)
 sol = solve(prob, QNDF(), saveat = 0.1);
