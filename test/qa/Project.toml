@@ -4,9 +4,6 @@ MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 SciMLTesting = "09d9d899-5365-40a9-917a-5f67fddea283"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
-[sources]
-MethodOfLines = {path = "../.."}
-
 [compat]
 JET = "0.9,0.10,0.11"
 SciMLTesting = "2.1"

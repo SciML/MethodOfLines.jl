@@ -7,6 +7,7 @@ run_qa(
     MethodOfLines;
     explicit_imports = true,
     api_docs_kwargs = (; rendered = true),
+    aqua_kwargs = (; persistent_tasks = (; tmax = 300)),
     # Aqua sub-checks with genuine findings, marked broken pending fixes (issue #574):
     #   :ambiguities       — 48 method ambiguities involving MethodOfLines methods
     #   :stale_deps        — OrdinaryDiffEq declared but not loaded (uses split subpackages)
