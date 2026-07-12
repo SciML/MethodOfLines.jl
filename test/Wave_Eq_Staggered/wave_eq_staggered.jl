@@ -1,5 +1,6 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils,
     LinearAlgebra
+using SciMLBase: successful_retcode
 using OrdinaryDiffEq
 using OrdinaryDiffEqLowOrderRK: SplitEuler
 
@@ -41,6 +42,7 @@ using OrdinaryDiffEqLowOrderRK: SplitEuler
     prob = discretize(pdesys, discretization)
 
     sol = solve(prob, SplitEuler(), dt = dt)
+    @test successful_retcode(sol)
 
     test_ind = floor(Int, (2(L - dx) / a) / (dt))
     @test_broken maximum(sol[1:128, 1] .- sol[1:128, test_ind]) < max(dx^2, dt)
