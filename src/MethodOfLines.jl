@@ -119,7 +119,7 @@ include("precompile.jl")
 
 # Export
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
-    grid_align, edge_align, center_align, get_discrete, chebyspace
+    edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme, MOLDiscCallback
 
 end
