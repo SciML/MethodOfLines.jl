@@ -9,7 +9,18 @@ end
 struct StaggeredGrid <: AbstractGrid
 end
 
+"""
+    center_align
+
+Grid alignment value for center-aligned finite difference grids.
+"""
 const center_align = CenterAlignedGrid()
+
+"""
+    edge_align
+
+Grid alignment value for edge-aligned finite difference grids.
+"""
 const edge_align = EdgeAlignedGrid()
 const stagger_align = StaggeredGrid()
 

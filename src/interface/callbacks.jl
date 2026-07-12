@@ -1,3 +1,8 @@
+"""
+    MOLDiscCallback(f, disc_ps)
+
+Wrap a discretization callback function and its parameters for symbolic callback handling.
+"""
 struct MOLDiscCallback
     f::Function
     p::Any

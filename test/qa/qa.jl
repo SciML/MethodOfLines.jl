@@ -6,14 +6,14 @@ using JET
 run_qa(
     MethodOfLines;
     explicit_imports = true,
+    api_docs_kwargs = (; rendered = true),
     # Aqua sub-checks with genuine findings, marked broken pending fixes (issue #574):
     #   :ambiguities       — 48 method ambiguities involving MethodOfLines methods
-    #   :undefined_exports — MethodOfLines.grid_align (a kwarg/field name, not a binding)
     #   :stale_deps        — OrdinaryDiffEq declared but not loaded (uses split subpackages)
     #   :deps_compat       — LinearAlgebra has no [compat] entry
     #   :piracies          — call-operator methods on PDEBase.InterfaceBoundary /
     #                        PDEBase.AbstractBoundary in interface_boundary.jl
-    aqua_broken = (:ambiguities, :undefined_exports, :stale_deps, :deps_compat, :piracies),
+    aqua_broken = (:ambiguities, :stale_deps, :deps_compat, :piracies),
     # JET: still reports possible errors on Julia 1.11/1.12 (the CI `julia 1` lane):
     # DiscreteSpace getproperty `.time`/`.ps` FieldErrors via ivs/params,
     # `MethodOfLines.otherderivmaps` not defined, and `f_analytic` possibly-undefined in

@@ -1,5 +1,10 @@
 abstract type AbstractScheme end
 
+"""
+    UpwindScheme([approx_order])
+
+Upwind finite difference scheme for advection terms.
+"""
 struct UpwindScheme <: AbstractScheme
     order::Any
     function UpwindScheme(approx_order = 1)

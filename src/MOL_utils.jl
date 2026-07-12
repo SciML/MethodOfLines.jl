@@ -108,6 +108,11 @@ end
     end
 end
 
+"""
+    chebyspace(N, dom)
+
+Construct `N` Chebyshev-spaced grid points over the domain `dom`.
+"""
 function chebyspace(N, dom)
     interval = dom.domain
     a, b = DomainSets.infimum(interval), DomainSets.supremum(interval)
