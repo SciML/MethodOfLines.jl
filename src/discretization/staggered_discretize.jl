@@ -16,10 +16,11 @@ function SciMLBase.discretize(
         else
             mol_metadata = getmetadata(simpsys, ModelingToolkit.ProblemTypeCtx, nothing)
             add_metadata!(mol_metadata, sys)
-            # Get u0 from metadata (stored there for MTK v11 compatibility)
-            u0 = hasproperty(mol_metadata, :u0) ? mol_metadata.u0 : []
+            # Discrete ICs are registered on the System via PDEBase
+            # (initialization_eqs for differential states + guesses). Do not
+            # re-pass indexed u0 as hard ODEProblem ICs.
             prob = ODEProblem(
-                simpsys, u0, tspan; build_initializeprob = false,
+                simpsys, nothing, tspan; build_initializeprob = true,
                 discretization.kwargs...,
                 kwargs...
             )
