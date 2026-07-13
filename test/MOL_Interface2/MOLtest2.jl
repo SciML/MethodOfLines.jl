@@ -451,6 +451,7 @@ end
 
     # Solve ODE problem
     sol = solve(prob, Tsit5(), saveat = 0.2)
+    @test SciMLBase.successful_retcode(sol)
 
     # Test that the system is correctly constructed
     varname1 = Symbol("u_Any[1]")
