@@ -26,7 +26,7 @@ With BCs and ICs:
 We can discretize such a system like this:
 
 ```@example pide
-using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Plots
+using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, OrdinaryDiffEqBDF, DomainSets, Plots
 
 @parameters t, x
 @variables u(..) cumuSum(..)
