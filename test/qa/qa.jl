@@ -64,8 +64,6 @@ run_qa(
                 :should_transform, :transform_pde_system!,
                 # non-public in ModelingToolkit:
                 :ProblemTypeCtx,
-                # non-public in IfElse:
-                :ifelse,
             ),
         ),
     ),

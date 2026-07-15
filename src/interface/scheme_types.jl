@@ -33,7 +33,7 @@ The functions making up the scheme take the following inputs:
 
 Functions must be of the form `f(u, p, t, deriv_iv, d_iv)`.
 
-Where the function would branch on a value of u, p, t, or d_iv, use IfElse.ifelse instead of standard conditionals.
+Where the function would branch on a value of u, p, t, or d_iv, use `ifelse` instead of standard conditionals.
 
 For the interior, `u` takes a vector of dependent variable values in the direction of the derivative
 of length `interior_points`. `interior_points` must be odd, as this function defines the derivative at the center of the input points.
