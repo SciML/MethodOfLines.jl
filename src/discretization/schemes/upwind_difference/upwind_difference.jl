@@ -86,7 +86,7 @@ function upwind_difference(
     expr = substitute(
         expr, Dict(valmaps(s, u, depvars, Idx(II, s, depvar(u, s), indexmap), indexmap))
     )
-    return IfElse.ifelse(
+    return ifelse(
         expr > 0,
         expr *
             upwind_difference(d, II, s, bs, derivweights, (j, x), u, central_ufunc, true),
