@@ -235,6 +235,7 @@ end
 
     println("Discretization:")
     prob = discretize(pdesys, discretization)
+    @test prob isa ODEProblem
 end
 
 @testset "Integrals in BCs" begin
