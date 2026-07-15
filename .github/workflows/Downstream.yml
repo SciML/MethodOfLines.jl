@@ -19,5 +19,4 @@ jobs:
       repo: "${{ matrix.package.repo }}"
       group: "${{ matrix.package.group }}"
       julia-version: "1"
-      continue-on-error: true  # PDESystemLibrary tests have pre-existing failures, see issue
     secrets: "inherit"
