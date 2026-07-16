@@ -215,7 +215,7 @@ end
         prob = discretize(pdesys, disc)
 
         # Solve ODE problem
-        sol = solve(prob, Tsit5(), saveat = 0.1)
+        sol = solve(prob, Tsit5(); saveat = 0.1, abstol = 1.0e-10, reltol = 1.0e-10)
 
         x_sol = sol[x]
         t_sol = sol[t]
@@ -237,9 +237,8 @@ end
         # (so it is correct on both the center-aligned and the half-step-offset edge-aligned
         # grids). A plain `sum(u)` rectangle rule carries an O(Δx) boundary bias that drifts
         # to ~1e-7 on the edge-aligned grid; the trapezoidal integral instead conserves down
-        # to the Tsit5 time-integration error (~6e-10 edge / ~4e-13 center at the default
-        # tolerances, both → ~1e-15 when the solver tolerance is tightened), so a strict
-        # atol holds honestly.
+        # to the Tsit5 time-integration error (~4e-15 with the explicit solver tolerances),
+        # so a strict atol holds honestly.
         w = trapezoidal_weights(x_sol)
         integral0 = dot(w, u_approx[1, :])
         # Test against exact solution
