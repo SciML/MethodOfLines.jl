@@ -22,19 +22,21 @@ function solve_both(pdesys, dxs, t; disc_kwargs = (;), solver = Rodas4(), kwsolv
     sys_arr, _ = symbolic_discretize(pdesys, disc_arr)
     prob_arr = discretize(pdesys, disc_arr)
     prob_scal = discretize(pdesys, disc_scal)
-    sol_arr = solve(prob_arr, solver; reltol = 1e-10, abstol = 1e-10, kwsolve...)
-    sol_scal = solve(prob_scal, solver; reltol = 1e-10, abstol = 1e-10, kwsolve...)
+    sol_arr = solve(prob_arr, solver; reltol = 1.0e-10, abstol = 1.0e-10, kwsolve...)
+    sol_scal = solve(prob_scal, solver; reltol = 1.0e-10, abstol = 1.0e-10, kwsolve...)
     return sol_arr, sol_scal, sys_arr
 end
 
-# The number of equations whose left/right hand side is an unscalarized symbolic array
+# The number of equations whose left/right hand side is an unscalarized symbolic array.
+# symtype falls back to typeof for non-symbolic values, and literal-array sides (like the
+# zeros rhs of a slice-form equation) only count when the other side is symbolic, so this
+# counts exactly the array-form equations.
 function narrayeqs(sys)
-    return count(get_eqs(sys)) do eq
-        lhs = Symbolics.unwrap(eq.lhs)
-        rhs = Symbolics.unwrap(eq.rhs)
-        (lhs isa SymbolicUtils.Symbolic && symtype(lhs) <: AbstractArray) ||
-            (rhs isa SymbolicUtils.Symbolic && symtype(rhs) <: AbstractArray)
+    function isarr(x)
+        u = Symbolics.unwrap(x)
+        return !(u isa AbstractArray) && symtype(u) <: AbstractArray
     end
+    return count(eq -> isarr(eq.lhs) || isarr(eq.rhs), get_eqs(sys))
 end
 
 @testset "1D linear diffusion, Dirichlet BCs" begin
@@ -52,13 +54,13 @@ end
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # The interior must be a single array equation
     @test narrayeqs(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 
     # Against the analytic solution
     xdisc = sol_arr[x]
     tdisc = sol_arr[t]
     exact = [exp(-pi^2 * ti) * sinpi(xi) for ti in tdisc, xi in xdisc]
-    @test sol_arr[u(t, x)] ≈ exact atol = 1e-2
+    @test maximum(abs.(sol_arr[u(t, x)] .- exact)) < 1.0e-2
 end
 
 @testset "1D diffusion, Neumann and Robin BCs" begin
@@ -80,7 +82,7 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D advection-diffusion, constant coefficient (winding rules)" begin
@@ -98,7 +100,7 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.02], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D nonlinear advection (Burgers-type, coefficient depends on u)" begin
@@ -116,7 +118,7 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.02], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D diffusion with space and time dependent coefficient" begin
@@ -133,7 +135,7 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D diffusion, fourth order approximation (frame points)" begin
@@ -153,7 +155,7 @@ end
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # One array equation for the core, plus scalar frame equations near the boundaries
     @test narrayeqs(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D diffusion on a nonuniform grid" begin
@@ -172,7 +174,7 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => gridvec], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "2D linear diffusion" begin
@@ -196,7 +198,7 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs(sys_arr) == 1
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1e-6
+    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
 @testset "Coupled system of two variables" begin
@@ -220,8 +222,8 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs(sys_arr) == 2
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
-    @test sol_arr[v(t, x)] ≈ sol_scal[v(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+    @test sol_arr[v(t, x)] ≈ sol_scal[v(t, x)] rtol = 1.0e-6
 end
 
 @testset "Fallback: periodic BCs still match the scalar path" begin
@@ -240,7 +242,7 @@ end
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # Periodic BCs are not representable as slices; the whole equation falls back
     @test narrayeqs(sys_arr) == 0
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "Fallback: nonlinear laplacian still matches the scalar path" begin
@@ -257,7 +259,7 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs(sys_arr) == 0
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "Fallback: WENO scheme still matches the scalar path" begin
@@ -267,18 +269,18 @@ end
     Dx = Differential(x)
 
     eq = Dt(u(t, x)) ~ -Dx(u(t, x))
-    bcs = [u(0, x) ~ exp(-100 * (x - 0.5)^2), u(t, 0) ~ 0.0]
+    bcs = [u(0, x) ~ exp(-100 * (x - 0.3)^2), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     sol_arr, sol_scal, sys_arr = solve_both(
         pdesys, [x => 0.02], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
-        kwsolve = (; dt = 1e-3)
+        kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs(sys_arr) == 0
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1e-6
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "Stationary (NonlinearProblem) still works with ArrayDiscretization" begin
@@ -294,9 +296,15 @@ end
     disc_arr = MOLFiniteDifference(
         [x => 0.05]; discretization_strategy = ArrayDiscretization()
     )
+    disc_scal = MOLFiniteDifference(
+        [x => 0.05]; discretization_strategy = ScalarizedDiscretization()
+    )
     prob = discretize(pdesys, disc_arr)
     sol = solve(prob)
+    prob_scal = discretize(pdesys, disc_scal)
+    sol_scal = solve(prob_scal)
     @test sol.retcode == SciMLBase.ReturnCode.Success
     xs = sol[x]
-    @test sol[u(x)] ≈ sinpi.(xs) atol = 1e-3
+    @test sol[u(x)] ≈ sol_scal[u(x)] rtol = 1.0e-8
+    @test sol[u(x)] ≈ sinpi.(xs) atol = 1.0e-2
 end

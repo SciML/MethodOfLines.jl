@@ -118,12 +118,18 @@ function discretize_equation_array_form(
         ),
         vec(generate_euler_integration_rules(II0, s, depvars, indexmap, terms)),
         vec(generate_whole_domain_integration_rules(II0, s, depvars, indexmap, terms)),
-        vec(generate_cb_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms)),
-        mapreduce(f -> f(II0), vcat, boundaryvalfuncs, init = [])
+        vec(generate_cb_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms))
     )
     for r in special_rules
         (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) &&
             throw(ArrayDiscretizationFallback("unsupported pattern $(r.first)"))
+    end
+    # Boundary values appearing in the interior equation, like u(t, 0), are variable
+    # references with a number argument; the scalar path substitutes them pointwise via
+    # `boundaryvalfuncs`, which has no slice representation here yet.
+    for u in get_depvars(pde.lhs, s.vars.depvar_ops) ∪ get_depvars(pde.rhs, s.vars.depvar_ops)
+        any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(u)) &&
+            throw(ArrayDiscretizationFallback("boundary value $u in interior equation"))
     end
 
     ranges = Dict(indexmap[x] => first(core)[indexmap[x]]:last(core)[indexmap[x]] for x in args)
@@ -143,14 +149,18 @@ function discretize_equation_array_form(
 
     lhs = arrayify(pde.lhs, ctx)
     rhs = arrayify(pde.rhs, ctx)
+    is_zero_scalar(x) =
+    let v = unwrap_const(safe_unwrap(x))
+        v isa Number && iszero(v)
+    end
     # `~` cannot equate an array with a scalar; the system is cardinalized so the rhs is
     # (a scalar) 0 and the lhs holds the whole residual.
     if is_array_valued(lhs) && !is_array_valued(rhs)
-        isequal(safe_unwrap(rhs), 0) ||
+        is_zero_scalar(rhs) ||
             throw(ArrayDiscretizationFallback("array lhs with non-zero scalar rhs"))
         rhs = zeros(size(core))
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
-        isequal(safe_unwrap(lhs), 0) ||
+        is_zero_scalar(lhs) ||
             throw(ArrayDiscretizationFallback("array rhs with non-zero scalar lhs"))
         lhs = zeros(size(core))
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
@@ -392,12 +402,9 @@ struct ArrayifyContext
     time::Any
 end
 
-function is_array_valued(x)
-    x isa AbstractArray && return true
-    u = safe_unwrap(x)
-    u isa SymbolicUtils.Symbolic || return false
-    return SymbolicUtils.symtype(u) <: AbstractArray
-end
+# symtype falls back to typeof for non-symbolic values, so this covers literal arrays,
+# symbolic arrays and scalars of either kind.
+is_array_valued(x) = SymbolicUtils.symtype(safe_unwrap(x)) <: AbstractArray
 
 """
     arrayify(expr, ctx)
@@ -420,6 +427,10 @@ function arrayify(expr, ctx)
             throw(ArrayDiscretizationFallback("unhandled spatial derivative in $expr"))
         arg = arrayify(only(arguments(expr)), ctx)
         return op(arg)
+    elseif op isa Symbolics.Operator
+        # Integrals and any other operators must have been replaced by rules already;
+        # they cannot be broadcast over slices.
+        throw(ArrayDiscretizationFallback("unhandled operator in $expr"))
     end
     newargs = [arrayify(a, ctx) for a in arguments(expr)]
     if any(is_array_valued, newargs)
