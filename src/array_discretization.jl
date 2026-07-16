@@ -257,9 +257,9 @@ end
 Broadcasted weighted sum of shifted slices: the array-form analogue of `sym_dot`.
 """
 function array_stencil(weights, slices)
-    wterms = [Broadcast.materialize(Broadcast.broadcasted(*, w, sl)) for (w, sl) in zip(weights, slices)]
+    wterms = [broadcast(*, w, sl) for (w, sl) in zip(weights, slices)]
     length(wterms) == 1 && return wterms[1]
-    return Broadcast.materialize(Broadcast.broadcasted(+, wterms...))
+    return broadcast(+, wterms...)
 end
 
 """
@@ -337,7 +337,7 @@ function array_winding_select(expr, s, u, x, d, derivweights, ranges, indexmap, 
     coef = arrayify(expr, coefctx)
     pos = array_upwind_difference(s, u, x, d, derivweights, ranges, indexmap, true)
     neg = array_upwind_difference(s, u, x, d, derivweights, ranges, indexmap, false)
-    bcast(op, args...) = Broadcast.materialize(Broadcast.broadcasted(op, args...))
+    bcast(op, args...) = broadcast(op, args...)
     return bcast(
         +,
         bcast(*, bcast(max, coef, 0), pos),
@@ -434,7 +434,7 @@ function arrayify(expr, ctx)
     end
     newargs = [arrayify(a, ctx) for a in arguments(expr)]
     if any(is_array_valued, newargs)
-        return Broadcast.materialize(Broadcast.broadcasted(op, newargs...))
+        return broadcast(op, newargs...)
     else
         return op(newargs...)
     end
