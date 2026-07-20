@@ -427,10 +427,11 @@ function arrayify(expr, ctx)
             throw(ArrayDiscretizationFallback("unhandled spatial derivative in $expr"))
         arg = arrayify(only(arguments(expr)), ctx)
         return op(arg)
-    elseif op isa Symbolics.Operator
-        # Integrals and any other operators must have been replaced by rules already;
-        # they cannot be broadcast over slices.
-        throw(ArrayDiscretizationFallback("unhandled operator in $expr"))
+    elseif !(op isa Function)
+        # Symbolic operators (`Integral`, ...) and symbolic callables are not `Function`s
+        # and cannot be broadcast over slices; anything reaching here was not replaced by
+        # a rule, so there is no slice form for it.
+        throw(ArrayDiscretizationFallback("unhandled operation $op in $expr"))
     end
     newargs = [arrayify(a, ctx) for a in arguments(expr)]
     if any(is_array_valued, newargs)
