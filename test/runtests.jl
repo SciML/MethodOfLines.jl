@@ -72,7 +72,14 @@ run_tests(;
         "MOL_Interface2" => joinpath(@__DIR__, "MOL_Interface2", "MOLtest2.jl"),
         "Diffusion" => joinpath(@__DIR__, "Diffusion", "MOL_1D_Linear_Diffusion.jl"),
         "Integrals" => joinpath(@__DIR__, "Integrals", "MOL_1D_Integration.jl"),
-        "Convection_WENO" => joinpath(@__DIR__, "Convection_WENO", "MOL_1D_Linear_Convection_WENO.jl"),
+        "Convection_WENO" => function ()
+            @safetestset "1D Linear Convection WENO" begin
+                include(joinpath(@__DIR__, "Convection_WENO", "MOL_1D_Linear_Convection_WENO.jl"))
+            end
+            return @safetestset "WENO Pipeline Spatial Convergence (MMS)" begin
+                include(joinpath(@__DIR__, "Convection_WENO", "MOL_1D_WENO_NU_Convergence.jl"))
+            end
+        end,
         "Higher_Order" => joinpath(@__DIR__, "Higher_Order", "MOL_1D_HigherOrder.jl"),
         "Stationary" => joinpath(@__DIR__, "Stationary", "MOL_NonlinearProblem.jl"),
         "Mixed_Derivatives" => joinpath(@__DIR__, "Mixed_Derivatives", "MOL_Mixed_Deriv.jl"),
