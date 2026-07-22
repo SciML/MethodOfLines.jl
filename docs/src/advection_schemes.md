@@ -24,7 +24,11 @@ Problems which require this scheme may also benefit from a [Strong-Stability-Pre
 
 Problems with first order derivatives which multiply one another will need to use this scheme over the upwind scheme.
 
-Supports only first order derivatives, other odd order derivatives are unsupported with this scheme. At present, does not support Nonuniform grids, though this is a planned feature.
+Supports only first order derivatives, other odd order derivatives are unsupported with this scheme.
+
+Nonuniform grids are supported: when a grid vector is supplied for a spatial variable, a node-centered nonuniform WENO-5 reconstruction (4th order accurate in smooth regions) is used, with one-sided reconstructions at physical boundaries.
+
+Periodic and interface boundary conditions are supported on nonuniform grids. Stencils that wrap across a periodic boundary or an interface between two domains are evaluated with the exact physical coordinates of the connected grid, so no accuracy is lost at the seam. The grids on either side of an interface do not need to match when a nonuniform grid vector is supplied for both connected variables. This applies to first-order (advection) derivatives only: systems with spatial derivative orders above 1 in variables connected by a mismatched-grid interface are rejected at discretization time, since higher-order stencils are not coordinate-aware at the interface.
 
 Specified on pages 8-9 of [this document](https://repository.library.brown.edu/studio/item/bdr:297524/PDF/)
 
