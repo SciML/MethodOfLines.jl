@@ -5,6 +5,7 @@
 # scalar path for unsupported patterns).
 
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Symbolics
+using SciMLBase
 using OrdinaryDiffEqRosenbrock: Rodas4
 using OrdinaryDiffEqSSPRK: SSPRK22
 using NonlinearSolve: NewtonRaphson
