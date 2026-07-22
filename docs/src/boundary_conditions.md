@@ -126,6 +126,8 @@ v(t, x, y_max) ~ u(t, x_max, y)
 
 Please note that if you want to use a periodic condition on a dimension with WENO schemes, please use a periodic condition on all variables in that dimension.
 
+Periodic conditions are also supported with `WENOScheme()` on nonuniform grids; wrapped stencils use the exact periodically shifted grid coordinates.
+
 ## Interfaces
 
 You may want to connect regions with differing dynamics together, to do this follow the following example, splitting the variable that spans these domains:
@@ -164,3 +166,5 @@ domains = [t ∈ Interval(0.0, 0.15),
 ```
 
 Note that if you want to use a higher order interface condition, this may not work if you have no simple condition of the form `c1(t, 0.5) ~ c2(t, 0.5)`.
+
+Interfaces require the connected variables to use the same step size, except when `WENOScheme()` is used with nonuniform grid vectors supplied for both connected variables, in which case the grids may differ: advection stencils that cross the interface are evaluated with the exact physical coordinates of the neighbouring grid. This exception covers first-order (advection) derivatives only — systems containing higher-order spatial derivatives (e.g. diffusion) in the connected variables are rejected with an error at discretization time.
