@@ -52,8 +52,14 @@ function PDEBase.discretize_equation!(
                 eqvar, indexmap, boundaryvalfuncs
             )
         catch e
-            e isa ArrayDiscretizationFallback || rethrow(e)
-            @debug "ArrayDiscretization falling back to pointwise discretization for $pde: $(e.msg)"
+            e isa InterruptException && rethrow(e)
+            # Any failure to *build* the array form degrades to the pointwise path, which
+            # is the reference implementation: this strategy must never turn a system the
+            # scalar path can discretize into an error. Genuine problems with the equation
+            # itself resurface below, where the scalar path raises them directly.
+            reason = e isa ArrayDiscretizationFallback ? e.msg :
+                sprint(showerror, e)
+            @debug "ArrayDiscretization falling back to pointwise discretization for $pde: $reason"
             vec(
                 map(interior) do II
                     discretize_equation_at_point(
@@ -215,7 +221,14 @@ function array_variable(u, s)
     el = safe_unwrap(first(vec(s.discvars[u])))
     (iscall(el) && operation(el) === getindex) ||
         throw(ArrayDiscretizationFallback("discrete variable for $u is not an array variable"))
-    return Symbolics.wrap(first(arguments(el)))
+    arr = first(arguments(el))
+    # For an array-valued dependent variable (`@variables u(..)[1:n]`) the discrete
+    # variable is a nested getindex, so the immediate parent is a component rather than
+    # the grid-shaped array this path can slice.
+    T = SymbolicUtils.symtype(arr)
+    (T <: AbstractArray && ndims(T) == length(ivs(u, s))) ||
+        throw(ArrayDiscretizationFallback("discrete variable for $u is not a grid-shaped array"))
+    return Symbolics.wrap(arr)
 end
 
 """

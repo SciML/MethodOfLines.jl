@@ -317,3 +317,47 @@ end
     @test sol[u(x)] ≈ sinpi.(xs) atol = 1.0e-2
     @test all(isfinite, sol[u(x)])
 end
+
+@testset "Fallback: array-valued dependent variables" begin
+    # `@variables u(..)[1:n]` discretizes to a nested getindex, whose immediate parent is
+    # a component rather than a grid-shaped array. This must fall back to the pointwise
+    # path rather than erroring: the array strategy may never turn a system the scalar
+    # path can discretize into a failure.
+    n_comp = 2
+    @parameters t x p[1:n_comp] q[1:n_comp]
+    @variables u(..)[1:n_comp]
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eqs = [Dt(u(t, x)[i]) ~ p[i] * Dxx(u(t, x)[i]) for i in 1:n_comp]
+    bcs = reduce(
+        vcat,
+        [
+            [
+                    u(0, x)[i] ~ q[i] * cos(x),
+                    u(t, 0)[i] ~ sin(t),
+                    u(t, 1)[i] ~ exp(-t) * cos(1),
+                ] for i in 1:n_comp
+        ]
+    )
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x], [u(t, x)[i] for i in 1:n_comp], [p, q];
+        initial_conditions = Dict(p => [1.5, 2.0], q => [1.2, 1.8])
+    )
+
+    disc_arr = MOLFiniteDifference(
+        [x => 0.1], t; discretization_strategy = ArrayDiscretization()
+    )
+    disc_scal = MOLFiniteDifference(
+        [x => 0.1], t; discretization_strategy = ScalarizedDiscretization()
+    )
+    prob_arr = discretize(pdesys, disc_arr)
+    prob_scal = discretize(pdesys, disc_scal)
+    sol_arr = solve(prob_arr, Rodas4(); reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.2)
+    sol_scal = solve(prob_scal, Rodas4(); reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.2)
+    @test SciMLBase.successful_retcode(sol_arr)
+    for i in 1:n_comp
+        @test sol_arr[u(t, x)[i]] ≈ sol_scal[u(t, x)[i]] rtol = 1.0e-6
+    end
+end
