@@ -47,5 +47,7 @@ Currently supported options are `grid_align`: `center_align` and `edge_align`. E
 
 `use_ODAE`: MethodOfLines will automatically make use of `ODAEProblem` where relevant, which improves performance for DAEs (as discretized PDEs are in general), if this is set to true. Defaults to false.
 
+`discretization_strategy`: How the discretized equations are represented symbolically. `ScalarizedDiscretization()` (the default) generates one scalar equation per interior grid point. `ArrayDiscretization()` generates the interior of each PDE as a single symbolic array equation over slices of the discretized variables, e.g. `D(u[2:n-1]) - (u[1:n-2] .- 2u[2:n-1] .+ u[3:n]) ./ dx^2 ~ 0`, which scales much better to large systems during symbolic processing. Patterns without a slice representation (WENO advection, nonlinear/spherical Laplacians, integrals, mixed derivatives, periodic/interface BCs, staggered grids) automatically fall back to pointwise scalar equations for the affected equation, so results are identical to `ScalarizedDiscretization` in all cases.
+
 Any unrecognized keyword arguments will be passed to the `ODEProblem` constructor, see [its documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/#Dynamical-systems) for available options.
 

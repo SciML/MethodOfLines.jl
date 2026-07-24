@@ -24,6 +24,7 @@ const FUNCTIONAL_GROUPS = [
     "Convection",
     "Convection_NU",
     "Wave_Eq_Staggered",
+    "Array_Discretization",
 ]
 
 run_tests(;
@@ -85,6 +86,7 @@ run_tests(;
         "Convection" => joinpath(@__DIR__, "Convection", "MOL_1D_Linear_Convection.jl"),
         "Convection_NU" => joinpath(@__DIR__, "Convection_NU", "MOL_1D_Linear_Convection_NonUniform.jl"),
         "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
+        "Array_Discretization" => joinpath(@__DIR__, "Array_Discretization", "array_discretization.jl"),
     ),
     qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),
     all = FUNCTIONAL_GROUPS,
