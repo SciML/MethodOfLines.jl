@@ -32,7 +32,7 @@ end
 
 @inline function _wrapperiodic(I, N, j, l)
     I1 = unitindex(N, j)
-    # -1 because of the relation u[1] ~ u[end]
+    # shift l-1: u[1] ~ u[end]
     if I[j] <= 1
         I = I + I1 * (l - 1)
     elseif I[j] > l
@@ -42,7 +42,7 @@ end
 end
 
 """
-Allow stencils indexing over periodic boundaries. Index through this function.
+Wrap stencil indices across interface/periodic boundaries.
 """
 
 function wrapinterface(
@@ -84,7 +84,6 @@ function _wrapinterface(I, s, b::InterfaceBoundary{Val{false}(), Val{true}()}, j
         l2 = length(s, b.x2)
         N = ndims(u, s)
         I1 = unitindex(N, j)
-        # update index
         I = I + (l2 - 1) * I1
         I = RefCartesianIndex(I, discu2)
     else
@@ -100,7 +99,6 @@ function _wrapinterface(I, s, b::InterfaceBoundary{Val{true}(), Val{false}()}, j
         discu2 = s.discvars[depvar(u2, s)]
         N = ndims(u, s)
         I1 = unitindex(N, j)
-        # update index
         I = I + (1 - l1) * I1
         return RefCartesianIndex(I, discu2)
     else
@@ -110,4 +108,46 @@ end
 
 function _wrapinterface(I, s, b::InterfaceBoundary{B, B}, j) where {B}
     throw(ArgumentError("Interface $(b.eq) joins two variables at the same end of the domain, this is not supported. Please post an issue if you need this feature."))
+end
+
+"""
+    bcoord(I, bs, s, jx)
+
+Physical coordinate of raw tap index `I` in the differentiated grid's chart. Wrapped taps
+use the exact interface chart transition: periodic shift = period length, contiguous
+shift = 0. Result is strictly increasing across the seam.
+"""
+function bcoord(I, bs, s, jx)
+    j, x = jx
+    for b in bs
+        c = _wrapcoord(I, s, b, j)
+        c === nothing || return c
+    end
+    return s.grid[x][I[j]]
+end
+
+_wrapcoord(I, s, b::AbstractBoundary, j) = nothing
+
+function _wrapcoord(I, s, b::InterfaceBoundary{Val{false}(), Val{true}()}, j)
+    if I[j] <= 1
+        grid1 = s.grid[b.x]
+        grid2 = s.grid[b.x2]
+        i2 = I[j] + length(grid2) - 1
+        # grid2 upper edge ≡ grid1 lower edge
+        return grid2[i2] - (grid2[end] - grid1[1])
+    else
+        return nothing
+    end
+end
+
+function _wrapcoord(I, s, b::InterfaceBoundary{Val{true}(), Val{false}()}, j)
+    grid1 = s.grid[b.x]
+    if I[j] > length(grid1)
+        grid2 = s.grid[b.x2]
+        i2 = I[j] + 1 - length(grid1)
+        # grid2 lower edge ≡ grid1 upper edge
+        return grid2[i2] + (grid1[end] - grid2[1])
+    else
+        return nothing
+    end
 end

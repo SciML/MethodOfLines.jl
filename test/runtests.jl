@@ -54,6 +54,9 @@ run_tests(;
             @safetestset "WENO Boundary Integration" begin
                 include(joinpath(@__DIR__, "Components", "weno_boundary_integration.jl"))
             end
+            @safetestset "WENO Interface Coordinates" begin
+                include(joinpath(@__DIR__, "Components", "weno_interface_coords.jl"))
+            end
             @safetestset "ODEFunction" begin
                 include(joinpath(@__DIR__, "Components", "ODEFunction_test.jl"))
             end
@@ -76,8 +79,14 @@ run_tests(;
             @safetestset "1D Linear Convection WENO" begin
                 include(joinpath(@__DIR__, "Convection_WENO", "MOL_1D_Linear_Convection_WENO.jl"))
             end
-            return @safetestset "WENO Pipeline Spatial Convergence (MMS)" begin
+            @safetestset "WENO Pipeline Spatial Convergence (MMS)" begin
                 include(joinpath(@__DIR__, "Convection_WENO", "MOL_1D_WENO_NU_Convergence.jl"))
+            end
+            @safetestset "WENO Linear Convection" begin
+                include(joinpath(@__DIR__, "Convection_WENO", "MOL_1D_Linear_Convection_WENO.jl"))
+            end
+            @safetestset "WENO Non-Uniform Interface/Periodic" begin
+                include(joinpath(@__DIR__, "Convection_WENO", "MOL_1D_WENO_NU_Interface.jl"))
             end
         end,
         "Higher_Order" => joinpath(@__DIR__, "Higher_Order", "MOL_1D_HigherOrder.jl"),
