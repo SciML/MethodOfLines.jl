@@ -16,12 +16,23 @@ function PDEBase.interface_errors(
     end
 end
 
+# Single predicate shared by check_boundarymap and validate_interface_orders.
+function mismatched_interface_dxs(b, discretization::MOLFiniteDifference)
+    return discretization.dxs[Num(b.x)] != discretization.dxs[Num(b.x2)]
+end
+
 function PDEBase.check_boundarymap(boundarymap, discretization::MOLFiniteDifference)
     bs = filter_interfaces(flatten_vardict(boundarymap))
+    ascheme = discretization.advection_scheme
     for b in bs
-        dx1 = discretization.dxs[Num(b.x)]
-        dx2 = discretization.dxs[Num(b.x2)]
-        if dx1 != dx2
+        if mismatched_interface_dxs(b, discretization)
+            # NU FunctionalScheme uses exact interface coordinates (bcoord) for advection;
+            # dx match waived. Non-advection orders are rejected by validate_interface_orders.
+            if ascheme isa FunctionalScheme && ascheme.is_nonuniform &&
+                    discretization.dxs[Num(b.x)] isa AbstractVector &&
+                    discretization.dxs[Num(b.x2)] isa AbstractVector
+                continue
+            end
             throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
         end
     end
