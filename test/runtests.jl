@@ -85,7 +85,7 @@ run_tests(;
             @safetestset "WENO Linear Convection" begin
                 include(joinpath(@__DIR__, "Convection_WENO", "MOL_1D_Linear_Convection_WENO.jl"))
             end
-            @safetestset "WENO Non-Uniform Interface/Periodic" begin
+            return @safetestset "WENO Non-Uniform Interface/Periodic" begin
                 include(joinpath(@__DIR__, "Convection_WENO", "MOL_1D_WENO_NU_Interface.jl"))
             end
         end,
