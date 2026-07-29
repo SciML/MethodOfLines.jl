@@ -25,7 +25,7 @@ using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, dep
     d_orders, vcat!, update_varmap!, get_ops
 
 # staggered changes
-using PDEBase: Interval
+using DomainSets: Interval
 using PDEBase: error_analysis, add_metadata!
 
 # To Extend
@@ -40,7 +40,7 @@ import PDEBase.construct_differential_discretizer
 import PDEBase.discretize_equation!
 import PDEBase.generate_ic_defaults
 import PDEBase.generate_metadata
-import PDEBase.symbolic_discretize
+import SciMLBase.symbolic_discretize
 
 import PDEBase.get_time
 import PDEBase.get_eqvar
