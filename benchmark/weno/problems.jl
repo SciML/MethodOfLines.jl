@@ -1,6 +1,5 @@
-# PDE problems for the WENO benchmarks: smooth periodic advection, inviscid Burgers,
-# a moving tanh front (adapted-grid crossover experiment), and a two-domain interface
-# pulse. Builders return named tuples consumed by the suite and the report driver.
+# PDE problems for the WENO benchmarks: periodic advection, inviscid Burgers, and a
+# two-domain interface pulse.
 
 using ModelingToolkit, DomainSets, MethodOfLines, SciMLBase
 
@@ -19,11 +18,7 @@ function advection_system(; t_end = 0.5)
     domains = [t ∈ Interval(0.0, t_end), x ∈ Interval(0.0, 2.0)]
     @named weno_advection = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    exact(x_, t_) = sinpi(x_ - t_)
-    return (;
-        pdesys = weno_advection, uvar = u, xvar = x, tvar = t,
-        xspan = (0.0, 2.0), t_end, exact,
-    )
+    return (; pdesys = weno_advection, xvar = x, tvar = t, xspan = (0.0, 2.0))
 end
 
 function advection_discretization(sys, kind::Symbol, n::Int)
@@ -46,60 +41,11 @@ function burgers_system(; t_end = 1.5)
     domains = [t ∈ Interval(0.0, t_end), x ∈ Interval(0.0, 2.0)]
     @named weno_burgers = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    return (;
-        pdesys = weno_burgers, uvar = u, xvar = x, tvar = t,
-        xspan = (0.0, 2.0), t_end,
-    )
+    return (; pdesys = weno_burgers, xvar = x, tvar = t, xspan = (0.0, 2.0))
 end
 
 function burgers_discretization(sys, kind::Symbol, n::Int)
     spec = grid_spec(kind, sys.xspan..., n)
-    return MOLFiniteDifference([sys.xvar => spec], sys.tvar; advection_scheme = WENOScheme())
-end
-
-# Moving tanh front. The 4th-order error is dominated by the largest spacing inside the
-# front path [x0, x0 + t_end]; a band-adapted grid reaches a given L2 error with fewer
-# nodes than a uniform grid.
-const FRONT_DELTA = 0.02
-const FRONT_X0 = 0.55
-const FRONT_T_END = 0.2
-# Must bracket [x0, x0 + t_end].
-const FRONT_BAND = (0.45, 0.85)
-
-function front_system(; delta = FRONT_DELTA, x0 = FRONT_X0, t_end = FRONT_T_END)
-    @parameters t x
-    @variables u(..)
-    Dt = Differential(t)
-    Dx = Differential(x)
-
-    exact(x_, t_) = tanh((x_ - t_ - x0) / delta)
-
-    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
-    # Dirichlet at both ends: Neumann outflow yields a singular mass matrix (DAE), forcing
-    # implicit solvers. tanh ≡ 1 at x = 2 to machine precision.
-    bcs = [
-        u(0, x) ~ tanh((x - x0) / delta),
-        u(t, 0.0) ~ tanh((-t - x0) / delta),
-        u(t, 2.0) ~ tanh((2.0 - t - x0) / delta),
-    ]
-    domains = [t ∈ Interval(0.0, t_end), x ∈ Interval(0.0, 2.0)]
-    @named weno_front = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-
-    return (;
-        pdesys = weno_front, uvar = u, xvar = x, tvar = t,
-        xspan = (0.0, 2.0), t_end, exact,
-    )
-end
-
-function front_grid_nodes(kind::Symbol, n::Int)
-    kind === :uniform && return uniform_grid(0.0, 2.0, n)
-    kind === :stretched && return stretched_grid(0.0, 2.0, n)
-    kind === :front_adapted && return front_adapted_grid(0.0, 2.0, n; band = FRONT_BAND)
-    return error("front experiment supports :uniform, :stretched, :front_adapted; got $kind")
-end
-
-function front_discretization(sys, kind::Symbol, n::Int)
-    spec = kind === :uniform ? 2.0 / (n - 1) : front_grid_nodes(kind, n)
     return MOLFiniteDifference([sys.xvar => spec], sys.tvar; advection_scheme = WENOScheme())
 end
 
@@ -133,10 +79,7 @@ function interface_system(; t_end = 0.5)
         eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)]
     )
 
-    return (;
-        pdesys = weno_interface, u1var = u1, u2var = u2,
-        x1var = x1, x2var = x2, tvar = t, t_end, exact = pulse,
-    )
+    return (; pdesys = weno_interface, x1var = x1, x2var = x2, tvar = t)
 end
 
 # Seam requires vector grids; interval counts mismatched (n : 3n/2) to exercise the seam.

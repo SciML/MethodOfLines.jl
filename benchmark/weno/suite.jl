@@ -5,7 +5,6 @@
 using BenchmarkTools
 using MethodOfLines
 using SciMLBase
-using OrdinaryDiffEq
 using OrdinaryDiffEqSSPRK
 
 function build_kernel_suite()

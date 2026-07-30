@@ -10,7 +10,6 @@ src/scratch
 src/scratch/*
 test/plots
 test/plots/*
-benchmark/results/
 dev
 dev/*
 
