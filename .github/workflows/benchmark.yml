@@ -1,0 +1,27 @@
+name: Benchmark this PR
+on:
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - 'docs/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+
+jobs:
+  bench:
+    name: "Benchmarks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
+        with:
+          julia-version: "1"
+          script: "benchmark/benchmarks.jl"
+          tune: "true"
+          extra-pkgs: "ModelingToolkit,DomainSets,SciMLBase,OrdinaryDiffEqSSPRK,StableRNGs"
+          job-summary: "${{ github.event.pull_request.head.repo.fork }}"
