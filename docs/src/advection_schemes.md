@@ -20,7 +20,7 @@ WENOScheme(; epsilon = 1e-6)
 
 A more stable scheme, 5th order accurate, which is a weighted sum of several different schemes, weighted based on the curvature of the solution at the point in question. More stable and tolerant of discontinuities, at the cost of solve complexity.
 
-`epsilon`is a quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. Problems with a lower magnitude solution will benefit from a smaller value.
+`epsilon` is a quantity used to prevent vanishing denominators in the scheme, defaults to `1e-6`. Problems with a lower magnitude solution will benefit from a smaller value.
 
 Problems which require this scheme may also benefit from a [Strong-Stability-Preserving (SSP) solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/#Explicit-Strong-Stability-Preserving-Runge-Kutta-Methods-for-Hyperbolic-PDEs-(Conservation-Laws)).
 

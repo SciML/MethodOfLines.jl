@@ -99,7 +99,7 @@ plot!(plt, sol_weno[x], sol_weno[u(t, x)][end, :];
     label = "WENO-5", lw = 2, ls = :dot)
 ```
 
-The two linear schemes fail exactly as Godunov's theorem predicts: the first-order upwind solution is monotone but heavily smeared, while the second-order one is sharper but rings around both fronts (over- and undershoots of magnitude ``\sim 0.1``). WENO-5 tracks the fronts sharply, and its largest overshoot is at the ``10^{-4}`` level — four orders of magnitude smaller.
+The two linear schemes fail exactly as Godunov's theorem predicts: the first-order upwind solution is monotone but heavily smeared, while the second-order one is sharper but rings around both fronts (over- and undershoots of magnitude ``\sim 0.1``). WENO-5 tracks the fronts sharply, and its largest overshoot is at the ``10^{-4}`` level — three orders of magnitude smaller.
 
 ## Non-uniform grids: resolution where it matters
 
@@ -121,7 +121,7 @@ end
 nothing # hide
 ```
 
-Since ``\rho \geq 1`` everywhere, the resulting point vector is strictly increasing, as `MOLFiniteDifference` requires. (MethodOfLines also exports `chebyspace` for constructing Chebyshev, i.e. boundary-clustered, grids — see [Non-Uniform Rectilinear Grids](../nonuniform.md).)
+Because ``\rho`` is strictly positive and the quantile levels are far coarser than the sampling lattice, the resulting point vector is strictly increasing, as `MOLFiniteDifference` requires. (MethodOfLines also exports `chebyspace` for constructing Chebyshev, i.e. boundary-clustered, grids — see [Non-Uniform Rectilinear Grids](../nonuniform.md).)
 
 Where should the points go? For that we need a problem whose steep feature lives at a *known, fixed location* — which brings us to the classic showcase for both WENO and grid clustering.
 
@@ -133,7 +133,7 @@ The inviscid Burgers equation
 \frac{\partial u}{\partial t} + u \frac{\partial u}{\partial x} = 0
 ```
 
-is the canonical model of nonlinear wave steepening: each point of the profile travels at its own speed ``u``, so fast regions overtake slow ones and a smooth initial condition steepens into a shock in finite time. For an initial profile ``u_0``, the gradient blows up at ``t_s = -1/\min_x u_0'(x)``. Note also that the term ``u\,\partial_x u`` is a first-order derivative multiplied by the dependent variable — the class of terms for which the WENO scheme is required in MethodOfLines.
+is the canonical model of nonlinear wave steepening: each point of the profile travels at its own speed ``u``, so fast regions overtake slow ones and a smooth initial condition steepens into a shock in finite time. For an initial profile ``u_0``, the gradient blows up at ``t_s = -1/\min_x u_0'(x)``. The nonlinear advection term ``u\,\partial_x u`` can also be discretized by the sign-aware upwind scheme, but near steep gradients WENO's adaptive stencils are the robust choice; more generally, terms in which first-order derivatives multiply *one another* do require `WENOScheme` in MethodOfLines (see [Advection Schemes](@ref adschemes)).
 
 We take ``u_0(x) = 0.5 + 0.4\sin(2\pi x)`` on the periodic unit interval, for which ``t_s = 1/(0.8\pi) \approx 0.4``, and integrate up to ``t = 0.35``, just before shock formation. The characteristics tell us *where* the shock forms: the steepest point of the profile starts at ``x = 0.5`` and drifts with the mean speed ``0.5``, arriving near ``x \approx 0.675`` at ``t = 0.35``. So we place a Gaussian bump of resolution density right there. Periodic boundary conditions are fully supported on non-uniform grids with WENO — stencils that wrap around the boundary are evaluated with the exact physical coordinates of the connected grid, so no accuracy is lost at the seam.
 
@@ -256,7 +256,7 @@ println("stretched: errors = ", round.(errs_stretched, sigdigits = 3),
     ",  EOC = ", round(eoc(errs_stretched), digits = 2))
 ```
 
-On uniform grids the observed order approaches the theoretical smooth-region rate; on this strongly stretched grid (``\beta = 4`` compresses the central cells by roughly a factor of 14 relative to the outermost ones) the scheme remains high-order — formally 4th order in smooth regions for the node-centered non-uniform reconstruction — though the pre-asymptotic rate at these modest resolutions is somewhat lower.
+Note that both grids here are passed as explicit point vectors, so both are discretized with the node-centered non-uniform reconstruction, which is formally 4th order accurate in smooth regions. On the equally spaced grid the observed order matches this rate closely; on the strongly stretched grid — ``\beta = 4`` makes the outermost cells about ``\cosh(4) \approx 27`` times wider than the central ones — the scheme remains high-order, though it is still pre-asymptotic at these modest resolutions and shows a reduced rate.
 
 ## Limitations
 

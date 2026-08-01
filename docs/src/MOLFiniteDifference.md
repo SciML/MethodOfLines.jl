@@ -37,7 +37,7 @@ Note that the second argument to `MOLFiniteDifference` is optional, all paramete
 
 Currently, implemented options for `advection_scheme` are `UpwindScheme()` and `WENOScheme()`, defaults to upwind. See [advection schemes](@ref adschemes) for more information, and the [WENO tutorial](@ref weno_tutorial) for a worked comparison of the two.
 
-Currently supported options are `grid_align`: `center_align` and `edge_align`. Edge align will give better accuracy with Neumann boundary conditions. Defaults tp `center_align`.
+Currently supported options are `grid_align`: `center_align` and `edge_align`. Edge align will give better accuracy with Neumann boundary conditions. Defaults to `center_align`.
 
 `center_align`: naive grid, starting from lower boundary, ending on upper boundary with step of `dx`
 

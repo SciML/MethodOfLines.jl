@@ -2,7 +2,7 @@
 
 For more information on how to use a non-uniform rectilinear grid, see the docs for [MOLFiniteDifference](@ref molfd). For a complete worked example that uses a non-uniform grid to resolve a steep moving front with the WENO advection scheme, see the [WENO tutorial](@ref weno_tutorial).
 
-Any strictly increasing `AbstractVector` of grid points spanning the domain can be used as a grid (except a `StepRangeLen`, which denotes a uniform grid). A common choice for problems with localized features is a stretched grid that clusters points where resolution is needed, for example the `sinh`-stretched grid used in the [WENO tutorial](@ref weno_tutorial).
+Any strictly increasing `AbstractVector` of grid points spanning the domain can be used as a grid (except a `StepRangeLen`, which denotes a uniform grid). A common choice for problems with localized features is a stretched grid that clusters points where resolution is needed, such as a `sinh`-stretched grid or one generated from a user-chosen resolution density; the tutorial linked above demonstrates both constructions.
 
 MethodOfLines exports the function `chebyspace`, which can be used to conveniently construct a [Chebyshev grid](https://en.wikipedia.org/wiki/Chebyshev_nodes), which may prove more accurate in certain cases, especially with higher approximation order (benchmarking to come, watch this space). It takes the arguments `chebyspace(N, dom)` where `N` is the number of points, and `dom` is the domain set for the variable you want to discretize in this way.
 
