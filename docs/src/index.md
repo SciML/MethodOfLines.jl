@@ -38,7 +38,7 @@ Boundary conditions include, but are not limited to:
   - Periodic
   - Any Julia function that returns a number
 
-Currently, the centered difference, upwind difference, nonlinear Laplacian and spherical Laplacian schemes are implemented. If you know of a scheme with better stability or accuracy in any specific case, please post an issue with a link to a paper.
+Currently, the centered difference, upwind difference, WENO-5, nonlinear Laplacian and spherical Laplacian schemes are implemented. If you know of a scheme with better stability or accuracy in any specific case, please post an issue with a link to a paper.
 
 Due to an implementation detail, the maximum derivative order that can be discretized by MOL is `div(typemax(Int), 2)`, in 64 bit `4611686018427387903`. We hope that this is enough for your purposes!
 
