@@ -264,8 +264,8 @@ Honesty about where the current infrastructure ends is part of the showcase:
 
 ## References
 
-  - G.-S. Jiang and C.-W. Shu, *Efficient Implementation of Weighted ENO Schemes*, J. Comput. Phys. 126 (1996).
-  - J. Shi, C. Hu, C.-W. Shu, *A technique of treating negative weights in WENO schemes*, J. Comput. Phys. 175 (2002).
-  - B. Fornberg, *Generation of finite difference formulas on arbitrarily spaced grids*, Math. Comp. 51 (1988).
-  - T. Y. Hou and P. G. LeFloch, *Why nonconservative schemes converge to wrong solutions: error analysis*, Math. Comp. 62 (1994).
-  - R. Wang and R. J. Spiteri, *Observations on the fifth-order WENO method with non-uniform meshes*, Appl. Math. Comput. 196 (2008).
+  - G.-S. Jiang and C.-W. Shu, *Efficient Implementation of Weighted ENO Schemes*, Journal of Computational Physics 126 (1996).
+  - J. Shi, C. Hu, C.-W. Shu, *A technique of treating negative weights in WENO schemes*, Journal of Computational Physics 175 (2002).
+  - B. Fornberg, *Generation of finite difference formulas on arbitrarily spaced grids*, Mathematics of Computation 51 (1988).
+  - T. Y. Hou and P. G. LeFloch, *Why nonconservative schemes converge to wrong solutions: error analysis*, Mathematics of Computation 62 (1994).
+  - R. Wang and R. J. Spiteri, *Observations on the fifth-order WENO method with non-uniform meshes*, Applied Mathematics and Computation 196 (2008).
