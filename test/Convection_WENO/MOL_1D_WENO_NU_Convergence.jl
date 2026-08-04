@@ -132,3 +132,51 @@ end
         @test err < 2.0e-5
     end
 end
+
+# Mixed WENO + centered diffusion holds a viscous shock on a clustered NU grid.
+@testset "Mixed WENO advection + centered diffusion holds a viscous shock layer" begin
+    ν = 2.0e-3
+    t_end = 1.0
+    u_inf(ξ) = -tanh(ξ / (2 * ν))
+
+    ρ(ξ) = 1 + 30 * exp(-ξ^2 / (2 * 0.02^2))
+    xsamp = range(-1.0, 1.0, length = 5001)
+    cdf = cumsum(ρ.(xsamp))
+    cdf = (cdf .- cdf[1]) ./ (cdf[end] - cdf[1])
+    xg = map(range(0, 1, length = 129)) do l
+        k = searchsortedfirst(cdf, l)
+        k <= 1 && return float(xsamp[1])
+        θ = (l - cdf[k - 1]) / (cdf[k] - cdf[k - 1])
+        return xsamp[k - 1] + θ * (xsamp[k] - xsamp[k - 1])
+    end
+    xg[1], xg[end] = -1.0, 1.0
+    @assert all(diff(xg) .> 0)
+
+    Dt = Differential(t)
+    Dx = Differential(x)
+    eq = Dt(u(t, x)) ~ -u(t, x) * Dx(u(t, x)) + ν * Dx(Dx(u(t, x)))
+    bcs = [
+        u(0.0, x) ~ u_inf(x),
+        u(t, -1.0) ~ 1.0,
+        u(t, 1.0) ~ -1.0,
+    ]
+    domains = [t ∈ Interval(0.0, t_end), x ∈ Interval(-1.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    disc = MOLFiniteDifference([x => xg], t; advection_scheme = WENOScheme())
+    prob = discretize(pdesys, disc)
+
+    dxmin = min_cell_width(xg)
+    dt = 0.2 * min(dxmin, dxmin^2 / (2 * ν))
+    sol = solve(prob, SSPRK33(); dt, adaptive = false, saveat = [t_end])
+    @test SciMLBase.successful_retcode(sol)
+    xs = sol[x]
+    uend = sol[u(t, x)][end, :]
+    @test all(isfinite, uend)
+
+    @test rel_l2(uend, u_inf.(xs), xs) < 3.0e-4
+    @test maximum(abs, uend) <= 1 + 1.0e-3
+    i0 = findfirst(k -> uend[k] * uend[k + 1] < 0, 1:(length(uend) - 1))
+    @test i0 !== nothing
+    x0 = xs[i0] - uend[i0] * (xs[i0 + 1] - xs[i0]) / (uend[i0 + 1] - uend[i0])
+    @test abs(x0) < dxmin
+end
