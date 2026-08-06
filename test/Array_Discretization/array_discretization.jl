@@ -413,3 +413,19 @@ end
     @test !any(eq -> hasoperation(eq, ifelse), get_eqs(sys_arr))
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
+
+@testset "Default strategy is unchanged (opt-in)" begin
+    # This strategy is opt-in: existing code must keep getting the scalarized
+    # discretization, so that adding it cannot change any current user's results.
+    @parameters t x
+    disc_default = MOLFiniteDifference([x => 0.1], t)
+    @test disc_default.disc_strategy isa ScalarizedDiscretization
+
+    disc_steady = MOLFiniteDifference([x => 0.1])
+    @test disc_steady.disc_strategy isa ScalarizedDiscretization
+
+    disc_opt = MOLFiniteDifference(
+        [x => 0.1], t; discretization_strategy = ArrayDiscretization()
+    )
+    @test disc_opt.disc_strategy isa ArrayDiscretization
+end
