@@ -121,6 +121,6 @@ include("precompile.jl")
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
     edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme, MOLDiscCallback
-export ScalarizedDiscretization, ArrayDiscretization
+export ScalarizedDiscretization, ArrayDiscretization, StrictArrayDiscretization
 
 end

@@ -13,9 +13,12 @@ function PDEBase.interface_errors(
     end
     return if !(
             typeof(discretization.disc_strategy) ∈
-                [ScalarizedDiscretization, ArrayDiscretization]
+                [
+                ScalarizedDiscretization, ArrayDiscretization,
+                StrictArrayDiscretization,
+            ]
         )
-        throw(ArgumentError("Only `ScalarizedDiscretization()` and `ArrayDiscretization()` are supported discretization strategies."))
+        throw(ArgumentError("Only `ScalarizedDiscretization()`, `ArrayDiscretization()` and `StrictArrayDiscretization()` are supported discretization strategies."))
     end
 end
 

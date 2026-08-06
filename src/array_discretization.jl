@@ -21,11 +21,36 @@ struct ArrayDiscretizationFallback <: Exception
     msg::String
 end
 
+"""
+    ArrayDiscretizationError(pde, msg)
+
+Raised by [`StrictArrayDiscretization`](@ref) when an equation cannot be represented in
+slice form, in place of the silent fallback [`ArrayDiscretization`](@ref) performs.
+"""
+struct ArrayDiscretizationError <: Exception
+    pde::Any
+    msg::String
+end
+
+function Base.showerror(io::IO, e::ArrayDiscretizationError)
+    print(
+        io,
+        """
+        StrictArrayDiscretization could not build an array (slice-form) equation for:
+          $(e.pde)
+        Reason: $(e.msg)
+
+        Use ArrayDiscretization() to discretize this equation pointwise instead, which
+        gives the same numerical result without the array representation."""
+    )
+    return
+end
+
 function PDEBase.discretize_equation!(
         disc_state::PDEBase.EquationState, pde::Equation, interiormap,
         eqvar, bcmap, depvars, s::DiscreteSpace, derivweights, indexmap,
         discretization::MOLFiniteDifference{G, D}
-    ) where {G, D <: ArrayDiscretization}
+    ) where {G, D <: AnyArrayDiscretization}
     # Boundary handling is identical to the scalarized strategy
     boundaryvalfuncs = generate_boundary_val_funcs(
         s, depvars, bcmap, indexmap, derivweights
@@ -59,6 +84,8 @@ function PDEBase.discretize_equation!(
             # itself resurface below, where the scalar path raises them directly.
             reason = e isa ArrayDiscretizationFallback ? e.msg :
                 sprint(showerror, e)
+            isstrict(discretization.disc_strategy) &&
+                throw(ArrayDiscretizationError(pde, reason))
             @debug "ArrayDiscretization falling back to pointwise discretization for $pde: $reason"
             vec(
                 map(interior) do II

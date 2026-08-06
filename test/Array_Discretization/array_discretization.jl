@@ -429,3 +429,134 @@ end
     )
     @test disc_opt.disc_strategy isa ArrayDiscretization
 end
+
+@testset "Interior representation is independent of grid resolution" begin
+    # The point of the array form: one interior equation whose expression size does not
+    # grow with the grid, where the scalarized form emits one equation per point. This is
+    # asserted structurally rather than by timing, but it is what makes generated code
+    # compile in constant rather than linear time (see the PR benchmark).
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # count nodes in an expression tree
+    function treesize(x)
+        x = Symbolics.unwrap(x)
+        SymbolicUtils.iscall(x) || return 1
+        return 1 + sum(treesize, SymbolicUtils.arguments(x); init = 0)
+    end
+    interior_size(sys) = sum(
+        treesize(eq.lhs) + treesize(eq.rhs)
+            for eq in get_eqs(sys) if occursin("Differential", string(eq));
+        init = 0
+    )
+
+    sizes = map([21, 81]) do n
+        disc_a = MOLFiniteDifference(
+            [x => 1 / (n - 1)], t; discretization_strategy = ArrayDiscretization()
+        )
+        disc_s = MOLFiniteDifference(
+            [x => 1 / (n - 1)], t;
+            discretization_strategy = ScalarizedDiscretization()
+        )
+        sys_a, _ = symbolic_discretize(pdesys, disc_a)
+        sys_s, _ = symbolic_discretize(pdesys, disc_s)
+        (;
+            n, arr = interior_size(sys_a), scal = interior_size(sys_s),
+            narr = narrayeqs(sys_a),
+        )
+    end
+
+    coarse, fine = sizes
+    # one array equation regardless of resolution
+    @test coarse.narr == 1
+    @test fine.narr == 1
+    # array interior expression does not grow with the grid
+    @test fine.arr == coarse.arr
+    # the scalarized interior does grow, roughly in proportion to the point count
+    @test fine.scal > 3 * coarse.scal
+end
+
+@testset "StrictArrayDiscretization errors instead of falling back" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    strict = MOLFiniteDifference(
+        [x => 0.1], t; discretization_strategy = StrictArrayDiscretization()
+    )
+
+    # Patterns with no slice representation must raise rather than silently discretize
+    # pointwise.
+    unsupported = [
+        (
+            "nonlinear laplacian",
+            Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x))),
+            [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
+        ),
+        (
+            "boundary value in interior",
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1),
+            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        ),
+        (
+            "periodic BC",
+            Dt(u(t, x)) ~ Dxx(u(t, x)),
+            [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
+        ),
+    ]
+    for (name, eq, bcs) in unsupported
+        @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+        @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
+            pdesys, strict
+        )
+        # the permissive strategy still handles it, pointwise
+        lenient = MOLFiniteDifference(
+            [x => 0.1], t; discretization_strategy = ArrayDiscretization()
+        )
+        sys, _ = symbolic_discretize(pdesys, lenient)
+        @test narrayeqs(sys) == 0
+    end
+
+    # A supported equation must go through strict mode unchanged.
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    @named ok_sys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    sys_strict, _ = symbolic_discretize(ok_sys, strict)
+    @test narrayeqs(sys_strict) == 1
+
+    # Frame points near a boundary are pointwise under either strategy because their
+    # stencils genuinely differ; that is structural, not an unsupported pattern, so
+    # strict mode must accept it.
+    strict4 = MOLFiniteDifference(
+        [x => 0.05], t; discretization_strategy = StrictArrayDiscretization(),
+        approx_order = 4
+    )
+    sys4, _ = symbolic_discretize(ok_sys, strict4)
+    @test narrayeqs(sys4) == 1
+    @test length(get_eqs(sys4)) > 3   # array interior + BCs + scalar frame equations
+
+    # The error names the offending equation and the reason.
+    @named bad = PDESystem(
+        Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x))),
+        [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
+        domains, [t, x], [u(t, x)]
+    )
+    msg = try
+        symbolic_discretize(bad, strict)
+        ""
+    catch e
+        sprint(showerror, e)
+    end
+    @test occursin("StrictArrayDiscretization", msg)
+    @test occursin("Reason:", msg)
+    @test occursin("ArrayDiscretization()", msg)
+end

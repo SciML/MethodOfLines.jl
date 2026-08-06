@@ -36,6 +36,34 @@ boundary conditions, staggered grids, boundary values appearing in interior equa
 automatically fall back to pointwise scalar equations, so results are always identical
 to `ScalarizedDiscretization`.
 
-Pass as `discretization_strategy` to [`MOLFiniteDifference`](@ref).
+Pass as `discretization_strategy` to [`MOLFiniteDifference`](@ref). Use
+[`StrictArrayDiscretization`](@ref) to make the fallback an error instead.
 """
 struct ArrayDiscretization <: AbstractDiscretizationStrategy end
+
+"""
+    StrictArrayDiscretization()
+
+Like [`ArrayDiscretization`](@ref), but raises an error instead of silently falling back
+to pointwise discretization when an equation contains a pattern with no slice
+representation.
+
+Useful for testing and for work that depends on getting the array form: with
+`ArrayDiscretization` an unsupported pattern still discretizes correctly, just
+pointwise, which is easy to miss. This makes that visible.
+
+The error covers whole-equation fallback only. Boundary, corner and extrapolation
+equations, and interior points near a boundary whose stencil differs from the
+translation-invariant one, are pointwise under either strategy — they are irregular by
+construction, not unsupported — so they are not errors here.
+
+Pass as `discretization_strategy` to [`MOLFiniteDifference`](@ref).
+"""
+struct StrictArrayDiscretization <: AbstractDiscretizationStrategy end
+
+# The two array strategies produce the same discretization and differ only in whether an
+# unrepresentable pattern falls back or raises, so the machinery dispatches on both.
+const AnyArrayDiscretization = Union{ArrayDiscretization, StrictArrayDiscretization}
+
+isstrict(::AbstractDiscretizationStrategy) = false
+isstrict(::StrictArrayDiscretization) = true
