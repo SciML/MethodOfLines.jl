@@ -342,15 +342,26 @@ end
 
 """
 Array form of the winding selection for an odd derivative multiplied by expression
-`expr`. The scalar path emits `ifelse(coef > 0, coef*pos, coef*neg)` pointwise; `ifelse`
-cannot currently be broadcast over symbolic array conditions, so this uses the
-numerically equivalent `max(coef, 0)*pos + min(coef, 0)*neg`.
+`expr`, mirroring the scalar path's `ifelse(coef > 0, coef*pos, coef*neg)`.
+
+When the coefficient does not vary over the grid — a literal, a parameter, or any
+expression of time alone — the wind direction is one scalar condition for the whole
+slice, so `ifelse` broadcasts and reproduces the scalar path exactly.
+
+A grid-varying coefficient needs a per-point condition, and `ifelse` cannot be broadcast
+over a symbolic array condition (the elementwise comparison carries symtype `Any` rather
+than `Bool`). Those use `max(coef, 0)*pos + min(coef, 0)*neg`, which agrees with `ifelse`
+on finite values but yields `NaN` rather than the finite branch when the unselected
+stencil is `Inf`/`NaN`.
 """
 function array_winding_select(expr, s, u, x, d, derivweights, ranges, indexmap, coefctx)
     coef = arrayify(expr, coefctx)
     pos = array_upwind_difference(s, u, x, d, derivweights, ranges, indexmap, true)
     neg = array_upwind_difference(s, u, x, d, derivweights, ranges, indexmap, false)
     bcast(op, args...) = broadcast(op, args...)
+    if !is_array_valued(coef)
+        return bcast(ifelse, coef > 0, bcast(*, coef, pos), bcast(*, coef, neg))
+    end
     return bcast(
         +,
         bcast(*, bcast(max, coef, 0), pos),

@@ -361,3 +361,55 @@ end
         @test sol_arr[u(t, x)[i]] ≈ sol_scal[u(t, x)[i]] rtol = 1.0e-6
     end
 end
+
+# Does any subexpression of `eq` apply the operation `f`, either directly or broadcast
+# over slices (`broadcast(f, ...)`, which is how the array form applies it)? In the
+# broadcast form the applied function is carried as a symbolic wrapper rather than the
+# function itself, so it is matched by name.
+function hasoperation(eq, f)
+    names_f(x) = x === f || string(x) == string(f)
+    function walk(x)
+        x = Symbolics.unwrap(x)
+        SymbolicUtils.iscall(x) || return false
+        op = SymbolicUtils.operation(x)
+        names_f(op) && return true
+        args = SymbolicUtils.arguments(x)
+        op === broadcast && !isempty(args) && names_f(first(args)) && return true
+        return any(walk, args)
+    end
+    return walk(eq.lhs) || walk(eq.rhs)
+end
+
+@testset "Winding form: ifelse for coefficients constant over the grid" begin
+    # The scalar path emits `ifelse(coef > 0, coef*pos, coef*neg)`. When the coefficient
+    # does not vary over the grid the wind direction is a single scalar condition, so the
+    # array path must emit that same `ifelse` rather than the `max`/`min` surrogate (the
+    # two differ when the unselected stencil is non-finite).
+    @parameters t x vel
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    bcs = [u(0, x) ~ exp(-100 * (x - 0.3)^2) + 1.0, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0]
+
+    for (name, advection, ps) in [
+            ("literal", -2.0 * Dx(u(t, x)), Num[]),
+            ("time dependent", -(1 + t) * Dx(u(t, x)), Num[]),
+        ]
+        eq = Dt(u(t, x)) ~ advection + 0.05 * Dxx(u(t, x))
+        @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], ps)
+        sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+        @test any(eq -> hasoperation(eq, ifelse), get_eqs(sys_arr))
+        @test narrayeqs(sys_arr) == 1
+        @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+    end
+
+    # A coefficient that varies over the grid still needs the per-point surrogate, since
+    # `ifelse` cannot broadcast over a symbolic array condition.
+    eq = Dt(u(t, x)) ~ -(1 + x) * Dx(u(t, x)) + 0.05 * Dxx(u(t, x))
+    @named pdesys_x = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys_x, [x => 0.05], t)
+    @test !any(eq -> hasoperation(eq, ifelse), get_eqs(sys_arr))
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+end
