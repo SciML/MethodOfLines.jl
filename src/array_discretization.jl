@@ -19,7 +19,14 @@
 
 struct ArrayDiscretizationFallback <: Exception
     msg::String
+    # `benign` marks a deliberate choice not to build an array form (nothing would be
+    # collapsed) rather than a pattern this path cannot represent. Strict mode tolerates
+    # the former and raises on the latter.
+    benign::Bool
 end
+ArrayDiscretizationFallback(msg::String) = ArrayDiscretizationFallback(msg, false)
+
+isbenign(e) = e isa ArrayDiscretizationFallback && e.benign
 
 """
     ArrayDiscretizationError(pde, msg)
@@ -57,7 +64,19 @@ function PDEBase.discretize_equation!(
     )
     eqvarbcs = mapreduce(x -> bcmap[operation(eqvar)][x], vcat, s.x̄)
     for boundary in eqvarbcs
-        generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+        try
+            vcat!(
+                disc_state.bceqs,
+                array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
+            )
+        catch e
+            e isa InterruptException && rethrow(e)
+            reason = e isa ArrayDiscretizationFallback ? e.msg : sprint(showerror, e)
+            @debug "ArrayDiscretization falling back to pointwise boundary equations for $(boundary.eq): $reason"
+            isstrict(discretization.disc_strategy) && !isbenign(e) &&
+                throw(ArrayDiscretizationError(boundary.eq, reason))
+            generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+        end
     end
     generate_extrap_eqs!(disc_state, pde, eqvar, s, derivweights, interiormap, bcmap)
     generate_corner_eqs!(disc_state, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
@@ -84,7 +103,7 @@ function PDEBase.discretize_equation!(
             # itself resurface below, where the scalar path raises them directly.
             reason = e isa ArrayDiscretizationFallback ? e.msg :
                 sprint(showerror, e)
-            isstrict(discretization.disc_strategy) &&
+            isstrict(discretization.disc_strategy) && !isbenign(e) &&
                 throw(ArrayDiscretizationError(pde, reason))
             @debug "ArrayDiscretization falling back to pointwise discretization for $pde: $reason"
             vec(
@@ -490,4 +509,142 @@ function arrayify(expr, ctx)
     else
         return op(newargs...)
     end
+end
+
+####
+# Boundary equations in slice form
+####
+
+"""
+    array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
+
+Generate the equations for `boundary` as a single symbolic array equation over the face
+it occupies, rather than one scalar equation per point on that face.
+
+This works because the index along the boundary's own direction is fixed across the
+face, so every point on it selects the same stencil weights and tap offsets — the same
+translation invariance the interior exploits, applied one dimension down. Without this,
+boundary equations stay pointwise and dominate the equation count in 2D and 3D, where
+they scale with the surface (`O(n)` and `O(n^2)`) while the interior collapses to one.
+
+Throws `ArrayDiscretizationFallback` for boundaries with no slice representation, in
+which case the caller emits the pointwise form.
+"""
+function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
+    boundary isa AbstractTruncatingBoundary ||
+        throw(ArrayDiscretizationFallback("non-truncating (interface) boundary"))
+    get_grid_type(s) <: StaggeredGrid &&
+        throw(ArrayDiscretizationFallback("staggered grids are not supported"))
+
+    u_, x_ = getvars(boundary)
+    u = depvar(u_, s)
+    args = ivs(u, s)
+    length(args) == 0 && throw(ArrayDiscretizationFallback("no spatial arguments"))
+    indexmap = Dict([args[i] => i for i in 1:length(args)])
+    haskey(indexmap, x_) ||
+        throw(ArrayDiscretizationFallback("boundary variable $x_ not an argument of $u"))
+    j = indexmap[x_]
+
+    E = edge(s, boundary, interiormap)
+    length(E) == 0 && throw(ArrayDiscretizationFallback("empty boundary edge"))
+    lo = collect(Tuple(first(E)))
+    hi = collect(Tuple(last(E)))
+    # the face must be a contiguous box for a slice to describe it
+    length(E) == prod(hi .- lo .+ 1) ||
+        throw(ArrayDiscretizationFallback("boundary edge is not a contiguous box"))
+    lo[j] == hi[j] ||
+        throw(ArrayDiscretizationFallback("boundary edge spans its own direction"))
+    ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
+    N = length(args)
+    # A single-point face (every 1D boundary) has nothing to collapse; a one-element
+    # slice equation would just be a more convoluted spelling of the scalar one.
+    prod(length(ranges[i]) for i in 1:N) == 1 &&
+        throw(ArrayDiscretizationFallback("single-point boundary", true))
+
+    # Every dependent variable in the condition must be one this path can slice: either
+    # the canonical variable, or a value on this same boundary.
+    bcdepvars = get_depvars(boundary.eq.lhs, s.vars.depvar_ops) ∪
+        get_depvars(boundary.eq.rhs, s.vars.depvar_ops)
+    for v in bcdepvars
+        vd = depvar(v, s)
+        isequal(ivs(vd, s), args) ||
+            throw(ArrayDiscretizationFallback("variable $v of differing dimensionality"))
+        for (k, a) in enumerate(remove(arguments(v), s.time))
+            unwrap_const(safe_unwrap(a)) isa Number || continue
+            k == j || throw(
+                ArrayDiscretizationFallback("boundary value of $v away from this boundary")
+            )
+        end
+    end
+    for x in args
+        isempty(filter_interfaces(bcmap[operation(u)][x])) ||
+            throw(ArrayDiscretizationFallback("interface/periodic boundary conditions"))
+    end
+
+    II0 = first(E)
+    ufunc(v, I, x) = s.discvars[v][I]
+
+    # Derivatives in the boundary direction: take the weights and taps the scalar path
+    # would use at a representative point on the face, then express the taps as shifted
+    # slices. The branch that selects them depends only on the index along `x_`, which is
+    # constant across the face, so this is exact.
+    derivrules = Pair[]
+    for d in derivweights.orders[x_]
+        Dop = get(derivweights.map, Differential(x_)^d, nothing)
+        Dop === nothing && continue
+        ws, Itap = try
+            central_difference_weights_and_stencil(
+                Dop, II0, s, filter_interfaces(bcmap[operation(u)][x_]), (j, x_), u
+            )
+        catch e
+            e isa InterruptException && rethrow(e)
+            throw(ArrayDiscretizationFallback("could not build boundary stencil for order $d"))
+        end
+        offsets = [I[j] - II0[j] for I in Itap]
+        all(I -> all(k -> k == j || I[k] == II0[k], 1:N), Itap) ||
+            throw(ArrayDiscretizationFallback("boundary stencil is not axis aligned"))
+        slices = [
+            array_slice(u, s, ranges, indexmap; shiftx = x_, offset = o) for o in offsets
+        ]
+        expr = array_stencil(collect(ws), slices)
+        for v in bcdepvars
+            isequal(depvar(v, s), u) || continue
+            push!(derivrules, safe_unwrap((Differential(x_)^d)(v)) => expr)
+        end
+        push!(derivrules, safe_unwrap((Differential(x_)^d)(u)) => expr)
+    end
+
+    # Dependent variables (both the canonical form and the value on this boundary) map to
+    # the slice over the face.
+    varrules = Pair[]
+    for v in bcdepvars
+        vd = depvar(v, s)
+        push!(varrules, safe_unwrap(v) => array_slice(vd, s, ranges, indexmap))
+    end
+    push!(varrules, safe_unwrap(u) => array_slice(u, s, ranges, indexmap))
+
+    # Independent variables: the boundary's own variable takes its endpoint value (a
+    # scalar), the others vary along the face. This mirrors `axiesvals`.
+    gridrules = Pair[]
+    for x in args
+        if isequal(x, x_)
+            val = lo[j] == 1 ? first(s.axies[x]) : last(s.axies[x])
+            push!(gridrules, safe_unwrap(x) => val)
+        else
+            push!(gridrules, safe_unwrap(x) => array_grid_vals(x, s, ranges, indexmap, N))
+        end
+    end
+
+    ctx = ArrayifyContext(vcat(derivrules, varrules, gridrules), s.time)
+    lhs = arrayify(boundary.eq.lhs, ctx)
+    rhs = arrayify(boundary.eq.rhs, ctx)
+    shape = Tuple(length(ranges[i]) for i in 1:N)
+    if is_array_valued(lhs) && !is_array_valued(rhs)
+        rhs = fill(Symbolics.unwrap(rhs), shape)
+    elseif !is_array_valued(lhs) && is_array_valued(rhs)
+        lhs = fill(Symbolics.unwrap(lhs), shape)
+    elseif !is_array_valued(lhs) && !is_array_valued(rhs)
+        throw(ArrayDiscretizationFallback("boundary condition has no discretizable terms"))
+    end
+    return [lhs ~ rhs]
 end

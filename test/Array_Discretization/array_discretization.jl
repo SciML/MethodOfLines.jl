@@ -34,12 +34,24 @@ end
 # zeros rhs of a slice-form equation) only count when the other side is symbolic, so this
 # counts exactly the array-form equations.
 function narrayeqs(sys)
+    return count(isarrayeq, get_eqs(sys))
+end
+
+function isarrayeq(eq)
     function isarr(x)
         u = Symbolics.unwrap(x)
         return !(u isa AbstractArray) && symtype(u) <: AbstractArray
     end
-    return count(eq -> isarr(eq.lhs) || isarr(eq.rhs), get_eqs(sys))
+    return isarr(eq.lhs) || isarr(eq.rhs)
 end
+
+# Interior equations carry the time derivative; boundary equations do not. Boundary
+# conditions on a face are emitted in array form too, so counting only the interior
+# expresses "the interior collapsed to a single equation" unambiguously.
+isinterioreq(eq) = occursin("Differential(t", string(eq))
+narrayeqs_interior(sys) = count(
+    eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)
+)
 
 @testset "1D linear diffusion, Dirichlet BCs" begin
     @parameters t x
@@ -55,7 +67,7 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # The interior must be a single array equation
-    @test narrayeqs(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 
     # Against the analytic solution
@@ -83,7 +95,7 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
@@ -101,7 +113,7 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.02], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
@@ -119,7 +131,7 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.02], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
@@ -136,7 +148,7 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
@@ -156,7 +168,7 @@ end
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # One array equation for the core, plus scalar frame equations near the boundaries
-    @test narrayeqs(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
@@ -175,7 +187,7 @@ end
     gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => gridvec], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
@@ -199,7 +211,7 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
@@ -223,7 +235,7 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs(sys_arr) == 2
+    @test narrayeqs_interior(sys_arr) == 2
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
     @test sol_arr[v(t, x)] ≈ sol_scal[v(t, x)] rtol = 1.0e-6
 end
@@ -243,7 +255,7 @@ end
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # Periodic BCs are not representable as slices; the whole equation falls back
-    @test narrayeqs(sys_arr) == 0
+    @test narrayeqs_interior(sys_arr) == 0
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
@@ -260,7 +272,7 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs(sys_arr) == 0
+    @test narrayeqs_interior(sys_arr) == 0
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
@@ -281,7 +293,7 @@ end
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs(sys_arr) == 0
+    @test narrayeqs_interior(sys_arr) == 0
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
@@ -401,7 +413,7 @@ end
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], ps)
         sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
         @test any(eq -> hasoperation(eq, ifelse), get_eqs(sys_arr))
-        @test narrayeqs(sys_arr) == 1
+        @test narrayeqs_interior(sys_arr) == 1
         @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
     end
 
@@ -469,7 +481,7 @@ end
         sys_s, _ = symbolic_discretize(pdesys, disc_s)
         (;
             n, arr = interior_size(sys_a), scal = interior_size(sys_s),
-            narr = narrayeqs(sys_a),
+            narr = narrayeqs_interior(sys_a),
         )
     end
 
@@ -523,7 +535,7 @@ end
             [x => 0.1], t; discretization_strategy = ArrayDiscretization()
         )
         sys, _ = symbolic_discretize(pdesys, lenient)
-        @test narrayeqs(sys) == 0
+        @test narrayeqs_interior(sys) == 0
     end
 
     # A supported equation must go through strict mode unchanged.
@@ -531,7 +543,7 @@ end
     bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
     @named ok_sys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
     sys_strict, _ = symbolic_discretize(ok_sys, strict)
-    @test narrayeqs(sys_strict) == 1
+    @test narrayeqs_interior(sys_strict) == 1
 
     # Frame points near a boundary are pointwise under either strategy because their
     # stencils genuinely differ; that is structural, not an unsupported pattern, so
@@ -541,7 +553,7 @@ end
         approx_order = 4
     )
     sys4, _ = symbolic_discretize(ok_sys, strict4)
-    @test narrayeqs(sys4) == 1
+    @test narrayeqs_interior(sys4) == 1
     @test length(get_eqs(sys4)) > 3   # array interior + BCs + scalar frame equations
 
     # The error names the offending equation and the reason.
@@ -559,4 +571,54 @@ end
     @test occursin("StrictArrayDiscretization", msg)
     @test occursin("Reason:", msg)
     @test occursin("ArrayDiscretization()", msg)
+end
+
+@testset "Boundary conditions collapse to one equation per face" begin
+    # Boundaries on a face are sliceable for the same reason the interior is: the index
+    # along the boundary's own direction is fixed across the face, so every point there
+    # selects the same stencil. Without this the boundary stays pointwise and dominates
+    # the equation count in 2D/3D, where it scales with the surface.
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    counts = map([8, 16]) do n
+        disc = MOLFiniteDifference(
+            [x => 1 / (n - 1), y => 1 / (n - 1)], t;
+            discretization_strategy = ArrayDiscretization()
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        length(get_eqs(sys))
+    end
+    # total equation count is independent of resolution in 2D
+    @test counts[1] == counts[2]
+    # one interior equation plus one per face
+    @test counts[1] <= 12
+
+    # and the solution still matches the scalar path exactly
+    sols = map(
+        [ArrayDiscretization(), ScalarizedDiscretization()]
+    ) do st
+        disc = MOLFiniteDifference(
+            [x => 0.1, y => 0.1], t; discretization_strategy = st
+        )
+        solve(
+            discretize(pdesys, disc), Rodas4();
+            reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.025
+        )[u(t, x, y)]
+    end
+    @test sols[1] ≈ sols[2] rtol = 1.0e-8
 end
