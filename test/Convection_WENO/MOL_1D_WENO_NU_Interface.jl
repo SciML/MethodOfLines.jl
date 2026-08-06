@@ -150,3 +150,84 @@ end
     # Dxx crossing a mismatched NU interface is not coordinate-aware; must be rejected.
     @test_throws ArgumentError discretize(pdesys, disc)
 end
+
+# Variable-velocity front across a mismatched NU interface.
+@testset "Variable-velocity front across a mismatched NU interface" begin
+    @parameters t x1 x2
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+
+    v2, xv, δv = 0.5, 0.55, 0.1
+    w_t, t0 = 0.02, 0.15
+    T_MID, T_END = 0.67, 1.3
+
+    s_slow(ξ) = 1 + (1 / v2 - 1) * 0.5 * (1 + tanh((ξ - xv) / δv))
+    Lc(ξ) = log(cosh((ξ - xv) / δv))
+    τ(ξ) = ξ + (1 / v2 - 1) * 0.5 * ((ξ + δv * Lc(ξ)) - δv * Lc(0.0))
+    S(σ) = 0.5 * (1 + tanh((σ - t0) / w_t))
+    c_exact(ξ, tt) = S(tt - τ(ξ))
+
+    function sgrid(a, b, n)
+        xsamp = range(a, b, length = 5001)
+        cdf = cumsum(s_slow.(xsamp))
+        cdf = (cdf .- cdf[1]) ./ (cdf[end] - cdf[1])
+        g = map(range(0, 1, length = n)) do l
+            k = searchsortedfirst(cdf, l)
+            k <= 1 && return float(xsamp[1])
+            θ = (l - cdf[k - 1]) / (cdf[k] - cdf[k - 1])
+            return xsamp[k - 1] + θ * (xsamp[k] - xsamp[k - 1])
+        end
+        g[1] = a
+        g[end] = b
+        @assert all(diff(g) .> 0)
+        return g
+    end
+
+    function abs_l2(usol, uref, xg)
+        w = [diff(xg); xg[end] - xg[end - 1]]
+        return sqrt(sum(w .* abs2.(usol .- uref)) / sum(w))
+    end
+
+    eqs = [
+        Dt(c1(t, x1)) ~ -(1 / s_slow(x1)) * Dx1(c1(t, x1)),
+        Dt(c2(t, x2)) ~ -(1 / s_slow(x2)) * Dx2(c2(t, x2)),
+    ]
+    bcs = [
+        c1(0, x1) ~ c_exact(x1, 0.0),
+        c2(0, x2) ~ c_exact(x2, 0.0),
+        c1(t, 0.0) ~ S(t),
+        c1(t, 0.5) ~ c2(t, 0.5),
+        Dx2(c2(t, 1.0)) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, T_END),
+        x1 ∈ Interval(0.0, 0.5),
+        x2 ∈ Interval(0.5, 1.0),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)]
+    )
+    disc = MOLFiniteDifference(
+        [x1 => sgrid(0.0, 0.5, 101), x2 => sgrid(0.5, 1.0, 201)], t;
+        advection_scheme = WENOScheme()
+    )
+    prob = discretize(pdesys, disc)
+    sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8, saveat = [T_MID, T_END])
+    @test SciMLBase.successful_retcode(sol)
+
+    xs1, xs2 = sol[x1], sol[x2]
+    ts = sol[t]
+    c1s, c2s = sol[c1(t, x1)], sol[c2(t, x2)]
+    @test all(isfinite, c1s) && all(isfinite, c2s)
+
+    @test all(abs(c1s[k, end] - c2s[k, 1]) < 1.0e-8 for k in axes(c1s, 1))
+    lo, hi = extrema(vcat(vec(c1s), vec(c2s)))
+    @test lo > -1.0e-3
+    @test hi < 1 + 1.0e-3
+    for k in eachindex(ts)
+        @test abs_l2(c1s[k, :], c_exact.(xs1, ts[k]), xs1) < 2.0e-2
+        @test abs_l2(c2s[k, :], c_exact.(xs2, ts[k]), xs2) < 2.0e-2
+    end
+end
