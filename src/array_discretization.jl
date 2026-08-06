@@ -79,7 +79,21 @@ function PDEBase.discretize_equation!(
         end
     end
     generate_extrap_eqs!(disc_state, pde, eqvar, s, derivweights, interiormap, bcmap)
-    generate_corner_eqs!(disc_state, s, interiormap, ndims(s.discvars[eqvar]), eqvar)
+    try
+        vcat!(
+            disc_state.bceqs,
+            array_corner_eqs(s, interiormap, eqvar, ndims(s.discvars[eqvar]))
+        )
+    catch e
+        e isa InterruptException && rethrow(e)
+        reason = e isa ArrayDiscretizationFallback ? e.msg : sprint(showerror, e)
+        @debug "ArrayDiscretization falling back to pointwise corner equations: $reason"
+        isstrict(discretization.disc_strategy) && !isbenign(e) &&
+            throw(ArrayDiscretizationError(pde, reason))
+        generate_corner_eqs!(
+            disc_state, s, interiormap, ndims(s.discvars[eqvar]), eqvar
+        )
+    end
 
     interior = interiormap.I[pde]
     eqs = if length(interior) == 0
@@ -647,4 +661,51 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         throw(ArrayDiscretizationFallback("boundary condition has no discretizable terms"))
     end
     return [lhs ~ rhs]
+end
+
+"""
+    array_corner_eqs(s, interiormap, u, N)
+
+Equations for the points that lie outside the interior in two or more dimensions — the
+corners in 2D, and the edges as well as the corners in 3D — as one array equation per
+contiguous box instead of one scalar equation per point.
+
+`generate_corner_eqs!` builds this region with `setdiff`, which yields a bag of indices
+and loses the structure. The region is in fact a union of boxes: along each dimension a
+point lies in the lower band, the interior band, or the upper band, and this region is
+exactly the combinations with at least two non-interior bands. Enumerating those gives
+`3^N - 2N - 1` boxes — none in 1D, the 4 corners in 2D, and the 12 edges plus 8 corners
+in 3D — a count that does not depend on the grid resolution.
+
+Without this the 3D edges stay pointwise and cost `12n - 10` equations, which is what
+keeps 3D at `O(n)` once the faces are sliced.
+"""
+function array_corner_eqs(s, interiormap, u, N)
+    N >= 2 || throw(ArrayDiscretizationFallback("no corner region below 2 dimensions", true))
+    interior = interiormap.I[interiormap.pde[u]]
+    length(interior) == 0 && throw(ArrayDiscretizationFallback("empty interior"))
+    arr = array_variable(u, s)
+    lo = Tuple(first(interior))
+    hi = Tuple(last(interior))
+    dims = size(s.discvars[u])
+
+    # the three bands per dimension: below the interior, the interior, above it
+    bands = map(1:N) do j
+        (1:(lo[j] - 1), lo[j]:hi[j], (hi[j] + 1):dims[j])
+    end
+
+    eqs = Equation[]
+    for combo in Iterators.product(ntuple(_ -> 1:3, N)...)
+        count(!=(2), combo) >= 2 || continue          # needs >= 2 non-interior bands
+        ranges = ntuple(j -> bands[j][combo[j]], N)
+        any(isempty, ranges) && continue
+        shape = map(length, ranges)
+        if prod(shape) == 1
+            # a single point is more clearly written as the scalar equation it is
+            push!(eqs, s.discvars[u][CartesianIndex(map(first, ranges))] ~ 0)
+        else
+            push!(eqs, arr[ranges...] ~ zeros(shape))
+        end
+    end
+    return eqs
 end
