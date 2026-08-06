@@ -26,7 +26,7 @@ u_\infty(x) = -\tanh\left(\frac{x}{2\nu}\right),
 
 an interior layer of width ``O(\nu)`` pinned at ``x = 0`` — the finite-difference prototype of a steep interfacial gradient. With ``\nu = 2 \times 10^{-3}`` the layer is ``\sim 0.01`` wide: a uniform grid needs thousands of points to see it, yet 98% of those points sit in regions where the solution is essentially constant.
 
-The test protocol: start *from* the exact steady state and integrate to ``t = 1``. A perfect scheme holds the layer exactly; a real scheme smears it, shifts it, or rings around it, and the error against ``u_\infty`` measures precisely that. (Starting from a smeared initial profile instead would measure the metastable, ``O(e^{c/\nu})``-slow layer relaxation of viscous Burgers — a property of the physics, not of the discretization.)
+The test protocol: start *from* the exact steady state and integrate to ``t = 1``. Sampled on a grid, ``u_\infty`` is a steady state of the PDE but *not* of the discretized system: any discretization — upwind or WENO, uniform or clustered — has its own discrete steady state, displaced from ``u_\infty`` by its spatial truncation error, and the numerical solution drifts toward it, smearing the layer, shifting it, or oscillating around it. The error against ``u_\infty`` at ``t = 1`` measures exactly this drift: a pure spatial-accuracy metric. (Starting from a smeared initial profile instead would measure the metastable, ``O(e^{c/\nu})``-slow layer relaxation of viscous Burgers — a property of the physics, not of the discretization.)
 
 ```@example showcase
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets, Plots
@@ -81,6 +81,14 @@ clustered_grid(n) = grid_from_density(-1.0, 1.0, n, cluster_density)
 nothing # hide
 ```
 
+The one-line density above encodes the entire grid design, so let's spell out the three choices in it:
+
+  - **Where: at the layer, whose location is known a priori.** The antisymmetric boundary conditions pin the layer's zero crossing at ``x = 0``, so the bump is centered there. This is *static* grid design exploiting known solution structure — the same information available for, say, an electrode/separator interface at a fixed position — not adaptivity: if the feature moved, this grid would not follow it.
+  - **How wide: a small multiple of the layer width.** The Gaussian width ``\sigma = 0.02`` covers the layer (``|u_\infty| < 0.99`` only for ``|x| < 0.011``) with margin on both sides. A Gaussian profile rather than a top-hat keeps ``\rho`` smooth, so adjacent cell widths vary gradually — the non-uniform reconstruction is high-order accurate for smoothly varying spacing and would lose accuracy across abrupt jumps in spacing.
+  - **How much: enough points across the layer.** The amplitude 30 sets a ``31\times`` peak-to-far-field density contrast. At ``N = 129`` this places the smallest cell (``\approx 8.8 \times 10^{-4}``, ``18\times`` finer than the uniform ``\Delta x = 2/128``) at the layer center and ``\sim 25`` of the 129 points across the layer, while the far field coarsens only to ``\approx 2.7 \times 10^{-2}`` — resolution the exponentially flat tails do not need.
+
+The design rule generalizes, and Part B applies it again: make ``\rho`` proportional to the inverse of the local feature width — large where the solution varies steeply, ``\approx 1`` where it is flat — and let the cumulative-integral construction place the points.
+
 ### Holding the layer
 
 We integrate with the SSP integrator `SSPRK33`; the fixed step obeys both the advective and the diffusive stability limit of the smallest cell. The weighted relative ``L^2`` error against ``u_\infty`` is the figure of merit:
@@ -128,7 +136,7 @@ Three regimes, one picture:
 
   - **First-order upwind** replaces the physical viscosity ``\nu`` with its own numerical viscosity ``\sim u\,\Delta x / 2 \approx 8 \times 10^{-3} \gg \nu`` and relaxes the layer to the corresponding *wrong* width.
   - **Uniform WENO at N=257** barely fits the layer into one cell. It stays non-oscillatory (the WENO weights see the layer as a near-discontinuity), but accuracy is limited — and on the *N=129* uniform grid the sub-cell layer is not even stable to integrate. Under-resolution is not a small-error regime; it is a failure regime.
-  - **Clustered WENO at N=129** resolves the layer with ``\sim 25`` points and holds it to a relative error of ``\sim 10^{-4}`` — two orders of magnitude better than the uniform grid with *twice* the points, with the largest overshoot at the ``10^{-8}`` level.
+  - **Clustered WENO at N=129** — the same scheme and point budget as the failing uniform ``N = 129`` run, with the points redistributed by the density engineered above — resolves the layer with the ``\sim 25`` points placed across it and holds it to a relative error of ``\sim 10^{-4}`` — two orders of magnitude better than the uniform grid with *twice* the points, with the largest overshoot at the ``10^{-8}`` level. The gain is attributable entirely to point placement.
 
 ### Error versus degrees of freedom
 
