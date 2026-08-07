@@ -16,10 +16,18 @@ the quickest way to find out whether a given system is fully in array form.
 | Interior, centered even-order derivatives | ✅ array | 1 per PDE |
 | Interior, upwind odd-order derivatives | ✅ array | 1 per PDE |
 | Boundary faces (Dirichlet / Neumann / Robin) | ✅ array | 1 per face |
+| Periodic / self-interface boundaries | ✅ array | 1 per face + O(1) seam points |
 | Corner and edge regions | ✅ array | 1 per box |
 | Near-boundary interior points ("frame") | pointwise | see below |
 
-Both uniform and non-uniform grids are covered, in any number of dimensions. The
+Periodic directions need no special interior handling: the scalar path never takes a
+boundary-stencil branch there (both ends report as interfaces), so the interior stencil
+already applies across the whole axis. The few points whose taps cross the seam are
+emitted individually, which is `O(1)` in grid size, not `O(n)`.
+
+Both uniform and non-uniform grids are covered, in any number of dimensions, except that
+periodic support requires a uniform grid in the periodic direction (the scalar path
+rejects non-uniform interface boundaries outright). The
 resulting system has `3^N` equations for an `N`-dimensional problem, independent of grid
 resolution: one per combination of {below the interior, inside it, above it} per axis.
 
@@ -54,12 +62,12 @@ Same shape as the nonlinear Laplacian plus the `r`-dependent weighting, which is
 value and already expressible as an array. Likely follows immediately from whatever
 approach works for the nonlinear Laplacian.
 
-### Interface and periodic boundary conditions
+### Interface boundaries between two domains
 
-`u(t, 0) ~ u(t, 1)` couples two faces. The faces are individually sliceable, so the
-equation should be expressible as one slice equated to another; the work is in
-`bwrap`-style index wrapping, which currently operates per point, and in the interior
-stencils that wrap across the periodic edge.
+Self-periodic boundaries (`u(t, 0) ~ u(t, 1)`, the same variable and independent variable
+at both ends) are supported. Genuine two-domain interfaces — where the two sides are
+different variables — are not: their stencil taps land in another variable's array, so
+the slice arithmetic does not carry over. These fall back cleanly.
 
 ### Boundary values inside interior equations
 
