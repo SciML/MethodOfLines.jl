@@ -52,6 +52,9 @@ versions = ["lts", "1", "pre"]
 [Wave_Eq_Staggered]
 versions = ["lts", "1", "pre"]
 
+[Array_Discretization]
+versions = ["lts", "1", "pre"]
+
 [Complex]
 versions = ["lts", "1", "pre"]
 

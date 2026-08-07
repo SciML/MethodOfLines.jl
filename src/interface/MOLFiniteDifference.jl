@@ -20,6 +20,11 @@ A discretization algorithm.
 - `grid_align`: The grid alignment types. See [`CenterAlignedGrid`](@ref) and [`EdgeAlignedGrid`](@ref).
 - `use_ODAE`: If `true`, the discretization will use the `ODAEproblem` constructor.
     Defaults to `false`.
+- `discretization_strategy`: How the discretized equations are represented symbolically.
+    `ScalarizedDiscretization()` (the default) generates one scalar equation per interior
+    grid point. `ArrayDiscretization()` generates the interior of each PDE as a single
+    symbolic array equation over slices of the discretized variables, falling back to
+    pointwise scalar equations for patterns with no slice representation.
 - `kwargs`: Any other keyword arguments you want to pass to the `ODEProblem`.
 
 """
