@@ -46,7 +46,7 @@ end
 function MOLFiniteDifference(
         dxs, time = nothing; approx_order = 2,
         advection_scheme = UpwindScheme(), grid_align = CenterAlignedGrid(),
-        discretization_strategy = ScalarizedDiscretization(),
+        discretization_strategy = ArrayDiscretization(),
         upwind_order = nothing, should_transform = true,
         use_ODAE = false, useIR = true, callbacks = [], kwargs...
     )

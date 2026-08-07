@@ -5,8 +5,10 @@ abstract type AbstractDiscretizationStrategy end
 """
     ScalarizedDiscretization()
 
-The default discretization strategy: discretize the `PDESystem` into one scalar equation
-per interior grid point.
+Discretize the `PDESystem` into one scalar equation per interior grid point.
+
+This was the default before v0.12, and remains what [`ArrayDiscretization`](@ref) falls
+back to for patterns with no slice representation.
 
 Pass as `discretization_strategy` to [`MOLFiniteDifference`](@ref).
 """
@@ -14,6 +16,8 @@ struct ScalarizedDiscretization <: AbstractDiscretizationStrategy end
 
 """
     ArrayDiscretization()
+
+The default discretization strategy since v0.12.
 
 Discretize the interior of each PDE into a single symbolic array equation over slices of
 the discretized (array) variables, e.g. for the 1D heat equation with second order
