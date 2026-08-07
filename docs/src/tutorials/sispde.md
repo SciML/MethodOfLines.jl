@@ -27,7 +27,8 @@ where ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 Note here elliptic problem has condition ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 
 ```@example sispde
-using DifferentialEquations, SteadyStateDiffEq, ModelingToolkit, MethodOfLines, DomainSets, Plots
+using OrdinaryDiffEq, OrdinaryDiffEqBDF, SteadyStateDiffEq, ModelingToolkit, MethodOfLines,
+      DomainSets, Plots
 
 # Parameters, variables, and derivatives
 @parameters t x
@@ -86,7 +87,7 @@ prob = discretize(pdesys, discretization);
 
 ```@example sispde
 # Solving SIS reaction diffusion model
-sol = solve(prob, Tsit5(), saveat = 0.2);
+sol = solve(prob, FBDF(), saveat = 0.2);
 
 # Retrieving the results
 discrete_x = sol[x]
@@ -106,7 +107,7 @@ See more solvers in [Steady State Solvers · DifferentialEquations.jl](https://d
 
 ```@example sispde
 steadystateprob = SteadyStateProblem(prob)
-steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
+steadystate = solve(steadystateprob, DynamicSS(FBDF()))
 ```
 
 ### The effect of human mobility on endemic size
@@ -121,7 +122,7 @@ I_vars = filter(s -> contains(string(s), "I("), unknowns(prob.f.sys))
 function episize!(dS_val, dI_val)
     newprob = remake(prob, p = [dS => dS_val, dI => dI_val, brn => 3, ϵ => 0.1])
     steadystateprob = SteadyStateProblem(newprob)
-    steadystate = solve(steadystateprob, DynamicSS(Tsit5()))
+    steadystate = solve(steadystateprob, DynamicSS(FBDF()))
     y = sum(steadystate[v] for v in I_vars) * dx
     return y
 end
