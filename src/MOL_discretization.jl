@@ -56,17 +56,21 @@ function _check_interface_boundarymap(boundarymap, discretization::MOLFiniteDiff
     bs = filter_interfaces(flatten_vardict(boundarymap))
     ascheme = discretization.advection_scheme
     for b in bs
-        mismatched_interface_dxs(b, discretization) || continue
         dx1 = discretization.dxs[Num(b.x)]
         dx2 = discretization.dxs[Num(b.x2)]
+        # Order > 1 upwind stencils are wider than the dynamic interface path
+        # supports. This must be checked before the mismatch gate below, which
+        # would skip same-variable periodic wraps (b.x == b.x2) entirely.
+        if ascheme isa UpwindScheme && ascheme.order > 1 &&
+                (dx1 isa AbstractVector || dx2 isa AbstractVector)
+            throw(ArgumentError("UpwindScheme(order=$(ascheme.order)) is not yet supported with interface or periodic boundary conditions on nonuniform grids, please use the default first order `UpwindScheme()`."))
+        end
+        mismatched_interface_dxs(b, discretization) || continue
         if dx1 isa AbstractVector && dx2 isa AbstractVector
             # NU FunctionalScheme uses exact interface coordinates (bcoord) for advection;
             # dx match waived. Non-advection orders are rejected by validate_interface_orders.
             if ascheme isa FunctionalScheme && ascheme.is_nonuniform
                 continue
-            end
-            if ascheme isa UpwindScheme && ascheme.order > 1
-                throw(ArgumentError("UpwindScheme(order=$(ascheme.order)) is not yet supported with interface or periodic boundary conditions on nonuniform grids, please use the default first order `UpwindScheme()`."))
             end
             # Same-variable periodic wrap: there is no cross-domain interface
             # coordinate to align, so skip the alignment check.

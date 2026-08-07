@@ -351,6 +351,26 @@ end
     @test_throws ArgumentError discretize(pdesys, disc)
 end
 
+@testset "UpwindScheme order > 1 on nonuniform periodic wrap fails gracefully" begin
+    # Same-variable periodic wraps have b.x == b.x2, so they bypass the
+    # mismatched-dx gate; the order guard must still fire for them.
+    xgrid = symmetric_cluster_grid(0.0, 1.0, 41; stretch = 5.0)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+    bcs = [
+        u(0.0, x) ~ sin(2π * x),
+        u(t, 0.0) ~ u(t, 1.0),
+    ]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    disc = MOLFiniteDifference(
+        [x => xgrid], t; advection_scheme = UpwindScheme(2),
+    )
+
+    @test_throws ArgumentError discretize(pdesys, disc)
+end
+
 @testset "Nonuniform interface grids route to AbstractVector topology" begin
     tspan = (0.0, 0.2)
     u0 = x -> sin(2π * x)
