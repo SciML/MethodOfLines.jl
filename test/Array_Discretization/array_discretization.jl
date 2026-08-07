@@ -605,20 +605,26 @@ end
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
-@testset "Default strategy is unchanged (opt-in)" begin
-    # This strategy is opt-in: existing code must keep getting the scalarized
-    # discretization, so that adding it cannot change any current user's results.
+@testset "Default strategy is the array form, with scalar available opt-in" begin
+    # ArrayDiscretization is the default. ScalarizedDiscretization remains available and
+    # is what the array path falls back to for patterns with no slice representation, so
+    # it must stay selectable explicitly.
     @parameters t x
     disc_default = MOLFiniteDifference([x => 0.1], t)
-    @test disc_default.disc_strategy isa ScalarizedDiscretization
+    @test disc_default.disc_strategy isa ArrayDiscretization
 
     disc_steady = MOLFiniteDifference([x => 0.1])
-    @test disc_steady.disc_strategy isa ScalarizedDiscretization
+    @test disc_steady.disc_strategy isa ArrayDiscretization
 
-    disc_opt = MOLFiniteDifference(
-        [x => 0.1], t; discretization_strategy = ArrayDiscretization()
+    disc_scalar = MOLFiniteDifference(
+        [x => 0.1], t; discretization_strategy = ScalarizedDiscretization()
     )
-    @test disc_opt.disc_strategy isa ArrayDiscretization
+    @test disc_scalar.disc_strategy isa ScalarizedDiscretization
+
+    disc_strict = MOLFiniteDifference(
+        [x => 0.1], t; discretization_strategy = StrictArrayDiscretization()
+    )
+    @test disc_strict.disc_strategy isa StrictArrayDiscretization
 end
 
 @testset "Interior representation is independent of grid resolution" begin
