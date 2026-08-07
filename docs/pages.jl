@@ -21,6 +21,7 @@ pages = [
     "Curvilinear Grids" => "curvilinear_grids.md",
     "FAQs" => "faq.md",
     "How it Works" => "howitworks.md",
+    "Array Discretization Coverage" => "array_discretization_coverage.md",
     "Notes for Developers: Implement a Scheme" => "devnotes.md",
     "Generated Examples" => ["generated/bruss_code.md", "generated/bruss_ode_eqs.md"],
     "API Reference" => ["api/discretization.md", "api/utils.md"],
