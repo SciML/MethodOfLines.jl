@@ -240,11 +240,10 @@ end
     @test sol_arr[v(t, x)] ≈ sol_scal[v(t, x)] rtol = 1.0e-6
 end
 
-@testset "Fallback: periodic BCs still match the scalar path" begin
+@testset "1D periodic BCs" begin
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
-    Dx = Differential(x)
     Dxx = Differential(x)^2
 
     eq = Dt(u(t, x)) ~ Dxx(u(t, x))
@@ -254,9 +253,189 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    # Periodic BCs are not representable as slices; the whole equation falls back
-    @test narrayeqs_interior(sys_arr) == 0
+    # The stencil is translation invariant across the whole periodic direction, so the
+    # interior is one array equation plus the points whose stencils wrap over the seam,
+    # which in 1D are single points and stay scalar.
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+
+    # The periodic solution is a decaying sine wave
+    xdisc = sol_arr[x]
+    tdisc = sol_arr[t]
+    exact = [exp(-4 * pi^2 * ti) * sinpi(2xi) for ti in tdisc, xi in xdisc]
+    @test maximum(abs.(sol_arr[u(t, x)] .- exact)) < 1.0e-2
+end
+
+@testset "1D periodic advection" begin
+    # The winding (upwind) stencils wrap over the seam as well, and asymmetrically: only
+    # one end of the interior needs the extra equations for each wind direction.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ -1.5 * Dx(u(t, x)) + 0.02 * Dxx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.02], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+end
+
+@testset "2D periodic BCs in both directions" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+    bcs = [
+        u(0, x, y) ~ sinpi(2x) * sinpi(2y),
+        u(t, 0, y) ~ u(t, 1, y),
+        u(t, x, 0) ~ u(t, x, 1),
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.02), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    # One equation for the points whose stencils do not wrap, one for each of the four
+    # slabs along the seams, and a scalar one for each of the four points where two seams
+    # meet: the slabs are the array equations that make this scale.
+    @test narrayeqs_interior(sys_arr) == 5
+    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
+
+    # and the equation count does not grow with the grid
+    counts = map([8, 16]) do n
+        disc = MOLFiniteDifference(
+            [x => 1 / (n - 1), y => 1 / (n - 1)], t;
+            discretization_strategy = ArrayDiscretization()
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        length(get_eqs(sys))
+    end
+    @test counts[1] == counts[2]
+end
+
+@testset "2D periodic in one direction, Dirichlet in the other" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+    bcs = [
+        u(0, x, y) ~ sinpi(2x) * sinpi(y),
+        u(t, 0, y) ~ u(t, 1, y),
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.02), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    # the core plus one slab per seam in x; y contributes no wrapping
+    @test narrayeqs_interior(sys_arr) == 3
+    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
+end
+
+@testset "Brusselator: coupled 2D system, periodic in both directions" begin
+    @parameters x y t
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    ∇²(w) = Dxx(w) + Dyy(w)
+
+    brusselator_f(x, y, t) = (((x - 0.3)^2 + (y - 0.6)^2) <= 0.1^2) * (t >= 1.1) * 5.0
+    α = 10.0
+    u0(x, y, t) = 22(y * (1 - y))^(3 / 2)
+    v0(x, y, t) = 27(x * (1 - x))^(3 / 2)
+
+    eqs = [
+        Dt(u(x, y, t)) ~ 1.0 + v(x, y, t) * u(x, y, t)^2 - 4.4 * u(x, y, t) +
+            α * ∇²(u(x, y, t)) + brusselator_f(x, y, t),
+        Dt(v(x, y, t)) ~ 3.4 * u(x, y, t) - v(x, y, t) * u(x, y, t)^2 +
+            α * ∇²(v(x, y, t)),
+    ]
+    domains = [
+        x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0), t ∈ Interval(0.0, 2.0),
+    ]
+    bcs = [
+        u(x, y, 0) ~ u0(x, y, 0),
+        u(0, y, t) ~ u(1, y, t),
+        u(x, 0, t) ~ u(x, 1, t),
+        v(x, y, 0) ~ v0(x, y, 0),
+        v(0, y, t) ~ v(1, y, t),
+        v(x, 0, t) ~ v(x, 1, t),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [x, y, t], [u(x, y, t), v(x, y, t)])
+
+    # five interior equations per variable, as in the single variable 2D case
+    counts = map([8, 16]) do n
+        disc = MOLFiniteDifference(
+            [x => 1 / n, y => 1 / n], t; discretization_strategy = ArrayDiscretization()
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        (; narr = narrayeqs_interior(sys), n = length(get_eqs(sys)))
+    end
+    @test counts[1].narr == 10
+    @test counts[1].n == counts[2].n
+
+    sols = map([ArrayDiscretization(), ScalarizedDiscretization()]) do st
+        disc = MOLFiniteDifference(
+            [x => 1 / 8, y => 1 / 8], t; discretization_strategy = st
+        )
+        sol = solve(
+            discretize(pdesys, disc), Rodas4();
+            reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.5
+        )
+        (sol[u(x, y, t)], sol[v(x, y, t)])
+    end
+    @test sols[1][1] ≈ sols[2][1] rtol = 1.0e-8
+    @test sols[1][2] ≈ sols[2][2] rtol = 1.0e-8
+end
+
+@testset "Fallback: interface joining two variables on two domains" begin
+    # An interface between two domains shifts the stencil taps onto another variable's
+    # array; that has no slice form here, so it must fall back rather than error.
+    @parameters t x1 x2
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+    Dxx1 = Dx1^2
+    Dxx2 = Dx2^2
+
+    eqs = [Dt(c1(t, x1)) ~ Dxx1(c1(t, x1)), Dt(c2(t, x2)) ~ Dxx2(c2(t, x2))]
+    bcs = [
+        c1(0, x1) ~ -x1 * (x1 - 1) * sin(x1),
+        c2(0, x2) ~ -x2 * (x2 - 1) * sin(x2),
+        c1(t, 0) ~ 0.0,
+        c1(t, 0.5) ~ c2(t, 0.5),
+        -Dx1(c1(t, 0.5)) ~ -Dx2(c2(t, 0.5)),
+        c2(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x1 => 0.05, x2 => 0.05], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 0
+    @test sol_arr[c1(t, x1)] ≈ sol_scal[c1(t, x1)] rtol = 1.0e-6
+    @test sol_arr[c2(t, x2)] ≈ sol_scal[c2(t, x2)] rtol = 1.0e-6
 end
 
 @testset "Fallback: nonlinear laplacian still matches the scalar path" begin
@@ -519,11 +698,6 @@ end
             Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1),
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         ),
-        (
-            "periodic BC",
-            Dt(u(t, x)) ~ Dxx(u(t, x)),
-            [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
-        ),
     ]
     for (name, eq, bcs) in unsupported
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
@@ -544,6 +718,14 @@ end
     @named ok_sys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
     sys_strict, _ = symbolic_discretize(ok_sys, strict)
     @test narrayeqs_interior(sys_strict) == 1
+
+    # Periodic boundaries are supported: the points whose stencils wrap over the seam are
+    # pointwise for the same structural reason the frame is, so strict mode accepts them.
+    @named periodic_sys = PDESystem(
+        eq, [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)], domains, [t, x], [u(t, x)]
+    )
+    sys_periodic, _ = symbolic_discretize(periodic_sys, strict)
+    @test narrayeqs_interior(sys_periodic) == 1
 
     # Frame points near a boundary are pointwise under either strategy because their
     # stencils genuinely differ; that is structural, not an unsupported pattern, so
