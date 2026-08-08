@@ -27,19 +27,68 @@ function mismatched_interface_dxs(b, discretization::MOLFiniteDifference)
     return discretization.dxs[Num(b.x)] != discretization.dxs[Num(b.x2)]
 end
 
+function _interface_physical_coords(b, grid1, grid2)
+    if isupper(b)
+        return grid1[end], grid2[1]
+    else
+        return grid1[1], grid2[end]
+    end
+end
+
+function _interface_coords_aligned(coord1, coord2, grid1, grid2)
+    scale = max(abs(grid1[end] - grid1[1]), abs(grid2[end] - grid2[1]))
+    return isapprox(coord1, coord2; atol = sqrt(eps(float(one(scale)))) * scale)
+end
+
+function PDEBase.check_boundarymap(
+        boundarymap, v::PDEBase.VariableMap, discretization::MOLFiniteDifference
+    )
+    return _check_interface_boundarymap(boundarymap, discretization)
+end
+
+# Kept for backwards compatibility with direct 2-arg calls; the PDEBase
+# discretization pipeline invokes the 3-arg hook above.
 function PDEBase.check_boundarymap(boundarymap, discretization::MOLFiniteDifference)
+    return _check_interface_boundarymap(boundarymap, discretization)
+end
+
+function _check_interface_boundarymap(boundarymap, discretization::MOLFiniteDifference)
     bs = filter_interfaces(flatten_vardict(boundarymap))
     ascheme = discretization.advection_scheme
     for b in bs
-        if mismatched_interface_dxs(b, discretization)
+        dx1 = discretization.dxs[Num(b.x)]
+        dx2 = discretization.dxs[Num(b.x2)]
+        # Order > 1 upwind stencils are wider than the dynamic interface path
+        # supports. This must be checked before the mismatch gate below, which
+        # would skip same-variable periodic wraps (b.x == b.x2) entirely.
+        if ascheme isa UpwindScheme && ascheme.order > 1 &&
+                (dx1 isa AbstractVector || dx2 isa AbstractVector)
+            throw(ArgumentError("UpwindScheme(order=$(ascheme.order)) is not yet supported with interface or periodic boundary conditions on nonuniform grids, please use the default first order `UpwindScheme()`."))
+        end
+        mismatched_interface_dxs(b, discretization) || continue
+        if dx1 isa AbstractVector && dx2 isa AbstractVector
             # NU FunctionalScheme uses exact interface coordinates (bcoord) for advection;
             # dx match waived. Non-advection orders are rejected by validate_interface_orders.
-            if ascheme isa FunctionalScheme && ascheme.is_nonuniform &&
-                    discretization.dxs[Num(b.x)] isa AbstractVector &&
-                    discretization.dxs[Num(b.x2)] isa AbstractVector
+            if ascheme isa FunctionalScheme && ascheme.is_nonuniform
                 continue
             end
-            throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same. If you need nonuniform interface boundaries please post an issue on GitHub."))
+            # Same-variable periodic wrap: there is no cross-domain interface
+            # coordinate to align, so skip the alignment check.
+            isequal(b.x, b.x2) && continue
+            # UpwindScheme supports nonuniform grids across the interface as long as the
+            # physical coordinates align at the interface boundary.
+            coord1, coord2 = _interface_physical_coords(b, dx1, dx2)
+            if !_interface_coords_aligned(coord1, coord2, dx1, dx2)
+                throw(
+                    ArgumentError(
+                        "The physical coordinates at the interface between $(b.x) and $(b.x2) must match for nonuniform grids, got $coord1 and $coord2 at the interface. Please ensure the grids align at the interface boundary. Note that cross-domain periodic (ring) topologies are not supported on nonuniform grids."
+                    )
+                )
+            end
+        elseif dx1 isa AbstractVector || dx2 isa AbstractVector
+            throw(ArgumentError("The interface between $(b.x) and $(b.x2) mixes a scalar step size with a nonuniform grid vector, please supply the same kind of grid on both sides."))
+        else
+            throw(ArgumentError("The step size of the connected variables $(b.x) and $(b.x2) must be the same."))
         end
     end
     return
@@ -68,7 +117,7 @@ function get_discrete(pdesys, discretization)
     # Create a map of each variable to their boundary conditions including initial conditions
     boundarymap = PDEBase.parse_bcs(get_bcs(pdesys), v, bcorders)
     # Check that the boundary map is valid
-    PDEBase.check_boundarymap(boundarymap, discretization)
+    PDEBase.check_boundarymap(boundarymap, v, discretization)
 
     # Transform system so that it is compatible with the discretization
     if should_transform(pdesys, discretization, boundarymap)
