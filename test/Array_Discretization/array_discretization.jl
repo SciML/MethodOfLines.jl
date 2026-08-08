@@ -455,7 +455,10 @@ end
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
-@testset "Fallback: WENO scheme still matches the scalar path" begin
+@testset "WENO advection on a uniform grid" begin
+    # WENO's smoothness indicators make its weights solution dependent, but its taps are
+    # the same offsets at every interior point, so the scheme traces once into a single
+    # array expression whose (nonlinear) weights broadcast elementwise.
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -472,8 +475,131 @@ end
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
+
+    # the scheme is traced once, so the equation count is resolution independent
+    counts = map([51, 101]) do n
+        disc = MOLFiniteDifference(
+            [x => 1 / (n - 1)], t; advection_scheme = WENOScheme(),
+            discretization_strategy = ArrayDiscretization()
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        length(get_eqs(sys))
+    end
+    @test counts[1] == counts[2]
+end
+
+@testset "WENO advection with a coefficient and diffusion" begin
+    # The scheme replaces the bare first derivative, so a coefficient multiplying it (and
+    # any other derivative in the equation) goes through the general broadcast path.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ -(1.0 + x) * Dx(u(t, x)) + 0.05 * Dxx(u(t, x))
+    bcs = [u(0, x) ~ exp(-100 * (x - 0.3)^2), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(
+        pdesys, [x => 0.02], t;
+        disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-4)
+    )
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
+end
+
+@testset "WENO advection with periodic boundaries" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(
+        pdesys, [x => 0.02], t;
+        disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-3)
+    )
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    # one array equation for the points whose taps do not wrap, the rest pointwise
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
+end
+
+@testset "Fallback: WENO advection on a nonuniform grid" begin
+    # The nonuniform scheme's stepsize and coordinate arguments vary from point to point,
+    # so it has no single traced form; this must fall back, not error.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+    bcs = [u(0, x) ~ exp(-100 * (x - 0.3)^2), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    gridvec = [0.5 * (1 - cospi(i / 40)) for i in 0:40]
+    sol_arr, sol_scal, sys_arr = solve_both(
+        pdesys, [x => gridvec], t;
+        disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-4)
+    )
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 0
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
+end
+
+@testset "User defined functional advection schemes" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, x))
+    bcs = [u(0, x) ~ exp(-100 * (x - 0.3)^2), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    # A scheme of the taps alone traces into one array expression like WENO does.
+    central3(u, p, t, x, dx) = (u[3] - u[1]) / (2dx)
+    scheme = FunctionalScheme{3, 1}(
+        central3, [nothing], [nothing], false, []; name = "central3"
+    )
+    sol_arr, sol_scal, sys_arr = solve_both(
+        pdesys, [x => 0.02], t;
+        disc_kwargs = (; advection_scheme = scheme), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-3)
+    )
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
+
+    # A scheme that uses the grid coordinate falls back: the scalar path folds those
+    # (numeric) coordinates in Float64, which a traced form cannot reproduce digit for
+    # digit, and this strategy may not change the numbers.
+    coord3(u, p, t, x, dx) = (u[3] - u[1]) / (x[3] - x[1])
+    xscheme = FunctionalScheme{3, 1}(
+        coord3, [nothing], [nothing], false, []; name = "coord3"
+    )
+    sol_arr2, sol_scal2, sys_arr2 = solve_both(
+        pdesys, [x => 0.02], t;
+        disc_kwargs = (; advection_scheme = xscheme), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-3)
+    )
+    @test sol_arr2.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr2) == 0
+    @test sol_arr2[u(t, x)] == sol_scal2[u(t, x)]
 end
 
 @testset "Stationary (NonlinearProblem) still works with ArrayDiscretization" begin
@@ -737,6 +863,28 @@ end
     sys4, _ = symbolic_discretize(ok_sys, strict4)
     @test narrayeqs_interior(sys4) == 1
     @test length(get_eqs(sys4)) > 3   # array interior + BCs + scalar frame equations
+
+    # A functional advection scheme with no single traced form is unsupported, where the
+    # same scheme on a uniform grid is not.
+    @named adv = PDESystem(
+        Dt(u(t, x)) ~ -Dx(u(t, x)),
+        [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        domains, [t, x], [u(t, x)]
+    )
+    strict_nu = MOLFiniteDifference(
+        [x => [0.5 * (1 - cospi(i / 20)) for i in 0:20]], t;
+        discretization_strategy = StrictArrayDiscretization(),
+        advection_scheme = WENOScheme()
+    )
+    @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
+        adv, strict_nu
+    )
+    strict_weno = MOLFiniteDifference(
+        [x => 0.05], t; discretization_strategy = StrictArrayDiscretization(),
+        advection_scheme = WENOScheme()
+    )
+    sys_weno, _ = symbolic_discretize(adv, strict_weno)
+    @test narrayeqs_interior(sys_weno) == 1
 
     # The error names the offending equation and the reason.
     @named bad = PDESystem(

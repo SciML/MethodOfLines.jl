@@ -16,7 +16,7 @@
 # `array_bands`, a count that does not depend on the grid resolution.
 #
 # When an equation contains a pattern that is not representable as slice broadcasts
-# (WENO/functional advection schemes, nonlinear or spherical laplacians, integrals,
+# (nonuniform functional advection schemes, nonlinear or spherical laplacians, integrals,
 # mixed derivatives, interfaces joining two different variables, boundary values appearing
 # in the interior equation, callbacks, staggered grids, variables of differing
 # dimensionality), the whole equation falls back to pointwise scalar discretization,
@@ -156,8 +156,12 @@ function discretize_equation_array_form(
     )
     get_grid_type(s) <: StaggeredGrid &&
         throw(ArrayDiscretizationFallback("staggered grids are not supported"))
-    derivweights.advection_scheme isa UpwindScheme ||
-        throw(ArrayDiscretizationFallback("only UpwindScheme advection is supported"))
+    derivweights.advection_scheme isa Union{UpwindScheme, FunctionalScheme} ||
+        throw(
+        ArrayDiscretizationFallback(
+            "unsupported advection scheme $(derivweights.advection_scheme)"
+        )
+    )
 
     args = ivs(eqvar, s)
     for u in depvars
@@ -255,7 +259,12 @@ function array_core_equation(
         terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
         vcat(varrules, gridrules), periodic
     )
-    ctx = ArrayifyContext(vcat(windrules, derivrules, varrules, gridrules), s.time)
+    advrules = array_advection_rules(
+        s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
+    )
+    ctx = ArrayifyContext(
+        vcat(windrules, advrules, derivrules, varrules, gridrules), s.time
+    )
 
     lhs = arrayify(pde.lhs, ctx)
     rhs = arrayify(pde.rhs, ctx)
@@ -325,9 +334,18 @@ function array_periodic_dims(s, depvars, args, bcmap)
 end
 
 """
+Whether the derivative of order `d` is discretized by a functional advection scheme
+(WENO and friends) rather than by the winding rules, mirroring the branch on the advection
+scheme in `generate_finite_difference_rules`: only the first derivative is handled by the
+scheme, the higher odd orders still wind.
+"""
+array_functional_advection(derivweights, d) =
+    d == 1 && derivweights.advection_scheme isa FunctionalScheme
+
+"""
 The most negative and most positive tap offsets any derivative in the equation applies in
-direction `x`, mirroring the interior branches of `central_difference_weights_and_stencil`
-and `_upwind_difference`.
+direction `x`, mirroring the interior branches of `central_difference_weights_and_stencil`,
+`_upwind_difference` and `get_f_taps_coords`.
 """
 function array_tap_extents(x, pdeorders, derivweights)
     mintap = 0
@@ -336,6 +354,10 @@ function array_tap_extents(x, pdeorders, derivweights)
         if iseven(d)
             Dop = derivweights.map[Differential(x)^d]
             taps = half_range(Dop.stencil_length)
+            mintap = min(mintap, first(taps))
+            maxtap = max(maxtap, last(taps))
+        elseif array_functional_advection(derivweights, d)
+            taps = half_range(derivweights.advection_scheme.interior_points)
             mintap = min(mintap, first(taps))
             maxtap = max(maxtap, last(taps))
         else
@@ -387,6 +409,13 @@ function array_bands(interior, s, args, pdeorders, derivweights, indexmap, perio
                     bpc = derivweights.map[Differential(x)^d].boundary_point_count
                     lo = max(lo, bpc + 1)
                     hi = min(hi, n - bpc)
+                elseif array_functional_advection(derivweights, d)
+                    # the branch conditions of `get_f_taps_coords`: points within
+                    # `length(F.lower)` of the start, or `length(F.upper)` of the end, take
+                    # a boundary function of the scheme instead of its interior one
+                    F = derivweights.advection_scheme
+                    lo = max(lo, length(F.lower) + 1)
+                    hi = min(hi, n - length(F.upper))
                 else
                     lo = max(lo, derivweights.windmap[2][Differential(x)^d].offside + 1)
                     hi = min(
@@ -605,13 +634,86 @@ function array_winding_select(
     )
 end
 
+"""
+Placeholder symbols standing in for one argument vector of a functional scheme while it is
+traced. They are substituted away before the expression leaves `array_function_scheme`, so
+they never reach the discretized system; the `##` prefix keeps them clear of user names.
+"""
+array_scheme_syms(tag, n) = [Symbolics.variable(Symbol("##mol_scheme_", tag), i) for i in 1:n]
+
+"""
+Array form of `function_scheme` on the interior branch, for the first derivative of `u` in
+`x` under a functional advection scheme (WENO and friends).
+
+The scheme is translation invariant on the interior — the same function applied to the same
+tap offsets at every point — so it can be traced once on placeholder symbols and its taps
+then replaced by shifted slices, instead of being retraced at every grid point. That the
+scheme's weights are solution dependent, as WENO's smoothness indicators are, costs nothing
+here: they are arithmetic on the taps like any other term, so `arrayify` broadcasts them
+elementwise along with the rest of the expression.
+
+The scheme's independent variable argument takes a different value at each point of the
+slice, so a scheme that uses it would have to be traced symbolically in that argument too,
+and the arithmetic Julia folds over those (numeric) coordinates in the scalar path would be
+rebuilt as symbolic operations, in general reassociated. Those fall back rather than risk
+differing from the scalar path in the last digits, as do nonuniform grids, whose stepsize
+argument varies from point to point in the same way.
+"""
+function array_function_scheme(F, s, u, x, ranges, indexmap, periodic)
+    dx = s.dxs[x]
+    dx isa Number ||
+        throw(ArrayDiscretizationFallback("$(F.name) advection on a nonuniform grid"))
+    # `get_f_taps_coords` rejects a stencil that wraps more than once around the seam
+    (haskey(periodic, x) && periodic[x] - 1 < F.interior_points) &&
+        throw(ArrayDiscretizationFallback("too few points in $x for $(F.name) to wrap"))
+    taps = half_range(F.interior_points)
+    usyms = array_scheme_syms("u", length(taps))
+    xsyms = array_scheme_syms("x", length(taps))
+    expr = try
+        F.interior(usyms, vcat(F.ps, params(s)), Num(s.time), xsyms, dx)
+    catch e
+        e isa InterruptException && rethrow(e)
+        throw(ArrayDiscretizationFallback("could not evaluate scheme $(F.name)"))
+    end
+    any(
+        v -> any(y -> isequal(v, safe_unwrap(y)), xsyms),
+        Symbolics.get_variables(expr)
+    ) && throw(
+        ArrayDiscretizationFallback("scheme $(F.name) depends on the grid coordinate")
+    )
+    slices = [
+        array_slice(u, s, ranges, indexmap; shiftx = x, offset = k, periodic = periodic)
+            for k in taps
+    ]
+    rules = [safe_unwrap(usyms[k]) => slices[k] for k in eachindex(taps)]
+    return arrayify(expr, ArrayifyContext(rules, s.time))
+end
+
+@inline function array_advection_rules(
+        s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
+    )
+    F = derivweights.advection_scheme
+    F isa FunctionalScheme || return Pair[]
+    rules = Pair[]
+    for u in depvars, x in ivs(depvar(u, s), s)
+        1 in pdeorders[x] || continue
+        push!(
+            rules,
+            safe_unwrap(Differential(x)(u)) => array_function_scheme(
+                F, s, u, x, ranges, indexmap, periodic
+            )
+        )
+    end
+    return rules
+end
+
 @inline function array_winding_rules(
         terms, s, depvars, pdeorders, derivweights, ranges, indexmap, baserules, periodic
     )
     coefctx = ArrayifyContext(baserules, s.time)
     ruleobjs = []
     for u in depvars, x in ivs(depvar(u, s), s)
-        for d in filter(isodd, pdeorders[x])
+        for d in filter(d -> isodd(d) && !array_functional_advection(derivweights, d), pdeorders[x])
             push!(
                 ruleobjs,
                 @rule *(
@@ -646,7 +748,7 @@ end
     # Default rules for bare odd derivatives (no coefficient): positive winding,
     # mirroring the tail of `generate_winding_rules`.
     for u in depvars, x in ivs(depvar(u, s), s)
-        for d in filter(isodd, pdeorders[x])
+        for d in filter(d -> isodd(d) && !array_functional_advection(derivweights, d), pdeorders[x])
             push!(
                 windrules,
                 safe_unwrap((Differential(x)^d)(u)) => array_upwind_difference(
