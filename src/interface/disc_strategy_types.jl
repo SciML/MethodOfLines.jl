@@ -33,7 +33,8 @@ that their stencil differs from the translation-invariant interior stencil. Boun
 values appearing in an interior equation (e.g. `u(t, 1)`) are substituted for the
 corresponding array element or face slice on every array box, including size-1 wrap
 boxes. Nonlinear Laplacians `Dx(a(u) * Dx(u))`, spherical Laplacians
-`r^-2 Dr(r^2 Dr(u))` and staggered grids are supported in slice form.
+`r^-2 Dr(r^2 Dr(u))`, mixed first-order derivatives `Dx(Dy(u))` and staggered grids
+are supported in slice form.
 Functional advection schemes (WENO and user schemes) are supported on
 uniform grids, and on nonuniform grids for schemes that provide a coefficient split
 (WENO does; user schemes opt in by defining a method on
@@ -41,7 +42,7 @@ uniform grids, and on nonuniform grids for schemes that provide a coefficient sp
 equations.
 Equations containing patterns with no slice representation (functional advection on
 periodic nonuniform grids, nonuniform schemes without a coefficient split, schemes that
-read the grid coordinate, integrals, mixed derivatives, interfaces
+read the grid coordinate, integrals, interfaces
 joining two different variables, derivatives of boundary values,
 time-literal references such as `u(0, x)`, boundary values on edge-aligned grids,
 stationary systems) automatically fall back to pointwise scalar equations, matching
