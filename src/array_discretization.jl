@@ -17,10 +17,10 @@
 #
 # When an equation contains a pattern that is not representable as slice broadcasts
 # (WENO/functional advection schemes, nonlinear or spherical laplacians, integrals,
-# mixed derivatives, interfaces joining two different variables, boundary values appearing
-# in the interior equation, callbacks, staggered grids, variables of differing
-# dimensionality), the whole equation falls back to pointwise scalar discretization,
-# producing numerics identical to `ScalarizedDiscretization`.
+# interfaces joining two different variables, boundary values appearing in the interior
+# equation, callbacks, staggered grids, variables of differing dimensionality), the whole
+# equation falls back to pointwise scalar discretization, producing numerics identical to
+# `ScalarizedDiscretization`.
 
 struct ArrayDiscretizationFallback <: Exception
     msg::String
@@ -167,8 +167,10 @@ function discretize_equation_array_form(
     periodic = array_periodic_dims(s, depvars, args, bcmap)
 
     pdeorders = Dict(x => d_orders(x, [pde]) for x in args)
+    mixedterms = array_mixed_terms(pde, depvars, args)
+    mixeddirs = unique(reduce(vcat, [[x, y] for (_, x, y) in mixedterms], init = []))
     bands, clean = array_bands(
-        interior, s, args, pdeorders, derivweights, indexmap, periodic
+        interior, s, args, pdeorders, derivweights, indexmap, periodic, mixeddirs
     )
     any(isempty, bands) && throw(ArrayDiscretizationFallback("empty core region"))
     N = length(args)
@@ -186,7 +188,6 @@ function discretize_equation_array_form(
     )
     terms = split_terms(pde, s.x̄)
     special_rules = vcat(
-        vec(generate_mixed_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms)),
         vec(generate_nonlinlap_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms)),
         vec(
             generate_spherical_diffusion_rules(
@@ -221,7 +222,7 @@ function discretize_equation_array_form(
         end
         return array_core_equation(
             pde, Dict(j => rs[j] for j in 1:N), s, depvars, derivweights,
-            args, pdeorders, indexmap, terms, periodic
+            args, pdeorders, indexmap, terms, periodic, mixedterms
         )
     end
 
@@ -239,7 +240,8 @@ The array equation for one box of the interior, given as `ranges` (dimension => 
 range).
 """
 function array_core_equation(
-        pde, ranges, s, depvars, derivweights, args, pdeorders, indexmap, terms, periodic
+        pde, ranges, s, depvars, derivweights, args, pdeorders, indexmap, terms, periodic,
+        mixedterms = ()
     )
     N = length(args)
     shape = ntuple(j -> length(ranges[j]), N)
@@ -251,11 +253,16 @@ function array_core_equation(
     derivrules = array_cartesian_rules(
         s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
     )
+    mixedrules = array_mixed_rules(
+        mixedterms, s, derivweights, ranges, indexmap, periodic
+    )
     windrules = array_winding_rules(
         terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
         vcat(varrules, gridrules), periodic
     )
-    ctx = ArrayifyContext(vcat(windrules, derivrules, varrules, gridrules), s.time)
+    ctx = ArrayifyContext(
+        vcat(mixedrules, windrules, derivrules, varrules, gridrules), s.time
+    )
 
     lhs = arrayify(pde.lhs, ctx)
     rhs = arrayify(pde.rhs, ctx)
@@ -328,10 +335,19 @@ end
 The most negative and most positive tap offsets any derivative in the equation applies in
 direction `x`, mirroring the interior branches of `central_difference_weights_and_stencil`
 and `_upwind_difference`.
+
+A mixed derivative reaches along `x` with the *centered* first order stencil rather than
+the winding one `pdeorders` would select for order 1, so those directions take its taps
+too.
 """
-function array_tap_extents(x, pdeorders, derivweights)
+function array_tap_extents(x, pdeorders, derivweights, mixeddirs = ())
     mintap = 0
     maxtap = 0
+    if any(y -> isequal(y, x), mixeddirs)
+        taps = half_range(derivweights.map[Differential(x)].stencil_length)
+        mintap = min(mintap, first(taps))
+        maxtap = max(maxtap, last(taps))
+    end
     for d in pdeorders[x]
         if iseven(d)
             Dop = derivweights.map[Differential(x)^d]
@@ -365,7 +381,9 @@ one range each keeps every tap of every box a single contiguous slice, at the co
 handful of extra equations — as many as the stencil is wide, so the count still does not
 depend on the grid resolution.
 """
-function array_bands(interior, s, args, pdeorders, derivweights, indexmap, periodic)
+function array_bands(
+        interior, s, args, pdeorders, derivweights, indexmap, periodic, mixeddirs = ()
+    )
     N = length(args)
     bands = [UnitRange{Int}[] for _ in 1:N]
     clean = Vector{Union{Nothing, Int}}(nothing, N)
@@ -374,7 +392,7 @@ function array_bands(interior, s, args, pdeorders, derivweights, indexmap, perio
         lo = first(interior)[j]
         hi = last(interior)[j]
         n = length(s, x)
-        mintap, maxtap = array_tap_extents(x, pdeorders, derivweights)
+        mintap, maxtap = array_tap_extents(x, pdeorders, derivweights, mixeddirs)
         if !haskey(periodic, x)
             # Taps must stay in range, and no point may take a boundary branch: the
             # centered one at II <= boundary_point_count or II > n - boundary_point_count,
@@ -382,6 +400,11 @@ function array_bands(interior, s, args, pdeorders, derivweights, indexmap, perio
             # II > n - boundary_point_count.
             lo = max(lo, 1 - mintap)
             hi = min(hi, n - maxtap)
+            if any(y -> isequal(y, x), mixeddirs)
+                bpc = derivweights.map[Differential(x)].boundary_point_count
+                lo = max(lo, bpc + 1)
+                hi = min(hi, n - bpc)
+            end
             for d in pdeorders[x]
                 if iseven(d)
                     bpc = derivweights.map[Differential(x)^d].boundary_point_count
@@ -450,20 +473,36 @@ function array_variable(u, s)
 end
 
 """
+A slice of the array variable for `u` over the core region, shifted by `offsets[j]` in each
+dimension `j` it names and wrapped around the seam where that dimension is periodic (see
+`wrap_periodic_range`). Dimensions absent from `offsets` are taken unshifted and unwrapped,
+which is what the scalar path does with the dimensions a stencil does not reach along.
+
+Naming a dimension with offset `0` is not the same as omitting it: `_wrapperiodic` maps the
+first index of a periodic dimension onto the last for every tap of a stencil that reaches
+along it, the centre tap included.
+"""
+function array_shifted_slice(u, s, ranges, indexmap, offsets, periodic)
+    arr = array_variable(depvar(u, s), s)
+    rs = map(ivs(depvar(u, s), s)) do y
+        j = indexmap[y]
+        r = ranges[j]
+        haskey(offsets, j) || return r
+        r = r .+ offsets[j]
+        return (periodic !== nothing && haskey(periodic, y)) ?
+            wrap_periodic_range(r, periodic[y]) : r
+    end
+    return arr[rs...]
+end
+
+"""
 A slice of the array variable for `u` over the core region, optionally shifted by
 `offset` in the dimension of `shiftx`, wrapped around the seam if that dimension is
 periodic (see `wrap_periodic_range`).
 """
 function array_slice(u, s, ranges, indexmap; shiftx = nothing, offset = 0, periodic = nothing)
-    arr = array_variable(depvar(u, s), s)
-    rs = map(ivs(depvar(u, s), s)) do y
-        r = ranges[indexmap[y]]
-        (shiftx !== nothing && isequal(y, shiftx)) || return r
-        r = r .+ offset
-        return (periodic !== nothing && haskey(periodic, y)) ?
-            wrap_periodic_range(r, periodic[y]) : r
-    end
-    return arr[rs...]
+    offsets = shiftx === nothing ? Dict{Int, Int}() : Dict(indexmap[shiftx] => offset)
+    return array_shifted_slice(u, s, ranges, indexmap, offsets, periodic)
 end
 
 """
@@ -498,18 +537,13 @@ function array_stencil(weights, slices)
 end
 
 """
-Array form of `central_difference` on the core region for the even order derivative
-`(Differential(x)^d)(u)`.
+The interior branch of `central_difference_weights_and_stencil` for `Dop` along dimension
+`j` of `N` over the index range `rng`, as `(weights, taps)`. On a nonuniform grid the
+interior weights vary from point to point, so each returned weight is the broadcastable
+numeric array of that tap's weight over `rng` rather than a scalar.
 """
-function array_central_difference(Dop, s, u, x, d, ranges, indexmap, periodic)
-    N = length(ranges)
-    j = indexmap[x]
-    rng = ranges[j]
+function array_interior_stencil(Dop, rng, j, N)
     taps = half_range(Dop.stencil_length)
-    slices = [
-        array_slice(u, s, ranges, indexmap; shiftx = x, offset = k, periodic = periodic)
-            for k in taps
-    ]
     weights = if Dop.dx isa Number
         collect(Dop.stencil_coefs)
     else
@@ -519,6 +553,21 @@ function array_central_difference(Dop, s, u, x, d, ranges, indexmap, periodic)
                 for k in eachindex(taps)
         ]
     end
+    return weights, taps
+end
+
+"""
+Array form of `central_difference` on the core region for the even order derivative
+`(Differential(x)^d)(u)`.
+"""
+function array_central_difference(Dop, s, u, x, d, ranges, indexmap, periodic)
+    N = length(ranges)
+    j = indexmap[x]
+    weights, taps = array_interior_stencil(Dop, ranges[j], j, N)
+    slices = [
+        array_slice(u, s, ranges, indexmap; shiftx = x, offset = k, periodic = periodic)
+            for k in taps
+    ]
     return array_stencil(weights, slices)
 end
 
@@ -536,6 +585,70 @@ end
                 )
             )
         end
+    end
+    return rules
+end
+
+"""
+The `(u, x, y)` triples for which the mixed derivative `Dx(Dy(u))` occurs in `pde`.
+
+`Dx(Dy(u))` for two distinct spatial variables is the only mixed pattern the scalar path
+has a scheme for (`generate_mixed_rules`), and so the only one with a slice form here;
+anything else — a mixed derivative of higher order in one of its directions, say — reaches
+`arrayify` with a spatial differential still in place and falls back.
+"""
+function array_mixed_terms(pde, depvars, args)
+    found = []
+    for u in depvars, x in args, y in remove(args, x)
+        r = safe_unwrap((Differential(x) * Differential(y))(u)) => nothing
+        (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) || continue
+        push!(found, (u, x, y))
+    end
+    return found
+end
+
+"""
+Array form of `mixed_central_difference` on the core region for `Dx(Dy(u))`.
+
+The scalar scheme is the tensor product of the two centered first order stencils: a sum
+over the taps in `x` of a sum over the taps in `y` of `wx*wy*u[II + kx + ky]`. Every point
+of the core takes the interior branch of both, so the whole thing is one broadcasted sum of
+slices shifted along two axes at once — `array_central_difference` with a second shifted
+axis. The weights come from the same `DerivativeOperator`s the scalar path uses and their
+products are numeric, so the two agree term by term.
+"""
+function array_mixed_difference(Dxop, Dyop, s, u, x, y, ranges, indexmap, periodic)
+    N = length(ranges)
+    jx = indexmap[x]
+    jy = indexmap[y]
+    xweights, xtaps = array_interior_stencil(Dxop, ranges[jx], jx, N)
+    yweights, ytaps = array_interior_stencil(Dyop, ranges[jy], jy, N)
+    weights = []
+    slices = []
+    for (wx, kx) in zip(xweights, xtaps), (wy, ky) in zip(yweights, ytaps)
+        push!(weights, broadcast(*, wx, wy))
+        push!(
+            slices,
+            array_shifted_slice(
+                u, s, ranges, indexmap, Dict(jx => kx, jy => ky), periodic
+            )
+        )
+    end
+    return array_stencil(weights, slices)
+end
+
+@inline function array_mixed_rules(
+        mixedterms, s, derivweights, ranges, indexmap, periodic
+    )
+    rules = Pair[]
+    for (u, x, y) in mixedterms
+        push!(
+            rules,
+            safe_unwrap((Differential(x) * Differential(y))(u)) => array_mixed_difference(
+                derivweights.map[Differential(x)], derivweights.map[Differential(y)],
+                s, u, x, y, ranges, indexmap, periodic
+            )
+        )
     end
     return rules
 end
