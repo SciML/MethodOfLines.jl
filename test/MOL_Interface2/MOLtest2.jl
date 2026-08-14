@@ -518,7 +518,7 @@ end
 
     @named sys = PDESystem(eq, bcs, domains, [t, φ], [Tₛ(t, φ)])
 
-    discretization = MOLFiniteDifference([φ => 80], t, order = 4)
+    discretization = MOLFiniteDifference([φ => 80], t)
 
     prob = discretize(sys, discretization) # ERROR HERE
 
