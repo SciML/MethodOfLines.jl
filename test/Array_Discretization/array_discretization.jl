@@ -1,8 +1,9 @@
 # Tests for the ArrayDiscretization strategy (issue #428): the interior of each PDE is
 # represented as a single symbolic array equation over slices of the array variables.
-# Every case is checked for agreement against ScalarizedDiscretization, which the array
-# strategy must reproduce exactly (it uses the same stencils, and falls back to the
-# scalar path for unsupported patterns).
+# Where both strategies can express the same substitutions, numerics match (often
+# bitwise on the RHS). The array path also covers periodic-face and free-standing-corner
+# boundary values that scalar `boundaryvalfuncs` leave symbolic; those cases assert the
+# array path is runnable rather than scalar parity. Unsupported patterns fall back.
 
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Symbolics
 using SciMLBase
@@ -694,16 +695,34 @@ end
             [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
         ),
         (
-            "boundary value in interior",
-            Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1),
+            "off-edge boundary sampling",
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 0.5),
+            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        ),
+        (
+            "derivative of boundary value",
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 1)),
+            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        ),
+        (
+            "time-literal in interior",
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, x),
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         ),
     ]
     for (name, eq, bcs) in unsupported
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-        @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
-            pdesys, strict
-        )
+        err = try
+            symbolic_discretize(pdesys, strict)
+            nothing
+        catch e
+            e
+        end
+        @test err isa MethodOfLines.ArrayDiscretizationError
+        @test !occursin("BoundsError", err.msg)
+        if name == "time-literal in interior"
+            @test occursin("time-literal", err.msg)
+        end
         # the permissive strategy still handles it, pointwise
         lenient = MOLFiniteDifference(
             [x => 0.1], t; discretization_strategy = ArrayDiscretization()
@@ -711,6 +730,16 @@ end
         sys, _ = symbolic_discretize(pdesys, lenient)
         @test narrayeqs_interior(sys) == 0
     end
+
+    @named bval_sys = PDESystem(
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1),
+        [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        domains, [t, x], [u(t, x)]
+    )
+    sys_bval, _ = symbolic_discretize(bval_sys, strict)
+    @test narrayeqs_interior(sys_bval) == 1
+    sol_bval_arr, sol_bval_scal, _ = solve_both(bval_sys, [x => 0.1], t)
+    @test maximum(abs.(sol_bval_arr[u(t, x)] .- sol_bval_scal[u(t, x)])) == 0.0
 
     # A supported equation must go through strict mode unchanged.
     eq = Dt(u(t, x)) ~ Dxx(u(t, x))
@@ -803,4 +832,353 @@ end
         )[u(t, x, y)]
     end
     @test sols[1] ≈ sols[2] rtol = 1.0e-8
+end
+
+@testset "Boundary value in interior equation (1D both edges)" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 0) - u(t, 1)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test maximum(abs.(sol_arr[u(t, x)] .- sol_scal[u(t, x)])) == 0.0
+    # dx = 0.05 → 21 points: u(t, 0) → [1], u(t, 1) → [21]
+    int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+    int_str = string(int_eq)
+    @test occursin("[1]", int_str)
+    @test occursin("[21]", int_str)
+
+    treesize(x) = let u = Symbolics.unwrap(x)
+        SymbolicUtils.iscall(u) ? 1 + sum(treesize, SymbolicUtils.arguments(u); init = 0) : 1
+    end
+    counts = map([11, 41]) do n
+        disc = MOLFiniteDifference(
+            [x => 1 / (n - 1)], t; discretization_strategy = ArrayDiscretization()
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        int = only(filter(isinterioreq, get_eqs(sys)))
+        (narrayeqs_interior(sys), treesize(int.lhs) + treesize(int.rhs))
+    end
+    @test counts[1][1] == counts[2][1] == 1
+    @test counts[1][2] == counts[2][2]
+end
+
+@testset "Boundary value with nonzero Dirichlet actually drives the interior" begin
+    # Nonzero BC: bitwise RHS proves substitution. Trajectory checks use rtol like the rest
+    # of this file; array vs scalar codegen is not bit-identical across Rosenbrock stages.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1)
+    bcs = [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ exp(-t)]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc_arr = MOLFiniteDifference(
+        dxs, t; discretization_strategy = ArrayDiscretization()
+    )
+    disc_scal = MOLFiniteDifference(
+        dxs, t; discretization_strategy = ScalarizedDiscretization()
+    )
+    sys_arr, _ = symbolic_discretize(pdesys, disc_arr)
+    prob_arr = discretize(pdesys, disc_arr)
+    prob_scal = discretize(pdesys, disc_scal)
+
+    @test narrayeqs_interior(sys_arr) == 1
+    int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+    @test occursin("[21]", string(int_eq))
+
+    du_arr = similar(prob_arr.u0)
+    du_scal = similar(prob_scal.u0)
+    prob_arr.f(du_arr, prob_arr.u0, prob_arr.p, 0.0)
+    prob_scal.f(du_scal, prob_scal.u0, prob_scal.p, 0.0)
+    @test du_arr == du_scal
+    @test maximum(abs.(du_arr)) > 1
+
+    sol_arr, sol_scal, _ = solve_both(pdesys, dxs, t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+    @test maximum(abs.(sol_arr[u(t, x)])) > 0.05
+
+    @parameters y
+    Dyy = Differential(y)^2
+    eq2 = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(t, 0, y)
+    bcs2 = [
+        u(0, x, y) ~ 0.0,
+        u(t, 0, y) ~ sinpi(y), u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains2 = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys2 = PDESystem(eq2, bcs2, domains2, [t, x, y], [u(t, x, y)])
+    dxs2 = [x => 0.1, y => 0.1]
+    disc2_arr = MOLFiniteDifference(
+        dxs2, t; discretization_strategy = ArrayDiscretization()
+    )
+    disc2_scal = MOLFiniteDifference(
+        dxs2, t; discretization_strategy = ScalarizedDiscretization()
+    )
+    sys2, _ = symbolic_discretize(pdesys2, disc2_arr)
+    prob2_arr = discretize(pdesys2, disc2_arr)
+    prob2_scal = discretize(pdesys2, disc2_scal)
+
+    @test narrayeqs_interior(sys2) == 1
+    face_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys2)))
+    @test occursin("1:1", string(face_eq))
+
+    du2_arr = similar(prob2_arr.u0)
+    du2_scal = similar(prob2_scal.u0)
+    prob2_arr.f(du2_arr, prob2_arr.u0, prob2_arr.p, 0.0)
+    prob2_scal.f(du2_scal, prob2_scal.u0, prob2_scal.p, 0.0)
+    @test du2_arr == du2_scal
+    @test maximum(abs.(du2_arr)) > 1
+
+    sol2_arr, sol2_scal, _ = solve_both(pdesys2, dxs2, t)
+    @test SciMLBase.successful_retcode(sol2_arr)
+    @test sol2_arr[u(t, x, y)] ≈ sol2_scal[u(t, x, y)] rtol = 1.0e-6
+    @test maximum(abs.(sol2_arr[u(t, x, y)])) > 0.05
+end
+
+@testset "Boundary value in interior equation (2D face slice and corner)" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+
+    @named face_sys = PDESystem(
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(t, 0, y),
+        bcs, domains, [t, x, y], [u(t, x, y)]
+    )
+    sol_arr, sol_scal, sys_arr = solve_both(face_sys, [x => 0.1, y => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test maximum(abs.(sol_arr[u(t, x, y)] .- sol_scal[u(t, x, y)])) == 0.0
+    face_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+    @test occursin("1:1", string(face_eq))
+
+    # Free-standing corner: scalar boundaryvalfuncs leave u(t,0,0) symbolic; array does not.
+    # No scalar parity — prove the array path is runnable and drives the interior.
+    corner_bcs = [
+        u(0, x, y) ~ 0.0,
+        u(t, 0, y) ~ 1.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 1.0, u(t, x, 1) ~ 0.0,
+    ]
+    @named corner_sys = PDESystem(
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(t, 0, 0),
+        corner_bcs, domains, [t, x, y], [u(t, x, y)]
+    )
+    dxs_c = [x => 0.1, y => 0.1]
+    disc = MOLFiniteDifference(
+        dxs_c, t; discretization_strategy = ArrayDiscretization()
+    )
+    sys_corner, _ = symbolic_discretize(corner_sys, disc)
+    @test narrayeqs_interior(sys_corner) == 1
+    corner_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_corner)))
+    corner_str = string(corner_eq)
+    @test occursin("[1, 1]", corner_str) || occursin("[1,1]", corner_str)
+    @test !occursin("u(t, 0, 0)", corner_str) && !occursin("u(t,0,0)", corner_str)
+    for eq in get_eqs(sys_corner)
+        s = string(eq)
+        @test !occursin("u(t, 0, 0)", s) && !occursin("u(t,0,0)", s)
+    end
+
+    prob_c = discretize(corner_sys, disc)
+    du_c = similar(prob_c.u0)
+    prob_c.f(du_c, prob_c.u0, prob_c.p, 0.0)
+    @test maximum(abs.(du_c)) > 1
+    sol_c = solve(prob_c, Rodas4())
+    @test SciMLBase.successful_retcode(sol_c)
+    @test maximum(abs.(sol_c[u(t, x, y)])) > 0.05
+end
+
+@testset "Boundary value of a coupled variable in the interior" begin
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + v(t, 1),
+        Dt(v(t, x)) ~ Dxx(v(t, x)) - u(t, x),
+    ]
+    bcs = [
+        u(0, x) ~ sinpi(x), v(0, x) ~ 0.0,
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 2
+    @test maximum(abs.(sol_arr[u(t, x)] .- sol_scal[u(t, x)])) == 0.0
+    @test maximum(abs.(sol_arr[v(t, x)] .- sol_scal[v(t, x)])) == 0.0
+end
+
+@testset "Boundary value in interior on a nonuniform grid" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => gridvec], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test maximum(abs.(sol_arr[u(t, x)] .- sol_scal[u(t, x)])) == 0.0
+end
+
+@testset "Boundary value as upwind coefficient stays in array form" begin
+    # Scalar path also leaves u(t,1) symbolic inside winding coefficients, so no parity.
+    # Array must substitute via winding coefctx and remain runnable.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -u(t, 1) * Dx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ exp(-t)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc = MOLFiniteDifference(
+        dxs, t; discretization_strategy = ArrayDiscretization()
+    )
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+    wind_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+    wind_str = string(wind_eq)
+    @test occursin("[21]", wind_str)
+    for e in get_eqs(sys)
+        s = string(e)
+        @test !occursin("u(t, 1)", s) && !occursin("u(t,1)", s)
+    end
+
+    strict = MOLFiniteDifference(
+        dxs, t; discretization_strategy = StrictArrayDiscretization()
+    )
+    sys_strict, _ = symbolic_discretize(pdesys, strict)
+    @test narrayeqs_interior(sys_strict) == 1
+
+    prob = discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    @test maximum(abs.(du)) > 0
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Boundary value in a periodic direction stays in array form" begin
+    # Scalar boundaryvalfuncs skip interface faces, so no scalar parity here.
+    # Prove every wrap/core equation substitutes u(t,0) and the ODE is runnable.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 0)
+    bcs = [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc = MOLFiniteDifference(
+        dxs, t; discretization_strategy = ArrayDiscretization()
+    )
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+    per_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+    @test occursin("[1]", string(per_eq))
+    for e in get_eqs(sys)
+        s = string(e)
+        @test !occursin("u(t, 0)", s) && !occursin("u(t,0)", s)
+    end
+
+    strict = MOLFiniteDifference(
+        dxs, t; discretization_strategy = StrictArrayDiscretization()
+    )
+    sys_strict, _ = symbolic_discretize(pdesys, strict)
+    @test narrayeqs_interior(sys_strict) == 1
+
+    prob = discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    @test maximum(abs.(du)) > 0
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Face boundary value in a doubly periodic domain" begin
+    # u(t,0,y) keeps a free argument, so on the four all-singleton wrap boxes the
+    # pointwise equation carries it as u(t, 0, <grid value>) after valmaps; the element
+    # rules must key on that form. No scalar parity (boundaryvalfuncs skip interface
+    # faces): prove nothing stays symbolic and the ODE is runnable, in both modes.
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(t, 0, y)
+    bcs = [
+        u(0, x, y) ~ sinpi(2x) * sinpi(2y),
+        u(t, 0, y) ~ u(t, 1, y),
+        u(t, x, 0) ~ u(t, x, 1),
+    ]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+    dxs = [x => 0.2, y => 0.2]
+
+    for strategy in (ArrayDiscretization(), StrictArrayDiscretization())
+        disc = MOLFiniteDifference(dxs, t; discretization_strategy = strategy)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        # 3 bands per periodic direction: 5 multi-point boxes in array form, 4
+        # all-singleton wrap boxes as scalar equations.
+        @test narrayeqs_interior(sys) == 5
+        for e in get_eqs(sys)
+            s = string(e)
+            @test !occursin("u(t, 0,", s) && !occursin("u(t,0,", s)
+        end
+        # Each wrap-point equation references the substituted seam element u[1, j].
+        wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
+        @test length(wrap_eqs) == 4
+        @test all(e -> occursin("[1, ", string(e)) || occursin("[1,", string(e)), wrap_eqs)
+    end
+
+    disc = MOLFiniteDifference(dxs, t; discretization_strategy = ArrayDiscretization())
+    prob = discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
 end

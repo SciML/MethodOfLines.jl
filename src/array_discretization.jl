@@ -15,12 +15,17 @@
 # interior is emitted as one array equation per box of the decomposition described in
 # `array_bands`, a count that does not depend on the grid resolution.
 #
-# When an equation contains a pattern that is not representable as slice broadcasts
-# (WENO/functional advection schemes, nonlinear or spherical laplacians, integrals,
-# mixed derivatives, interfaces joining two different variables, boundary values appearing
-# in the interior equation, callbacks, staggered grids, variables of differing
-# dimensionality), the whole equation falls back to pointwise scalar discretization,
-# producing numerics identical to `ScalarizedDiscretization`.
+# Interior boundary values (e.g. `u(t, 1)`) map to the matching array element or face
+# slice on every array box, including size-1 wrap boxes and frame points (the scalar
+# `boundaryvalfuncs` skip interface faces and free-standing corners; this path does not).
+# Derivatives of boundary values, time-literal references like `u(0, x)`, and
+# edge-aligned grids, fall back.
+#
+# Unsupported patterns fall back to pointwise scalarization (same numerics as
+# `ScalarizedDiscretization`): WENO/functional advection, nonlinear/spherical
+# laplacians, integrals, mixed derivatives, two-variable interfaces, callbacks,
+# staggered grids, differing dimensionality, boundary-value derivatives, time-literal
+# dependent-variable calls, edge-aligned boundary values, stationary systems.
 
 struct ArrayDiscretizationFallback <: Exception
     msg::String
@@ -154,6 +159,12 @@ function discretize_equation_array_form(
         pde, interior, s, depvars, derivweights, bcmap,
         eqvar, indexmap, boundaryvalfuncs
     )
+    # Stationary: PDEBase emits `0 ~ residual`; Symbolics rejects scalar ~ array.
+    s.time === nothing && throw(
+        ArrayDiscretizationFallback(
+            "stationary (no time) systems have no array form in NonlinearSystem construction"
+        )
+    )
     get_grid_type(s) <: StaggeredGrid &&
         throw(ArrayDiscretizationFallback("staggered grids are not supported"))
     derivweights.advection_scheme isa UpwindScheme ||
@@ -202,34 +213,33 @@ function discretize_equation_array_form(
         (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) &&
             throw(ArrayDiscretizationFallback("unsupported pattern $(r.first)"))
     end
-    # Boundary values appearing in the interior equation, like u(t, 0), are variable
-    # references with a number argument; the scalar path substitutes them pointwise via
-    # `boundaryvalfuncs`, which has no slice representation here yet.
-    for u in get_depvars(pde.lhs, s.vars.depvar_ops) ∪ get_depvars(pde.rhs, s.vars.depvar_ops)
-        any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(u)) &&
-            throw(ArrayDiscretizationFallback("boundary value $u in interior equation"))
-    end
+    array_validate_boundary_values(pde, s)
 
     core_eqs = map(Iterators.product(map(eachindex, bands)...)) do combo
         rs = ntuple(j -> bands[j][combo[j]], N)
+        ranges = Dict(j => rs[j] for j in 1:N)
         if prod(map(length, rs)) == 1
-            # a single point is more clearly written as the scalar equation it is
-            return discretize_equation_at_point(
+            # a single point is more clearly written as the scalar equation it is;
+            # still apply array bval rules (periodic faces have empty boundaryvalfuncs)
+            eq = discretize_equation_at_point(
                 CartesianIndex(map(first, rs)), s, depvars, pde, derivweights,
                 bcmap, eqvar, indexmap, boundaryvalfuncs
             )
+            return array_substitute_boundary_values(eq, pde, s, ranges, indexmap)
         end
         return array_core_equation(
-            pde, Dict(j => rs[j] for j in 1:N), s, depvars, derivweights,
+            pde, ranges, s, depvars, derivweights,
             args, pdeorders, indexmap, terms, periodic
         )
     end
 
     frame = setdiff(vec(collect(interior)), vec(collect(core)))
     frame_eqs = map(frame) do II
-        discretize_equation_at_point(
+        eq = discretize_equation_at_point(
             II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs
         )
+        ranges = Dict(j => II[j]:II[j] for j in 1:N)
+        return array_substitute_boundary_values(eq, pde, s, ranges, indexmap)
     end
     return vcat(vec(core_eqs), frame_eqs)
 end
@@ -243,7 +253,8 @@ function array_core_equation(
     )
     N = length(args)
     shape = ntuple(j -> length(ranges[j]), N)
-    # Ordered substitution rules; the first matching rule wins at each node.
+    # First matching rule wins. Boundary-value rules before core-variable rules.
+    bvalrules = array_boundary_value_rules(pde, s, ranges, indexmap)
     varrules = [safe_unwrap(u) => array_slice(u, s, ranges, indexmap) for u in depvars]
     gridrules = [
         safe_unwrap(x) => array_grid_vals(x, s, ranges, indexmap, N) for x in args
@@ -251,11 +262,15 @@ function array_core_equation(
     derivrules = array_cartesian_rules(
         s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
     )
+    # Winding coefficients are arrayified with the same baserules; include bvalrules so
+    # e.g. `u(t, 1)*Dx(u)` substitutes the boundary element before the wind rule fires.
     windrules = array_winding_rules(
         terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
-        vcat(varrules, gridrules), periodic
+        vcat(bvalrules, varrules, gridrules), periodic
     )
-    ctx = ArrayifyContext(vcat(windrules, derivrules, varrules, gridrules), s.time)
+    ctx = ArrayifyContext(
+        vcat(bvalrules, windrules, derivrules, varrules, gridrules), s.time
+    )
 
     lhs = arrayify(pde.lhs, ctx)
     rhs = arrayify(pde.rhs, ctx)
@@ -464,6 +479,186 @@ function array_slice(u, s, ranges, indexmap; shiftx = nothing, offset = 0, perio
             wrap_periodic_range(r, periodic[y]) : r
     end
     return arr[rs...]
+end
+
+# Boundary values in interior equations
+
+"""
+Resolve a numeric boundary argument to a 1-based grid index at a domain edge,
+matching the arithmetic in `newindex`.
+"""
+function array_boundary_edge_index(xval, x, s)
+    if isequal(xval, s.axies[x][1])
+        return 1
+    elseif isequal(xval, s.axies[x][end])
+        return length(s, x)
+    else
+        throw(
+            ArrayDiscretizationFallback(
+                "boundary value is not at a domain edge for $x = $xval"
+            )
+        )
+    end
+end
+
+"""
+True when `expr` contains a spatial derivative of a boundary value such as
+`(Differential(x))(u(t, 1))`. Those have no slice form here yet (the scalar path
+handles them via `depvarderivbcmaps`).
+"""
+function array_has_boundary_value_derivative(expr, s)
+    expr = safe_unwrap(expr)
+    iscall(expr) || return false
+    op = operation(expr)
+    if op isa Differential && (s.time === nothing || !isequal(op.x, s.time))
+        for a in arguments(expr)
+            for v in get_depvars(a, s.vars.depvar_ops)
+                any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(v)) &&
+                    return true
+            end
+            array_has_boundary_value_derivative(a, s) && return true
+        end
+    end
+    return any(a -> array_has_boundary_value_derivative(a, s), arguments(expr))
+end
+
+"""
+Dependent-variable terms in `pde` that carry at least one numeric (boundary) argument.
+"""
+function array_boundary_value_terms(pde, s)
+    terms = []
+    for u in get_depvars(pde.lhs, s.vars.depvar_ops) ∪ get_depvars(pde.rhs, s.vars.depvar_ops)
+        any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(u)) && push!(terms, u)
+    end
+    return terms
+end
+
+"""
+True when `u_` replaces the time variable with a numeric literal, e.g. `u(0, x)`.
+Those are not spatial boundary values; there is no slice form for them here yet.
+"""
+function array_is_time_literal_term(u_, s)
+    s.time === nothing && return false
+    args = arguments(u_)
+    any(a -> isequal(a, s.time), args) && return false
+    return any(a -> unwrap_const(safe_unwrap(a)) isa Number, args)
+end
+
+"""
+Equation-level checks for boundary values in the interior equation. Throws
+`ArrayDiscretizationFallback` for patterns with no slice form yet (edge-aligned grids,
+derivatives of boundary values, time literals, off-edge sampling); otherwise succeeds so
+`array_boundary_value_rules` can substitute each term.
+"""
+function array_validate_boundary_values(pde, s)
+    bvals = array_boundary_value_terms(pde, s)
+    isempty(bvals) && return bvals
+    get_grid_type(s) <: CenterAlignedGrid || throw(
+        ArrayDiscretizationFallback(
+            "boundary values in interior equations require a CenterAlignedGrid"
+        )
+    )
+    (
+        array_has_boundary_value_derivative(pde.lhs, s) ||
+            array_has_boundary_value_derivative(pde.rhs, s)
+    ) && throw(
+        ArrayDiscretizationFallback("derivative of boundary value in interior equation")
+    )
+    for u_ in bvals
+        array_is_time_literal_term(u_, s) && throw(
+            ArrayDiscretizationFallback(
+                "time-literal value $u_ in interior equation (not a spatial boundary value)"
+            )
+        )
+        u = depvar(u_, s)
+        args = ivs(u, s)
+        args_ = remove(arguments(u_), s.time)
+        length(args_) == length(args) || throw(
+            ArrayDiscretizationFallback(
+                "boundary value $u_ has unexpected argument structure"
+            )
+        )
+        for (j, a) in enumerate(args_)
+            aval = unwrap_const(safe_unwrap(a))
+            aval isa Number || continue
+            array_boundary_edge_index(aval, args[j], s)
+        end
+    end
+    return bvals
+end
+
+"""
+The array element (every spatial argument fixed) or face slice (some arguments free
+over the core box) corresponding to a boundary value like `u(t, 1)` or `u(t, 0, y)`.
+Fixed dimensions use a singleton `k:k` range so the result broadcasts against the
+core slice; a fully-fixed reference is a scalar element, which broadcasts as well.
+"""
+function array_boundary_value_view(u_, s, ranges, indexmap)
+    u = depvar(u_, s)
+    arr = array_variable(u, s)
+    args = ivs(u, s)
+    args_ = remove(arguments(u_), s.time)
+    idxs = Vector{Any}(undef, length(args_))
+    all_fixed = true
+    for (j, a) in enumerate(args_)
+        aval = unwrap_const(safe_unwrap(a))
+        if aval isa Number
+            idxs[j] = array_boundary_edge_index(aval, args[j], s)
+        else
+            all_fixed = false
+            idxs[j] = ranges[indexmap[args[j]]]
+        end
+    end
+    all_fixed && return arr[idxs...]
+    rs = ntuple(j -> idxs[j] isa Integer ? (idxs[j]:idxs[j]) : idxs[j], length(idxs))
+    return arr[rs...]
+end
+
+"""
+Substitution rules mapping each boundary value in `pde` to its array element or face
+slice over the core box described by `ranges`. Call after
+`array_validate_boundary_values`.
+
+Returns a `Vector{<:Pair}` even when empty, so `vcat` into `ArrayifyContext.rules`
+stays well-typed.
+"""
+function array_boundary_value_rules(pde, s, ranges, indexmap)
+    return Pair[
+        safe_unwrap(u_) => array_boundary_value_view(u_, s, ranges, indexmap)
+            for u_ in array_boundary_value_terms(pde, s)
+    ]
+end
+
+"""
+Substitute boundary values into an already pointwise-discretized equation at the
+single point described by `ranges` (all singleton). Used for size-1 wrap boxes and
+frame points, where `discretize_equation_at_point` leaves interface-face and
+free-standing-corner boundary values symbolic. `valmaps` has already replaced free
+spatial arguments with their grid values inside those leftover terms (`u(t, 0, y)`
+appears as e.g. `u(t, 0, 0.2)`), so each rule keys on that grid-valued form and maps
+to the scalar array element at this point, never a slice.
+"""
+function array_substitute_boundary_values(eq, pde, s, ranges, indexmap)
+    bvals = array_boundary_value_terms(pde, s)
+    isempty(bvals) && return eq
+    rdict = Dict()
+    for u_ in bvals
+        u = depvar(u_, s)
+        args = ivs(u, s)
+        args_ = remove(arguments(u_), s.time)
+        idxs = map(enumerate(args_)) do (j, a)
+            aval = unwrap_const(safe_unwrap(a))
+            aval isa Number ? array_boundary_edge_index(aval, args[j], s) :
+                first(ranges[indexmap[args[j]]])
+        end
+        gridsubs = Dict(
+            safe_unwrap(args[j]) => s.grid[args[j]][idxs[j]]
+                for (j, a) in enumerate(args_)
+                if !(unwrap_const(safe_unwrap(a)) isa Number)
+        )
+        rdict[pde_substitute(u_, gridsubs)] = array_variable(u, s)[idxs...]
+    end
+    return pde_substitute(eq.lhs, rdict) ~ pde_substitute(eq.rhs, rdict)
 end
 
 """
