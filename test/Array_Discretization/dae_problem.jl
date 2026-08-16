@@ -33,10 +33,9 @@ function solve_both(pdesys, dxs, t, u; disc_kwargs = (;), tol = 1.0e-10)
     sol_ode = solve(
         discretize(pdesys, disc), Rodas4(); reltol = tol, abstol = tol
     )
-    discu = get_discrete(pdesys, disc)[u]
-    dae_vals = map(sym -> sol_dae[sym][end], discu)
-    ode_vals = sol_ode[u][end, ntuple(_ -> Colon(), ndims(discu))...]
-    return prob_dae, sol_dae, dae_vals, ode_vals
+    nx = ndims(get_discrete(pdesys, disc)[u])
+    final(sol) = sol[u][end, ntuple(_ -> Colon(), nx)...]
+    return prob_dae, sol_dae, final(sol_dae), final(sol_ode)
 end
 
 @testset "1D heat, Dirichlet BCs" begin
@@ -59,6 +58,10 @@ end
 
     prob, sol, dae_vals, ode_vals = solve_both(pdesys, [x => n], t, u(t, x))
     @test SciMLBase.successful_retcode(sol)
+    # the solution is wrapped, so it is indexed by `u(t, x)` and interpolates like the
+    # `discretize` path rather than being indexed by the discretized variables
+    @test sol isa SciMLBase.PDETimeSeriesSolution
+    @test sol(0.1, 0.5)[1] ≈ sinpi(0.5) * exp(-pi^2 * 0.1) rtol = 1.0e-2
     @test any(isarrayeq, get_eqs(prob.f.sys))
     @test prob.kwargs[:initializealg] isa BrownFullBasicInit
     # interior points are differential, the two boundaries algebraic
