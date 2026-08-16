@@ -280,3 +280,32 @@ end
     @test err isa ArgumentError
     @test occursin("ArrayDiscretization", err.msg)
 end
+
+# The predicate's algebraic-variable and coupled-unknown branches are unreachable from what
+# MethodOfLines currently emits: PDEBase only writes an initialization equation for a
+# variable whose time-derivative order in the system exceeds the order of its initial
+# condition, which makes the variable differential by construction. They are checked here
+# on hand-built systems so the guard is known to discriminate rather than only to accept.
+@testset "safety predicate branches" begin
+    @independent_variables τ
+    @variables a(τ) b(τ)
+    D = Differential(τ)
+    eqs = [D(a) ~ -a + b, b ~ 2a]
+    build(init) = complete(
+        System(eqs, τ, [a, b], []; initialization_eqs = init, name = :sys)
+    )
+
+    @test isempty(MethodOfLines.brown_init_offenders(build([a ~ 1.0])))
+
+    algebraic = MethodOfLines.brown_init_offenders(build([b ~ 1.0]))
+    @test length(algebraic) == 1
+    @test occursin("algebraic rather than differential", last(only(algebraic)))
+
+    coupled = MethodOfLines.brown_init_offenders(build([a ~ b]))
+    @test length(coupled) == 1
+    @test occursin("relates", last(only(coupled)))
+
+    derivative = MethodOfLines.brown_init_offenders(build([D(a) ~ 0.0]))
+    @test length(derivative) == 1
+    @test occursin("time derivative", last(only(derivative)))
+end
