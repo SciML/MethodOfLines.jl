@@ -5,7 +5,7 @@ using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: get_unknowns,
     get_eqs, get_bcs, get_dvs,
-    get_ivs
+    get_ivs, initialization_equations
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term,
@@ -112,6 +112,7 @@ include("discretization/staggered_discretize.jl")
 # Main
 include("scalar_discretization.jl")
 include("array_discretization.jl")
+include("dae_discretization.jl")
 include("MOL_discretization.jl")
 
 ## PrecompileTools
