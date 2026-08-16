@@ -17,7 +17,8 @@ A discretization algorithm.
 
 - `approx_order`: The order of the derivative approximation.
 - `advection_scheme`: The scheme to be used to discretize advection terms, i.e. first order spatial derivatives and associated coefficients. Defaults to `UpwindScheme()`. WENOScheme() is also available, and is more stable and accurate at the cost of complexity.
-- `grid_align`: The grid alignment types. See [`CenterAlignedGrid`](@ref) and [`EdgeAlignedGrid`](@ref).
+- `grid_align`: The grid alignment value. Use [`center_align`](@ref), [`edge_align`](@ref), or
+  `StaggeredGrid()` as appropriate for the discretization.
 - `use_ODAE`: If `true`, the discretization will use the `ODAEproblem` constructor.
     Defaults to `false`.
 - `discretization_strategy`: How the discretized equations are represented symbolically.
@@ -26,6 +27,33 @@ A discretization algorithm.
     symbolic array equation over slices of the discretized variables, falling back to
     pointwise scalar equations for patterns with no slice representation.
 - `kwargs`: Any other keyword arguments you want to pass to the `ODEProblem`.
+
+## Fields
+
+- `dxs`: A dictionary mapping each discretized independent variable to an integer
+  grid size, a spacing, or an explicit grid.
+- `time`: The independent variable left undiscretized, or `nothing` for a fully
+  discretized system.
+- `approx_order`: The requested finite-difference approximation order.
+- `advection_scheme`: The scheme used for first-order spatial derivatives.
+- `grid_align`: The grid alignment marker.
+- `should_transform`: Whether supported symbolic transformations are applied before
+  discretization.
+- `use_ODAE`: Whether the resulting problem may use an `ODAEProblem` formulation.
+- `disc_strategy`: The symbolic equation representation strategy.
+- `useIR`: Whether ModelingToolkit's intermediate representation is used.
+- `callbacks`: Symbolic discretization callbacks.
+- `kwargs`: Additional keyword arguments forwarded to the generated problem.
+
+## Example
+
+```julia
+using ModelingToolkit
+using MethodOfLines
+
+@parameters t x
+discretization = MOLFiniteDifference([x => 0.1], t)
+```
 
 """
 struct MOLFiniteDifference{G, D} <: AbstractEquationSystemDiscretization

@@ -4,11 +4,18 @@ CurrentModule = MethodOfLines
 
 # Discretization
 
-```@docs
-MOLFiniteDifference
-DiscreteSpace
+## Public API
+
+```@autodocs
+Modules = [MethodOfLines]
+Private = false
+Order = [:constant, :type, :function]
 ```
 
-```@autodocs; canonical=false
+## Developer API
+
+```@autodocs
 Modules = [MethodOfLines]
+Public = false
+Order = [:constant, :type, :function]
 ```

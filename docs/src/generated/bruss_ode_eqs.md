@@ -1,4 +1,4 @@
-# [Generated ODE system for the Brusselator Equation] (@id brusssys)
+# [Generated ODE system for the Brusselator Equation](@id brusssys)
 
 Here's the generated system of equations for the [Brusselator](@ref brusselator), with `dx = dy = 1/4`.
 

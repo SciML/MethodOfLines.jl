@@ -1,4 +1,4 @@
-# [Getting Started] (@id brusselator)
+# [Getting Started](@id brusselator)
 
 ## Using the Brusselator PDE as an example
 

@@ -36,8 +36,4 @@ Specified on pages 8-9 of [this document](https://repository.library.brown.edu/s
 
 ## FunctionalScheme
 
-`WENOScheme` is itself implemented as a `FunctionalScheme`, a general mechanism for supplying your own advection scheme as a set of Julia functions. See the docstring below, and [the developer notes](devnotes.md) for how schemes are wired into the discretization.
-
-```@docs
-FunctionalScheme
-```
+`WENOScheme` is itself implemented as a `FunctionalScheme`, a general mechanism for supplying your own advection scheme as a set of Julia functions. See the [`FunctionalScheme`](@ref) API reference and [the developer notes](devnotes.md) for how schemes are wired into the discretization.
