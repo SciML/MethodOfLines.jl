@@ -8,7 +8,6 @@ run_qa(
     explicit_imports = true,
     # Intentional reexports of the SciMLBase-owned user entry points.
     reexports_allow = (:discretize, :symbolic_discretize),
-    api_docs_kwargs = (; rendered = true),
     aqua_kwargs = (; persistent_tasks = (; tmax = 300)),
     # Aqua sub-checks with genuine findings, marked broken pending fixes (issue #574):
     #   :ambiguities       — 48 method ambiguities involving MethodOfLines methods
