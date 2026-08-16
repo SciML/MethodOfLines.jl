@@ -63,5 +63,5 @@ sol = solve(prob, DFBDF())
 
 builds a problem without `mtkcompile`, and the array equations reach the generated code intact. `initializealg` defaults to `BrownFullBasicInit()`, and is chosen only when the discretized system's initialization equations are ones that algorithm preserves; otherwise construction fails with an error naming the offending equations and pointing back at `discretize`. Systems that are second order in time need the order reduction that `mtkcompile` performs, and are rejected here.
 
-The result is a plain `DAEProblem`, so its solution is indexed by the discretized variables — `sol[u_disc[i]]`, with `u_disc` from [`get_discrete`](@ref) — rather than by the `PDESystem`'s variables. Use `discretize` when you want a `PDETimeSeriesSolution`.
+The solution is a `PDETimeSeriesSolution`, the same wrapper `discretize` produces, so it is indexed and interpolated by the `PDESystem`'s own variables: `sol[u(t, x)]`, `sol(t, x)`.
 
