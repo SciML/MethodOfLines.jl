@@ -51,3 +51,17 @@ Currently supported options are `grid_align`: `center_align` and `edge_align`. E
 
 Any unrecognized keyword arguments will be passed to the `ODEProblem` constructor, see [its documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/#Dynamical-systems) for available options.
 
+## Keeping the array form: `DAEProblem`
+
+`discretize` runs `mtkcompile`, which scalarizes array equations: an `ODEProblem` needs `D(x) = f(x)`, and isolating the derivative is structural simplification. The residuals MethodOfLines emits, `D(u) - f ~ 0`, are already in implicit-DAE form, so
+
+```julia
+disc = MOLFiniteDifference([x => n], t; discretization_strategy = ArrayDiscretization())
+prob = DAEProblem(pdesys, disc)
+sol = solve(prob, DFBDF())
+```
+
+builds a problem without `mtkcompile`, and the array equations reach the generated code intact. `initializealg` defaults to `BrownFullBasicInit()`, and is chosen only when the discretized system's initialization equations are ones that algorithm preserves; otherwise construction fails with an error naming the offending equations and pointing back at `discretize`. Systems that are second order in time need the order reduction that `mtkcompile` performs, and are rejected here.
+
+The result is a plain `DAEProblem`, so its solution is indexed by the discretized variables — `sol[u_disc[i]]`, with `u_disc` from [`get_discrete`](@ref) — rather than by the `PDESystem`'s variables. Use `discretize` when you want a `PDETimeSeriesSolution`.
+
