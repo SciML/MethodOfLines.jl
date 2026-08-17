@@ -33,6 +33,7 @@ function cartesian_nonlinear_laplacian(
     bs = filter_interfaces(bcmap[operation(u)][x])
     N = ndims(u, s)
     N == 0 && return 0
+    u_ivs = ivs(u, s)
     jx = j, x = (x2i(s, u, x), x)
 
     D_inner = derivweights.halfoffsetmap[1][Differential(x)]
@@ -78,7 +79,7 @@ function cartesian_nonlinear_laplacian(
                     weights, getindex.((s.grid[x],), getindex.(interface_wrap(stencil), (j,)))
                 ),
             ],
-            [s.x̄[k] => s.grid[s.x̄[k]][II[k]] for k in setdiff(1:N, [j])]
+            [u_ivs[k] => s.grid[u_ivs[k]][II[k]] for k in setdiff(1:N, [j])]
         )
     end
 
