@@ -1,4 +1,5 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
+import SciMLBase
 using OrdinaryDiffEqRosenbrock: Rodas4
 using OrdinaryDiffEqSDIRK: TRBDF2
 using ModelingToolkit: operation, iscall, arguments
@@ -73,7 +74,7 @@ end
     dx = 0.1
     dy = 0.2
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
     sol = solve(prob, Tsit5())
 end
 
@@ -270,7 +271,7 @@ end
 
     # Method of lines discretization
     discretization = MOLFiniteDifference([x => dx], nothing, approx_order = order)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
 
     # # Solution of the ODE system
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
