@@ -47,7 +47,7 @@ using ModelingToolkit: Differential
     # Method of lines discretization
     dx = 0.01
     discretization = MOLFiniteDifference([x => dx], t)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
 
     # Solution of the ODE system
     using OrdinaryDiffEq
@@ -103,7 +103,7 @@ end
 #     # Method of lines discretization
 #     dx = 0.01
 #     discretization = MOLFiniteDifference([x=>dx],t)
-#     prob = ModelingToolkit.discretize(pdesys,discretization)
+#     prob = SciMLBase.discretize(pdesys,discretization)
 
 #     # Solution of the ODE system
 #     using OrdinaryDiffEq
@@ -163,7 +163,7 @@ end
     # Method of lines discretization
     dx = 0.01
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 2)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_original([x=>dx],t)
     #prob_orig = discretize_original(pdesys,disco)
@@ -227,7 +227,7 @@ end
     # Method of lines discretization
     dx = 0.01
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
 
     #disco = MOLFiniteDifference_original([x=>dx],t)
     #prob_orig = discretize_original(pdesys,disco)
@@ -288,7 +288,7 @@ end
 #     # Method of lines discretization
 #     dx = 0.01
 #     discretization = MOLFiniteDifference([x=>dx],t)
-#     prob = ModelingToolkit.discretize(pdesys,discretization)
+#     prob = SciMLBase.discretize(pdesys,discretization)
 
 #     # Solution of the ODE system
 #     using OrdinaryDiffEq
@@ -348,7 +348,7 @@ end
     # Method of lines discretization
     dx = 0.01
     discretization = MOLFiniteDifference([x => dx], t)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
 
     # Solution of the ODE system
     using OrdinaryDiffEq
@@ -409,7 +409,7 @@ end
     # Method of lines discretization
     dx = 0.01
     discretization = MOLFiniteDifference([x => dx], t)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
 
     # Solution of the ODE system
     using OrdinaryDiffEq
@@ -471,7 +471,7 @@ end
     # Method of lines discretization
     dx = 0.01
     discretization = MOLFiniteDifference([x => dx], t)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
 
     # Solution of the ODE system
     using OrdinaryDiffEq
@@ -532,7 +532,7 @@ end
     # Method of lines discretization
     dx = 0.01
     discretization = MOLFiniteDifference([x => dx], t)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
 
     # Solution of the ODE system
     using OrdinaryDiffEq

@@ -2,6 +2,7 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+import SciMLBase
 using ModelingToolkit: Differential
 
 # Tests
@@ -54,7 +55,7 @@ using ModelingToolkit: Differential
 
     # Method of lines discretization
     discretization = MOLFiniteDifference([x => dx, y => dy], t; approx_order = order)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
     # Solution of the ODE system
     sol = solve(prob, Tsit5())
     r_space_x = sol[x]
@@ -124,7 +125,7 @@ end
     dx = 0.1
     dy = 0.2
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
-    prob = ModelingToolkit.discretize(pdesys, discretization)
+    prob = SciMLBase.discretize(pdesys, discretization)
 
     # Solution of the ODE system
     sol = solve(prob, Rosenbrock23())
