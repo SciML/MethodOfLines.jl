@@ -8,6 +8,7 @@ CurrentModule = MethodOfLines
 
 ```@autodocs
 Modules = [MethodOfLines]
+Public = true
 Private = false
 Order = [:constant, :type, :function]
 ```
@@ -17,5 +18,6 @@ Order = [:constant, :type, :function]
 ```@autodocs
 Modules = [MethodOfLines]
 Public = false
+Private = true
 Order = [:constant, :type, :function]
 ```
