@@ -1,4 +1,4 @@
-# [How it works] (@id hiw)
+# [How it works](@id hiw)
 
 MethodOfLines.jl makes heavy use of `Symbolics.jl` and `SymbolicUtils.jl`, namely it's rule matching features to recognize terms which require particular discretizations.
 
