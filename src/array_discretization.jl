@@ -21,8 +21,11 @@
 # Derivatives of boundary values, time-literal references like `u(0, x)`, and
 # edge-aligned grids, fall back.
 #
+# Nonlinear laplacians `Dx(a(u) * Dx(u))` are emitted in slice form too; see
+# `array_nonlinear_laplacian`.
+#
 # Unsupported patterns fall back to pointwise scalarization (same numerics as
-# `ScalarizedDiscretization`): WENO/functional advection, nonlinear/spherical
+# `ScalarizedDiscretization`): WENO/functional advection, spherical
 # laplacians, integrals, mixed derivatives, two-variable interfaces, callbacks,
 # staggered grids, differing dimensionality, boundary-value derivatives, time-literal
 # dependent-variable calls, edge-aligned boundary values, stationary systems.
@@ -178,8 +181,17 @@ function discretize_equation_array_form(
     periodic = array_periodic_dims(s, depvars, args, bcmap)
 
     pdeorders = Dict(x => d_orders(x, [pde]) for x in args)
+    terms = split_terms(pde, s.x̄)
+    # Matched before the bands: half-offset stencils reach further than the order-2
+    # central difference `d_orders` reports for these terms.
+    nllap_matches = match_nonlinlap_terms(terms, s, depvars)
+    nllap_orders = Dict()
+    for m in nllap_matches
+        orders = Set(nonlinlap_coeff_orders(m, depvars, derivweights))
+        nllap_orders[m.x] = union(get(nllap_orders, m.x, Set{Int}()), orders)
+    end
     bands, clean = array_bands(
-        interior, s, args, pdeorders, derivweights, indexmap, periodic
+        interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders
     )
     any(isempty, bands) && throw(ArrayDiscretizationFallback("empty core region"))
     N = length(args)
@@ -195,10 +207,8 @@ function discretize_equation_array_form(
     II0 = CartesianIndex(
         ntuple(j -> clean[j] === nothing ? first(core)[j] : first(bands[j][clean[j]]), N)
     )
-    terms = split_terms(pde, s.x̄)
     special_rules = vcat(
         vec(generate_mixed_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms)),
-        vec(generate_nonlinlap_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms)),
         vec(
             generate_spherical_diffusion_rules(
                 II0, s, depvars, derivweights, bcmap,
@@ -229,7 +239,7 @@ function discretize_equation_array_form(
         end
         return array_core_equation(
             pde, ranges, s, depvars, derivweights,
-            args, pdeorders, indexmap, terms, periodic
+            args, pdeorders, indexmap, terms, periodic, nllap_matches
         )
     end
 
@@ -249,7 +259,8 @@ The array equation for one box of the interior, given as `ranges` (dimension => 
 range).
 """
 function array_core_equation(
-        pde, ranges, s, depvars, derivweights, args, pdeorders, indexmap, terms, periodic
+        pde, ranges, s, depvars, derivweights, args, pdeorders, indexmap, terms,
+        periodic, nllap_matches
     )
     N = length(args)
     shape = ntuple(j -> length(ranges[j]), N)
@@ -268,8 +279,13 @@ function array_core_equation(
         terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
         vcat(bvalrules, varrules, gridrules), periodic
     )
+    nllaprules = array_nonlinlap_rules(
+        nllap_matches, s, depvars, derivweights, ranges, indexmap,
+        vcat(bvalrules, varrules, gridrules), periodic
+    )
+    # Family order is the reverse of the scalar path's last-key-wins `Dict`.
     ctx = ArrayifyContext(
-        vcat(bvalrules, windrules, derivrules, varrules, gridrules), s.time
+        vcat(bvalrules, windrules, nllaprules, derivrules, varrules, gridrules), s.time
     )
 
     lhs = arrayify(pde.lhs, ctx)
@@ -379,8 +395,15 @@ seam and the wrapped tap is not contiguous with the rest. Splitting those points
 one range each keeps every tap of every box a single contiguous slice, at the cost of a
 handful of extra equations — as many as the stencil is wide, so the count still does not
 depend on the grid resolution.
+
+`nllap_orders` maps each direction carrying a nonlinear laplacian to the coefficient's
+derivative orders above one; those directions additionally take the half-offset branch
+conditions and tap extents of `array_nonlinlap_constraints`.
 """
-function array_bands(interior, s, args, pdeorders, derivweights, indexmap, periodic)
+function array_bands(
+        interior, s, args, pdeorders, derivweights, indexmap, periodic,
+        nllap_orders = Dict()
+    )
     N = length(args)
     bands = [UnitRange{Int}[] for _ in 1:N]
     clean = Vector{Union{Nothing, Int}}(nothing, N)
@@ -390,6 +413,16 @@ function array_bands(interior, s, args, pdeorders, derivweights, indexmap, perio
         hi = last(interior)[j]
         n = length(s, x)
         mintap, maxtap = array_tap_extents(x, pdeorders, derivweights)
+        nl = if haskey(nllap_orders, x)
+            c = array_nonlinlap_constraints(
+                x, n, derivweights, sort(collect(nllap_orders[x]))
+            )
+            mintap = min(mintap, c[3])
+            maxtap = max(maxtap, c[4])
+            c
+        else
+            nothing
+        end
         if !haskey(periodic, x)
             # Taps must stay in range, and no point may take a boundary branch: the
             # centered one at II <= boundary_point_count or II > n - boundary_point_count,
@@ -409,6 +442,10 @@ function array_bands(interior, s, args, pdeorders, derivweights, indexmap, perio
                         n - derivweights.windmap[1][Differential(x)^d].boundary_point_count
                     )
                 end
+            end
+            if nl !== nothing
+                lo = max(lo, nl[1])
+                hi = min(hi, nl[2])
             end
             lo > hi && return bands, clean
             bands[j] = [lo:hi]
@@ -851,6 +888,299 @@ end
         end
     end
     return windrules
+end
+
+####
+# Nonlinear laplacian in slice form
+####
+
+"""
+A matched nonlinear laplacian `Dx(expr * Dx(u))`: `term` is the matched additive term,
+`pre` any prefactor product and `div` any divisor (`nothing` when absent).
+"""
+struct NonlinlapMatch
+    term::Any
+    x::Any
+    u::Any
+    expr::Any
+    pre::Any
+    div::Any
+end
+
+_nllap_pre(preargs) = isempty(preargs) ? nothing : *(preargs...)
+function _nllap_match(x, u, exprargs, preargs, div)
+    return NonlinlapMatch(nothing, x, u, *(exprargs...), _nllap_pre(preargs), div)
+end
+function _nllap_match_div(x, u, a, preargs, div)
+    return NonlinlapMatch(nothing, x, u, 1 / a, _nllap_pre(preargs), div)
+end
+
+"""
+Match the five `@rule` patterns of `generate_nonlinlap_rules` against the additive
+`terms`, keeping the last match per term (mirrors the scalar path's `Dict` semantics).
+Grid-varying prefactors throw: the scalar path leaves them undiscretized, so no slice
+form can reproduce them.
+"""
+function match_nonlinlap_terms(terms, s, depvars)
+    ruleobjs = []
+    for u in depvars, x in ivs(depvar(u, s), s)
+        push!(
+            ruleobjs,
+            @rule *(
+                ~~c, $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)), ~~d
+            ) => _nllap_match(x, u, [~a..., ~b...], [~c..., ~d...], nothing)
+        )
+    end
+    for u in depvars, x in ivs(depvar(u, s), s)
+        push!(
+            ruleobjs,
+            @rule $(Differential(x))(
+                *(~~a, $(Differential(x))(u), ~~b)
+            ) => _nllap_match(x, u, [~a..., ~b...], [], nothing)
+        )
+    end
+    for u in depvars, x in ivs(depvar(u, s), s)
+        push!(
+            ruleobjs,
+            @rule (
+                $(Differential(x))($(Differential(x))(u) / ~a)
+            ) => _nllap_match_div(x, u, ~a, [], nothing)
+        )
+    end
+    for u in depvars, x in ivs(depvar(u, s), s)
+        push!(
+            ruleobjs,
+            @rule *(
+                ~~b, ($(Differential(x))($(Differential(x))(u) / ~a)), ~~c
+            ) => _nllap_match_div(x, u, ~a, [~b..., ~c...], nothing)
+        )
+    end
+    for u in depvars, x in ivs(depvar(u, s), s)
+        push!(
+            ruleobjs,
+            @rule /(
+                *(~~b, ($(Differential(x))(*(~~a, $(Differential(x))(u), ~~d))), ~~c), ~e
+            ) => _nllap_match(x, u, [~a..., ~d...], [~b..., ~c...], ~e)
+        )
+    end
+
+    matches = NonlinlapMatch[]
+    for t in terms
+        m = nothing
+        for r in ruleobjs
+            v = r(t)
+            v === nothing || (m = v)
+        end
+        m === nothing && continue
+        if m.pre !== nothing
+            pre = safe_unwrap(m.pre)
+            if !isempty(get_depvars(pre, s.vars.depvar_ops)) ||
+                    any(y -> subsmatch(pre, safe_unwrap(y) => nothing), s.x̄)
+                throw(
+                    ArrayDiscretizationFallback(
+                        "grid-varying factor $(m.pre) multiplying a nonlinear laplacian, which the scalar path leaves undiscretized"
+                    )
+                )
+            end
+        end
+        push!(matches, NonlinlapMatch(t, m.x, m.u, m.expr, m.pre, m.div))
+    end
+    return matches
+end
+
+"""
+Derivative orders above one that the coefficient applies along `m.x`; order one is
+always contributed by the inner derivative.
+"""
+function nonlinlap_coeff_orders(m::NonlinlapMatch, depvars, derivweights)
+    expr = safe_unwrap(m.expr)
+    orders = Int[]
+    for d in unique(vcat(1, derivweights.orders[m.x]))
+        d == 1 && continue
+        used = any(
+            v -> subsmatch(expr, safe_unwrap((Differential(m.x)^d)(v)) => nothing),
+            depvars
+        )
+        used && push!(orders, d)
+    end
+    return orders
+end
+
+# Interior-branch tap offsets of a half-offset operator (`Itap` in
+# `get_half_offset_weights_and_stencil`).
+half_offset_taps(D) = (1 - div(D.stencil_length, 2)):div(D.stencil_length, 2)
+
+"""
+Band bounds and tap extents `(lo, hi, mintap, maxtap)` a nonlinear laplacian imposes in
+direction `x`: the interior branch conditions of `get_half_offset_weights_and_stencil`
+for the outer operator (applied at `II - 1` on the clipped length `n - 1`) and, at each
+of its half-offset taps, for the interpolator and the inner half-offset derivatives.
+"""
+function array_nonlinlap_constraints(x, n, derivweights, coeff_orders)
+    D_outer = derivweights.halfoffsetmap[2][Differential(x)]
+    bpc_o = D_outer.boundary_point_count
+    # Outer interior branch: bpc_o < II - 1 <= (n-1) - bpc_o.
+    lo = bpc_o + 2
+    hi = n - bpc_o
+    outer_taps = half_offset_taps(D_outer) .- 1
+    mintap, maxtap = 0, 0
+    inner_ops = vcat(
+        [derivweights.interpmap[x], derivweights.halfoffsetmap[1][Differential(x)]],
+        [derivweights.halfoffsetmap[1][Differential(x)^d] for d in coeff_orders]
+    )
+    for D in inner_ops
+        bpc = D.boundary_point_count
+        # Interior branch at each half-offset point: bpc < II + o <= n - bpc.
+        lo = max(lo, bpc + 1 - first(outer_taps))
+        hi = min(hi, n - bpc - last(outer_taps))
+        taps = half_offset_taps(D)
+        mintap = min(mintap, first(outer_taps) + first(taps))
+        maxtap = max(maxtap, last(outer_taps) + last(taps))
+    end
+    return lo, hi, mintap, maxtap
+end
+
+"""
+Slice form of the half-offset operator `D` applied to `v` at offset `o` from each core
+point (interior branch of `get_half_offset_weights_and_stencil`). On nonuniform grids
+the weights vary per point, indexed as `stencil_coefs[i + o - boundary_point_count]`.
+"""
+function array_half_offset_stencil(D, v, o, s, x, ranges, indexmap, periodic)
+    N = length(ranges)
+    j = indexmap[x]
+    rng = ranges[j]
+    taps = half_offset_taps(D)
+    slices = [
+        array_slice(
+                v, s, ranges, indexmap; shiftx = x, offset = o + q, periodic = periodic
+            ) for q in taps
+    ]
+    weights = if D.dx isa Number
+        collect(D.stencil_coefs)
+    else
+        [
+            array_weight_vals(
+                    i -> D.stencil_coefs[i + o - D.boundary_point_count], k, rng, j, N
+                ) for k in eachindex(taps)
+        ]
+    end
+    return array_stencil(weights, slices)
+end
+
+"""
+Numeric grid values of `x` interpolated to the half-offset point at offset `o`, shaped
+to broadcast along the dimension of `x` (slice form of `map_ivs_to_interpolated`, with
+`_wrapperiodic`-style wrapping).
+"""
+function array_interp_grid_vals(interp, o, s, x, ranges, indexmap, periodic, N)
+    j = indexmap[x]
+    rng = ranges[j]
+    grid = s.grid[x]
+    n = length(s, x)
+    taps = half_offset_taps(interp)
+    wrap(i) = if haskey(periodic, x)
+        i <= 1 ? i + n - 1 : (i > n ? i - n + 1 : i)
+    else
+        i
+    end
+    getweights(i) = interp.dx isa Number ? interp.stencil_coefs :
+        interp.stencil_coefs[i + o - interp.boundary_point_count]
+    vals = [dot(getweights(i), [grid[wrap(i + o + q)] for q in taps]) for i in rng]
+    N == 1 && return vals
+    return reshape(vals, ntuple(k -> k == j ? length(vals) : 1, N))
+end
+
+"""
+Slice form of `cartesian_nonlinear_laplacian` for a matched `Dx(expr * Dx(u))`: at each
+half-offset point of the outer stencil, `expr * Dx(u)` is rebuilt over shifted slices
+(dependent variables interpolated, same-`x` derivatives via the half-offset operators,
+`x` interpolated numerically), then combined with the outer weights. Unhandled patterns
+in the coefficient surface as `ArrayDiscretizationFallback` from `arrayify`.
+"""
+function array_nonlinear_laplacian(
+        m::NonlinlapMatch, s, depvars, derivweights, ranges, indexmap, periodic
+    )
+    x, u = m.x, m.u
+    N = length(ranges)
+    j = indexmap[x]
+    rng = ranges[j]
+
+    D_outer = derivweights.halfoffsetmap[2][Differential(x)]
+    interp = derivweights.interpmap[x]
+    # Outer derivative is applied at II - 1 (`outerstencil` in the scalar path).
+    outer_taps = half_offset_taps(D_outer) .- 1
+
+    # Only build rules for orders the coefficient uses: slices are built eagerly and the
+    # band only guarantees in-range taps for those operators.
+    orders = vcat(1, nonlinlap_coeff_orders(m, depvars, derivweights))
+    interpolated = map(outer_taps) do o
+        rules = Pair[]
+        for v in depvars
+            for order in orders
+                D = derivweights.halfoffsetmap[1][Differential(x)^order]
+                push!(
+                    rules,
+                    safe_unwrap((Differential(x)^order)(v)) => array_half_offset_stencil(
+                        D, v, o, s, x, ranges, indexmap, periodic
+                    )
+                )
+            end
+        end
+        for v in depvars
+            push!(
+                rules,
+                safe_unwrap(v) => array_half_offset_stencil(
+                    interp, v, o, s, x, ranges, indexmap, periodic
+                )
+            )
+        end
+        push!(
+            rules,
+            safe_unwrap(x) => array_interp_grid_vals(
+                interp, o, s, x, ranges, indexmap, periodic, N
+            )
+        )
+        for y in ivs(depvar(u, s), s)
+            isequal(y, x) && continue
+            push!(rules, safe_unwrap(y) => array_grid_vals(y, s, ranges, indexmap, N))
+        end
+        ctx = ArrayifyContext(rules, s.time)
+        return arrayify(m.expr * Differential(x)(u), ctx)
+    end
+
+    outerweights = if D_outer.dx isa Number
+        collect(D_outer.stencil_coefs)
+    else
+        # -1: the outer derivative sits at II - 1.
+        [
+            array_weight_vals(
+                    i -> D_outer.stencil_coefs[i - 1 - D_outer.boundary_point_count],
+                    k, rng, j, N
+                ) for k in eachindex(outer_taps)
+        ]
+    end
+    return array_stencil(outerweights, interpolated)
+end
+
+"""
+Rules binding each matched term to its slice form: the laplacian from
+`array_nonlinear_laplacian`, grid-constant prefactors broadcast on, divisors
+discretized with the base rules (mirrors `replacevals`).
+"""
+function array_nonlinlap_rules(
+        matches, s, depvars, derivweights, ranges, indexmap, baserules, periodic
+    )
+    basectx = ArrayifyContext(baserules, s.time)
+    rules = Pair[]
+    for m in matches
+        val = array_nonlinear_laplacian(
+            m, s, depvars, derivweights, ranges, indexmap, periodic
+        )
+        m.pre === nothing || (val = broadcast(*, arrayify(m.pre, basectx), val))
+        m.div === nothing || (val = broadcast(/, val, arrayify(m.div, basectx)))
+        push!(rules, safe_unwrap(m.term) => val)
+    end
+    return rules
 end
 
 struct ArrayifyContext

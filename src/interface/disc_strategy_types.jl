@@ -32,8 +32,9 @@ Boundary, extrapolation and corner equations are generated pointwise as in
 that their stencil differs from the translation-invariant interior stencil. Boundary
 values appearing in an interior equation (e.g. `u(t, 1)`) are substituted for the
 corresponding array element or face slice on every array box, including size-1 wrap
-boxes. Equations containing patterns with no slice representation (WENO or functional
-advection schemes, nonlinear or spherical Laplacians, integrals, mixed derivatives,
+boxes. Nonlinear Laplacians `Dx(a(u) * Dx(u))` are supported in slice form.
+Equations containing patterns with no slice representation (WENO or functional
+advection schemes, spherical Laplacians, integrals, mixed derivatives,
 interfaces joining two different variables, staggered grids, derivatives of boundary
 values, time-literal references such as `u(0, x)`, boundary values on edge-aligned
 grids, stationary systems) automatically fall back to pointwise scalar equations,

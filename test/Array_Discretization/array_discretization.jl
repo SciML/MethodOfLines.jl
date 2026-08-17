@@ -439,7 +439,7 @@ end
     @test sol_arr[c2(t, x2)] ≈ sol_scal[c2(t, x2)] rtol = 1.0e-6
 end
 
-@testset "Fallback: nonlinear laplacian still matches the scalar path" begin
+@testset "1D nonlinear laplacian (u coefficient)" begin
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -452,8 +452,198 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sys_arr) == 0
+    # The half-offset coefficient expression is translation invariant over the core, so
+    # the interior collapses to one array equation (issue #623).
+    @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+
+    # and the equation count does not grow with the grid
+    counts = map([21, 41]) do n
+        disc = MOLFiniteDifference(
+            [x => 1 / (n - 1)], t; discretization_strategy = ArrayDiscretization()
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        length(get_eqs(sys))
+    end
+    @test counts[1] == counts[2]
+end
+
+@testset "1D nonlinear laplacian against an analytic solution" begin
+    # test/Nonlinear_Diffusion Test 00 (doi:10.1016/j.camwa.2006.12.077):
+    # Dt(u) ~ Dx(u^-1 Dx(u)), exact solution 2(1 + t)/(1 + x)^2.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    analytic(t, x) = 2.0 * (1.0 + t) / (1.0 + x)^2
+    eq = Dt(u(t, x)) ~ Dx(u(t, x)^(-1) * Dx(u(t, x)))
+    bcs = [
+        u(0, x) ~ analytic(0.0, x),
+        u(t, 0) ~ analytic(t, 0.0),
+        u(t, 2) ~ analytic(t, 2.0),
+    ]
+    domains = [t ∈ Interval(0.0, 2.0), x ∈ Interval(0.0, 2.0)]
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.04], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+
+    xdisc = sol_arr[x]
+    exact = [analytic(sol_arr[t][end], xi) for xi in xdisc]
+    @test sol_arr[u(t, x)][end, :] ≈ exact atol = 0.1
+end
+
+@testset "1D nonlinear laplacian, coefficient depending on x" begin
+    # An independent variable in the coefficient becomes numerically interpolated grid
+    # values at the half-offset points.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ Dx((1 + x) * u(t, x) * Dx(u(t, x)))
+    bcs = [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+end
+
+@testset "1D nonlinear laplacian, division forms" begin
+    @parameters t x p
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    bcs = [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
+
+    # A divided coefficient, Dx(Dx(u)/a(u))
+    eq = Dt(u(t, x)) ~ Dx(Dx(u(t, x)) / u(t, x))
+    @named pdesys_div = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys_div, [x => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+
+    # A grid-constant prefactor and a parameter divisor on the whole laplacian
+    eq = Dt(u(t, x)) ~ 3.0 * Dx(u(t, x) * Dx(u(t, x))) / p
+    @named pdesys_pre = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [p => 2.0])
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys_pre, [x => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+end
+
+@testset "1D nonlinear laplacian, fourth order approximation" begin
+    # Band regression guard: at order 4 the half-offset operators are wider than the
+    # central second difference `d_orders` reports, so the core must shrink accordingly.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x)))
+    bcs = [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(
+        pdesys, [x => 0.05], t; disc_kwargs = (; approx_order = 4)
+    )
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+end
+
+@testset "1D nonlinear laplacian, periodic BCs" begin
+    # In a periodic direction the core spans the whole interior except the points whose
+    # slices would straddle the seam.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x)))
+    bcs = [u(0, x) ~ 1.5 + sinpi(2x) / 2, u(t, 0) ~ u(t, 1)]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+end
+
+@testset "1D nonlinear laplacian on a nonuniform grid" begin
+    # Half-offset interior weights vary per point and enter as numeric coefficient
+    # vectors.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x)))
+    bcs = [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => gridvec], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
+end
+
+@testset "2D nonlinear laplacian" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+
+    eq = Dt(u(t, x, y)) ~ Dx(u(t, x, y) * Dx(u(t, x, y))) +
+        Dy(u(t, x, y) * Dy(u(t, x, y)))
+    bcs = [
+        u(0, x, y) ~ 1.0 + sinpi(x) * sinpi(y) / 2,
+        u(t, 0, y) ~ 1.0, u(t, 1, y) ~ 1.0,
+        u(t, x, 0) ~ 1.0, u(t, x, 1) ~ 1.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.025), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
+end
+
+@testset "Fallback: grid-varying factor multiplying a nonlinear laplacian" begin
+    # The scalar path leaves such factors undiscretized (a pre-existing scalar-path
+    # bug), so no slice form can reproduce it; the equation stays pointwise for parity.
+    # Symbolic level only: the scalar result does not simulate.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ x * Dx(u(t, x)^2 * Dx(u(t, x)))
+    bcs = [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    lenient = MOLFiniteDifference(
+        [x => 0.05], t; discretization_strategy = ArrayDiscretization()
+    )
+    sys, _ = symbolic_discretize(pdesys, lenient)
+    @test narrayeqs_interior(sys) == 0
 end
 
 @testset "Fallback: WENO scheme still matches the scalar path" begin
@@ -690,8 +880,8 @@ end
     # pointwise.
     unsupported = [
         (
-            "nonlinear laplacian",
-            Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x))),
+            "spherical laplacian",
+            Dt(u(t, x)) ~ Dx(x^2 * Dx(u(t, x))) / x^2,
             [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
         ),
         (
@@ -748,6 +938,15 @@ end
     sys_strict, _ = symbolic_discretize(ok_sys, strict)
     @test narrayeqs_interior(sys_strict) == 1
 
+    # Nonlinear laplacians are supported and must go through strict mode too.
+    @named nllap_sys = PDESystem(
+        Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x))),
+        [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
+        domains, [t, x], [u(t, x)]
+    )
+    sys_nllap, _ = symbolic_discretize(nllap_sys, strict)
+    @test narrayeqs_interior(sys_nllap) == 1
+
     # Periodic boundaries are supported: the points whose stencils wrap over the seam are
     # pointwise for the same structural reason the frame is, so strict mode accepts them.
     @named periodic_sys = PDESystem(
@@ -769,7 +968,7 @@ end
 
     # The error names the offending equation and the reason.
     @named bad = PDESystem(
-        Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x))),
+        Dt(u(t, x)) ~ Dx(x^2 * Dx(u(t, x))) / x^2,
         [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
         domains, [t, x], [u(t, x)]
     )
