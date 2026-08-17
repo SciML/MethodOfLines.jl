@@ -187,9 +187,9 @@ system's initialization equations are ones it honors; otherwise a
 [`BrownFullBasicInitUnsafeError`](@ref) is raised naming the offending equations. Passing
 `initializealg` explicitly overrides both the default and that check.
 
-The result is a plain `DAEProblem`, so its solution is indexed by the discretized
-variables (`sol[u_disc[i]]`, with `u_disc` from [`get_discrete`](@ref)) rather than by the
-`PDESystem`'s variables. Use `discretize` for a `PDETimeSeriesSolution`.
+The solution is a `PDETimeSeriesSolution`, the same wrapper [`discretize`](@ref)
+produces, so it is indexed and interpolated by the `PDESystem`'s own variables:
+`sol[u(t, x)]`, `sol(t, x)`.
 """
 function SciMLBase.DAEProblem(
         pdesys::PDESystem, discretization::MOLFiniteDifference;
