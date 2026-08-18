@@ -7,8 +7,10 @@
 
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Symbolics
 using SciMLBase
+using SciMLBase: successful_retcode
 using OrdinaryDiffEqRosenbrock: Rodas4
 using OrdinaryDiffEqSSPRK: SSPRK22
+using OrdinaryDiffEqLowOrderRK: SplitEuler
 using NonlinearSolve: NewtonRaphson
 using ModelingToolkit: get_eqs
 using SymbolicUtils: symtype
@@ -1380,4 +1382,92 @@ end
     @test all(isfinite, du)
     sol = solve(prob, Rodas4())
     @test SciMLBase.successful_retcode(sol)
+end
+
+# Staggered grids: each variable's alignment fixes its interior stencil taps, so the
+# interior collapses to one array equation per PDE. Staggered problems build
+# SplitODEProblems without symbolic indexing, so solutions are compared positionally.
+function staggered_wave(dx; periodic = false, strategy = ArrayDiscretization())
+    @parameters t x
+    @variables ρ(..) ϕ(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    a = 5.0
+    L = 2.0
+    eq = [
+        Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+        Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0,
+    ]
+    bcs = if periodic
+        [
+            ρ(0, x) ~ exp(-(x - L / 2)^2), ϕ(0.0, x) ~ 0.0,
+            ρ(t, L) ~ ρ(t, -L), ϕ(t, -L) ~ ϕ(t, L),
+        ]
+    else
+        [
+            ρ(0, x) ~ exp(-x^2), ϕ(0.0, x) ~ 0.0,
+            Dx(ρ(t, L)) ~ 0.0, ϕ(t, -L) ~ 0.0,
+        ]
+    end
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(-L, L)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
+    disc = MOLFiniteDifference(
+        [x => dx], t; grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = ϕ(t, x), discretization_strategy = strategy
+    )
+    return pdesys, disc
+end
+
+@testset "Staggered 1D wave equation, mixed BCs" begin
+    pdesys, disc = staggered_wave(0.125)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    # one array equation per PDE
+    @test narrayeqs_interior(sys) == 2
+
+    # equation count is independent of resolution
+    pdesys2, disc2 = staggered_wave(0.0625)
+    sys2, _ = symbolic_discretize(pdesys2, disc2)
+    @test length(get_eqs(sys2)) == length(get_eqs(sys))
+
+    pdesys_s, disc_s = staggered_wave(0.125; strategy = ScalarizedDiscretization())
+    prob_arr = discretize(pdesys, disc)
+    prob_scal = discretize(pdesys_s, disc_s)
+    @test prob_arr.u0 == prob_scal.u0
+    dt = (0.125 / 5.0)^2
+    sol_arr = solve(prob_arr, SplitEuler(), dt = dt)
+    sol_scal = solve(prob_scal, SplitEuler(), dt = dt)
+    @test successful_retcode(sol_arr)
+    @test successful_retcode(sol_scal)
+    @test Array(sol_arr) ≈ Array(sol_scal) atol = 1.0e-12
+end
+
+@testset "Staggered 1D wave equation, periodic BCs" begin
+    pdesys, disc = staggered_wave(0.125; periodic = true)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 2
+
+    pdesys2, disc2 = staggered_wave(0.0625; periodic = true)
+    sys2, _ = symbolic_discretize(pdesys2, disc2)
+    @test length(get_eqs(sys2)) == length(get_eqs(sys))
+
+    pdesys_s, disc_s = staggered_wave(
+        0.125; periodic = true, strategy = ScalarizedDiscretization()
+    )
+    prob_arr = discretize(pdesys, disc)
+    prob_scal = discretize(pdesys_s, disc_s)
+    @test prob_arr.u0 == prob_scal.u0
+    dt = (0.125 / 5.0)^2
+    sol_arr = solve(prob_arr, SplitEuler(), dt = dt)
+    sol_scal = solve(prob_scal, SplitEuler(), dt = dt)
+    @test successful_retcode(sol_arr)
+    @test successful_retcode(sol_scal)
+    @test Array(sol_arr) ≈ Array(sol_scal) atol = 1.0e-12
+end
+
+@testset "Staggered grid under StrictArrayDiscretization" begin
+    # 1D staggered boundaries are single points — benign fallbacks — so strict mode
+    # accepts the whole system.
+    pdesys, disc = staggered_wave(0.125; strategy = StrictArrayDiscretization())
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 2
 end
