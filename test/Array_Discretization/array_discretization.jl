@@ -790,9 +790,8 @@ end
 end
 
 @testset "WENO advection on a uniform grid" begin
-    # WENO's smoothness indicators make its weights solution dependent, but its taps are
-    # the same offsets at every interior point, so the scheme traces once into a single
-    # array expression whose (nonlinear) weights broadcast elementwise.
+    # The taps are fixed offsets, so the scheme traces once; the solution-dependent
+    # weights broadcast elementwise.
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -825,8 +824,8 @@ end
 end
 
 @testset "WENO advection with a coefficient and diffusion" begin
-    # The scheme replaces the bare first derivative, so a coefficient multiplying it (and
-    # any other derivative in the equation) goes through the general broadcast path.
+    # The scheme replaces the bare `Dx(u)`; coefficients and other derivatives
+    # broadcast on.
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -880,13 +879,29 @@ end
         length(get_eqs(sys))
     end
     @test counts[1] == counts[2]
+
+    # a periodic nonuniform direction falls back
+    gridvec = [0.5 * (1 - cospi(i / 50)) for i in 0:50]
+    solp_arr, solp_scal, sysp_arr = solve_both(
+        pdesys, [x => gridvec], t;
+        disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-3)
+    )
+    @test solp_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sysp_arr) == 0
+    @test solp_arr[u(t, x)] == solp_scal[u(t, x)]
+    strictp = MOLFiniteDifference(
+        [x => gridvec], t; discretization_strategy = StrictArrayDiscretization(),
+        advection_scheme = WENOScheme()
+    )
+    @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
+        pdesys, strictp
+    )
 end
 
 @testset "WENO advection on a nonuniform grid (coefficient split)" begin
-    # The nonuniform scheme's coordinate arithmetic is factored into numeric per-point
-    # coefficient slots (`array_scheme_split`), so the solution arithmetic traces once
-    # and substituting the slots reproduces the scalar path's expression exactly — the
-    # solutions agree bitwise, like the uniform case.
+    # Coordinate arithmetic sits in numeric per-point slots (`array_scheme_split`), so
+    # the kernel traces once and the solutions agree bitwise, like the uniform case.
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -921,13 +936,10 @@ end
 end
 
 @testset "Nonuniform WENO coefficient split reproduces the scalar trace" begin
-    # Acceptance criterion of the split: substituting the numeric slots of
-    # `weno_nu_coeffs` into the once-traced `weno_nu_apply` must be symbolically
-    # identical (`isequal`) to the trace of `_weno_f_nonuniform_core` on the same
-    # window. Identical expressions compile to identical code, which is what makes the
-    # array path agree with the pointwise path bitwise. Each slot must hold exactly the
-    # constant the scalar trace folds at that spot, so this breaks visibly (rather than
-    # drifting silently) if SymbolicUtils canonicalization ever changes.
+    # Acceptance criterion of the split: substituting the numeric slots into the traced
+    # kernel must be symbolically identical (`isequal`) to the scalar core's trace on
+    # the same window — identical expressions compile to identical code, hence bitwise
+    # parity. Breaks visibly if SymbolicUtils canonicalization ever changes.
     ε = 1.0e-6
     usyms = [Symbolics.variable(:u, i) for i in 1:5]
     split = MethodOfLines.array_scheme_split(WENOScheme())
@@ -1068,6 +1080,23 @@ end
     @test narrayeqs_interior(sysm_arr) == 1
     @test solm_arr[w(t, x, y)] == solm_scal[w(t, x, y)]
 
+    # a trace and central differences in one 2D equation
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    @named advdiff2d = PDESystem(
+        Dt(w(t, x, y)) ~ -Dx(w(t, x, y)) - Dy(w(t, x, y)) +
+            0.05 * (Dxx(w(t, x, y)) + Dyy(w(t, x, y))),
+        bcs2, dom2, [t, x, y], [w(t, x, y)]
+    )
+    sold_arr, sold_scal, sysd_arr = solve_both(
+        advdiff2d, [x => 0.05, y => 0.05], t;
+        disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-3)
+    )
+    @test sold_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sysd_arr) == 1
+    @test sold_arr[w(t, x, y)] == sold_scal[w(t, x, y)]
+
     # and both forms pass strict mode
     strict2 = MOLFiniteDifference(
         [x => 0.05, y => gridvec], t;
@@ -1103,9 +1132,8 @@ end
     @test narrayeqs_interior(sys_arr) == 1
     @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
 
-    # A scheme that uses the grid coordinate falls back: the scalar path folds those
-    # (numeric) coordinates in Float64, which a traced form cannot reproduce digit for
-    # digit, and this strategy may not change the numbers.
+    # A scheme that reads the grid coordinate falls back: a trace cannot reproduce the
+    # scalar path's Float64 coordinate folds digit for digit.
     coord3(u, p, t, x, dx) = (u[3] - u[1]) / (x[3] - x[1])
     xscheme = FunctionalScheme{3, 1}(
         coord3, [nothing], [nothing], false, []; name = "coord3"
@@ -1119,8 +1147,8 @@ end
     @test narrayeqs_interior(sys_arr2) == 0
     @test sol_arr2[u(t, x)] == sol_scal2[u(t, x)]
 
-    # A nonuniform user scheme without an `array_scheme_split` falls back on a
-    # nonuniform grid; the pointwise result is untouched.
+    # A nonuniform scheme without an `array_scheme_split` falls back; the pointwise
+    # result is untouched.
     nu3(u, p, t, x, dx) = (u[3] - u[1]) / (x[3] - x[1])
     nuscheme = FunctionalScheme{3, 1}(
         nu3, [nothing], [nothing], true, []; name = "nu3"
@@ -1135,8 +1163,8 @@ end
     @test narrayeqs_interior(sys_arr3) == 0
     @test sol_arr3[u(t, x)] == sol_scal3[u(t, x)]
 
-    # A scheme whose trace fails — a hard branch on the coordinate values, which are
-    # symbols during tracing but numbers on the pointwise path — falls back, not errors.
+    # A trace failure (hard branch on coordinates, which are symbols while tracing)
+    # falls back, not errors.
     xbranch(u, p, t, x, dx) = x[3] > 0.5 ? (u[3] - u[2]) / dx : (u[2] - u[1]) / dx
     bscheme = FunctionalScheme{3, 1}(
         xbranch, [nothing], [nothing], false, []; name = "xbranch"

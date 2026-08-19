@@ -25,11 +25,10 @@
 # `array_nonlinear_laplacian`. Spherical laplacians `r^-2 Dr(r^2 Dr(u))` build on the
 # same half-offset machinery; see `array_spherical_diffusion`.
 #
-# Functional advection schemes (WENO and friends) are traced once per direction on the
-# interior and their taps replaced by shifted slices. On nonuniform grids the coordinate
-# arithmetic is factored into numeric per-point coefficients (`array_scheme_split`).
-# Schemes without a split, schemes that read the grid coordinate, and periodic nonuniform
-# directions still fall back. See `array_function_scheme_trace`.
+# Functional advection schemes are traced once per direction, taps
+# replaced by shifted slices; on nonuniform grids the coordinate arithmetic moves into
+# numeric per-point coefficients (`array_scheme_split`). See `array_function_scheme_trace`
+# for what falls back.
 #
 # Staggered grids collapse the same way: each variable's alignment fixes its two stencil
 # taps across the interior, so the interior is one array equation per PDE; the (1D,
@@ -834,9 +833,9 @@ function array_weight_vals(getweights, k, rng, j, N)
 end
 
 """
-Per-slot coefficient arrays of a split functional scheme (see [`array_scheme_split`](@ref)):
-`getcoeffs(i)` is evaluated once per core point of `rng` and its `nslots` entries are
-sliced into broadcastable arrays along dimension `j` of `N`, like `array_weight_vals`.
+Per-slot coefficient arrays of a split functional scheme: `getcoeffs(i)` is evaluated once
+per point of `rng` and its `nslots` entries sliced into broadcastable arrays along
+dimension `j` of `N`, like `array_weight_vals`.
 """
 function array_coeff_vals(getcoeffs, nslots, rng, j, N)
     percoeff = [getcoeffs(i) for i in rng]
@@ -1029,46 +1028,34 @@ array_scheme_syms(tag, n) = [Symbolics.variable(Symbol("##mol_scheme_", tag), i)
 """
     array_scheme_split(F::FunctionalScheme)
 
-Coefficient split of a functional scheme for nonuniform grids, or `nothing` (the
-default), in which case the scheme falls back to the pointwise path there.
+Coefficient split of a functional scheme for nonuniform grids; `nothing` (the default)
+falls back to the pointwise path there. Not exported: a scheme opts in by defining a
+method on `MethodOfLines.array_scheme_split`, as WENO does.
 
-A split is a named tuple `(coeffs, apply, nslots)` factoring the scheme's `interior`
-function into grid geometry and solution arithmetic: `coeffs(xwindow)` maps the
-`interior_points`-long window of grid coordinates around a point to `nslots` numbers,
-and `apply(u, p, t, c)` recombines them with the taps `u` such that
+A split `(coeffs, apply, nslots)` factors `interior` into grid geometry and solution
+arithmetic: `coeffs(xwindow)` maps the `interior_points`-long window of grid coordinates
+to `nslots` numbers, and `apply(u, p, t, c)` recombines them with the taps so that
 `apply(u, p, t, coeffs(xwindow))` equals `interior(u, p, t, xwindow, dxwindow)` up to
-floating point reassociation. `apply` is traced once on placeholder symbols — so it
-must be branch free like `interior` — while the slots are evaluated numerically per
-grid point, keeping the coordinate arithmetic out of the symbolic trace. When each
-slot holds exactly the constant the scalar trace folds at that spot and enters `apply`
-linearly, substituting the slots reproduces the scalar path's expression symbolically
-— then the discretization matches the pointwise one bitwise, as WENO's split does
-(pinned by its property test). A split that reassociates the fold only agrees to
-~1e-15 relative instead. See `weno_nu_coeffs`/`weno_nu_apply` for the WENO split.
+reassociation. `apply` is traced once on placeholder symbols and must be branch free;
+the slots are evaluated numerically per grid point. If each slot holds exactly the
+constant the scalar trace folds at that spot and enters `apply` linearly, the array form
+matches the pointwise path bitwise (WENO's split does, pinned by its property test); a
+split that reassociates the fold agrees to ~1e-15 relative instead.
 """
 array_scheme_split(::FunctionalScheme) = nothing
 
 """
-Trace of a functional advection scheme for one direction `x`, shared by every dependent
-variable advected in `x`: the traced expression, its tap offsets and placeholder taps
-`usyms`, and on nonuniform grids the coefficient slots `csyms` with their split
-(`nothing` on uniform grids).
+Trace of a functional advection scheme for one direction `x`, shared by every variable
+advected in `x`: the traced expression, tap offsets, placeholder taps `usyms`, and on
+nonuniform grids the coefficient slots `csyms` with their split.
 
-The scheme is translation invariant on the interior — the same function applied to the same
-tap offsets at every point — so it can be traced once on placeholder symbols and its taps
-then replaced by shifted slices, instead of being retraced at every grid point. That the
-scheme's weights are solution dependent, as WENO's smoothness indicators are, costs nothing
-here: they are arithmetic on the taps like any other term, so `arrayify` broadcasts them
-elementwise along with the rest of the expression.
-
-The scheme's independent variable argument takes a different value at each point of the
-slice, so a scheme that uses it would have to be traced symbolically in that argument too,
-and the arithmetic Julia folds over those (numeric) coordinates in the scalar path would be
-rebuilt as symbolic operations, in general reassociated. Those fall back rather than risk
-differing from the scalar path in the last digits. Nonuniform grids vary in the same way,
-but a scheme with an [`array_scheme_split`](@ref) confines the coordinate arithmetic to
-numeric coefficient slots and is traced through its `apply` kernel instead; schemes
-without one fall back.
+The interior is translation invariant, so the scheme traces once and its taps are later
+replaced by shifted slices; solution-dependent weights (WENO's smoothness indicators) are
+tap arithmetic and broadcast like any other term. Schemes that read the grid coordinate
+fall back: the scalar path folds those numeric coordinates, which a trace would rebuild
+reassociated. Nonuniform grids trace the `apply` kernel of the scheme's
+[`array_scheme_split`](@ref) instead; schemes without a split fall back, as do periodic
+nonuniform directions, whose coefficient windows cannot wrap the seam.
 """
 function array_function_scheme_trace(F, s, x, periodic)
     dx = s.dxs[x]
@@ -1097,8 +1084,6 @@ function array_function_scheme_trace(F, s, x, periodic)
         )
         return (expr = expr, taps = taps, usyms = usyms, csyms = nothing, split = nothing)
     end
-    # Coefficient windows are read straight off the grid; wrapping them across a seam
-    # stays with the pointwise path.
     haskey(periodic, x) && throw(
         ArrayDiscretizationFallback(
             "$(F.name) advection on a periodic nonuniform grid"
@@ -1122,9 +1107,9 @@ function array_function_scheme_trace(F, s, x, periodic)
 end
 
 """
-Substitution rules binding the coefficient slots of a split scheme trace to their
-numeric per-point arrays over the core box; empty on uniform grids. The windows fed to
-`coeffs` are the same grid windows `get_f_taps_coords` hands the scalar path.
+Rules binding the coefficient slots of a split scheme trace to their numeric per-point
+arrays over the core box; empty on uniform grids. The windows fed to `coeffs` are the
+same grid windows the scalar path sees.
 """
 function array_scheme_coeff_rules(trace, s, x, ranges, indexmap)
     trace.csyms === nothing && return Pair[]
@@ -1158,9 +1143,7 @@ end
     )
     F = derivweights.advection_scheme
     F isa FunctionalScheme || return Pair[]
-    # Only trace for derivatives the equation contains: the scalar path applies the
-    # scheme where its rule key occurs, and tracing absent pairs would add nothing but
-    # fallback surface.
+    # Only derivatives the equation contains: tracing absent pairs adds fallback surface.
     pairs = Tuple{Any, Any}[]
     for u in depvars, x in ivs(depvar(u, s), s)
         1 in pdeorders[x] || continue
@@ -1170,8 +1153,8 @@ end
         push!(pairs, (u, x))
     end
     rules = Pair[]
+    # One trace per direction: it depends on the grid along `x` but not on `u`.
     for x in unique(map(last, pairs))
-        # One trace per direction: it depends on the grid along `x` but not on `u`.
         trace = array_function_scheme_trace(F, s, x, periodic)
         crules = array_scheme_coeff_rules(trace, s, x, ranges, indexmap)
         for (u, xu) in pairs

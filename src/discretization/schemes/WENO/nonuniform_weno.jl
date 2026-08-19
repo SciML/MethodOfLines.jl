@@ -211,17 +211,13 @@ Base.@propagate_inbounds @inline function (::WENONonUniformBoundary{T})(
     return weno_f_nonuniform(u, p, t, x, dx, Val(T))
 end
 
-####
 # Coefficient split for the array discretization strategy
-####
 
-# `weno_nu_coeffs`/`weno_nu_apply` split `_weno_f_nonuniform_core(u, ε, x, Val(3))` into
-# grid geometry (numeric, evaluated per point at discretization time) and solution
-# arithmetic (traced once on placeholder slots by `array_function_scheme`). Each slot must
-# hold exactly the constant the scalar trace folds at that spot — same operations, same
-# order — and slots must enter `weno_nu_apply` linearly (no slot*slot arithmetic), or the
-# once-traced form would canonicalize differently from the scalar path. Pinned by the
-# "coefficient split reproduces the scalar trace" property test.
+# Split of `_weno_f_nonuniform_core(u, ε, x, Val(3))` into grid geometry (`weno_nu_coeffs`,
+# numeric per point) and solution arithmetic (`weno_nu_apply`, traced once). Each slot must
+# hold exactly the constant the scalar trace folds at that spot and enter `weno_nu_apply`
+# linearly (no slot*slot arithmetic), or the traced form would canonicalize differently
+# from the scalar path. Pinned by the coefficient-split property test.
 
 const WENO_NU_NSLOTS = 55
 
@@ -269,8 +265,7 @@ function weno_nu_coeffs(x::AbstractVector)
     return c
 end
 
-# Solution arithmetic of `_weno_f_nonuniform_core` over the slots; `ε = p[1]`, `t` unused
-# (FunctionalScheme parameter contract).
+# Solution arithmetic of `_weno_f_nonuniform_core` over the slots; `ε = p[1]`, `t` unused.
 function weno_nu_apply(u, p, t, c)
     ε = p[1]
     function substencil(b, ua, ub, uc)
