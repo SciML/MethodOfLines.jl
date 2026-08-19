@@ -210,3 +210,92 @@ Base.@propagate_inbounds @inline function (::WENONonUniformBoundary{T})(
     ) where {T}
     return weno_f_nonuniform(u, p, t, x, dx, Val(T))
 end
+
+####
+# Coefficient split for the array discretization strategy
+####
+
+# `weno_nu_coeffs`/`weno_nu_apply` split `_weno_f_nonuniform_core(u, ε, x, Val(3))` into
+# grid geometry (numeric, evaluated per point at discretization time) and solution
+# arithmetic (traced once on placeholder slots by `array_function_scheme`). Each slot must
+# hold exactly the constant the scalar trace folds at that spot — same operations, same
+# order — and slots must enter `weno_nu_apply` linearly (no slot*slot arithmetic), or the
+# once-traced form would canonicalize differently from the scalar path. Pinned by the
+# "coefficient split reproduces the scalar trace" property test.
+
+const WENO_NU_NSLOTS = 55
+
+# Slot layout: substencil k = 0, 1, 2 at base 15k holds the five Fornberg operators of
+# `_substencil_beta_r` (m1i, m1L, m1M, m1R, m2M; 3 entries each); 46 = Δx*(Δx/6) and
+# 47 = ((Δx*Δx)*Δx)*Δx are the folded quadrature factors of `Δx*I1 + Δx^3*I2`;
+# 48:50 = dp ./ σp; 51:53 = dm ./ σm; 54 = σp; 55 = σm.
+function weno_nu_coeffs(x::AbstractVector)
+    T = eltype(x)
+    x1 = T(x[1]); x2 = T(x[2]); x3 = T(x[3]); x4 = T(x[4]); x5 = T(x[5])
+
+    xi, xL, xph = _weno_target_geometry(Val(3), x1, x2, x3, x4, x5)
+    Δx = xph - xL
+    xM = (xL + xph) / 2
+
+    c = Vector{T}(undef, WENO_NU_NSLOTS)
+    for (k, α) in enumerate(((x1, x2, x3), (x2, x3, x4), (x3, x4, x5)))
+        b = 15 * (k - 1)
+        _, m1i, _ = _fornberg3_weights(α, xi)
+        _, m1L, _ = _fornberg3_weights(α, xL)
+        _, m1M, m2M = _fornberg3_weights(α, xM)
+        _, m1R, _ = _fornberg3_weights(α, xph)
+        c[(b + 1):(b + 3)] .= m1i
+        c[(b + 4):(b + 6)] .= m1L
+        c[(b + 7):(b + 9)] .= m1M
+        c[(b + 10):(b + 12)] .= m1R
+        c[(b + 13):(b + 15)] .= m2M
+    end
+
+    c[46] = Δx * (Δx / 6)
+    c[47] = ((Δx * Δx) * Δx) * Δx
+
+    d0, d2 = _weno_ideal_d0d2(Val(3), x1, x2, x3, x4, x5)
+    d1 = one(T) - d0 - d2
+    θ = T(3)
+    half = T(1) / 2
+    dp0 = half * (d0 + θ * abs(d0)); dp1 = half * (d1 + θ * abs(d1)); dp2 = half * (d2 + θ * abs(d2))
+    dm0 = dp0 - d0; dm1 = dp1 - d1; dm2 = dp2 - d2
+    σp = dp0 + dp1 + dp2
+    σm = dm0 + dm1 + dm2
+    c[48] = dp0 / σp; c[49] = dp1 / σp; c[50] = dp2 / σp
+    c[51] = dm0 / σm; c[52] = dm1 / σm; c[53] = dm2 / σm
+    c[54] = σp
+    c[55] = σm
+    return c
+end
+
+# Solution arithmetic of `_weno_f_nonuniform_core` over the slots; `ε = p[1]`, `t` unused
+# (FunctionalScheme parameter contract).
+function weno_nu_apply(u, p, t, c)
+    ε = p[1]
+    function substencil(b, ua, ub, uc)
+        r = c[b + 1] * ua + c[b + 2] * ub + c[b + 3] * uc
+        pL = c[b + 4] * ua + c[b + 5] * ub + c[b + 6] * uc
+        pM = c[b + 7] * ua + c[b + 8] * ub + c[b + 9] * uc
+        pR = c[b + 10] * ua + c[b + 11] * ub + c[b + 12] * uc
+        pp = c[b + 13] * ua + c[b + 14] * ub + c[b + 15] * uc
+        val = c[46] * (pL^2 + 4 * pM^2 + pR^2) + c[47] * pp^2
+        return r, _beta_nonneg(val)
+    end
+    r0, β0 = substencil(0, u[1], u[2], u[3])
+    r1, β1 = substencil(15, u[2], u[3], u[4])
+    r2, β2 = substencil(30, u[3], u[4], u[5])
+
+    ap0 = c[48] / (ε + β0)^2; ap1 = c[49] / (ε + β1)^2; ap2 = c[50] / (ε + β2)^2
+    sp = ap0 + ap1 + ap2
+    ωp0 = ap0 / sp; ωp1 = ap1 / sp; ωp2 = ap2 / sp
+
+    am0 = c[51] / (ε + β0)^2; am1 = c[52] / (ε + β1)^2; am2 = c[53] / (ε + β2)^2
+    sm = am0 + am1 + am2
+    ωm0 = am0 / sm; ωm1 = am1 / sm; ωm2 = am2 / sm
+
+    Rp = ωp0 * r0 + ωp1 * r1 + ωp2 * r2
+    Rm = ωm0 * r0 + ωm1 * r1 + ωm2 * r2
+
+    return c[54] * Rp - c[55] * Rm
+end
