@@ -5,7 +5,6 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqBDF: DFBDF
 using SciMLBase
 using ModelingToolkit: Differential
 using StableRNGs
@@ -57,7 +56,7 @@ using StableRNGs
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     @test SciMLBase.successful_retcode(sol)
 
@@ -182,7 +181,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     @test SciMLBase.successful_retcode(sol)
 
@@ -250,7 +249,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     @test SciMLBase.successful_retcode(sol)
 
@@ -371,7 +370,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
 
     # Test against exact solution
@@ -436,7 +435,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     @test SciMLBase.successful_retcode(sol)
 
@@ -503,7 +502,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     @test_broken SciMLBase.successful_retcode(sol)
 
@@ -569,7 +568,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     @test_broken SciMLBase.successful_retcode(sol)
 

@@ -2,7 +2,6 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqBDF: DFBDF
 import SciMLBase
 using ModelingToolkit: Differential
 
@@ -57,7 +56,7 @@ using ModelingToolkit: Differential
     # Method of lines discretization
     discretization = MOLFiniteDifference([x => dx, y => dy], t; approx_order = order)
     prob = SciMLBase.discretize(pdesys, discretization)
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
     r_space_x = sol[x]
     r_space_y = sol[y]
     asf = [analytic_sol_func(t_max, X, Y) for X in r_space_x, Y in r_space_y]
@@ -127,7 +126,7 @@ end
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
     prob = SciMLBase.discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
     r_space_x = sol[x]
     r_space_y = sol[y]
     asf = [analytic_sol_func(t_max, X, Y) for X in r_space_x, Y in r_space_y]

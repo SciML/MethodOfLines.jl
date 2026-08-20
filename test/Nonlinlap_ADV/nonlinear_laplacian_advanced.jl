@@ -1,5 +1,4 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqBDF: DFBDF
 using Symbolics
 using Symbolics: wrap, unwrap
 using SciMLBase
@@ -84,7 +83,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     @test SciMLBase.successful_retcode(sol)
 

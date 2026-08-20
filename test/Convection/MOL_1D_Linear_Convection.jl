@@ -3,6 +3,7 @@
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, DiffEqBase, LinearAlgebra, Test, DomainSets
 using OrdinaryDiffEqLowOrderRK: Euler
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 #using Plots
 # Tests
 
@@ -34,11 +35,11 @@ using OrdinaryDiffEqLowOrderRK: Euler
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
+    discretization = MOLFiniteDifference([x => dx], t)
     # explicitly specify upwind order
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
@@ -84,11 +85,11 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
+    discretization = MOLFiniteDifference([x => dx], t)
     # explicitly specify upwind order
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
@@ -134,11 +135,11 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
+    discretization = MOLFiniteDifference([x => dx], t)
     # explicitly specify upwind order
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
@@ -184,10 +185,10 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
+    discretization = MOLFiniteDifference([x => dx], t)
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
@@ -233,10 +234,10 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
+    discretization = MOLFiniteDifference([x => dx], t)
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
@@ -283,10 +284,10 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
+    discretization = MOLFiniteDifference([x => dx], t)
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
     # Solve ODE problemdoes this mean that - doesn't seem to affect things
     using OrdinaryDiffEq
@@ -348,10 +349,10 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
+    discretization = MOLFiniteDifference([x => dx], t)
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
@@ -414,10 +415,10 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
+    discretization = MOLFiniteDifference([x => dx], t)
 
     # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
     # Solve ODE problem
     using OrdinaryDiffEq
@@ -467,12 +468,12 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
+    discretization = MOLFiniteDifference([x => dx], t)
 
     # Convert the PDE problem into an ODE problem
-    @test_broken (discretize(pdesys, discretization) isa ODEProblem)
+    @test_broken (ode_discretize(pdesys, discretization) isa ODEProblem)
 
-    # prob = discretize(pdesys, discretization)
+    # prob = ode_discretize(pdesys, discretization)
     # Solve ODE problem
     # using OrdinaryDiffEq
     # sol = solve(prob, FBDF(), saveat=0.1)

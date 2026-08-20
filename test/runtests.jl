@@ -110,7 +110,7 @@ run_tests(;
         end,
         "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
         "Array_Discretization" => function ()
-            @safetestset "Array discretization strategy" begin
+            @safetestset "Array discretization" begin
                 include(joinpath(@__DIR__, "Array_Discretization", "array_discretization.jl"))
             end
             return @safetestset "DAEProblem on the array form" begin

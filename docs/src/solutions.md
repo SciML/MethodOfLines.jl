@@ -63,9 +63,8 @@ The original solver solution is stored in `sol.original_sol`.
 To avoid wrapping entirely, use the `wrap` keyword argument to `solve`:
 
 ```julia
-using OrdinaryDiffEqBDF: DFBDF
 
-sol = solve(prob, DFBDF(); wrap = Val(false))
+sol = solve(prob; wrap = Val(false))
 ```
 
 ```

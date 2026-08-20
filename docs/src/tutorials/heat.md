@@ -6,7 +6,6 @@ In this tutorial, we will use the symbolic interface to solve the heat equation.
 
 ```@example heatd
 using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
-using OrdinaryDiffEqBDF: DFBDF
 # Method of Manufactured Solutions: exact solution
 u_exact = (x, t) -> exp.(-t) * cos.(x)
 
@@ -39,7 +38,7 @@ prob = discretize(pdesys, discretization)
 
 # Solve the DAE problem
 using OrdinaryDiffEq
-sol = solve(prob, DFBDF(), saveat = 0.2)
+sol = solve(prob; saveat = 0.2)
 
 # Plot results and compare with exact solution
 discrete_x = sol[x]
@@ -61,7 +60,6 @@ plt
 
 ```@example heatn
 using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
-using OrdinaryDiffEqBDF: DFBDF
 # Method of Manufactured Solutions: exact solution
 u_exact = (x, t) -> exp.(-t) * cos.(x)
 
@@ -96,7 +94,7 @@ prob = discretize(pdesys, discretization)
 
 # Solve the DAE problem
 using OrdinaryDiffEq
-sol = solve(prob, DFBDF(), saveat = 0.2)
+sol = solve(prob; saveat = 0.2)
 
 # Plot results and compare with exact solution
 discrete_x = sol[x]
@@ -119,7 +117,6 @@ plt
 
 ```@example heatr
 using ModelingToolkit, MethodOfLines, DomainSets, OrdinaryDiffEq
-using OrdinaryDiffEqBDF: DFBDF
 # Method of Manufactured Solutions
 u_exact = (x, t) -> exp.(-t) * sin.(x)
 
@@ -154,7 +151,7 @@ prob = discretize(pdesys, discretization)
 
 # Solve the DAE problem
 using OrdinaryDiffEq
-sol = solve(prob, DFBDF(), saveat = 0.2)
+sol = solve(prob; saveat = 0.2)
 
 # Plot results and compare with exact solution
 discrete_x = sol[x]

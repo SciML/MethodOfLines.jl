@@ -2,7 +2,6 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqBDF: DFBDF
 using ModelingToolkit: Differential
 
 # Tests
@@ -49,7 +48,7 @@ using ModelingToolkit: Differential
     discretization = MOLFiniteDifference([x => dx_], t)
 
     prob = discretize(pdesys, discretization)
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     x_sol = sol[x]
     t_sol = sol[t]

@@ -29,7 +29,6 @@ Note here elliptic problem has condition ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 ```@example sispde
 using OrdinaryDiffEq, SteadyStateDiffEq, ModelingToolkit, MethodOfLines,
     DomainSets, Plots
-using OrdinaryDiffEqBDF: DFBDF
 
 # Parameters, variables, and derivatives
 @parameters t x
@@ -88,7 +87,7 @@ prob = discretize(pdesys, discretization);
 
 ```@example sispde
 # Solving SIS reaction diffusion model
-sol = solve(prob, DFBDF(), saveat = 0.2);
+sol = solve(prob; saveat = 0.2);
 
 # Retrieving the results
 discrete_x = sol[x]

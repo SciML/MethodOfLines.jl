@@ -2,6 +2,7 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, DomainSets
 using OrdinaryDiffEqSSPRK: SSPRK33
 using SciMLBase
 using ModelingToolkit: Differential
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 @parameters t x
 @variables u(..)
@@ -103,9 +104,9 @@ function solve_mms_advection(;
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     disc = MOLFiniteDifference(
-        [x => xgrid], t; advection_scheme, approx_order, use_ODAE = true,
+        [x => xgrid], t; advection_scheme, approx_order,
     )
-    prob = discretize(pdesys, disc)
+    prob = ode_discretize(pdesys, disc)
     dt = advection_timestep(xgrid, v)
     sol = solve(prob, SSPRK33(); dt = dt, saveat = saveat, adaptive = false)
     return sol, disc, prob, L
@@ -144,9 +145,9 @@ function solve_inflow_advection(;
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     disc = MOLFiniteDifference(
-        [x => xgrid], t; advection_scheme, approx_order, use_ODAE = true,
+        [x => xgrid], t; advection_scheme, approx_order,
     )
-    prob = discretize(pdesys, disc)
+    prob = ode_discretize(pdesys, disc)
     dt = advection_timestep(xgrid, v)
     sol = solve(prob, SSPRK33(); dt = dt, saveat = saveat, adaptive = false)
     return sol, disc, prob, L
@@ -218,9 +219,9 @@ end
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
         disc = MOLFiniteDifference(
-            [x => xgrid], t; advection_scheme = UpwindScheme(), use_ODAE = true
+            [x => xgrid], t; advection_scheme = UpwindScheme()
         )
-        prob = discretize(pdesys, disc)
+        prob = ode_discretize(pdesys, disc)
         dt = 0.2 * minimum(diff(xgrid)) / 0.6
         sol = solve(prob, SSPRK33(); dt = dt, saveat = [tf], adaptive = false)
         u_num = sol[u(t, x)][end, :]
@@ -316,7 +317,7 @@ end
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
         disc = MOLFiniteDifference(
-            [x => xgrid], t; advection_scheme = UpwindScheme(), use_ODAE = true,
+            [x => xgrid], t; advection_scheme = UpwindScheme(),
         )
         vmap = MethodOfLines.VariableMap(pdesys, disc)
         s = MethodOfLines.construct_discrete_space(vmap, disc)
@@ -328,7 +329,7 @@ end
         @test length(s.dxs[x]) == length(xgrid) - 1
         @test s.dxs[x] ≈ diff(xgrid)
 
-        prob = discretize(pdesys, disc)
+        prob = ode_discretize(pdesys, disc)
         @test prob isa SciMLBase.ODEProblem
     end
 

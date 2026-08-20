@@ -2,6 +2,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, NonlinearSolve,
     DomainSets
 using ModelingToolkit: Differential
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 @testset "Test 00a: Test solution interface, time dependent" begin
     # Parameters, variables, and derivatives
@@ -35,11 +36,11 @@ using ModelingToolkit: Differential
     dx = dy = 2 / 8
     order = 1
     discretization = MOLFiniteDifference(
-        [x => dx, y => dy], t; advection_scheme = WENOScheme(), use_ODAE = true
+        [x => dx, y => dy], t; advection_scheme = WENOScheme()
     )
     # explicitly specify upwind order
 
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
     using OrdinaryDiffEq
     sol = solve(prob, FBDF(), saveat = 0.1)

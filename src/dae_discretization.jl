@@ -176,10 +176,8 @@ end
     DAEProblem(pdesys::PDESystem, discretization::MOLFiniteDifference; kwargs...)
 
 Discretize `pdesys` and build a `DAEProblem` from the residuals MethodOfLines emits,
-without running `mtkcompile`. Requires an array discretization strategy
-([`ArrayDiscretization`](@ref) or [`StrictArrayDiscretization`](@ref)): the point of this
-path is that the array equations reach the generated code intact, which `mtkcompile`
-would undo.
+without running `mtkcompile`. The array equations reach the generated code intact,
+which `mtkcompile` would undo.
 
 `initializealg` defaults to `BrownFullBasicInit()`, which is the only algorithm that
 reproduces the [`discretize`](@ref) result here, and is chosen only when the discretized
@@ -195,13 +193,6 @@ function SciMLBase.DAEProblem(
         pdesys::PDESystem, discretization::MOLFiniteDifference;
         initializealg = nothing, build_initializeprob = false, kwargs...
     )
-    if !(discretization.disc_strategy isa AnyArrayDiscretization)
-        throw(
-            ArgumentError(
-                "`DAEProblem` exists to keep the array (slice-form) equations that `mtkcompile` would scalarize, and $(nameof(typeof(discretization.disc_strategy))) produces none. Pass `discretization_strategy = ArrayDiscretization()` to `MOLFiniteDifference`, or use `discretize(pdesys, discretization)`, which is strictly better here."
-            )
-        )
-    end
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     if tspan === nothing
         throw(

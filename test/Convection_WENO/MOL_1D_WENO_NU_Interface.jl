@@ -3,6 +3,7 @@
 using ModelingToolkit, MethodOfLines, DomainSets, LinearAlgebra, Test
 using OrdinaryDiffEq
 using SciMLBase
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 # Self-similar stretching: refinement isolates asymptotic MMS order.
 stretched_grid(a, b, n; amp = 0.15) = [
@@ -33,9 +34,9 @@ stretched_grid(a, b, n; amp = 0.15) = [
         g = stretched_grid(0.0, 2.0, n; amp = 0.05)
         @assert all(diff(g) .> 0)
         disc = MOLFiniteDifference(
-            [x => g], t; advection_scheme = WENOScheme(), use_ODAE = true
+            [x => g], t; advection_scheme = WENOScheme()
         )
-        prob = discretize(pdesys, disc)
+        prob = ode_discretize(pdesys, disc)
         sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, saveat = [T_END])
         @test SciMLBase.successful_retcode(sol)
         usol = sol[u(t, x)][end, :]
@@ -91,9 +92,9 @@ end
 
         disc = MOLFiniteDifference(
             [x1 => g1, x2 => g2], t;
-            advection_scheme = WENOScheme(), use_ODAE = true
+            advection_scheme = WENOScheme()
         )
-        prob = discretize(pdesys, disc)
+        prob = ode_discretize(pdesys, disc)
         sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, saveat = [T_END])
         @test SciMLBase.successful_retcode(sol)
 
@@ -151,7 +152,7 @@ end
         [x1 => g1, x2 => g2], t; advection_scheme = WENOScheme()
     )
     # Dxx crossing a mismatched NU interface is not coordinate-aware; must be rejected.
-    @test_throws ArgumentError discretize(pdesys, disc)
+    @test_throws ArgumentError ode_discretize(pdesys, disc)
 end
 
 # Variable-velocity front across a mismatched NU interface.
@@ -214,9 +215,9 @@ end
     )
     disc = MOLFiniteDifference(
         [x1 => sgrid(0.0, 0.5, 101), x2 => sgrid(0.5, 1.0, 201)], t;
-        advection_scheme = WENOScheme(), use_ODAE = true
+        advection_scheme = WENOScheme()
     )
-    prob = discretize(pdesys, disc)
+    prob = ode_discretize(pdesys, disc)
     sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8, saveat = [T_MID, T_END])
     @test SciMLBase.successful_retcode(sol)
 

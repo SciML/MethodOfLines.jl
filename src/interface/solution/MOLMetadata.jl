@@ -9,12 +9,11 @@ Used to unpack the solution.
           MOLFiniteDifference object.
 - `pdesys`: a PDESystem object, used in the discretization.
 """
-struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
+struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C} <:
     SciMLBase.AbstractDiscretizationMetadata{hasTime}
     discretespace::Ds
     disc::Disc
     pdesys::PDE
-    use_ODAE::Bool
     metadata::M
     complexmap::C
     u0::Vector
@@ -29,15 +28,12 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
         else
             hasTime = Val(true)
         end
-        use_ODAE = disc.use_ODAE
         return new{
             hasTime, typeof(discretespace),
             typeof(disc), typeof(pdesys),
-            typeof(metaref), typeof(complexmap), typeof(disc.disc_strategy),
+            typeof(metaref), typeof(complexmap),
         }(
-            discretespace,
-            disc, pdesys, use_ODAE,
-            metaref, complexmap, u0
+            discretespace, disc, pdesys, metaref, complexmap, u0
         )
     end
 end
@@ -48,7 +44,3 @@ function PDEBase.generate_metadata(
     )
     return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, nothing, u0)
 end
-
-# function PDEBase.generate_metadata(s::DiscreteSpace, disc::MOLFiniteDifference{G,D}, pdesys::PDESystem, boundarymap, metadata=nothing) where {G<:StaggeredGrid}
-#     return MOLMetadata(s, disc, pdesys, boundarymap, metadata)
-# end

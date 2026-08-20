@@ -2,7 +2,6 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqBDF: DFBDF
 using ModelingToolkit: Differential
 
 # Composite trapezoidal-rule weights for a (possibly non-uniform) 1D grid `xs`.
@@ -68,7 +67,7 @@ end
         ]
         prob = discretize(pdesys, disc)
 
-        sol = solve(prob, DFBDF(), saveat = 0.1)
+        sol = solve(prob; saveat = 0.1)
 
         x_disc = sol[x][2:(end - 1)]
         t_disc = sol[t]
@@ -115,7 +114,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     solu = sol[u(t, x)]
     # Test
@@ -161,7 +160,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     solu = sol[u(t, x)]
     # Test
@@ -207,7 +206,7 @@ end
     for disc in [discretization, discretization_edge]
         prob = discretize(pdesys, disc)
 
-        sol = solve(prob, DFBDF(); saveat = 0.1, abstol = 1.0e-10, reltol = 1.0e-10)
+        sol = solve(prob; saveat = 0.1, abstol = 1.0e-10, reltol = 1.0e-10)
 
         x_sol = sol[x]
         t_sol = sol[t]
@@ -282,7 +281,7 @@ end
     for (j, disc) in enumerate([discretization, discretization_edge])
         prob = discretize(pdesys, disc)
 
-        sol = solve(prob, DFBDF(), saveat = 0.1)
+        sol = solve(prob; saveat = 0.1)
 
         solx = sol[x]
         solt = sol[t]
@@ -347,7 +346,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
     u_approx = sol[u(t, x)]
     discx = sol[x]
     disct = sol[t]
@@ -399,7 +398,7 @@ end
     for disc in [discretization, discretization_edge]
         prob = discretize(pdesys, disc)
 
-        sol = solve(prob, DFBDF(), saveat = 0.1)
+        sol = solve(prob; saveat = 0.1)
         x_disc = sol[x]
         t_disc = sol[t]
         u_approx = sol[u(t, x)]
@@ -447,7 +446,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), reltol = 1.0e-6, saveat = 0.1)
+    sol = solve(prob; reltol = 1.0e-6, saveat = 0.1)
 
     u_approx = sol[u(t, x)]
     discx = sol[x]
@@ -497,7 +496,7 @@ end
     discretization = MOLFiniteDifference([r => dr], t, approx_order = 4)
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     u_approx = sol[u(t, r)]
     r = sol[r][2:(end - 1)]
@@ -555,7 +554,7 @@ end
     discretization = MOLFiniteDifference([r => dr], t)
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     u_approx = sol[u(t, r)]
     r = sol[r][2:(end - 1)]
@@ -622,7 +621,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     x_sol = sol[x][2:(end - 1)]
     t_sol = sol[t]
@@ -667,7 +666,7 @@ end
     discretization = MOLFiniteDifference([x => 0.1], t)
     prob = discretize(pdesys, discretization)
     # Make sure it can be solved
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 end
 
 @testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables order 4" begin
@@ -719,7 +718,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     x_sol = sol[x]
     y_sol = sol[y]
@@ -787,7 +786,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     solu1 = sol[u(t, x)]
     solu2 = sol[v(t, y)]
@@ -844,7 +843,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     x_sol = sol[x]
     t_sol = sol[t]
@@ -897,7 +896,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     x1_sol = sol[x1]
     x2_sol = sol[x2]

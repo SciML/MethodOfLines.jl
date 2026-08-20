@@ -46,7 +46,6 @@ With `ModelingToolkit.jl`, we first symbolically define the system, see also the
 
 ```julia
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqBDF: DFBDF
 
 @parameters x y t
 @variables u(..) v(..)
@@ -119,12 +118,12 @@ Use an implicit [DAE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae
 for a time-dependent problem, or a NonlinearSolve algorithm when the
 `MOLFiniteDifference` constructor has no time dimension. Include these solvers with
 `using OrdinaryDiffEq` or `using NonlinearSolve`, then call
-`solve(prob, AppropriateSolver())`. `DFBDF()` is a suitable first choice for many of the
-generated DAE problems.
+`solve(prob, AppropriateSolver())`. Calling `solve(prob)` uses OrdinaryDiffEq's default
+DAE algorithm.
 
 ```julia
 println("Solve:")
-@time sol = solve(prob, DFBDF(), saveat = 0.1)
+@time sol = solve(prob; saveat = 0.1)
 ```
 
 ## Extracting results

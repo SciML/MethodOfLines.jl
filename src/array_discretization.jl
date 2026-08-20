@@ -44,45 +44,13 @@
 
 struct ArrayDiscretizationFallback <: Exception
     msg::String
-    # `benign` marks a deliberate choice not to build an array form (nothing would be
-    # collapsed) rather than a pattern this path cannot represent. Strict mode tolerates
-    # the former and raises on the latter.
-    benign::Bool
-end
-ArrayDiscretizationFallback(msg::String) = ArrayDiscretizationFallback(msg, false)
-
-isbenign(e) = e isa ArrayDiscretizationFallback && e.benign
-
-"""
-    ArrayDiscretizationError(pde, msg)
-
-Raised by [`StrictArrayDiscretization`](@ref) when an equation cannot be represented in
-slice form, in place of the silent fallback [`ArrayDiscretization`](@ref) performs.
-"""
-struct ArrayDiscretizationError <: Exception
-    pde::Any
-    msg::String
-end
-
-function Base.showerror(io::IO, e::ArrayDiscretizationError)
-    print(
-        io,
-        """
-        StrictArrayDiscretization could not build an array (slice-form) equation for:
-          $(e.pde)
-        Reason: $(e.msg)
-
-        Use ArrayDiscretization() to discretize this equation pointwise instead, which
-        gives the same numerical result without the array representation."""
-    )
-    return
 end
 
 function PDEBase.discretize_equation!(
         disc_state::PDEBase.EquationState, pde::Equation, interiormap,
         eqvar, bcmap, depvars, s::DiscreteSpace, derivweights, indexmap,
-        discretization::MOLFiniteDifference{G, D}
-    ) where {G, D <: AnyArrayDiscretization}
+        discretization::MOLFiniteDifference
+    )
     # Boundary handling is identical to the scalarized strategy
     boundaryvalfuncs = generate_boundary_val_funcs(
         s, depvars, bcmap, indexmap, derivweights
@@ -98,8 +66,6 @@ function PDEBase.discretize_equation!(
             e isa InterruptException && rethrow(e)
             reason = e isa ArrayDiscretizationFallback ? e.msg : sprint(showerror, e)
             @debug "ArrayDiscretization falling back to pointwise boundary equations for $(boundary.eq): $reason"
-            isstrict(discretization.disc_strategy) && !isbenign(e) &&
-                throw(ArrayDiscretizationError(boundary.eq, reason))
             generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
         end
     end
@@ -113,8 +79,6 @@ function PDEBase.discretize_equation!(
         e isa InterruptException && rethrow(e)
         reason = e isa ArrayDiscretizationFallback ? e.msg : sprint(showerror, e)
         @debug "ArrayDiscretization falling back to pointwise corner equations: $reason"
-        isstrict(discretization.disc_strategy) && !isbenign(e) &&
-            throw(ArrayDiscretizationError(pde, reason))
         generate_corner_eqs!(
             disc_state, s, interiormap, ndims(s.discvars[eqvar]), eqvar
         )
@@ -142,8 +106,6 @@ function PDEBase.discretize_equation!(
             # itself resurface below, where the scalar path raises them directly.
             reason = e isa ArrayDiscretizationFallback ? e.msg :
                 sprint(showerror, e)
-            isstrict(discretization.disc_strategy) && !isbenign(e) &&
-                throw(ArrayDiscretizationError(pde, reason))
             @debug "ArrayDiscretization falling back to pointwise discretization for $pde: $reason"
             vec(
                 map(interior) do II
@@ -1906,7 +1868,7 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     # A single-point face (every 1D boundary) has nothing to collapse; a one-element
     # slice equation would just be a more convoluted spelling of the scalar one.
     prod(length(ranges[i]) for i in 1:N) == 1 &&
-        throw(ArrayDiscretizationFallback("single-point boundary", true))
+        throw(ArrayDiscretizationFallback("single-point boundary"))
     # A staggered 1D boundary is always the single point above; multi-point staggered
     # faces would need the staggered stencil selection, which has no slice form here yet.
     get_grid_type(s) <: StaggeredGrid &&
@@ -2032,7 +1994,7 @@ function array_bc_eqs(s, boundary::InterfaceBoundary, interiormap, derivweights,
         throw(ArrayDiscretizationFallback("boundary edge spans its own direction"))
     ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
     length(E) == 1 &&
-        throw(ArrayDiscretizationFallback("single-point interface boundary", true))
+        throw(ArrayDiscretizationFallback("single-point interface boundary"))
     # 1D staggered interfaces are the single point above; multi-point staggered faces
     # are untested on the scalar path, so decline rather than guess.
     get_grid_type(s) <: StaggeredGrid &&
@@ -2069,7 +2031,7 @@ Without this the 3D edges stay pointwise and cost `12n - 10` equations, which is
 keeps 3D at `O(n)` once the faces are sliced.
 """
 function array_corner_eqs(s, interiormap, u, N)
-    N >= 2 || throw(ArrayDiscretizationFallback("no corner region below 2 dimensions", true))
+    N >= 2 || throw(ArrayDiscretizationFallback("no corner region below 2 dimensions"))
     interior = interiormap.I[interiormap.pde[u]]
     length(interior) == 0 && throw(ArrayDiscretizationFallback("empty interior"))
     arr = array_variable(u, s)

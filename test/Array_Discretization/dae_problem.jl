@@ -6,7 +6,6 @@
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Symbolics
 using SciMLBase
 using DiffEqBase: BrownFullBasicInit, ShampineCollocationInit
-using OrdinaryDiffEqBDF: DFBDF
 using OrdinaryDiffEqRosenbrock: Rodas4
 using ModelingToolkit: get_eqs
 using SymbolicUtils: symtype
@@ -20,9 +19,7 @@ function isarrayeq(eq)
     return isarr(eq.lhs) || isarr(eq.rhs)
 end
 
-array_disc(dxs, t; kwargs...) = MOLFiniteDifference(
-    dxs, t; discretization_strategy = ArrayDiscretization(), kwargs...
-)
+array_disc(dxs, t; kwargs...) = MOLFiniteDifference(dxs, t; kwargs...)
 
 # Solve the same system both ways and return the discretized values of `u` at the final
 # time, indexed identically, plus the DAE problem for structural checks.
@@ -30,7 +27,7 @@ function solve_both(pdesys, dxs, t, u; disc_kwargs = (;), tol = 1.0e-10)
     disc = array_disc(dxs, t; disc_kwargs...)
     prob_dae = discretize(pdesys, disc)
     @test prob_dae isa SciMLBase.DAEProblem
-    sol_dae = solve(prob_dae, DFBDF(); reltol = tol, abstol = tol)
+    sol_dae = solve(prob_dae; reltol = tol, abstol = tol)
     sys, tspan = symbolic_discretize(pdesys, disc)
     prob_ode = ODEProblem(mtkcompile(sys), nothing, tspan)
     sol_ode = solve(prob_ode, Rodas4(); reltol = tol, abstol = tol)
@@ -263,33 +260,8 @@ end
     prob = DAEProblem(pdesys, disc; initializealg = ShampineCollocationInit())
     @test prob.kwargs[:initializealg] isa ShampineCollocationInit
     @test SciMLBase.successful_retcode(
-        solve(prob, DFBDF(); reltol = 1.0e-8, abstol = 1.0e-8)
+        solve(prob; reltol = 1.0e-8, abstol = 1.0e-8)
     )
-end
-
-@testset "the pointwise strategy is rejected" begin
-    @parameters t x
-    @variables u(..)
-    Dt = Differential(t)
-    Dxx = Differential(x)^2
-
-    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
-    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
-    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
-    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-
-    disc = MOLFiniteDifference(
-        [x => 11], t;
-        discretization_strategy = MethodOfLines.PointwiseDiscretization()
-    )
-    err = try
-        DAEProblem(pdesys, disc)
-        nothing
-    catch e
-        e
-    end
-    @test err isa ArgumentError
-    @test occursin("ArrayDiscretization", err.msg)
 end
 
 @testset "explicit compiled ODE path" begin
@@ -303,8 +275,10 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => 11], t; use_ODAE = true)
-    prob = discretize(pdesys, disc)
+    @test_throws ArgumentError MOLFiniteDifference([x => 11], t; use_ODAE = true)
+    disc = MOLFiniteDifference([x => 11], t)
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    prob = ODEProblem(mtkcompile(sys), nothing, tspan)
     @test prob isa SciMLBase.ODEProblem
     @test SciMLBase.successful_retcode(solve(prob, Rodas4()))
 end

@@ -27,7 +27,6 @@ We can discretize such a system like this:
 
 ```@example pide
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Plots
-using OrdinaryDiffEqBDF: DFBDF
 
 @parameters t, x
 @variables u(..) cumuSum(..)
@@ -53,7 +52,7 @@ order = 2
 discretization = MOLFiniteDifference([x => 30], t)
 
 prob = MethodOfLines.discretize(pde_system, discretization)
-sol = solve(prob, DFBDF(), saveat = 0.1);
+sol = solve(prob; saveat = 0.1);
 
 solu = sol[u(t, x)]
 
@@ -65,7 +64,6 @@ Due to a limitation, the whole domain integral needs to have the same arguments 
 
 ```julia
 using MethodOfLines, ModelingToolkit, DomainSets, OrdinaryDiffEq, Plots
-using OrdinaryDiffEqBDF: DFBDF
 
 @parameters t, x
 @variables integrand(..) integral(..)
@@ -93,7 +91,7 @@ disc = MOLFiniteDifference([x => 120], t)
 
 prob = discretize(pde_system, disc)
 
-sol = solve(prob, DFBDF())
+sol = solve(prob)
 
 xdisc = sol[x]
 tdisc = sol[t]

@@ -33,7 +33,6 @@ ModelingToolkit = "11.39.1"
 ModelingToolkitBase = "1.58"
 NonlinearSolve = "4"
 OrdinaryDiffEq = "7"
-OrdinaryDiffEqBDF = "2"
 OrdinaryDiffEqLowOrderRK = "2"
 OrdinaryDiffEqRosenbrock = "2"
 OrdinaryDiffEqSDIRK = "2"
@@ -55,7 +54,6 @@ julia = "1.10"
 [extras]
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 NonlinearSolve = "8913a72c-1f9b-4ce2-8d82-65094dcecaec"
-OrdinaryDiffEqBDF = "6ad6398a-0878-4a85-9266-38940aa047c8"
 OrdinaryDiffEqLowOrderRK = "1344f307-1e59-4825-a18e-ace9aa3fa4c6"
 OrdinaryDiffEqRosenbrock = "43230ef6-c299-4910-a778-202eb28ce4ce"
 OrdinaryDiffEqSDIRK = "2d112036-d095-4a1e-ab9a-08536f3ecdbf"
@@ -66,4 +64,4 @@ StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "ForwardDiff", "NonlinearSolve", "OrdinaryDiffEqBDF", "OrdinaryDiffEqLowOrderRK", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqSSPRK", "SafeTestsets", "SciMLTesting", "StableRNGs"]
+test = ["Test", "ForwardDiff", "NonlinearSolve", "OrdinaryDiffEqLowOrderRK", "OrdinaryDiffEqRosenbrock", "OrdinaryDiffEqSDIRK", "OrdinaryDiffEqSSPRK", "SafeTestsets", "SciMLTesting", "StableRNGs"]

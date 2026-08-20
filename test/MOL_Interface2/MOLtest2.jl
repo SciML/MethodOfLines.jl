@@ -1,5 +1,4 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
-using OrdinaryDiffEqBDF: DFBDF
 using SciMLBase
 using ModelingToolkit: operation, iscall, arguments
 using DomainSets
@@ -167,7 +166,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF(), saveat = 0.01)
+    sol = solve(prob; saveat = 0.01)
 
     x1_sol = sol[x1]
     x2_sol = sol[x2]
@@ -272,7 +271,7 @@ end
 
     prob = MethodOfLines.discretize(pde_system, discretization)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 end
 
 @testset "Dt in BCs" begin
@@ -306,7 +305,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.2)
+    sol = solve(prob; saveat = 0.2)
 
     discrete_x = sol[x]
     discrete_t = sol[t]
@@ -356,7 +355,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     discrete_r = sol[r]
     discrete_t = sol[t]
@@ -392,7 +391,7 @@ end
     discretization = MOLFiniteDifference([x => 0.01], t)
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     discrete_x = sol[x]
     discrete_t = sol[t]
@@ -447,7 +446,7 @@ end
 
     prob = discretize(pdesys, discretization) #error occurs here
 
-    sol = solve(prob, DFBDF(), saveat = 0.2)
+    sol = solve(prob; saveat = 0.2)
     @test SciMLBase.successful_retcode(sol)
 
     # Test that the system is correctly constructed
@@ -518,7 +517,7 @@ end
 
     prob = discretize(sys, discretization) # ERROR HERE
 
-    sol = solve(prob, DFBDF(), saveat = s_in_y)
+    sol = solve(prob; saveat = s_in_y)
 end
 
 # Complex PDE equation/unknown counting: MTK v11 splits complex equations into

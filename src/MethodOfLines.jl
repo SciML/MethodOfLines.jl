@@ -62,7 +62,6 @@ import SciMLBase.discretize
 include("interface/grid_types.jl")
 include("interface/scheme_types.jl")
 include("interface/callbacks.jl")
-include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
 
 include("discretization/discretize_vars.jl")
@@ -123,6 +122,5 @@ include("precompile.jl")
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
     edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme, MOLDiscCallback
-export ArrayDiscretization, StrictArrayDiscretization
 
 end

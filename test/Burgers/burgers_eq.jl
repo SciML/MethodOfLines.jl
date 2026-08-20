@@ -1,5 +1,4 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq, Test
-using OrdinaryDiffEqBDF: DFBDF
 using DomainSets
 using StableRNGs
 #using Plots
@@ -37,7 +36,7 @@ using StableRNGs
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     x_disc = sol[x]
     solu = sol[u(t, x)]
@@ -87,7 +86,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     x_disc = sol[x]
     solu = sol[u(t, x)]
@@ -140,7 +139,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 
     x_disc = sol[x]
     solu = sol[u(t, x)]

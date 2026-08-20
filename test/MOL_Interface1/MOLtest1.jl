@@ -1,5 +1,4 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
-using OrdinaryDiffEqBDF: DFBDF
 import SciMLBase
 using ModelingToolkit: operation, iscall, arguments
 using DomainSets
@@ -33,7 +32,7 @@ using Test
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
     discretization = MOLFiniteDifference([x => 0.1], t; grid_align = edge_align)
     prob = discretize(pdesys, discretization)
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 end
 
 @testset "Heat Equation 2D 1 variable" begin
@@ -74,7 +73,7 @@ end
     dy = 0.2
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
     prob = SciMLBase.discretize(pdesys, discretization)
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 end
 
 # Diffusion in a sphere
@@ -98,7 +97,7 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
     discretization = MOLFiniteDifference([r => 0.1], t)
     prob = discretize(pdesys, discretization)
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 end
 
 @testset "RHS = 0" begin
@@ -223,7 +222,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 end
 
 @testset "Array u" begin
@@ -345,7 +344,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 end
 
 @testset "2D variable connected to 1D variable at boundary #33" begin
@@ -386,5 +385,5 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 end

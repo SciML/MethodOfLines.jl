@@ -11,9 +11,7 @@ function PDEBase.interface_errors(
     if !any(s -> discretization.advection_scheme isa s, [UpwindScheme, FunctionalScheme])
         throw(ArgumentError("Only `UpwindScheme()` and `FunctionalScheme()` are supported advection schemes. Got $(typeof(discretization.advection_scheme))."))
     end
-    return if !(discretization.disc_strategy isa Union{AnyArrayDiscretization, PointwiseDiscretization})
-        throw(ArgumentError("Only `ArrayDiscretization()` and `StrictArrayDiscretization()` are supported discretization strategies. `ScalarizedDiscretization()` was removed in v1; the scalar form is now the fallback within `ArrayDiscretization()`."))
-    end
+    return
 end
 
 # Single predicate shared by check_boundarymap and validate_interface_orders.
@@ -218,16 +216,15 @@ Discretize `pdesys` and return a problem ready to `solve`.
 
 For a time-dependent system this builds a `DAEProblem`. MethodOfLines emits residuals of
 the form `D(u) - f ~ 0`, which are already implicit-DAE form, so no `mtkcompile` is
-needed and the array (slice-form) equations reach the generated code intact. Solve it
-with an implicit-DAE solver such as `DFBDF()`.
+needed and the array (slice-form) equations reach the generated code intact. Calling
+`solve(prob)` selects the default DAE algorithm.
 
 A few systems cannot be posed as a first-order DAE — those second order in time, and
 those whose initialization equations `BrownFullBasicInit` would not honour. Those fall
 back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations. Pass
 `fallback = false` to make that an error instead.
 
-Passing `use_ODAE = true` to [`MOLFiniteDifference`](@ref) retains the pre-v1 compiled
-`ODEProblem` path. Supplying `analytic` also selects that path because analytic solutions
+Supplying `analytic` selects the compiled `ODEProblem` path because analytic solutions
 are attached through the compiled `ODEFunction`.
 
 Time-independent systems have no derivative to keep implicit and discretize to a
@@ -249,8 +246,7 @@ function SciMLBase.discretize(
     if tspan === nothing
         return _stationary_problem(sys, discretization; kwargs...)
     end
-    ode_path = analytic !== nothing || discretization.use_ODAE ||
-        discretization.disc_strategy isa PointwiseDiscretization
+    ode_path = analytic !== nothing
     if !ode_path
         try
             return _dae_problem(sys, tspan, discretization; kwargs...)

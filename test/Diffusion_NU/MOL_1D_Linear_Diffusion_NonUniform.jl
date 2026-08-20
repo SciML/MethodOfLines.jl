@@ -2,7 +2,6 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqBDF: DFBDF
 using ModelingToolkit: Differential
 using StableRNGs
 
@@ -48,7 +47,7 @@ using StableRNGs
     for disc in [discretization, discretization_approx_order4]
         prob = discretize(pdesys, disc)
 
-        sol = solve(prob, DFBDF(), saveat = 0.1)
+        sol = solve(prob; saveat = 0.1)
 
         x_sol = sol[x]
 
@@ -107,7 +106,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     # Test
     solu = sol[u(t, x)]
@@ -148,7 +147,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     # Test
     solu = sol[u(t, x)]
@@ -202,7 +201,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     solu = sol[u(t, x)]
 
@@ -251,7 +250,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     x_sol = sol[x]
 
@@ -315,7 +314,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
     u_approx = sol[u(t, x)]
     x = sol[x]
     t = sol.t
@@ -374,7 +373,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     solu = sol[u(t, x)]
 
@@ -427,7 +426,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, DFBDF(), reltol = 1.0e-6, saveat = 0.1)
+    sol = solve(prob; reltol = 1.0e-6, saveat = 0.1)
 
     u_approx = sol[u(t, x)]
     x = sol[x]
@@ -488,7 +487,7 @@ end
     discretization = MOLFiniteDifference([r => dr], t, approx_order = 4)
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     u_approx = sol[u(t, r)]
     r = sol[r][2:(end - 1)]
@@ -550,7 +549,7 @@ end
     discretization = MOLFiniteDifference([r => dr], t)
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     u_approx = sol[u(t, r)]
     r = sol[r][2:(end - 1)]
@@ -619,7 +618,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     x_sol = sol[x][2:(end - 1)]
     t_sol = sol[t]
@@ -668,7 +667,7 @@ end
     discretization = MOLFiniteDifference([x => dx], t)
     prob = discretize(pdesys, discretization)
     # Make sure it can be solved
-    sol = solve(prob, DFBDF())
+    sol = solve(prob)
 end
 
 @testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables order 4" begin
@@ -725,7 +724,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     x_sol = sol[x]
     y_sol = sol[y]
@@ -793,7 +792,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     solu1 = sol[u(t, x)]
     solu2 = sol[v(t, y)]
@@ -853,7 +852,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, DFBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     solu = sol[u(t, x)]
     solv = sol[v(t)]

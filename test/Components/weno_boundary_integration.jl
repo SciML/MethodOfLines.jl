@@ -2,6 +2,7 @@
 
 using Test
 using ModelingToolkit, MethodOfLines, DomainSets, OrdinaryDiffEq, SciMLBase
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 const M = MethodOfLines
 
@@ -102,7 +103,7 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     disc = MOLFiniteDifference(
-        [x => nonuniform_grid], t; advection_scheme = WENOScheme(), use_ODAE = true
+        [x => nonuniform_grid], t; advection_scheme = WENOScheme()
     )
     im, s, bmap = build_discrete_system(pdesys, disc)
 
@@ -132,7 +133,7 @@ end
     @test val_lo isa Float64 && isfinite(val_lo)
     @test val_hi isa Float64 && isfinite(val_hi)
 
-    prob = discretize(pdesys, disc)
+    prob = ode_discretize(pdesys, disc)
     sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8, saveat = [T_END])
     @test SciMLBase.successful_retcode(sol)
     @test all(isfinite, sol[u(t, x)][end, :])
