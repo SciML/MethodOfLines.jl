@@ -14,24 +14,27 @@ function spherical_diffusion(innerexpr, II, derivweights, s, indexmap, bcmap, de
     D_1 = derivweights.map[Differential(r)]
     D_2 = derivweights.map[Differential(r)^2]
 
-    #TODO!: Update this to use indvars of the pde
-    # What to replace parameter x with given I
-    _rsubs(x, I) = x => s.grid[x][I[s.x2i[x]]]
+    # What to replace parameter x with given I. `II` is argument-ordered
+    # (`x2i(s, u, x)`), not `s.x̄`-ordered (`s.x2i`).
+    _rsubs(x, I) = x => s.grid[x][I[x2i(s, u, x)]]
     # Full rules for substituting parameters in the inner expression
     function rsubs(I)
-        return safe_vcat([v => s.discvars[v][I] for v in depvars], [_rsubs(x, I) for x in s.x̄])
+        return safe_vcat(
+            [v => s.discvars[v][I] for v in depvars], [_rsubs(x, I) for x in ivs(u, s)]
+        )
     end
     # Discretization func for u
     ufunc_u(v, I, x) = s.discvars[v][I]
+    jr = x2i(s, u, r)
 
     # 2nd order finite difference in u
     exprhere = Num(substitute(innerexpr, Dict(rsubs(II))))
     # Catch the r ≈ 0 case
     if isapprox(unwrap_const(Symbolics.unwrap(substitute(r, _rsubs(r, II)))), 0, atol = 1.0e-6)
-        D_2_u = central_difference(D_2, II, s, bs, (s.x2i[r], r), u, ufunc_u)
+        D_2_u = central_difference(D_2, II, s, bs, (jr, r), u, ufunc_u)
         return 6exprhere * D_2_u # See appendix B of the paper
     end
-    D_1_u = central_difference(D_1, II, s, bs, (s.x2i[r], r), u, ufunc_u)
+    D_1_u = central_difference(D_1, II, s, bs, (jr, r), u, ufunc_u)
     # See scheme 1 in appendix A of the paper
 
     return exprhere * (
