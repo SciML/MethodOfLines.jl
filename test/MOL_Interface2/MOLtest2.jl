@@ -1,5 +1,5 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
-using OrdinaryDiffEqRosenbrock: Rodas4, Rodas4P
+using OrdinaryDiffEqBDF: DFBDF
 using SciMLBase
 using ModelingToolkit: operation, iscall, arguments
 using DomainSets
@@ -43,7 +43,7 @@ using Test
         diff_eq = ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test (discretize(pdesys, discretization) isa ODEProblem)
+        @test discretize(pdesys, discretization) isa DAEProblem
     end
 
     @testset "Test 02: ∂t(c(x, t)) ~ ∂x(D * ∂x(c(x, t)))" begin
@@ -68,7 +68,7 @@ using Test
         diff_eq = ∂t(c(x, t)) ~ ∂x(D₀ / (1.0 + exp(α * (c(x, t) - χ))) * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test (discretize(pdesys, discretization) isa ODEProblem)
+        @test discretize(pdesys, discretization) isa DAEProblem
     end
 
     @testset "Test 05: ∂t(c(x, t)) ~ ∂x(1/x * ∂x(c(x, t)))" begin
@@ -96,21 +96,21 @@ using Test
         diff_eq = ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x, t) * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test_broken (discretize(pdesys, discretization) isa ODEProblem)
+        @test_broken discretize(pdesys, discretization) isa DAEProblem
     end
 
     @testset "Test 09: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
         diff_eq = c(x, t) * ∂x(c(x, t) * ∂x(c(x, t))) / (1 + c(x, t)) ~ 0
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test_broken (discretize(pdesys, discretization) isa ODEProblem)
+        @test_broken discretize(pdesys, discretization) isa DAEProblem
     end
 
     @testset "Test 10: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
         diff_eq = c(x, t) * ∂x(c(x, t)^(-1) * ∂x(c(x, t))) ~ 0
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test_broken (discretize(pdesys, discretization) isa ODEProblem)
+        @test_broken discretize(pdesys, discretization) isa DAEProblem
     end
 
     @testset "Test 11: ∂t(c(x, t)) ~ ∂x(1/(1+c(x,t)^2) ∂x(c(x, t)))" begin
@@ -167,7 +167,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, FBDF(), saveat = 0.01)
+    sol = solve(prob, DFBDF(), saveat = 0.01)
 
     x1_sol = sol[x1]
     x2_sol = sol[x2]
@@ -235,7 +235,7 @@ end
 
     println("Discretization:")
     prob = discretize(pdesys, discretization)
-    @test prob isa ODEProblem
+    @test prob isa DAEProblem
 end
 
 @testset "Integrals in BCs" begin
@@ -272,7 +272,7 @@ end
 
     prob = MethodOfLines.discretize(pde_system, discretization)
 
-    sol = solve(prob, FBDF())
+    sol = solve(prob, DFBDF())
 end
 
 @testset "Dt in BCs" begin
@@ -304,11 +304,9 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx], t)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Rodas4(), saveat = 0.2)
+    sol = solve(prob, DFBDF(), saveat = 0.2)
 
     discrete_x = sol[x]
     discrete_t = sol[t]
@@ -358,7 +356,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, Rodas4P())
+    sol = solve(prob, DFBDF())
 
     discrete_r = sol[r]
     discrete_t = sol[t]
@@ -394,7 +392,7 @@ end
     discretization = MOLFiniteDifference([x => 0.01], t)
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, DFBDF())
 
     discrete_x = sol[x]
     discrete_t = sol[t]
@@ -447,11 +445,9 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx], t; approx_order = order)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization) #error occurs here
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.2)
+    sol = solve(prob, DFBDF(), saveat = 0.2)
     @test SciMLBase.successful_retcode(sol)
 
     # Test that the system is correctly constructed
@@ -522,7 +518,7 @@ end
 
     prob = discretize(sys, discretization) # ERROR HERE
 
-    sol = solve(prob, FBDF(), saveat = s_in_y)
+    sol = solve(prob, DFBDF(), saveat = s_in_y)
 end
 
 # Complex PDE equation/unknown counting: MTK v11 splits complex equations into

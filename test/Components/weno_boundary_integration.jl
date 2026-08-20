@@ -101,7 +101,9 @@ end
     domains = [t ∈ Interval(0.0, T_END), x ∈ Interval(x0, xL)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => nonuniform_grid], t; advection_scheme = WENOScheme())
+    disc = MOLFiniteDifference(
+        [x => nonuniform_grid], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
     im, s, bmap = build_discrete_system(pdesys, disc)
 
     pde = first(keys(im.I))

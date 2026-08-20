@@ -30,7 +30,7 @@ run_qa(
             ignore = (
                 :Interval,                       # owner IntervalSets, re-exported by PDEBase
                 :get_bcs, :get_dvs, :get_eqs,    # owner ModelingToolkitBase, re-exported by ModelingToolkit
-                :get_ivs, :get_unknowns, :initialization_equations,
+                :get_ivs, :get_unknowns,
                 :unwrap,                         # owner SymbolicUtils, re-exported by Symbolics
             ),
         ),

@@ -79,6 +79,6 @@ Discretize every equation pointwise, one scalar equation per interior grid point
 Internal and unexported. The pointwise form is not a strategy users choose in v1 — it is
 what [`ArrayDiscretization`](@ref) falls back to for patterns with no slice
 representation. This exists so tests can exercise that path for a whole system and check
-the array form against it; `discretization_strategy` rejects it.
+the array form against it. It routes through the compiled `ODEProblem` path.
 """
 struct PointwiseDiscretization <: AbstractDiscretizationStrategy end

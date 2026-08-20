@@ -2,6 +2,7 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using OrdinaryDiffEqBDF: DFBDF
 using SciMLBase
 using ModelingToolkit: Differential
 
@@ -88,7 +89,7 @@ end
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, FBDF())
+    sol = solve(prob, DFBDF())
 end
 
 @testset "KdV Single Soliton equation" begin
@@ -131,7 +132,7 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, FBDF(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     @test SciMLBase.successful_retcode(sol)
 

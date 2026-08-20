@@ -26,7 +26,8 @@ With BCs and ICs:
 We can discretize such a system like this:
 
 ```@example pide
-using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, OrdinaryDiffEqBDF, DomainSets, Plots
+using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Plots
+using OrdinaryDiffEqBDF: DFBDF
 
 @parameters t, x
 @variables u(..) cumuSum(..)
@@ -64,6 +65,7 @@ Due to a limitation, the whole domain integral needs to have the same arguments 
 
 ```julia
 using MethodOfLines, ModelingToolkit, DomainSets, OrdinaryDiffEq, Plots
+using OrdinaryDiffEqBDF: DFBDF
 
 @parameters t, x
 @variables integrand(..) integral(..)

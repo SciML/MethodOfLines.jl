@@ -1,5 +1,6 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets,
     NonlinearSolve
+using OrdinaryDiffEqBDF: DFBDF
 using SciMLBase
 using ModelingToolkit: Differential
 
@@ -81,7 +82,7 @@ end
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
-    sol = solve(prob, FBDF(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
     @test SciMLBase.successful_retcode(sol)
 end
 

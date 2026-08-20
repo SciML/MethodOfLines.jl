@@ -60,7 +60,7 @@
                     [x => N, y => N], t, approx_order = order, grid_align = center_align
                 )
 
-                # Convert the PDE problem into an ODE problem
+                # Convert the PDE system into a numerical problem
                 prob = discretize(pdesys, discretization)
             end
             begin

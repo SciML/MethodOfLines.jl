@@ -32,7 +32,9 @@ stretched_grid(a, b, n; amp = 0.15) = [
     errs = map((41, 81, 161)) do n
         g = stretched_grid(0.0, 2.0, n; amp = 0.05)
         @assert all(diff(g) .> 0)
-        disc = MOLFiniteDifference([x => g], t; advection_scheme = WENOScheme())
+        disc = MOLFiniteDifference(
+            [x => g], t; advection_scheme = WENOScheme(), use_ODAE = true
+        )
         prob = discretize(pdesys, disc)
         sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, saveat = [T_END])
         @test SciMLBase.successful_retcode(sol)
@@ -88,7 +90,8 @@ end
         @assert all(diff(g1) .> 0) && all(diff(g2) .> 0)
 
         disc = MOLFiniteDifference(
-            [x1 => g1, x2 => g2], t; advection_scheme = WENOScheme()
+            [x1 => g1, x2 => g2], t;
+            advection_scheme = WENOScheme(), use_ODAE = true
         )
         prob = discretize(pdesys, disc)
         sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, saveat = [T_END])
@@ -211,7 +214,7 @@ end
     )
     disc = MOLFiniteDifference(
         [x1 => sgrid(0.0, 0.5, 101), x2 => sgrid(0.5, 1.0, 201)], t;
-        advection_scheme = WENOScheme()
+        advection_scheme = WENOScheme(), use_ODAE = true
     )
     prob = discretize(pdesys, disc)
     sol = solve(prob, Tsit5(); abstol = 1.0e-8, reltol = 1.0e-8, saveat = [T_MID, T_END])

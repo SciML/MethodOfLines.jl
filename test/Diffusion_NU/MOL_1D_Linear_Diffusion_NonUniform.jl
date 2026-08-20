@@ -2,7 +2,7 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqRosenbrock: Rodas4
+using OrdinaryDiffEqBDF: DFBDF
 using ModelingToolkit: Differential
 using StableRNGs
 
@@ -46,11 +46,9 @@ using StableRNGs
     discretization_approx_order4 = MOLFiniteDifference([x => dx], t; approx_order = 4)
 
     for disc in [discretization, discretization_approx_order4]
-        # Convert the PDE problem into an ODE problem
         prob = discretize(pdesys, disc)
 
-        # Solve ODE problem
-        sol = solve(prob, Tsit5(), saveat = 0.1)
+        sol = solve(prob, DFBDF(), saveat = 0.1)
 
         x_sol = sol[x]
 
@@ -107,11 +105,9 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx], t)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     # Test
     solu = sol[u(t, x)]
@@ -150,11 +146,9 @@ end
 
     discretization = MOLFiniteDifference([chebyspace(100, domains[2])], t, approx_order = 4)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     # Test
     solu = sol[u(t, x)]
@@ -206,11 +200,9 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx], t)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     solu = sol[u(t, x)]
 
@@ -256,12 +248,10 @@ end
     order = 6
     disc = MOLFiniteDifference([x => dx], t, approx_order = order)
 
-    # Convert the PDE problem into an ODE problem
 
     prob = discretize(pdesys, disc)
 
-    # Solve ODE problem
-    sol = solve(prob, Rodas4(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     x_sol = sol[x]
 
@@ -323,11 +313,9 @@ end
     order = 2
     disc = MOLFiniteDifference([x => dx], t)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, disc)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
     u_approx = sol[u(t, x)]
     x = sol[x]
     t = sol.t
@@ -384,11 +372,9 @@ end
     order = 4
     disc = MOLFiniteDifference([x => dx], t; approx_order = order)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, disc)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     solu = sol[u(t, x)]
 
@@ -439,11 +425,9 @@ end
     order = 6
     disc = MOLFiniteDifference([x => dx], t, approx_order = order)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, disc)
 
-    # Solve ODE problem
-    sol = solve(prob, Rodas4(), reltol = 1.0e-6, saveat = 0.1)
+    sol = solve(prob, DFBDF(), reltol = 1.0e-6, saveat = 0.1)
 
     u_approx = sol[u(t, x)]
     x = sol[x]
@@ -504,8 +488,7 @@ end
     discretization = MOLFiniteDifference([r => dr], t, approx_order = 4)
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     u_approx = sol[u(t, r)]
     r = sol[r][2:(end - 1)]
@@ -567,8 +550,7 @@ end
     discretization = MOLFiniteDifference([r => dr], t)
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     u_approx = sol[u(t, r)]
     r = sol[r][2:(end - 1)]
@@ -635,11 +617,9 @@ end
     order = 6
     discretization = MOLFiniteDifference([x => dx], t)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     x_sol = sol[x][2:(end - 1)]
     t_sol = sol[t]
@@ -688,7 +668,7 @@ end
     discretization = MOLFiniteDifference([x => dx], t)
     prob = discretize(pdesys, discretization)
     # Make sure it can be solved
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, DFBDF())
 end
 
 @testset "Test 12: linear diffusion, two variables, mixed BCs, different independent variables order 4" begin
@@ -743,11 +723,9 @@ end
     order = 4
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     x_sol = sol[x]
     y_sol = sol[y]
@@ -813,11 +791,9 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     solu1 = sol[u(t, x)]
     solu2 = sol[v(t, y)]
@@ -875,11 +851,9 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx], t)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
-    sol = solve(prob, Tsit5(), saveat = 0.1)
+    sol = solve(prob, DFBDF(), saveat = 0.1)
 
     solu = sol[u(t, x)]
     solv = sol[v(t)]

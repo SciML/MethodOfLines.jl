@@ -211,7 +211,8 @@ function generate_code(
 end
 
 """
-    discretize(pdesys, discretization; analytic = nothing, checks = true, kwargs...)
+    discretize(pdesys, discretization;
+               analytic = nothing, checks = true, fallback = true, kwargs...)
 
 Discretize `pdesys` and return a problem ready to `solve`.
 
@@ -225,11 +226,15 @@ those whose initialization equations `BrownFullBasicInit` would not honour. Thos
 back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations. Pass
 `fallback = false` to make that an error instead.
 
+Passing `use_ODAE = true` to [`MOLFiniteDifference`](@ref) retains the pre-v1 compiled
+`ODEProblem` path. Supplying `analytic` also selects that path because analytic solutions
+are attached through the compiled `ODEFunction`.
+
 Time-independent systems have no derivative to keep implicit and discretize to a
 `NonlinearProblem` as before.
 
 To build a problem yourself — an `ODEProblem`, or anything else — start from
-[`symbolic_discretize`](@ref):
+`symbolic_discretize`:
 
 ```julia
 sys, tspan = symbolic_discretize(pdesys, discretization)
@@ -244,9 +249,9 @@ function SciMLBase.discretize(
     if tspan === nothing
         return _stationary_problem(sys, discretization; kwargs...)
     end
-    # An `analytic` solution is attached through `ODEFunction`, which needs the compiled
-    # system, so that request selects the ODE path outright.
-    if analytic === nothing
+    ode_path = analytic !== nothing || discretization.use_ODAE ||
+        discretization.disc_strategy isa PointwiseDiscretization
+    if !ode_path
         try
             return _dae_problem(sys, tspan, discretization; kwargs...)
         catch e

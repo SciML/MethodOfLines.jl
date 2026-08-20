@@ -30,17 +30,6 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C, Strat} <:
             hasTime = Val(true)
         end
         use_ODAE = disc.use_ODAE
-        if use_ODAE
-            bcivmap = reduce(
-                (d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap))
-            )
-            allbcs = let v = discretespace.vars
-                mapreduce(x -> bcivmap[x], vcat, v.x̄)
-            end
-            if all(bc -> bc.order > 0, allbcs)
-                use_ODAE = false
-            end
-        end
         return new{
             hasTime, typeof(discretespace),
             typeof(disc), typeof(pdesys),

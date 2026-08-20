@@ -27,7 +27,9 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
 
     @named cbpdesys = PDESystem(cbeq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => 0.1], t; approx_order = 2, callbacks = [cb])
+    disc = MOLFiniteDifference(
+        [x => 0.1], t; approx_order = 2, callbacks = [cb], use_ODAE = true
+    )
 
     prob = discretize(pdesys, disc)
     cbprob = discretize(cbpdesys, disc)

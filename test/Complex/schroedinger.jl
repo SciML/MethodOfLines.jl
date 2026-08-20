@@ -1,4 +1,5 @@
 using MethodOfLines, OrdinaryDiffEq, DomainSets, ModelingToolkit, Test
+using OrdinaryDiffEqBDF: DFBDF
 using SciMLBase
 using DiffEqBase: BrownFullBasicInit
 
@@ -32,7 +33,7 @@ using DiffEqBase: BrownFullBasicInit
 
     prob = discretize(sys, disc)
 
-    sol = solve(prob, FBDF(), saveat = 0.01, initializealg = BrownFullBasicInit())
+    sol = solve(prob, DFBDF(), saveat = 0.01, initializealg = BrownFullBasicInit())
 
     discx = sol[x]
     disct = sol[t]
@@ -91,7 +92,7 @@ end
 
     prob = discretize(sys, disc)
 
-    sol = solve(prob, FBDF(), saveat = 0.01, initializealg = BrownFullBasicInit())
+    sol = solve(prob, DFBDF(), saveat = 0.01, initializealg = BrownFullBasicInit())
 
     @test SciMLBase.successful_retcode(sol)
 end

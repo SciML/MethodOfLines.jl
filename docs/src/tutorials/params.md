@@ -4,6 +4,7 @@ We can also build up more complicated systems with multiple dependent variables 
 
 ```@example ivs1
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
+using OrdinaryDiffEqBDF: DFBDF
 
 @parameters t x
 @parameters Dn=0.5 Dp=2.0
@@ -27,7 +28,7 @@ domains = [t ∈ Interval(0.0, 1.0),
 
 discretization = MOLFiniteDifference([x => 0.1], t)
 
-prob = discretize(pdesys, discretization) # This gives an ODEProblem since it's time-dependent
+prob = discretize(pdesys, discretization) # This gives a DAEProblem since it's time-dependent
 
 sol = solve(prob, DFBDF())
 
@@ -55,6 +56,7 @@ The system does not need to be re-discretized every time we want to plot with di
 
 ```@example ivs2
 using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
+using OrdinaryDiffEqBDF: DFBDF
 
 @parameters t x
 @parameters Dn=0.5 Dp=2.0
@@ -78,7 +80,7 @@ domains = [t ∈ Interval(0.0, 1.0),
 
 discretization = MOLFiniteDifference([x => 0.1], t)
 
-prob = discretize(pdesys, discretization) # This gives an ODEProblem since it's time-dependent
+prob = discretize(pdesys, discretization) # This gives a DAEProblem since it's time-dependent
 
 sols = []
 for (Dnval, Dpval) in zip(rand(10), rand(10))

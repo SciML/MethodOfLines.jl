@@ -35,7 +35,9 @@ using OrdinaryDiffEqRosenbrock: Rodas4P
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -84,7 +86,9 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -133,7 +137,9 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -182,7 +188,9 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
     # explicitly specify upwind order
 
     # Convert the PDE problem into an ODE problem
@@ -232,7 +240,9 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -283,7 +293,9 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -348,7 +360,9 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -413,7 +427,9 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -478,7 +494,9 @@ end
     # Method of lines discretization
     dx = 2π / 30
     order = 2
-    discretization = MOLFiniteDifference([x => dx], t, advection_scheme = WENOScheme())
+    discretization = MOLFiniteDifference(
+        [x => dx], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(sys, discretization)

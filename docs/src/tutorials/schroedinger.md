@@ -4,6 +4,7 @@ MethodOfLines can solve linear complex PDEs like the Schrödinger equation:
 
 ```@example schro
 using MethodOfLines, OrdinaryDiffEq, Plots, DomainSets, ModelingToolkit
+using OrdinaryDiffEqBDF: DFBDF
 
 @parameters t, x
 @variables ψ(..)

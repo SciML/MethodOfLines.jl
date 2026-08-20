@@ -27,8 +27,9 @@ where ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 Note here elliptic problem has condition ``\int_{0}^{1} S(x)+I(x)dx = 1``.
 
 ```@example sispde
-using OrdinaryDiffEq, OrdinaryDiffEqBDF, SteadyStateDiffEq, ModelingToolkit, MethodOfLines,
-      DomainSets, Plots
+using OrdinaryDiffEq, SteadyStateDiffEq, ModelingToolkit, MethodOfLines,
+    DomainSets, Plots
+using OrdinaryDiffEqBDF: DFBDF
 
 # Parameters, variables, and derivatives
 @parameters t x
@@ -79,7 +80,7 @@ dx = 0.01
 order = 2
 discretization = MOLFiniteDifference([x => dx], t)
 
-# Convert the PDE problem into an ODE problem
+# Convert the PDE system into a DAE problem
 prob = discretize(pdesys, discretization);
 ```
 
@@ -106,7 +107,9 @@ Change the elliptic problem to steady state problem of reaction diffusion equati
 See more solvers in [Steady State Solvers · DifferentialEquations.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/steady_state_solve/)
 
 ```@example sispde
-steadystateprob = SteadyStateProblem(prob)
+sys, tspan = symbolic_discretize(pdesys, discretization)
+odeprob = ODEProblem(mtkcompile(sys), nothing, tspan)
+steadystateprob = SteadyStateProblem(odeprob)
 steadystate = solve(steadystateprob, DynamicSS(FBDF()))
 ```
 
@@ -117,10 +120,10 @@ $$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$$
 
 ```@example sispde
 # Get the discretized I variables from the system
-I_vars = filter(s -> contains(string(s), "I("), unknowns(prob.f.sys))
+I_vars = filter(s -> contains(string(s), "I("), unknowns(odeprob.f.sys))
 
 function episize!(dS_val, dI_val)
-    newprob = remake(prob, p = [dS => dS_val, dI => dI_val, brn => 3, ϵ => 0.1])
+    newprob = remake(odeprob, p = [dS => dS_val, dI => dI_val, brn => 3, ϵ => 0.1])
     steadystateprob = SteadyStateProblem(newprob)
     steadystate = solve(steadystateprob, DynamicSS(FBDF()))
     y = sum(steadystate[v] for v in I_vars) * dx

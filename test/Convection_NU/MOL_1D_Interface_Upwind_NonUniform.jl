@@ -100,7 +100,7 @@ function solve_periodic_advection(;
     domains = [t ∈ Interval(t0, tf), x ∈ Interval(x0, xL)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => xgrid], t; advection_scheme)
+    disc = MOLFiniteDifference([x => xgrid], t; advection_scheme, use_ODAE = true)
     prob = discretize(pdesys, disc)
     dt = advection_timestep(xgrid, v)
     sol = solve(prob, SSPRK33(); dt = dt, saveat = saveat, adaptive = false)
@@ -170,7 +170,7 @@ function solve_multi_domain_interface_advection(;
     )
 
     disc = MOLFiniteDifference(
-        [x1 => x1grid, x2 => x2grid], t; advection_scheme,
+        [x1 => x1grid, x2 => x2grid], t; advection_scheme, use_ODAE = true,
     )
     prob = discretize(pdesys, disc)
     dt = min(advection_timestep(x1grid, max(abs(v), abs(v2))), advection_timestep(x2grid, max(abs(v), abs(v2))))
@@ -213,7 +213,8 @@ function solve_chained_interface_advection(;
     )
 
     disc = MOLFiniteDifference(
-        [xivs[k] => grids[k] for k in 1:4], t; advection_scheme = UpwindScheme(),
+        [xivs[k] => grids[k] for k in 1:4], t;
+        advection_scheme = UpwindScheme(), use_ODAE = true,
     )
     prob = discretize(pdesys, disc)
     dt = minimum(advection_timestep(g, v) for g in grids)
@@ -265,7 +266,8 @@ end
 
     pdesys = build_mismatch_interface_system(; u0 = u0)
     disc = MOLFiniteDifference(
-        [x1 => x1grid, x2 => x2grid], t; advection_scheme = UpwindScheme(),
+        [x1 => x1grid, x2 => x2grid], t;
+        advection_scheme = UpwindScheme(), use_ODAE = true,
     )
 
     @test_throws ArgumentError get_discrete(pdesys, disc)
@@ -334,7 +336,8 @@ end
         eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)],
     )
     disc = MOLFiniteDifference(
-        [x1 => x1grid, x2 => x2grid], t; advection_scheme = UpwindScheme(),
+        [x1 => x1grid, x2 => x2grid], t;
+        advection_scheme = UpwindScheme(), use_ODAE = true,
     )
 
     @test_throws ArgumentError discretize(pdesys, disc)
@@ -403,7 +406,8 @@ end
     )
 
     disc = MOLFiniteDifference(
-        [x1 => x1grid, x2 => x2grid], t; advection_scheme = UpwindScheme(),
+        [x1 => x1grid, x2 => x2grid], t;
+        advection_scheme = UpwindScheme(), use_ODAE = true,
     )
     vmap = MethodOfLines.VariableMap(pdesys, disc)
     s = MethodOfLines.construct_discrete_space(vmap, disc)
@@ -688,7 +692,8 @@ end
     )
 
     disc = MOLFiniteDifference(
-        [x1 => x1grid, x2 => x2grid], t; advection_scheme = UpwindScheme(),
+        [x1 => x1grid, x2 => x2grid], t;
+        advection_scheme = UpwindScheme(), use_ODAE = true,
     )
 
     # The nonuniform interface routing owns the grid/step-size topology; it must

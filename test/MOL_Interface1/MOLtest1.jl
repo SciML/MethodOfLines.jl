@@ -1,7 +1,6 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
+using OrdinaryDiffEqBDF: DFBDF
 import SciMLBase
-using OrdinaryDiffEqRosenbrock: Rodas4
-using OrdinaryDiffEqSDIRK: TRBDF2
 using ModelingToolkit: operation, iscall, arguments
 using DomainSets
 using NonlinearSolve
@@ -33,8 +32,8 @@ using Test
 
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
     discretization = MOLFiniteDifference([x => 0.1], t; grid_align = edge_align)
-    prob = discretize(pdesys, discretization) # This gives an ODEProblem since it's time-dependent
-    sol = solve(prob, Tsit5())
+    prob = discretize(pdesys, discretization)
+    sol = solve(prob, DFBDF())
 end
 
 @testset "Heat Equation 2D 1 variable" begin
@@ -75,7 +74,7 @@ end
     dy = 0.2
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
     prob = SciMLBase.discretize(pdesys, discretization)
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, DFBDF())
 end
 
 # Diffusion in a sphere
@@ -98,8 +97,8 @@ end
 
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
     discretization = MOLFiniteDifference([r => 0.1], t)
-    prob = discretize(pdesys, discretization) # This gives an ODEProblem since it's time-dependent
-    sol = solve(prob, Tsit5())
+    prob = discretize(pdesys, discretization)
+    sol = solve(prob, DFBDF())
 end
 
 @testset "RHS = 0" begin
@@ -181,7 +180,6 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx, t => dt], approx_order = order)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
     # Solve the ODE problem
@@ -223,10 +221,9 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx], t, approx_order = order)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, Rodas4())
+    sol = solve(prob, DFBDF())
 end
 
 @testset "Array u" begin
@@ -348,7 +345,7 @@ end
 
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, TRBDF2())
+    sol = solve(prob, DFBDF())
 end
 
 @testset "2D variable connected to 1D variable at boundary #33" begin
@@ -387,8 +384,7 @@ end
     order = 2
     discretization = MOLFiniteDifference([x => dx, r => dr], t, approx_order = order)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, DFBDF())
 end

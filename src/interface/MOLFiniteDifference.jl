@@ -22,14 +22,15 @@ A discretization algorithm.
   stable and accurate at the cost of complexity.
 - `grid_align`: The grid alignment value. Use [`center_align`](@ref),
   [`edge_align`](@ref), or `StaggeredGrid()` as appropriate for the discretization.
-- `use_ODAE`: If `true`, the discretization will use the `ODAEproblem` constructor.
-    Defaults to `false`.
+- `use_ODAE`: If `true`, use the compiled `ODEProblem` path retained for compatibility.
+    Defaults to `false`, which returns a `DAEProblem` for supported time-dependent
+    systems.
 - `discretization_strategy`: How the discretized equations are represented symbolically.
     [`ArrayDiscretization()`](@ref), the default, generates the interior of each PDE as a
     single symbolic array equation over slices of the discretized variables, falling back
     to pointwise scalar equations for patterns with no slice representation. Use
     [`StrictArrayDiscretization()`](@ref) to make that fallback an error.
-- `kwargs`: Additional keyword arguments passed to the `ODEProblem`.
+- `kwargs`: Additional keyword arguments passed to the generated problem.
 
 # Fields
 
@@ -42,7 +43,7 @@ A discretization algorithm.
 - `grid_align`: The grid alignment marker.
 - `should_transform`: Whether supported symbolic transformations are applied before
   discretization.
-- `use_ODAE`: Whether the resulting problem may use an `ODAEProblem` formulation.
+- `use_ODAE`: Whether to retain the compiled `ODEProblem` path.
 - `disc_strategy`: The symbolic equation representation strategy.
 - `useIR`: Whether ModelingToolkit's intermediate representation is used.
 - `callbacks`: Symbolic discretization callbacks.

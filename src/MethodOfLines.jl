@@ -5,7 +5,8 @@ using DiffEqBase
 using ModelingToolkit
 using ModelingToolkit: get_unknowns,
     get_eqs, get_bcs, get_dvs,
-    get_ivs, initialization_equations
+    get_ivs
+using ModelingToolkitBase: initialization_equations
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term,

@@ -34,7 +34,7 @@ using OrdinaryDiffEqLowOrderRK: Euler
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
     # explicitly specify upwind order
 
     # Convert the PDE problem into an ODE problem
@@ -84,7 +84,7 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
     # explicitly specify upwind order
 
     # Convert the PDE problem into an ODE problem
@@ -134,7 +134,7 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
     # explicitly specify upwind order
 
     # Convert the PDE problem into an ODE problem
@@ -184,7 +184,7 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -233,7 +233,7 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -283,7 +283,7 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -348,7 +348,7 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -414,7 +414,7 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
 
     # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
@@ -467,7 +467,7 @@ end
     # Method of lines discretization
     dx = 2 / 80
     order = 1
-    discretization = MOLFiniteDifference([x => dx], t)
+    discretization = MOLFiniteDifference([x => dx], t; use_ODAE = true)
 
     # Convert the PDE problem into an ODE problem
     @test_broken (discretize(pdesys, discretization) isa ODEProblem)

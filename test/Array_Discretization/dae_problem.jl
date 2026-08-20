@@ -1,7 +1,7 @@
 # Tests for the DAEProblem path, which builds an implicit-DAE problem from the residuals
 # MethodOfLines emits without running `mtkcompile`, so the array (slice-form) equations
-# survive into the generated code. Every case is checked against the `discretize`
-# (`ODEProblem` + `mtkcompile`) path, which this must reproduce.
+# survive into the generated code. Every case is checked against the compiled
+# `ODEProblem` path, which this must reproduce.
 
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Symbolics
 using SciMLBase
@@ -28,11 +28,12 @@ array_disc(dxs, t; kwargs...) = MOLFiniteDifference(
 # time, indexed identically, plus the DAE problem for structural checks.
 function solve_both(pdesys, dxs, t, u; disc_kwargs = (;), tol = 1.0e-10)
     disc = array_disc(dxs, t; disc_kwargs...)
-    prob_dae = DAEProblem(pdesys, disc)
+    prob_dae = discretize(pdesys, disc)
+    @test prob_dae isa SciMLBase.DAEProblem
     sol_dae = solve(prob_dae, DFBDF(); reltol = tol, abstol = tol)
-    sol_ode = solve(
-        discretize(pdesys, disc), Rodas4(); reltol = tol, abstol = tol
-    )
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    prob_ode = ODEProblem(mtkcompile(sys), nothing, tspan)
+    sol_ode = solve(prob_ode, Rodas4(); reltol = tol, abstol = tol)
     nx = ndims(get_discrete(pdesys, disc)[u])
     final(sol) = sol[u][end, ntuple(_ -> Colon(), nx)...]
     return prob_dae, sol_dae, final(sol_dae), final(sol_ode)
@@ -225,9 +226,13 @@ end
     @test occursin("BrownFullBasicInit", msg)
     @test occursin(string(first(first(offenders))), msg)
 
-    # the same system still discretizes and solves through the ODEProblem path
+    fallback_prob = discretize(pdesys, disc)
+    @test fallback_prob isa SciMLBase.ODEProblem
     @test SciMLBase.successful_retcode(
-        solve(discretize(pdesys, disc), Rodas4(); reltol = 1.0e-8, abstol = 1.0e-8)
+        solve(fallback_prob, Rodas4(); reltol = 1.0e-8, abstol = 1.0e-8)
+    )
+    @test_throws MethodOfLines.BrownFullBasicInitUnsafeError discretize(
+        pdesys, disc; fallback = false
     )
 
     # an explicit `initializealg` overrides the safety gate; the system is then rejected
@@ -273,7 +278,10 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => 11], t)
+    disc = MOLFiniteDifference(
+        [x => 11], t;
+        discretization_strategy = MethodOfLines.PointwiseDiscretization()
+    )
     err = try
         DAEProblem(pdesys, disc)
         nothing
@@ -282,6 +290,23 @@ end
     end
     @test err isa ArgumentError
     @test occursin("ArrayDiscretization", err.msg)
+end
+
+@testset "explicit compiled ODE path" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc = MOLFiniteDifference([x => 11], t; use_ODAE = true)
+    prob = discretize(pdesys, disc)
+    @test prob isa SciMLBase.ODEProblem
+    @test SciMLBase.successful_retcode(solve(prob, Rodas4()))
 end
 
 # The predicate's algebraic-variable and coupled-unknown branches are unreachable from what

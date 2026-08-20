@@ -27,12 +27,7 @@ function SciMLBase.PDETimeSeriesSolution(
         ivs = [discretespace.time, discretespace.x̄...]
         ivgrid = generate_ivgrid(discretespace, ivs, sol.t, metadata)
 
-        solved_unknowns = if metadata.use_ODAE
-            deriv_unknowns = metadata.metadata[]
-            unknowns(odesys)[deriv_unknowns]
-        else
-            unknowns(odesys)
-        end
+        solved_unknowns = unknowns(odesys)
         dvs = discretespace.ū
         # Reshape the solution to flat arrays, faster to do this eagerly.
         umap = mapreduce(vcat, dvs) do u

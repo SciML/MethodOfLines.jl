@@ -1,4 +1,5 @@
 using MethodOfLines, ModelingToolkit, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using OrdinaryDiffEqBDF: DFBDF
 
 @testset "Test 00: Test simple integration case (0 .. x), no transformation" begin
     # test integrals
@@ -36,7 +37,7 @@ using MethodOfLines, ModelingToolkit, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 
     prob = discretize(pde_system, disc)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, DFBDF())
 
     xdisc = sol[x]
     tdisc = sol[t]
@@ -76,7 +77,7 @@ end
 
     disc = MOLFiniteDifference([x => 120], t)
 
-    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    @test_broken discretize(pde_system, disc) isa DAEProblem
     # prob = discretize(pde_system, disc)
     # sol = solve(prob, Tsit5())
 
@@ -124,7 +125,7 @@ end
 
     prob = discretize(pde_system, disc)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob, DFBDF())
 
     xdisc = sol[x]
     tdisc = sol[t]
@@ -168,7 +169,7 @@ end
 
     disc = MOLFiniteDifference([x => 120], t)
 
-    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    @test_broken discretize(pde_system, disc) isa DAEProblem
     # prob = discretize(pde_system, disc)
     # sol = solve(prob, Tsit5(), saveat=0.1)
 

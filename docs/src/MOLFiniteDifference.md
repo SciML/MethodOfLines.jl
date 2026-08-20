@@ -1,14 +1,17 @@
 # [Discretization](@id molfd)
 ```julia
-struct MOLFiniteDifference{G} <: DiffEqBase.AbstractDiscretization
-    dxs
-    time
+struct MOLFiniteDifference{G, D} <: AbstractEquationSystemDiscretization
+    dxs::Any
+    time::Any
     approx_order::Int
-    advection_scheme
+    advection_scheme::Any
     grid_align::G
     should_transform::Bool
     use_ODAE::Bool
-    kwargs
+    disc_strategy::D
+    useIR::Bool
+    callbacks::Any
+    kwargs::Any
 end
 ```
 
@@ -26,7 +29,7 @@ discretization = MOLFiniteDifference(dxs,
                                       approx_order = <Order of derivative approximation, starting from 2> 
                                       grid_align = <your grid type choice>,
                                       should_transform = <Whether to automatically transform the PDESystem (see below)>
-                                      use_ODAE = <Whether to use ODAEProblem>)
+                                      use_ODAE = <Whether to retain the compiled ODEProblem path>)
 prob = discretize(pdesys, discretization)
 ```
 Where `dxs` is a vector of pairs of parameters to the grid step in this dimension, i.e. `[x=>0.2, y=>0.1]`. If the value given for a dimension is a subtype of `Integer`, the domain for that variable will be discretized in to that integer number of equally spaced points.
@@ -45,17 +48,19 @@ Currently supported options are `grid_align`: `center_align` and `edge_align`. E
 
 `should_transform`: Whether to automatically transform the system to make it compatible with MethodOfLines where possible, defaults to true. If your system has no mixed derivatives, all derivatives are purely of a dependent variable i.e. `Dx(u_aux(t,x))` not `Dx(v(t,x)*u(t,x))`, excepting nonlinear and spherical Laplacians for which this holds for the innermost derivative argument, and no expandable derivatives, this can be set to false for better discretization performance at the cost of generality, if you perform these transformations yourself.
 
-`use_ODAE`: MethodOfLines will automatically make use of `ODAEProblem` where relevant, which improves performance for DAEs (as discretized PDEs are in general), if this is set to true. Defaults to false.
+`use_ODAE`: Retains the pre-v1 compiled `ODEProblem` path when set to `true`. Defaults to `false`, which returns a `DAEProblem` for supported time-dependent systems.
 
 `discretization_strategy`: How the discretized equations are represented symbolically. `ArrayDiscretization()`, the default and only public strategy in v1, generates the interior of each PDE as a single symbolic array equation over slices of the discretized variables, e.g. `D(u[2:n-1]) - (u[1:n-2] .- 2u[2:n-1] .+ u[3:n]) ./ dx^2 ~ 0`. This keeps the number of symbolic equations independent of the grid resolution and scales much better during symbolic processing. Nonlinear Laplacians `Dx(a(u) * Dx(u))`, spherical Laplacians `r^-2 Dr(r^2 Dr(u))`, mixed first-order derivatives `Dx(Dy(u))`, WENO / functional advection (on uniform grids, and on nonuniform grids — periodic or not — for schemes that provide a coefficient split; WENO does; user schemes opt in by defining a method on `MethodOfLines.array_scheme_split`), staggered grids, self-periodic interfaces and boundary values appearing inside an interior equation (e.g. `u(t, 1)`) are included in the array form, including on wrap boxes near a periodic seam. Patterns without a slice representation (nonuniform advection schemes without a coefficient split, schemes that read the grid coordinate, integrals, higher mixed derivatives, two-domain interface BCs, derivatives of boundary values, time-literal references such as `u(0, x)`, boundary values on edge-aligned grids, stationary systems) automatically fall back to pointwise scalar equations for the affected equation. `StrictArrayDiscretization()` turns that fallback into an error. `ScalarizedDiscretization()` was removed in v1 — the scalar form is now the fallback inside the array strategy rather than a strategy of its own. Where the array form is used, numerics match the pointwise path whenever that path can express the same boundary-value substitutions; the array path also substitutes periodic-face and free-standing-corner references that pointwise `boundaryvalfuncs` currently leave symbolic.
 
-Any unrecognized keyword arguments will be passed to the `ODEProblem` constructor, see [its documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/#Dynamical-systems) for available options.
+Any unrecognized keyword arguments are passed to the generated problem constructor; see the [ModelingToolkit problem documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/#Dynamical-systems) for available options.
 
 ## Problem types
 
 `discretize` returns a `DAEProblem` for a time-dependent system:
 
 ```julia
+using OrdinaryDiffEqBDF: DFBDF
+
 disc = MOLFiniteDifference([x => n], t)
 prob = discretize(pdesys, disc)
 sol = solve(prob, DFBDF())
@@ -105,5 +110,8 @@ benefit of the array form. Prefer `discretize` unless you specifically need an
   systems. Solvers must be implicit-DAE algorithms such as `DFBDF()`; an `ODEProblem`
   solver like `Tsit5()` will no longer accept the result. Solution indexing is unchanged.
 - `ScalarizedDiscretization()` was removed. It is the default fallback inside
-  `ArrayDiscretization()`, which is now the only strategy.
-- For an `ODEProblem`, use `symbolic_discretize` plus `mtkcompile` as above.
+  `ArrayDiscretization()`; the public strategy choices are `ArrayDiscretization()` and
+  `StrictArrayDiscretization()`.
+- To retain the pre-v1 compiled `ODEProblem` behavior, construct the discretization with
+  `use_ODAE = true`. For manual problem construction, use `symbolic_discretize` plus
+  `mtkcompile` as above.

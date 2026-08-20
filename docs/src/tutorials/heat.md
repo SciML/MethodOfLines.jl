@@ -6,6 +6,7 @@ In this tutorial, we will use the symbolic interface to solve the heat equation.
 
 ```@example heatd
 using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
+using OrdinaryDiffEqBDF: DFBDF
 # Method of Manufactured Solutions: exact solution
 u_exact = (x, t) -> exp.(-t) * cos.(x)
 
@@ -33,10 +34,10 @@ dx = 0.1
 order = 2
 discretization = MOLFiniteDifference([x => dx], t)
 
-# Convert the PDE problem into an ODE problem
+# Convert the PDE system into a DAE problem
 prob = discretize(pdesys, discretization)
 
-# Solve ODE problem
+# Solve the DAE problem
 using OrdinaryDiffEq
 sol = solve(prob, DFBDF(), saveat = 0.2)
 
@@ -60,6 +61,7 @@ plt
 
 ```@example heatn
 using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
+using OrdinaryDiffEqBDF: DFBDF
 # Method of Manufactured Solutions: exact solution
 u_exact = (x, t) -> exp.(-t) * cos.(x)
 
@@ -89,10 +91,10 @@ dx = 0.01
 order = 2
 discretization = MOLFiniteDifference([x => dx], t)
 
-# Convert the PDE problem into an ODE problem
+# Convert the PDE system into a DAE problem
 prob = discretize(pdesys, discretization)
 
-# Solve ODE problem
+# Solve the DAE problem
 using OrdinaryDiffEq
 sol = solve(prob, DFBDF(), saveat = 0.2)
 
@@ -117,6 +119,7 @@ plt
 
 ```@example heatr
 using ModelingToolkit, MethodOfLines, DomainSets, OrdinaryDiffEq
+using OrdinaryDiffEqBDF: DFBDF
 # Method of Manufactured Solutions
 u_exact = (x, t) -> exp.(-t) * sin.(x)
 
@@ -146,10 +149,10 @@ dx = 0.05
 order = 2
 discretization = MOLFiniteDifference([x => dx], t)
 
-# Convert the PDE problem into an ODE problem
+# Convert the PDE system into a DAE problem
 prob = discretize(pdesys, discretization)
 
-# Solve ODE problem
+# Solve the DAE problem
 using OrdinaryDiffEq
 sol = solve(prob, DFBDF(), saveat = 0.2)
 

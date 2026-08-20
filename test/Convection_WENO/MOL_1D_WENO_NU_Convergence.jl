@@ -70,7 +70,9 @@ function build_advection_prob(xgrid; v)
     ]
     domains = [t ∈ Interval(0.0, tf), x ∈ Interval(x0, xL)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-    disc = MOLFiniteDifference([x => xgrid], t; advection_scheme = WENOScheme())
+    disc = MOLFiniteDifference(
+        [x => xgrid], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
     return discretize(pdesys, disc)
 end
 
@@ -162,7 +164,9 @@ end
     ]
     domains = [t ∈ Interval(0.0, t_end), x ∈ Interval(-1.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-    disc = MOLFiniteDifference([x => xg], t; advection_scheme = WENOScheme())
+    disc = MOLFiniteDifference(
+        [x => xg], t; advection_scheme = WENOScheme(), use_ODAE = true
+    )
     prob = discretize(pdesys, disc)
 
     dxmin = min_cell_width(xg)

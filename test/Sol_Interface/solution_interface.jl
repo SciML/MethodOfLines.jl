@@ -35,14 +35,12 @@ using ModelingToolkit: Differential
     dx = dy = 2 / 8
     order = 1
     discretization = MOLFiniteDifference(
-        [x => dx, y => dy], t; advection_scheme = WENOScheme()
+        [x => dx, y => dy], t; advection_scheme = WENOScheme(), use_ODAE = true
     )
     # explicitly specify upwind order
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
 
-    # Solve ODE problem
     using OrdinaryDiffEq
     sol = solve(prob, FBDF(), saveat = 0.1)
 

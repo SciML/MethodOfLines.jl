@@ -64,4 +64,4 @@ v[1, 5](t) ~ v[5, 5](t),
 v[1, 1](t) ~ 0] # Invalid corner point set to 0
 ```
 
-On the call to ODEProblem, this [code](@ref brusscode) is generated.
+On the compiled `ODEProblem` path, this [code](@ref brusscode) is generated.

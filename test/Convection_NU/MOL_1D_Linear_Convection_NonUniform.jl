@@ -103,7 +103,7 @@ function solve_mms_advection(;
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     disc = MOLFiniteDifference(
-        [x => xgrid], t; advection_scheme, approx_order,
+        [x => xgrid], t; advection_scheme, approx_order, use_ODAE = true,
     )
     prob = discretize(pdesys, disc)
     dt = advection_timestep(xgrid, v)
@@ -144,7 +144,7 @@ function solve_inflow_advection(;
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     disc = MOLFiniteDifference(
-        [x => xgrid], t; advection_scheme, approx_order,
+        [x => xgrid], t; advection_scheme, approx_order, use_ODAE = true,
     )
     prob = discretize(pdesys, disc)
     dt = advection_timestep(xgrid, v)
@@ -217,7 +217,9 @@ end
         domains = [t ∈ Interval(t0, tf), x ∈ Interval(xgrid[1], xgrid[end])]
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-        disc = MOLFiniteDifference([x => xgrid], t; advection_scheme = UpwindScheme())
+        disc = MOLFiniteDifference(
+            [x => xgrid], t; advection_scheme = UpwindScheme(), use_ODAE = true
+        )
         prob = discretize(pdesys, disc)
         dt = 0.2 * minimum(diff(xgrid)) / 0.6
         sol = solve(prob, SSPRK33(); dt = dt, saveat = [tf], adaptive = false)
@@ -314,7 +316,7 @@ end
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
         disc = MOLFiniteDifference(
-            [x => xgrid], t; advection_scheme = UpwindScheme(),
+            [x => xgrid], t; advection_scheme = UpwindScheme(), use_ODAE = true,
         )
         vmap = MethodOfLines.VariableMap(pdesys, disc)
         s = MethodOfLines.construct_discrete_space(vmap, disc)

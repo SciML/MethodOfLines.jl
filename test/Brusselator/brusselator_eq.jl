@@ -60,10 +60,11 @@ using OrdinaryDiffEqSDIRK: TRBDF2
 
     order = 2
 
-    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order = order)
+    discretization = MOLFiniteDifference(
+        [x => dx, y => dy], t; approx_order = order, use_ODAE = true
+    )
 
     #MethodOfLines.generate_code(pdesys, discretization)
-    # Convert the PDE problem into an ODE problem
     println("Discretization:")
     @time prob = discretize(pdesys, discretization)
 
@@ -119,7 +120,7 @@ using OrdinaryDiffEqSDIRK: TRBDF2
     u0_manual = init_brusselator_2d(xyd_brusselator)
     prob = ODEProblem(brusselator_2d_loop, u0_manual, (0.0, 11.5), p)
 
-    msol = solve(prob, TRBDF2(), saveat = 0.01) # 2.771 s (5452 allocations: 65.73 MiB)
+    msol = solve(prob, TRBDF2(), saveat = 0.01)
 
     @testset "." begin
         for k in div(length(t), 2):length(t)
