@@ -9,6 +9,7 @@ using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Symbolics
 using SciMLBase
 using SciMLBase: successful_retcode
 using OrdinaryDiffEqRosenbrock: Rodas4
+using OrdinaryDiffEqBDF: DFBDF
 using OrdinaryDiffEqSSPRK: SSPRK22
 using OrdinaryDiffEqLowOrderRK: SplitEuler
 using NonlinearSolve: NewtonRaphson
@@ -16,19 +17,23 @@ using ModelingToolkit: get_eqs
 using SymbolicUtils: symtype
 using Test
 
-# Solve pdesys with both strategies and return (array_sol, scalar_sol, array_sys)
+# Solve pdesys with the array form and with the pointwise form it falls back to, and
+# return (array_sol, pointwise_sol, array_sys). The array form discretizes to a
+# `DAEProblem`, the pointwise form to an `ODEProblem`, so each arm gets its own solver.
 function solve_both(pdesys, dxs, t; disc_kwargs = (;), solver = Rodas4(), kwsolve = (;))
     disc_arr = MOLFiniteDifference(
         dxs, t; discretization_strategy = ArrayDiscretization(), disc_kwargs...
     )
-    disc_scal = MOLFiniteDifference(
-        dxs, t; discretization_strategy = ScalarizedDiscretization(), disc_kwargs...
+    disc_pt = MOLFiniteDifference(
+        dxs, t; discretization_strategy = MethodOfLines.PointwiseDiscretization(),
+        disc_kwargs...
     )
     sys_arr, _ = symbolic_discretize(pdesys, disc_arr)
     prob_arr = discretize(pdesys, disc_arr)
-    prob_scal = discretize(pdesys, disc_scal)
-    sol_arr = solve(prob_arr, solver; reltol = 1.0e-10, abstol = 1.0e-10, kwsolve...)
-    sol_scal = solve(prob_scal, solver; reltol = 1.0e-10, abstol = 1.0e-10, kwsolve...)
+    prob_pt = discretize(pdesys, disc_pt)
+    arr_solver = prob_arr isa SciMLBase.DAEProblem ? DFBDF() : solver
+    sol_arr = solve(prob_arr, arr_solver; reltol = 1.0e-10, abstol = 1.0e-10, kwsolve...)
+    sol_scal = solve(prob_pt, solver; reltol = 1.0e-10, abstol = 1.0e-10, kwsolve...)
     return sol_arr, sol_scal, sys_arr
 end
 
@@ -395,7 +400,7 @@ end
     @test counts[1].narr == 10
     @test counts[1].n == counts[2].n
 
-    sols = map([ArrayDiscretization(), ScalarizedDiscretization()]) do st
+    sols = map([ArrayDiscretization(), MethodOfLines.PointwiseDiscretization()]) do st
         disc = MOLFiniteDifference(
             [x => 1 / 8, y => 1 / 8], t; discretization_strategy = st
         )
@@ -1338,7 +1343,7 @@ end
         [x => 0.05]; discretization_strategy = ArrayDiscretization()
     )
     disc_scal = MOLFiniteDifference(
-        [x => 0.05]; discretization_strategy = ScalarizedDiscretization()
+        [x => 0.05]; discretization_strategy = MethodOfLines.PointwiseDiscretization()
     )
     prob = discretize(pdesys, disc_arr)
     prob_scal = discretize(pdesys, disc_scal)
@@ -1389,7 +1394,7 @@ end
         [x => 0.1], t; discretization_strategy = ArrayDiscretization()
     )
     disc_scal = MOLFiniteDifference(
-        [x => 0.1], t; discretization_strategy = ScalarizedDiscretization()
+        [x => 0.1], t; discretization_strategy = MethodOfLines.PointwiseDiscretization()
     )
     prob_arr = discretize(pdesys, disc_arr)
     prob_scal = discretize(pdesys, disc_scal)
@@ -1502,7 +1507,7 @@ end
         )
         disc_s = MOLFiniteDifference(
             [x => 1 / (n - 1)], t;
-            discretization_strategy = ScalarizedDiscretization()
+            discretization_strategy = MethodOfLines.PointwiseDiscretization()
         )
         sys_a, _ = symbolic_discretize(pdesys, disc_a)
         sys_s, _ = symbolic_discretize(pdesys, disc_s)
@@ -1728,7 +1733,7 @@ end
 
     # and the solution still matches the scalar path exactly
     sols = map(
-        [ArrayDiscretization(), ScalarizedDiscretization()]
+        [ArrayDiscretization(), MethodOfLines.PointwiseDiscretization()]
     ) do st
         disc = MOLFiniteDifference(
             [x => 0.1, y => 0.1], t; discretization_strategy = st
@@ -1795,7 +1800,7 @@ end
         dxs, t; discretization_strategy = ArrayDiscretization()
     )
     disc_scal = MOLFiniteDifference(
-        dxs, t; discretization_strategy = ScalarizedDiscretization()
+        dxs, t; discretization_strategy = MethodOfLines.PointwiseDiscretization()
     )
     sys_arr, _ = symbolic_discretize(pdesys, disc_arr)
     prob_arr = discretize(pdesys, disc_arr)
@@ -1834,7 +1839,7 @@ end
         dxs2, t; discretization_strategy = ArrayDiscretization()
     )
     disc2_scal = MOLFiniteDifference(
-        dxs2, t; discretization_strategy = ScalarizedDiscretization()
+        dxs2, t; discretization_strategy = MethodOfLines.PointwiseDiscretization()
     )
     sys2, _ = symbolic_discretize(pdesys2, disc2_arr)
     prob2_arr = discretize(pdesys2, disc2_arr)
@@ -2135,7 +2140,7 @@ end
     sys2, _ = symbolic_discretize(pdesys2, disc2)
     @test length(get_eqs(sys2)) == length(get_eqs(sys))
 
-    pdesys_s, disc_s = staggered_wave(0.125; strategy = ScalarizedDiscretization())
+    pdesys_s, disc_s = staggered_wave(0.125; strategy = MethodOfLines.PointwiseDiscretization())
     prob_arr = discretize(pdesys, disc)
     prob_scal = discretize(pdesys_s, disc_s)
     @test prob_arr.u0 == prob_scal.u0
@@ -2157,7 +2162,7 @@ end
     @test length(get_eqs(sys2)) == length(get_eqs(sys))
 
     pdesys_s, disc_s = staggered_wave(
-        0.125; periodic = true, strategy = ScalarizedDiscretization()
+        0.125; periodic = true, strategy = MethodOfLines.PointwiseDiscretization()
     )
     prob_arr = discretize(pdesys, disc)
     prob_scal = discretize(pdesys_s, disc_s)

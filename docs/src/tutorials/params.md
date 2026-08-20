@@ -29,7 +29,7 @@ discretization = MOLFiniteDifference([x => 0.1], t)
 
 prob = discretize(pdesys, discretization) # This gives an ODEProblem since it's time-dependent
 
-sol = solve(prob, Tsit5())
+sol = solve(prob, DFBDF())
 
 discrete_x = sol[x]
 discrete_t = sol[t]
@@ -83,7 +83,7 @@ prob = discretize(pdesys, discretization) # This gives an ODEProblem since it's 
 sols = []
 for (Dnval, Dpval) in zip(rand(10), rand(10))
     newprob = remake(prob, p = [Dn => Dnval, Dp => Dpval])
-    push!(sols, solve(newprob, Tsit5()))
+    push!(sols, solve(newprob, DFBDF()))
 end
 
 using Plots

@@ -87,7 +87,7 @@ prob = discretize(pdesys, discretization);
 
 ```@example sispde
 # Solving SIS reaction diffusion model
-sol = solve(prob, FBDF(), saveat = 0.2);
+sol = solve(prob, DFBDF(), saveat = 0.2);
 
 # Retrieving the results
 discrete_x = sol[x]

@@ -11,7 +11,7 @@ function PDEBase.interface_errors(
     if !any(s -> discretization.advection_scheme isa s, [UpwindScheme, FunctionalScheme])
         throw(ArgumentError("Only `UpwindScheme()` and `FunctionalScheme()` are supported advection schemes. Got $(typeof(discretization.advection_scheme))."))
     end
-    return if !(discretization.disc_strategy isa AnyArrayDiscretization)
+    return if !(discretization.disc_strategy isa Union{AnyArrayDiscretization, PointwiseDiscretization})
         throw(ArgumentError("Only `ArrayDiscretization()` and `StrictArrayDiscretization()` are supported discretization strategies. `ScalarizedDiscretization()` was removed in v1; the scalar form is now the fallback within `ArrayDiscretization()`."))
     end
 end

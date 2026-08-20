@@ -52,7 +52,7 @@ order = 2
 discretization = MOLFiniteDifference([x => 30], t)
 
 prob = MethodOfLines.discretize(pde_system, discretization)
-sol = solve(prob, QNDF(), saveat = 0.1);
+sol = solve(prob, DFBDF(), saveat = 0.1);
 
 solu = sol[u(t, x)]
 
@@ -91,7 +91,7 @@ disc = MOLFiniteDifference([x => 120], t)
 
 prob = discretize(pde_system, disc)
 
-sol = solve(prob, Tsit5())
+sol = solve(prob, DFBDF())
 
 xdisc = sol[x]
 tdisc = sol[t]

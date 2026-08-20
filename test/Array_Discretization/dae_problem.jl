@@ -262,7 +262,7 @@ end
     )
 end
 
-@testset "ScalarizedDiscretization is rejected" begin
+@testset "the pointwise strategy is rejected" begin
     @parameters t x
     @variables u(..)
     Dt = Differential(t)

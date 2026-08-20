@@ -38,7 +38,7 @@ prob = discretize(pdesys, discretization)
 
 # Solve ODE problem
 using OrdinaryDiffEq
-sol = solve(prob, Tsit5(), saveat = 0.2)
+sol = solve(prob, DFBDF(), saveat = 0.2)
 
 # Plot results and compare with exact solution
 discrete_x = sol[x]
@@ -94,7 +94,7 @@ prob = discretize(pdesys, discretization)
 
 # Solve ODE problem
 using OrdinaryDiffEq
-sol = solve(prob, Tsit5(), saveat = 0.2)
+sol = solve(prob, DFBDF(), saveat = 0.2)
 
 # Plot results and compare with exact solution
 discrete_x = sol[x]
@@ -151,7 +151,7 @@ prob = discretize(pdesys, discretization)
 
 # Solve ODE problem
 using OrdinaryDiffEq
-sol = solve(prob, Tsit5(), saveat = 0.2)
+sol = solve(prob, DFBDF(), saveat = 0.2)
 
 # Plot results and compare with exact solution
 discrete_x = sol[x]

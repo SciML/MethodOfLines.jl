@@ -117,7 +117,7 @@ Now your problem can be solved with an appropriate ODE solver, or Nonlinear solv
 
 ```julia
 println("Solve:")
-@time sol = solve(prob, TRBDF2(), saveat = 0.1)
+@time sol = solve(prob, DFBDF(), saveat = 0.1)
 ```
 
 ## Extracting results
