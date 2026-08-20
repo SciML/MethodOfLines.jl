@@ -11,14 +11,8 @@ function PDEBase.interface_errors(
     if !any(s -> discretization.advection_scheme isa s, [UpwindScheme, FunctionalScheme])
         throw(ArgumentError("Only `UpwindScheme()` and `FunctionalScheme()` are supported advection schemes. Got $(typeof(discretization.advection_scheme))."))
     end
-    return if !(
-            typeof(discretization.disc_strategy) ∈
-                [
-                ScalarizedDiscretization, ArrayDiscretization,
-                StrictArrayDiscretization,
-            ]
-        )
-        throw(ArgumentError("Only `ScalarizedDiscretization()`, `ArrayDiscretization()` and `StrictArrayDiscretization()` are supported discretization strategies."))
+    return if !(discretization.disc_strategy isa AnyArrayDiscretization)
+        throw(ArgumentError("Only `ArrayDiscretization()` and `StrictArrayDiscretization()` are supported discretization strategies. `ScalarizedDiscretization()` was removed in v1; the scalar form is now the fallback within `ArrayDiscretization()`."))
     end
 end
 
@@ -214,4 +208,79 @@ function generate_code(
     return open(filename, "a") do io
         println(io, code)
     end
+end
+
+"""
+    discretize(pdesys, discretization; analytic = nothing, checks = true, kwargs...)
+
+Discretize `pdesys` and return a problem ready to `solve`.
+
+For a time-dependent system this builds a `DAEProblem`. MethodOfLines emits residuals of
+the form `D(u) - f ~ 0`, which are already implicit-DAE form, so no `mtkcompile` is
+needed and the array (slice-form) equations reach the generated code intact. Solve it
+with an implicit-DAE solver such as `DFBDF()`.
+
+A few systems cannot be posed as a first-order DAE — those second order in time, and
+those whose initialization equations `BrownFullBasicInit` would not honour. Those fall
+back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations. Pass
+`fallback = false` to make that an error instead.
+
+Time-independent systems have no derivative to keep implicit and discretize to a
+`NonlinearProblem` as before.
+
+To build a problem yourself — an `ODEProblem`, or anything else — start from
+[`symbolic_discretize`](@ref):
+
+```julia
+sys, tspan = symbolic_discretize(pdesys, discretization)
+prob = ODEProblem(mtkcompile(sys), nothing, tspan)
+```
+"""
+function SciMLBase.discretize(
+        pdesys::PDESystem, discretization::MOLFiniteDifference;
+        analytic = nothing, checks = true, fallback = true, kwargs...
+    )
+    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization; checks = checks)
+    if tspan === nothing
+        return _stationary_problem(sys, discretization; kwargs...)
+    end
+    # An `analytic` solution is attached through `ODEFunction`, which needs the compiled
+    # system, so that request selects the ODE path outright.
+    if analytic === nothing
+        try
+            return _dae_problem(sys, tspan, discretization; kwargs...)
+        catch e
+            e isa InterruptException && rethrow(e)
+            fallback || rethrow(e)
+            @debug "Falling back to `mtkcompile` and an `ODEProblem`: $(sprint(showerror, e))"
+        end
+    end
+    return _ode_problem(sys, tspan, pdesys, discretization; analytic, kwargs...)
+end
+
+function _stationary_problem(sys, discretization::MOLFiniteDifference; kwargs...)
+    simpsys = mtkcompile(sys)
+    PDEBase.add_metadata!(getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
+    u0_guess = Dict(u => 1.0 for u in get_unknowns(simpsys))
+    return NonlinearProblem(
+        simpsys, u0_guess; discretization.kwargs..., kwargs...
+    )
+end
+
+function _ode_problem(
+        sys, tspan, pdesys, discretization::MOLFiniteDifference; analytic = nothing,
+        kwargs...
+    )
+    simpsys = mtkcompile(sys)
+    PDEBase.add_metadata!(
+        getmetadata(simpsys, ModelingToolkit.ProblemTypeCtx, nothing), sys
+    )
+    prob = ODEProblem(simpsys, nothing, tspan; discretization.kwargs..., kwargs...)
+    analytic === nothing && return prob
+    f = ODEFunction(
+        pdesys, discretization; analytic = analytic, discretization.kwargs..., kwargs...
+    )
+    return ODEProblem(
+        f, prob.u0, prob.tspan, prob.p; discretization.kwargs..., kwargs...
+    )
 end

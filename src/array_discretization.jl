@@ -37,8 +37,8 @@
 # Mixed first-order derivatives `Dx(Dy(u))` are the tensor product of the two centered
 # first-order stencils; see `array_mixed_difference`. Higher mixed orders still fall back.
 #
-# Unsupported patterns fall back to pointwise scalarization (same numerics as
-# `ScalarizedDiscretization`): integrals, two-variable interfaces, callbacks,
+# Unsupported patterns fall back to pointwise scalarization: integrals,
+# two-variable interfaces, callbacks,
 # differing dimensionality, boundary-value derivatives, time-literal dependent-variable
 # calls, edge-aligned boundary values, stationary systems.
 
@@ -1026,7 +1026,7 @@ end
 
 """
 Patterns the staggered scalar path cannot discretize either; falling back keeps this
-strategy's behaviour identical to `ScalarizedDiscretization` for them.
+strategy's behaviour identical to the pointwise form for them.
 """
 function validate_staggered_array_form(s, depvars, pdeorders, args)
     for x in args

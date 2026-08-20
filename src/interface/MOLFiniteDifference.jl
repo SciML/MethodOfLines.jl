@@ -25,10 +25,10 @@ A discretization algorithm.
 - `use_ODAE`: If `true`, the discretization will use the `ODAEproblem` constructor.
     Defaults to `false`.
 - `discretization_strategy`: How the discretized equations are represented symbolically.
-    `ScalarizedDiscretization()` (the default) generates one scalar equation per interior
-    grid point. `ArrayDiscretization()` generates the interior of each PDE as a single
-    symbolic array equation over slices of the discretized variables, falling back to
-    pointwise scalar equations for patterns with no slice representation.
+    [`ArrayDiscretization()`](@ref), the default, generates the interior of each PDE as a
+    single symbolic array equation over slices of the discretized variables, falling back
+    to pointwise scalar equations for patterns with no slice representation. Use
+    [`StrictArrayDiscretization()`](@ref) to make that fallback an error.
 - `kwargs`: Additional keyword arguments passed to the `ODEProblem`.
 
 # Fields
@@ -77,7 +77,7 @@ end
 function MOLFiniteDifference(
         dxs, time = nothing; approx_order = 2,
         advection_scheme = UpwindScheme(), grid_align = CenterAlignedGrid(),
-        discretization_strategy = ScalarizedDiscretization(),
+        discretization_strategy = ArrayDiscretization(),
         upwind_order = nothing, should_transform = true,
         use_ODAE = false, useIR = true, callbacks = [], kwargs...
     )

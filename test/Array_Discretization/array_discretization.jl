@@ -1453,15 +1453,15 @@ end
     @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
-@testset "Default strategy is unchanged (opt-in)" begin
-    # This strategy is opt-in: existing code must keep getting the scalarized
-    # discretization, so that adding it cannot change any current user's results.
+@testset "ArrayDiscretization is the default" begin
+    # v1 removed `ScalarizedDiscretization`: the array form is the only strategy, and the
+    # scalar form is its fallback for patterns with no slice representation.
     @parameters t x
     disc_default = MOLFiniteDifference([x => 0.1], t)
-    @test disc_default.disc_strategy isa ScalarizedDiscretization
+    @test disc_default.disc_strategy isa ArrayDiscretization
 
     disc_steady = MOLFiniteDifference([x => 0.1])
-    @test disc_steady.disc_strategy isa ScalarizedDiscretization
+    @test disc_steady.disc_strategy isa ArrayDiscretization
 
     disc_opt = MOLFiniteDifference(
         [x => 0.1], t; discretization_strategy = ArrayDiscretization()

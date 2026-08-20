@@ -210,6 +210,22 @@ function SciMLBase.DAEProblem(
             )
         )
     end
+    return _dae_problem(
+        sys, tspan, discretization; initializealg, build_initializeprob, kwargs...
+    )
+end
+
+"""
+    _dae_problem(sys, tspan, discretization; kwargs...)
+
+Build the `DAEProblem` from an already discretized system. Shared by
+`DAEProblem(::PDESystem, ::MOLFiniteDifference)` and [`discretize`](@ref) so that the
+system is discretized once.
+"""
+function _dae_problem(
+        sys, tspan, discretization::MOLFiniteDifference;
+        initializealg = nothing, build_initializeprob = false, kwargs...
+    )
     sys = complete(sys)
     if initializealg === nothing
         offenders = brown_init_offenders(sys)

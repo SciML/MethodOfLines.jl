@@ -47,20 +47,63 @@ Currently supported options are `grid_align`: `center_align` and `edge_align`. E
 
 `use_ODAE`: MethodOfLines will automatically make use of `ODAEProblem` where relevant, which improves performance for DAEs (as discretized PDEs are in general), if this is set to true. Defaults to false.
 
-`discretization_strategy`: How the discretized equations are represented symbolically. `ScalarizedDiscretization()` (the default) generates one scalar equation per interior grid point. `ArrayDiscretization()` generates the interior of each PDE as a single symbolic array equation over slices of the discretized variables, e.g. `D(u[2:n-1]) - (u[1:n-2] .- 2u[2:n-1] .+ u[3:n]) ./ dx^2 ~ 0`, which scales much better to large systems during symbolic processing. Nonlinear Laplacians `Dx(a(u) * Dx(u))`, spherical Laplacians `r^-2 Dr(r^2 Dr(u))`, mixed first-order derivatives `Dx(Dy(u))`, WENO / functional advection (on uniform grids, and on nonuniform grids — periodic or not — for schemes that provide a coefficient split; WENO does; user schemes opt in by defining a method on `MethodOfLines.array_scheme_split`), staggered grids, self-periodic interfaces and boundary values appearing inside an interior equation (e.g. `u(t, 1)`) are included in the array form, including on wrap boxes near a periodic seam. Patterns without a slice representation (nonuniform advection schemes without a coefficient split, schemes that read the grid coordinate, integrals, two-domain interface BCs, derivatives of boundary values, time-literal references such as `u(0, x)`, boundary values on edge-aligned grids, stationary systems) automatically fall back to pointwise scalar equations for the affected equation, matching `ScalarizedDiscretization` there. Where the array form is used, numerics match the scalar path whenever the scalar path can express the same boundary-value substitutions; the array path also substitutes periodic-face and free-standing-corner references that scalar `boundaryvalfuncs` currently leave symbolic.
+`discretization_strategy`: How the discretized equations are represented symbolically. `ArrayDiscretization()`, the default and only public strategy in v1, generates the interior of each PDE as a single symbolic array equation over slices of the discretized variables, e.g. `D(u[2:n-1]) - (u[1:n-2] .- 2u[2:n-1] .+ u[3:n]) ./ dx^2 ~ 0`. This keeps the number of symbolic equations independent of the grid resolution and scales much better during symbolic processing. Nonlinear Laplacians `Dx(a(u) * Dx(u))`, spherical Laplacians `r^-2 Dr(r^2 Dr(u))`, mixed first-order derivatives `Dx(Dy(u))`, WENO / functional advection (on uniform grids, and on nonuniform grids — periodic or not — for schemes that provide a coefficient split; WENO does; user schemes opt in by defining a method on `MethodOfLines.array_scheme_split`), staggered grids, self-periodic interfaces and boundary values appearing inside an interior equation (e.g. `u(t, 1)`) are included in the array form, including on wrap boxes near a periodic seam. Patterns without a slice representation (nonuniform advection schemes without a coefficient split, schemes that read the grid coordinate, integrals, higher mixed derivatives, two-domain interface BCs, derivatives of boundary values, time-literal references such as `u(0, x)`, boundary values on edge-aligned grids, stationary systems) automatically fall back to pointwise scalar equations for the affected equation. `StrictArrayDiscretization()` turns that fallback into an error. `ScalarizedDiscretization()` was removed in v1 — the scalar form is now the fallback inside the array strategy rather than a strategy of its own. Where the array form is used, numerics match the pointwise path whenever that path can express the same boundary-value substitutions; the array path also substitutes periodic-face and free-standing-corner references that pointwise `boundaryvalfuncs` currently leave symbolic.
 
 Any unrecognized keyword arguments will be passed to the `ODEProblem` constructor, see [its documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/#Dynamical-systems) for available options.
 
-## Keeping the array form: `DAEProblem`
+## Problem types
 
-`discretize` runs `mtkcompile`, which scalarizes array equations: an `ODEProblem` needs `D(x) = f(x)`, and isolating the derivative is structural simplification. The residuals MethodOfLines emits, `D(u) - f ~ 0`, are already in implicit-DAE form, so
+`discretize` returns a `DAEProblem` for a time-dependent system:
 
 ```julia
-disc = MOLFiniteDifference([x => n], t; discretization_strategy = ArrayDiscretization())
-prob = DAEProblem(pdesys, disc)
+disc = MOLFiniteDifference([x => n], t)
+prob = discretize(pdesys, disc)
 sol = solve(prob, DFBDF())
 ```
 
-builds a problem without `mtkcompile`, and the array equations reach the generated code intact. `initializealg` defaults to `BrownFullBasicInit()`, and is chosen only when the discretized system's initialization equations are ones that algorithm preserves; otherwise construction fails with an error naming the offending equations and pointing back at `discretize`. Systems that are second order in time need the order reduction that `mtkcompile` performs, and are rejected here.
+MethodOfLines emits residuals of the form `D(u) - f ~ 0`, which are already in
+implicit-DAE form. Building a `DAEProblem` therefore needs no `mtkcompile`, and the array
+equations reach the generated code intact — isolating the derivative for an `ODEProblem`
+is structural simplification, and it scalarizes them. Solve with an implicit-DAE
+algorithm such as `DFBDF()`.
 
-The solution is a `PDETimeSeriesSolution`, the same wrapper `discretize` produces, so it is indexed and interpolated by the `PDESystem`'s own variables: `sol[u(t, x)]`, `sol(t, x)`.
+`initializealg` defaults to `BrownFullBasicInit()`, chosen only when the discretized
+system's initialization equations are ones that algorithm preserves.
+
+A few systems cannot be posed as a first-order DAE: those second order in time, and those
+whose initialization equations `BrownFullBasicInit` would not honour. They fall back to
+`mtkcompile` plus an `ODEProblem`, which scalarizes the array equations. Pass
+`fallback = false` to `discretize` to make that an error instead.
+
+Time-independent systems have no derivative to keep implicit, and discretize to a
+`NonlinearProblem`.
+
+The solution is a `PDETimeSeriesSolution` in every case, indexed and interpolated by the
+`PDESystem`'s own variables: `sol[u(t, x)]`, `sol(t, x)`.
+
+## Building a problem yourself: `symbolic_discretize`
+
+To construct a problem type `discretize` does not build — an `ODEProblem`, or anything
+else — start from `symbolic_discretize`, which returns the discretized system and the
+time span:
+
+```julia
+sys, tspan = symbolic_discretize(pdesys, disc)
+
+# an ODEProblem needs `D(x) = f(x)`, so compile first
+prob = ODEProblem(mtkcompile(sys), nothing, tspan)
+sol = solve(prob, Rodas5P())
+```
+
+Note that `mtkcompile` scalarizes the array equations, so this path gives up the scaling
+benefit of the array form. Prefer `discretize` unless you specifically need an
+`ODEProblem`.
+
+## Migrating to v1
+
+- `discretize` returns a `DAEProblem` rather than an `ODEProblem` for time-dependent
+  systems. Solvers must be implicit-DAE algorithms such as `DFBDF()`; an `ODEProblem`
+  solver like `Tsit5()` will no longer accept the result. Solution indexing is unchanged.
+- `ScalarizedDiscretization()` was removed. It is the default fallback inside
+  `ArrayDiscretization()`, which is now the only strategy.
+- For an `ODEProblem`, use `symbolic_discretize` plus `mtkcompile` as above.
