@@ -1078,25 +1078,48 @@ end
     cosgrid(n) = [0.5 * (1 - cospi(i / n)) for i in 0:n]
     dom1 = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
 
-    # Multi-dimensional systems eagerly build mixed-derivative stencils, which reject
-    # nonuniform interfaces in the scalar path; both strategies surface that error, so
-    # 2D periodic nonuniform advection has no scalar reference to match yet.
+    # Multi-dimensional systems eagerly build mixed-derivative stencils in the scalar
+    # path, which reject nonuniform interfaces; the array path builds mixed rules only
+    # for the mixed terms present in the equation, so it covers this system while the
+    # scalar path has no reference to match. Accuracy is checked against the exact
+    # advection solution instead.
     dom2 = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    bcs2 = [
+        w(0, x, y) ~ sinpi(2x) * exp(-100 * (y - 0.4)^2),
+        w(t, 0, y) ~ w(t, 1, y), w(t, x, 0) ~ 0.0, w(t, x, 1) ~ 0.0,
+    ]
     @named pdesys2 = PDESystem(
         Dt(w(t, x, y)) ~ -Dx(w(t, x, y)) - Dy(w(t, x, y)),
-        [
-            w(0, x, y) ~ sinpi(2x) * exp(-100 * (y - 0.4)^2),
-            w(t, 0, y) ~ w(t, 1, y), w(t, x, 0) ~ 0.0, w(t, x, 1) ~ 0.0,
-        ],
-        dom2, [t, x, y], [w(t, x, y)]
+        bcs2, dom2, [t, x, y], [w(t, x, y)]
     )
-    for strat in (ScalarizedDiscretization(), ArrayDiscretization())
-        disc2 = MOLFiniteDifference(
-            [x => cosgrid(20), y => 0.05], t; advection_scheme = WENOScheme(),
-            discretization_strategy = strat
-        )
-        @test_throws AssertionError symbolic_discretize(pdesys2, disc2)
-    end
+    disc2(strat) = MOLFiniteDifference(
+        [x => cosgrid(20), y => 0.05], t; advection_scheme = WENOScheme(),
+        discretization_strategy = strat
+    )
+    @test_throws AssertionError symbolic_discretize(
+        pdesys2, disc2(ScalarizedDiscretization())
+    )
+
+    strict2 = disc2(StrictArrayDiscretization())
+    sys2, _ = symbolic_discretize(pdesys2, strict2)
+    interior2 = filter(isinterioreq, get_eqs(sys2))
+    @test !isempty(interior2) && all(isarrayeq, interior2)
+    sol2 = solve(discretize(pdesys2, strict2), SSPRK22(); dt = 1.0e-4)
+    @test sol2.retcode == SciMLBase.ReturnCode.Success
+    xs2, ys2, T2 = sol2[x], sol2[y], sol2[t][end]
+    exact2 = [
+        sinpi(2 * (xi - T2)) * exp(-100 * (yi - T2 - 0.4)^2) for xi in xs2, yi in ys2
+    ]
+    @test maximum(abs.(sol2[w(t, x, y)][end, :, :] .- exact2)) < 0.1
+
+    # a mixed term reaching along the periodic nonuniform direction has no slice form
+    @named pdesys2m = PDESystem(
+        Dt(w(t, x, y)) ~ -Dx(w(t, x, y)) - Dy(w(t, x, y)) + 0.01 * Dx(Dy(w(t, x, y))),
+        bcs2, dom2, [t, x, y], [w(t, x, y)]
+    )
+    @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
+        pdesys2m, strict2
+    )
 
     # smallest grid the boundary extrapolator admits (7 points); every window wraps
     @named adv = PDESystem(
