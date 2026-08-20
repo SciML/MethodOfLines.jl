@@ -380,6 +380,9 @@ wrapped around the seam by `bwrap`, which `wrap_periodic_range` reproduces on sl
 
 Interfaces that join two different variables, or one end of a domain only, shift taps onto
 another array and have no such form here; those throw.
+
+A nonuniform periodic direction is admitted: operators whose seam form the scalar path
+cannot build (linear stencils, half-offset operators) throw at their own sites instead.
 """
 function array_periodic_dims(s, depvars, args, bcmap)
     periodic = Dict()
@@ -403,11 +406,6 @@ function array_periodic_dims(s, depvars, args, bcmap)
                 )
             end
         end
-        # `central_difference_weights_and_stencil` and `_upwind_difference` reject
-        # interfaces on a nonuniform grid outright, so the scalar path is the one that
-        # must report that.
-        s.dxs[x] isa Number ||
-            throw(ArrayDiscretizationFallback("interface boundary on a nonuniform grid"))
         periodic[x] = length(s, x)
     end
     return periodic
@@ -927,6 +925,11 @@ Array form of `central_difference` on the core region for the even order derivat
 `(Differential(x)^d)(u)`.
 """
 function array_central_difference(Dop, s, u, x, d, ranges, indexmap, periodic)
+    # `central_difference_weights_and_stencil` rejects interfaces on a nonuniform grid;
+    # the scalar path is the one that must report that.
+    haskey(periodic, x) && !(Dop.dx isa Number) && throw(
+        ArrayDiscretizationFallback("even-order derivative in a periodic nonuniform direction")
+    )
     N = length(ranges)
     j = indexmap[x]
     weights, taps = array_interior_stencil(Dop, ranges[j], j, N)
@@ -984,6 +987,14 @@ axis. The weights come from the same `DerivativeOperator`s the scalar path uses 
 products are numeric, so the two agree term by term.
 """
 function array_mixed_difference(Dxop, Dyop, s, u, x, y, ranges, indexmap, periodic)
+    # `central_difference_weights_and_stencil` rejects interfaces on a nonuniform grid;
+    # the scalar path is the one that must report that.
+    haskey(periodic, x) && !(Dxop.dx isa Number) && throw(
+        ArrayDiscretizationFallback("mixed derivative in a periodic nonuniform direction")
+    )
+    haskey(periodic, y) && !(Dyop.dx isa Number) && throw(
+        ArrayDiscretizationFallback("mixed derivative in a periodic nonuniform direction")
+    )
     N = length(ranges)
     jx = indexmap[x]
     jy = indexmap[y]
@@ -1077,6 +1088,11 @@ function array_upwind_difference(
     )
     Dop = ispositive ? derivweights.windmap[2][Differential(x)^d] :
         derivweights.windmap[1][Differential(x)^d]
+    # `_upwind_difference` rejects interfaces on a nonuniform grid; the scalar path is
+    # the one that must report that.
+    haskey(periodic, x) && !(Dop.dx isa Number) && throw(
+        ArrayDiscretizationFallback("upwind derivative in a periodic nonuniform direction")
+    )
     N = length(ranges)
     j = indexmap[x]
     rng = ranges[j]
@@ -1170,8 +1186,9 @@ replaced by shifted slices; solution-dependent weights (WENO's smoothness indica
 tap arithmetic and broadcast like any other term. Schemes that read the grid coordinate
 fall back: the scalar path folds those numeric coordinates, which a trace would rebuild
 reassociated. Nonuniform grids trace the `apply` kernel of the scheme's
-[`array_scheme_split`](@ref) instead; schemes without a split fall back, as do periodic
-nonuniform directions, whose coefficient windows cannot wrap the seam.
+[`array_scheme_split`](@ref) instead; schemes without a split fall back. Periodic
+nonuniform directions share the split kernel, with coefficient windows unwrapped across
+the seam by `array_scheme_coeff_rules`.
 """
 function array_function_scheme_trace(F, s, x, periodic)
     dx = s.dxs[x]
@@ -1200,11 +1217,6 @@ function array_function_scheme_trace(F, s, x, periodic)
         )
         return (expr = expr, taps = taps, usyms = usyms, csyms = nothing, split = nothing)
     end
-    haskey(periodic, x) && throw(
-        ArrayDiscretizationFallback(
-            "$(F.name) advection on a periodic nonuniform grid"
-        )
-    )
     split = array_scheme_split(F)
     split === nothing &&
         throw(ArrayDiscretizationFallback("$(F.name) advection on a nonuniform grid"))
@@ -1223,18 +1235,37 @@ function array_function_scheme_trace(F, s, x, periodic)
 end
 
 """
+Coordinate of raw tap index `i` in a self-periodic direction of `n` points: taps at or
+below the first point shift down by the period, taps past the last point shift up.
+Mirrors `_wrapcoord` bit for bit and must stay in lockstep with it, or the coefficient
+slots lose bitwise parity with the scalar path.
+"""
+function array_periodic_coord(grid, i, n)
+    i <= 1 && return grid[i + n - 1] - (grid[end] - grid[1])
+    i > n && return grid[i + 1 - n] + (grid[end] - grid[1])
+    return grid[i]
+end
+
+"""
 Rules binding the coefficient slots of a split scheme trace to their numeric per-point
 arrays over the core box; empty on uniform grids. The windows fed to `coeffs` are the
-same grid windows the scalar path sees.
+same grid windows the scalar path sees; in a periodic direction taps beyond either end
+take the periodically shifted coordinate `bcoord` would produce.
 """
-function array_scheme_coeff_rules(trace, s, x, ranges, indexmap)
+function array_scheme_coeff_rules(trace, s, x, ranges, indexmap, periodic)
     trace.csyms === nothing && return Pair[]
     N = length(ranges)
     j = indexmap[x]
     rng = ranges[j]
     grid = s.grid[x]
+    window = if haskey(periodic, x)
+        n = length(s, x)
+        i -> [array_periodic_coord(grid, i + k, n) for k in trace.taps]
+    else
+        i -> view(grid, i .+ trace.taps)
+    end
     cvals = array_coeff_vals(
-        i -> trace.split.coeffs(view(grid, i .+ trace.taps)),
+        i -> trace.split.coeffs(window(i)),
         trace.split.nslots, rng, j, N
     )
     return Pair[safe_unwrap(trace.csyms[k]) => cvals[k] for k in 1:trace.split.nslots]
@@ -1272,7 +1303,7 @@ end
     # One trace per direction: it depends on the grid along `x` but not on `u`.
     for x in unique(map(last, pairs))
         trace = array_function_scheme_trace(F, s, x, periodic)
-        crules = array_scheme_coeff_rules(trace, s, x, ranges, indexmap)
+        crules = array_scheme_coeff_rules(trace, s, x, ranges, indexmap, periodic)
         for (u, xu) in pairs
             isequal(xu, x) || continue
             push!(
@@ -1551,6 +1582,9 @@ function array_nonlinear_laplacian(
         m::NonlinlapMatch, s, depvars, derivweights, ranges, indexmap, periodic
     )
     x, u = m.x, m.u
+    haskey(periodic, x) && !(s.dxs[x] isa Number) && throw(
+        ArrayDiscretizationFallback("nonlinear laplacian in a periodic nonuniform direction")
+    )
     N = length(ranges)
     j = indexmap[x]
     rng = ranges[j]

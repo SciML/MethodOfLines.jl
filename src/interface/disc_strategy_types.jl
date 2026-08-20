@@ -36,13 +36,12 @@ boxes. Nonlinear Laplacians `Dx(a(u) * Dx(u))`, spherical Laplacians
 `r^-2 Dr(r^2 Dr(u))`, mixed first-order derivatives `Dx(Dy(u))` and staggered grids
 are supported in slice form.
 Functional advection schemes (WENO and user schemes) are supported on
-uniform grids, and on nonuniform grids for schemes that provide a coefficient split
-(WENO does; user schemes opt in by defining a method on
+uniform grids, and on nonuniform grids — periodic or not — for schemes that provide a
+coefficient split (WENO does; user schemes opt in by defining a method on
 `MethodOfLines.array_scheme_split`), with one trace per direction in multi-dimensional
 equations.
-Equations containing patterns with no slice representation (functional advection on
-periodic nonuniform grids, nonuniform schemes without a coefficient split, schemes that
-read the grid coordinate, integrals, interfaces
+Equations containing patterns with no slice representation (nonuniform schemes without
+a coefficient split, schemes that read the grid coordinate, integrals, interfaces
 joining two different variables, derivatives of boundary values,
 time-literal references such as `u(0, x)`, boundary values on edge-aligned grids,
 stationary systems) automatically fall back to pointwise scalar equations, matching
