@@ -24,10 +24,14 @@
 # Nonlinear laplacians `Dx(a(u) * Dx(u))` are emitted in slice form too; see
 # `array_nonlinear_laplacian`.
 #
+# Staggered grids collapse the same way: each variable's alignment fixes its two stencil
+# taps across the interior, so the interior is one array equation per PDE; the (1D,
+# single-point) boundaries stay pointwise.
+#
 # Unsupported patterns fall back to pointwise scalarization (same numerics as
 # `ScalarizedDiscretization`): WENO/functional advection, spherical
 # laplacians, integrals, mixed derivatives, two-variable interfaces, callbacks,
-# staggered grids, differing dimensionality, boundary-value derivatives, time-literal
+# differing dimensionality, boundary-value derivatives, time-literal
 # dependent-variable calls, edge-aligned boundary values, stationary systems.
 
 struct ArrayDiscretizationFallback <: Exception
@@ -162,15 +166,16 @@ function discretize_equation_array_form(
         pde, interior, s, depvars, derivweights, bcmap,
         eqvar, indexmap, boundaryvalfuncs
     )
+    isstag = get_grid_type(s) <: StaggeredGrid
     # Stationary: PDEBase emits `0 ~ residual`; Symbolics rejects scalar ~ array.
     s.time === nothing && throw(
         ArrayDiscretizationFallback(
             "stationary (no time) systems have no array form in NonlinearSystem construction"
         )
     )
-    get_grid_type(s) <: StaggeredGrid &&
-        throw(ArrayDiscretizationFallback("staggered grids are not supported"))
-    derivweights.advection_scheme isa UpwindScheme ||
+    # The staggered path never consults the advection scheme (see the staggered
+    # `generate_finite_difference_rules`), so the requirement only applies otherwise.
+    isstag || derivweights.advection_scheme isa UpwindScheme ||
         throw(ArrayDiscretizationFallback("only UpwindScheme advection is supported"))
 
     args = ivs(eqvar, s)
@@ -181,14 +186,20 @@ function discretize_equation_array_form(
     periodic = array_periodic_dims(s, depvars, args, bcmap)
 
     pdeorders = Dict(x => d_orders(x, [pde]) for x in args)
+    isstag && validate_staggered_array_form(s, depvars, pdeorders, args)
     terms = split_terms(pde, s.x̄)
     # Matched before the bands: half-offset stencils reach further than the order-2
-    # central difference `d_orders` reports for these terms.
-    nllap_matches = match_nonlinlap_terms(terms, s, depvars)
+    # central difference `d_orders` reports for these terms. The staggered path has no
+    # nonlinear-laplacian scheme; `validate_staggered_array_form` already rejects even
+    # orders, so there is nothing to match there.
+    nllap_matches = NonlinlapMatch[]
     nllap_orders = Dict()
-    for m in nllap_matches
-        orders = Set(nonlinlap_coeff_orders(m, depvars, derivweights))
-        nllap_orders[m.x] = union(get(nllap_orders, m.x, Set{Int}()), orders)
+    if !isstag
+        nllap_matches = match_nonlinlap_terms(terms, s, depvars)
+        for m in nllap_matches
+            orders = Set(nonlinlap_coeff_orders(m, depvars, derivweights))
+            nllap_orders[m.x] = union(get(nllap_orders, m.x, Set{Int}()), orders)
+        end
     end
     bands, clean = array_bands(
         interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders
@@ -203,25 +214,29 @@ function discretize_equation_array_form(
     # do not wrap. Several of these generators return candidate rules unconditionally; the
     # scalar path only applies a special scheme when a rule key occurs in the equation, so
     # fall back exactly when one does. Any firing rule means a scheme with no slice
-    # representation here yet.
-    II0 = CartesianIndex(
-        ntuple(j -> clean[j] === nothing ? first(core)[j] : first(bands[j][clean[j]]), N)
-    )
-    special_rules = vcat(
-        vec(generate_mixed_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms)),
-        vec(
-            generate_spherical_diffusion_rules(
-                II0, s, depvars, derivweights, bcmap,
-                indexmap, split_additive_terms(pde)
-            )
-        ),
-        vec(generate_euler_integration_rules(II0, s, depvars, indexmap, terms)),
-        vec(generate_whole_domain_integration_rules(II0, s, depvars, indexmap, terms)),
-        vec(generate_cb_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms))
-    )
-    for r in special_rules
-        (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) &&
-            throw(ArrayDiscretizationFallback("unsupported pattern $(r.first)"))
+    # representation here yet. The staggered scalar path applies none of these schemes,
+    # so there is nothing to probe there; its unsupported patterns (integrals, ...)
+    # surface in `arrayify` instead.
+    if !isstag
+        II0 = CartesianIndex(
+            ntuple(j -> clean[j] === nothing ? first(core)[j] : first(bands[j][clean[j]]), N)
+        )
+        special_rules = vcat(
+            vec(generate_mixed_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms)),
+            vec(
+                generate_spherical_diffusion_rules(
+                    II0, s, depvars, derivweights, bcmap,
+                    indexmap, split_additive_terms(pde)
+                )
+            ),
+            vec(generate_euler_integration_rules(II0, s, depvars, indexmap, terms)),
+            vec(generate_whole_domain_integration_rules(II0, s, depvars, indexmap, terms)),
+            vec(generate_cb_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms))
+        )
+        for r in special_rules
+            (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) &&
+                throw(ArrayDiscretizationFallback("unsupported pattern $(r.first)"))
+        end
     end
     array_validate_boundary_values(pde, s)
 
@@ -270,19 +285,27 @@ function array_core_equation(
     gridrules = [
         safe_unwrap(x) => array_grid_vals(x, s, ranges, indexmap, N) for x in args
     ]
-    derivrules = array_cartesian_rules(
-        s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
-    )
-    # Winding coefficients are arrayified with the same baserules; include bvalrules so
-    # e.g. `u(t, 1)*Dx(u)` substitutes the boundary element before the wind rule fires.
-    windrules = array_winding_rules(
-        terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
-        vcat(bvalrules, varrules, gridrules), periodic
-    )
-    nllaprules = array_nonlinlap_rules(
-        nllap_matches, s, depvars, derivweights, ranges, indexmap,
-        vcat(bvalrules, varrules, gridrules), periodic
-    )
+    if get_grid_type(s) <: StaggeredGrid
+        derivrules = array_staggered_rules(
+            s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
+        )
+        windrules = Pair[]
+        nllaprules = Pair[]
+    else
+        derivrules = array_cartesian_rules(
+            s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
+        )
+        # Winding coefficients are arrayified with the same baserules; include bvalrules so
+        # e.g. `u(t, 1)*Dx(u)` substitutes the boundary element before the wind rule fires.
+        windrules = array_winding_rules(
+            terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
+            vcat(bvalrules, varrules, gridrules), periodic
+        )
+        nllaprules = array_nonlinlap_rules(
+            nllap_matches, s, depvars, derivweights, ranges, indexmap,
+            vcat(bvalrules, varrules, gridrules), periodic
+        )
+    end
     # Family order is the reverse of the scalar path's last-key-wins `Dict`.
     ctx = ArrayifyContext(
         vcat(bvalrules, windrules, nllaprules, derivrules, varrules, gridrules), s.time
@@ -359,8 +382,12 @@ end
 The most negative and most positive tap offsets any derivative in the equation applies in
 direction `x`, mirroring the interior branches of `central_difference_weights_and_stencil`
 and `_upwind_difference`.
+
+On a staggered grid the interior taps are `(0, +1)` or `(-1, 0)` depending on each
+variable's alignment; the union over both alignments is taken, so at worst one extra
+point per end lands in the pointwise frame.
 """
-function array_tap_extents(x, pdeorders, derivweights)
+function array_tap_extents(x, pdeorders, derivweights, ::Type{G}) where {G}
     mintap = 0
     maxtap = 0
     for d in pdeorders[x]
@@ -377,6 +404,10 @@ function array_tap_extents(x, pdeorders, derivweights)
         end
     end
     return mintap, maxtap
+end
+
+function array_tap_extents(x, pdeorders, derivweights, ::Type{G}) where {G <: StaggeredGrid}
+    return isempty(pdeorders[x]) ? (0, 0) : (-1, 1)
 end
 
 """
@@ -412,7 +443,7 @@ function array_bands(
         lo = first(interior)[j]
         hi = last(interior)[j]
         n = length(s, x)
-        mintap, maxtap = array_tap_extents(x, pdeorders, derivweights)
+        mintap, maxtap = array_tap_extents(x, pdeorders, derivweights, get_grid_type(s))
         nl = if haskey(nllap_orders, x)
             c = array_nonlinlap_constraints(
                 x, n, derivweights, sort(collect(nllap_orders[x]))
@@ -427,11 +458,16 @@ function array_bands(
             # Taps must stay in range, and no point may take a boundary branch: the
             # centered one at II <= boundary_point_count or II > n - boundary_point_count,
             # the positive winding at II <= offside, the negative one at
-            # II > n - boundary_point_count.
+            # II > n - boundary_point_count. The staggered branch conditions use the
+            # centered operator's boundary_point_count for every order.
             lo = max(lo, 1 - mintap)
             hi = min(hi, n - maxtap)
             for d in pdeorders[x]
-                if iseven(d)
+                if get_grid_type(s) <: StaggeredGrid
+                    bpc = derivweights.map[Differential(x)^d].boundary_point_count
+                    lo = max(lo, bpc + 1)
+                    hi = min(hi, n - bpc)
+                elseif iseven(d)
                     bpc = derivweights.map[Differential(x)^d].boundary_point_count
                     lo = max(lo, bpc + 1)
                     hi = min(hi, n - bpc)
@@ -766,6 +802,62 @@ end
                 safe_unwrap((Differential(x)^d)(u)) => array_central_difference(
                     Dop, s, u, x, d, ranges, indexmap, periodic
                 )
+            )
+        end
+    end
+    return rules
+end
+
+"""
+Patterns the staggered scalar path cannot discretize either; falling back keeps this
+strategy's behaviour identical to `ScalarizedDiscretization` for them.
+"""
+function validate_staggered_array_form(s, depvars, pdeorders, args)
+    for x in args
+        all(isodd, pdeorders[x]) ||
+            throw(ArrayDiscretizationFallback("even-order derivative on a staggered grid"))
+        isempty(pdeorders[x]) && continue
+        # the staggered scalar path applies `stencil_coefs` directly, which only holds a
+        # single weight set on a uniform grid
+        s.dxs[x] isa Number ||
+            throw(ArrayDiscretizationFallback("staggered grid with nonuniform d$x"))
+    end
+    for u in depvars
+        haskey(s.staggeredvars, operation(depvar(u, s))) ||
+            throw(ArrayDiscretizationFallback("no alignment recorded for $u"))
+    end
+    return nothing
+end
+
+"""
+Array form of the interior branch of the staggered `generate_cartesian_rules`: the same
+`windmap` weights, with the two taps fixed by each variable's alignment — `(0, +1)` for a
+center-aligned variable, `(-1, 0)` for an edge-aligned one — constant across the core.
+"""
+function array_staggered_rules(
+        s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
+    )
+    rules = Pair[]
+    for u in depvars, x in ivs(depvar(u, s), s)
+        for d in filter(isodd, pdeorders[x])
+            Dop = get(derivweights.windmap[1], Differential(x)^d, nothing)
+            Dop === nothing && throw(
+                ArrayDiscretizationFallback(
+                    "no upwind operator for order $d in $x on a staggered grid"
+                )
+            )
+            taps = s.staggeredvars[operation(depvar(u, s))] == CenterAlignedVar ?
+                (0:1) : (-1:0)
+            slices = [
+                array_slice(
+                        u, s, ranges, indexmap;
+                        shiftx = x, offset = k, periodic = periodic
+                    ) for k in taps
+            ]
+            push!(
+                rules,
+                safe_unwrap((Differential(x)^d)(u)) =>
+                    array_stencil(collect(Dop.stencil_coefs), slices)
             )
         end
     end
@@ -1249,8 +1341,6 @@ which case the caller emits the pointwise form.
 function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     boundary isa AbstractTruncatingBoundary ||
         throw(ArrayDiscretizationFallback("non-truncating (interface) boundary"))
-    get_grid_type(s) <: StaggeredGrid &&
-        throw(ArrayDiscretizationFallback("staggered grids are not supported"))
 
     u_, x_ = getvars(boundary)
     u = depvar(u_, s)
@@ -1276,6 +1366,10 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     # slice equation would just be a more convoluted spelling of the scalar one.
     prod(length(ranges[i]) for i in 1:N) == 1 &&
         throw(ArrayDiscretizationFallback("single-point boundary", true))
+    # A staggered 1D boundary is always the single point above; multi-point staggered
+    # faces would need the staggered stencil selection, which has no slice form here yet.
+    get_grid_type(s) <: StaggeredGrid &&
+        throw(ArrayDiscretizationFallback("staggered boundary face"))
 
     # Every dependent variable in the condition must be one this path can slice: either
     # the canonical variable, or a value on this same boundary.
@@ -1377,8 +1471,6 @@ one repeats the same relation and contributes none.
 """
 function array_bc_eqs(s, boundary::InterfaceBoundary, interiormap, derivweights, bcmap)
     isupper(boundary) && return Equation[]
-    get_grid_type(s) <: StaggeredGrid &&
-        throw(ArrayDiscretizationFallback("staggered grids are not supported"))
 
     u = depvar(boundary.u, s)
     u2 = depvar(boundary.u2, s)
@@ -1400,6 +1492,10 @@ function array_bc_eqs(s, boundary::InterfaceBoundary, interiormap, derivweights,
     ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
     length(E) == 1 &&
         throw(ArrayDiscretizationFallback("single-point interface boundary", true))
+    # 1D staggered interfaces are the single point above; multi-point staggered faces
+    # are untested on the scalar path, so decline rather than guess.
+    get_grid_type(s) <: StaggeredGrid &&
+        throw(ArrayDiscretizationFallback("staggered interface face"))
 
     arr2 = array_variable(u2, s)
     disc2 = s.discvars[u2]

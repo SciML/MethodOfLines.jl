@@ -10,6 +10,8 @@ Solvers should be chosen carefully, the only officially supported solver is `Spl
 
 Staggered grid functionality is still in its infancy. Please open issues if unexpected results occur or needed functionality is not present.
 
+Staggered grids are compatible with `discretization_strategy=ArrayDiscretization()`, which emits the interior of each PDE as a single symbolic array equation over slices, keeping the symbolic equation count independent of the grid resolution.
+
 ```
 using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
 @parameters t x
