@@ -880,7 +880,8 @@ end
     end
     @test counts[1] == counts[2]
 
-    # a periodic nonuniform direction falls back
+    # a periodic nonuniform direction goes through the coefficient split: seam windows
+    # take the periodically shifted coordinates `bcoord` produces, so parity is bitwise
     gridvec = [0.5 * (1 - cospi(i / 50)) for i in 0:50]
     solp_arr, solp_scal, sysp_arr = solve_both(
         pdesys, [x => gridvec], t;
@@ -888,15 +889,26 @@ end
         kwsolve = (; dt = 1.0e-3)
     )
     @test solp_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sysp_arr) == 0
+    @test narrayeqs_interior(sysp_arr) == 1
     @test solp_arr[u(t, x)] == solp_scal[u(t, x)]
     strictp = MOLFiniteDifference(
         [x => gridvec], t; discretization_strategy = StrictArrayDiscretization(),
         advection_scheme = WENOScheme()
     )
-    @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
-        pdesys, strictp
-    )
+    sysp_strict, _ = symbolic_discretize(pdesys, strictp)
+    @test narrayeqs_interior(sysp_strict) == 1
+
+    # resolution independence holds on the periodic nonuniform path too
+    pcounts = map([40, 80]) do n
+        disc = MOLFiniteDifference(
+            [x => [0.5 * (1 - cospi(i / n)) for i in 0:n]], t;
+            advection_scheme = WENOScheme(),
+            discretization_strategy = ArrayDiscretization()
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        length(get_eqs(sys))
+    end
+    @test pcounts[1] == pcounts[2]
 end
 
 @testset "WENO advection on a nonuniform grid (coefficient split)" begin
@@ -978,6 +990,19 @@ end
         b = MethodOfLines._weno_f_nonuniform_core(uvals, ε, x, Val(3))
         @test isapprox(a, b; rtol = 1.0e-13)
     end
+
+    # seam windows of a periodic direction: exactly the coordinates
+    # `array_periodic_coord` hands to `coeffs` near either end
+    n = 17
+    pgrid = [0.5 * (1 - cospi(i / (n - 1))) for i in 0:(n - 1)] .+ 0.25
+    for center in (1, 2, 3, n - 1, n)
+        x = [MethodOfLines.array_periodic_coord(pgrid, center + k, n) for k in -2:2]
+        @assert all(>(0), diff(x))
+        c = split.coeffs(x)
+        applied = Symbolics.substitute(traced, Dict(csyms .=> c))
+        core = MethodOfLines._weno_f_nonuniform_core(usyms, ε, x, Val(3))
+        @test isequal(Symbolics.unwrap(applied), Symbolics.unwrap(core))
+    end
 end
 
 @testset "Nonuniform WENO: diffusion, coupling, minimal grid" begin
@@ -1041,6 +1066,65 @@ end
     @test sol7_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys7_arr) == 1
     @test sol7_arr[u(t, x)] == sol7_scal[u(t, x)]
+end
+
+@testset "Periodic nonuniform WENO: minimal grid, guards" begin
+    @parameters t x y
+    @variables u(..) w(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dy = Differential(y)
+    cosgrid(n) = [0.5 * (1 - cospi(i / n)) for i in 0:n]
+    dom1 = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+
+    # Multi-dimensional systems eagerly build mixed-derivative stencils, which reject
+    # nonuniform interfaces in the scalar path; both strategies surface that error, so
+    # 2D periodic nonuniform advection has no scalar reference to match yet.
+    dom2 = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named pdesys2 = PDESystem(
+        Dt(w(t, x, y)) ~ -Dx(w(t, x, y)) - Dy(w(t, x, y)),
+        [
+            w(0, x, y) ~ sinpi(2x) * exp(-100 * (y - 0.4)^2),
+            w(t, 0, y) ~ w(t, 1, y), w(t, x, 0) ~ 0.0, w(t, x, 1) ~ 0.0,
+        ],
+        dom2, [t, x, y], [w(t, x, y)]
+    )
+    for strat in (ScalarizedDiscretization(), ArrayDiscretization())
+        disc2 = MOLFiniteDifference(
+            [x => cosgrid(20), y => 0.05], t; advection_scheme = WENOScheme(),
+            discretization_strategy = strat
+        )
+        @test_throws AssertionError symbolic_discretize(pdesys2, disc2)
+    end
+
+    # smallest grid the boundary extrapolator admits (7 points); every window wraps
+    @named adv = PDESystem(
+        Dt(u(t, x)) ~ -Dx(u(t, x)),
+        [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
+        dom1, [t, x], [u(t, x)]
+    )
+    sol7_arr, sol7_scal, _ = solve_both(
+        adv, [x => cosgrid(6)], t;
+        disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-4)
+    )
+    @test sol7_arr.retcode == SciMLBase.ReturnCode.Success
+    @test sol7_arr[u(t, x)] == sol7_scal[u(t, x)]
+
+    # linear stencils still have no seam form on a nonuniform grid
+    @named advdiffp = PDESystem(
+        Dt(u(t, x)) ~ -Dx(u(t, x)) + 0.05 * Dxx(u(t, x)),
+        [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
+        dom1, [t, x], [u(t, x)]
+    )
+    strictmix = MOLFiniteDifference(
+        [x => cosgrid(20)], t; discretization_strategy = StrictArrayDiscretization(),
+        advection_scheme = WENOScheme()
+    )
+    @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
+        advdiffp, strictmix
+    )
 end
 
 @testset "WENO advection in multi-dimensional equations" begin
@@ -1528,7 +1612,8 @@ end
     @test length(get_eqs(sys4)) > 3   # array interior + BCs + scalar frame equations
 
     # WENO is supported on uniform and (through its coefficient split) nonuniform
-    # grids; a nonuniform scheme without a split has no traced form and errors.
+    # grids, including periodic nonuniform directions; a nonuniform scheme without a
+    # split has no traced form and errors.
     @named adv = PDESystem(
         Dt(u(t, x)) ~ -Dx(u(t, x)),
         [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
@@ -1541,6 +1626,13 @@ end
     )
     sys_nu, _ = symbolic_discretize(adv, strict_nu)
     @test narrayeqs_interior(sys_nu) == 1
+    @named advp = PDESystem(
+        Dt(u(t, x)) ~ -Dx(u(t, x)),
+        [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
+        domains, [t, x], [u(t, x)]
+    )
+    sys_nup, _ = symbolic_discretize(advp, strict_nu)
+    @test narrayeqs_interior(sys_nup) == 1
     strict_weno = MOLFiniteDifference(
         [x => 0.05], t; discretization_strategy = StrictArrayDiscretization(),
         advection_scheme = WENOScheme()

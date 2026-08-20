@@ -262,7 +262,7 @@ Note that both grids here are passed as explicit point vectors, so both are disc
 
   - `WENOScheme` discretizes **first-order spatial derivatives only**; higher odd-order derivatives are unsupported with this scheme. Even-order terms such as diffusion are handled by the standard centered schemes and may be freely mixed in the same equation.
   - With an explicit SSP integrator, the time step is limited by the smallest cell of a non-uniform grid.
-  - With `discretization_strategy = ArrayDiscretization()`, WENO is emitted in array (slice) form on both uniform and non-uniform grids, with the same numerics as the default strategy; periodic non-uniform grids discretize pointwise. See [Discretization](../MOLFiniteDifference.md).
+  - With `discretization_strategy = ArrayDiscretization()`, WENO is emitted in array (slice) form on both uniform and non-uniform grids, including periodic non-uniform grids, with the same numerics as the default strategy. See [Discretization](../MOLFiniteDifference.md).
   - Periodic and interface boundary conditions are supported on non-uniform grids for first-order derivatives; systems with higher-order derivatives across a *mismatched-grid* interface are rejected at discretization time. See [Boundary Conditions](../boundary_conditions.md) and [Advection Schemes](@ref adschemes).
 
 ## References
