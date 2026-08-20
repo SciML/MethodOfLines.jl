@@ -37,6 +37,9 @@ run_tests(;
             @safetestset "Discretization of space and grid types" begin
                 include(joinpath(@__DIR__, "Components", "DiscreteSpace.jl"))
             end
+            @safetestset "Nonlinear laplacian IV interpolation order" begin
+                include(joinpath(@__DIR__, "Components", "nonlinear_laplacian_ivs.jl"))
+            end
             @safetestset "Variable PDE mapping and interior construction" begin
                 include(joinpath(@__DIR__, "Components", "interiormap_test.jl"))
             end

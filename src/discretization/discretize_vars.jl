@@ -347,13 +347,6 @@ end
 
 valmaps(s, u, depvars, indexmap) = valmaps.([s], [u], [depvars], s.Igrid[u], [indexmap])
 
-function map_symbolic_to_discrete(II::CartesianIndex, s::DiscreteSpace{N, M}) where {N, M}
-    return vcat(
-        [s.ū[k] => s.discvars[k][II] for k in 1:M],
-        [s.x̄[j] => s.grid[j][II[j]] for j in 1:N]
-    )
-end
-
 # TODO: Allow other grids
 
 @inline function generate_grid(

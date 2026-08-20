@@ -78,7 +78,7 @@ function cartesian_nonlinear_laplacian(
                     weights, getindex.((s.grid[x],), getindex.(interface_wrap(stencil), (j,)))
                 ),
             ],
-            [s.x̄[k] => s.grid[s.x̄[k]][II[k]] for k in setdiff(1:N, [j])]
+            transverse_iv_substitutions(s, u, II, x)
         )
     end
 
@@ -100,6 +100,15 @@ function cartesian_nonlinear_laplacian(
 
     # multiply the inner finite difference by the interpolated expression, and finally take the outer finite difference
     return sym_dot(outerweights, interpolated_expr)
+end
+
+"""
+Substitution rules for independent variables that are not the derivative
+direction `x`. Values are taken from the argument-ordered index `II` via
+`x2i`, never from the hash-order-dependent `s.x̄` permutation.
+"""
+function transverse_iv_substitutions(s::DiscreteSpace, u, II, x)
+    return [x_ => s.grid[x_][II[x2i(s, u, x_)]] for x_ in ivs(u, s) if !isequal(x_, x)]
 end
 
 function generate_deriv_rules(
