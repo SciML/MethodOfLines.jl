@@ -2174,8 +2174,8 @@ end
 
     sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    # the core plus one slab per seam in x; y contributes no wrapping
-    @test narrayeqs_interior(sys_arr) == 3
+    # one box per band of the periodic decomposition, a count independent of the grid
+    @test narrayeqs_interior(sys_arr) == 2
     @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 

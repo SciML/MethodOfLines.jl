@@ -223,7 +223,7 @@ function discretize_equation_array_form(
         end
     end
     mixedterms = isstag ? [] : array_mixed_terms(pde, depvars, args)
-    mixeddirs = unique(reduce(vcat, [[x, y] for (_, x, y) in mixedterms], init = []))
+    mixeddirs = unique!([d for (_, x, y) in mixedterms for d in (x, y)])
     bands, clean = array_bands(
         interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders,
         sph_orders, mixeddirs
@@ -293,7 +293,7 @@ range).
 """
 function array_core_equation(
         pde, ranges, s, depvars, derivweights, args, pdeorders, indexmap, terms,
-        periodic, nllap_matches, sph_matches, mixedterms = ()
+        periodic, nllap_matches, sph_matches, mixedterms
     )
     N = length(args)
     shape = ntuple(j -> length(ranges[j]), N)
@@ -435,10 +435,10 @@ A mixed derivative reaches along `x` with the *centered* first order stencil rat
 the winding one `pdeorders` would select for order 1, so those directions take its taps
 too.
 """
-function array_tap_extents(x, pdeorders, derivweights, ::Type{G}, mixeddirs = ()) where {G}
+function array_tap_extents(x, pdeorders, derivweights, ::Type{G}, mixeddirs) where {G}
     mintap = 0
     maxtap = 0
-    if any(y -> isequal(y, x), mixeddirs)
+    if any(isequal(x), mixeddirs)
         taps = half_range(derivweights.map[Differential(x)].stencil_length)
         mintap = min(mintap, first(taps))
         maxtap = max(maxtap, last(taps))
@@ -464,7 +464,7 @@ function array_tap_extents(x, pdeorders, derivweights, ::Type{G}, mixeddirs = ()
 end
 
 function array_tap_extents(
-        x, pdeorders, derivweights, ::Type{G}, mixeddirs = ()
+        x, pdeorders, derivweights, ::Type{G}, mixeddirs
     ) where {G <: StaggeredGrid}
     return isempty(pdeorders[x]) ? (0, 0) : (-1, 1)
 end
@@ -497,7 +497,7 @@ stencil the order-1 entry of `pdeorders` would select.
 """
 function array_bands(
         interior, s, args, pdeorders, derivweights, indexmap, periodic,
-        nllap_orders = Dict(), sph_orders = Dict(), mixeddirs = ()
+        nllap_orders, sph_orders, mixeddirs
     )
     N = length(args)
     bands = [UnitRange{Int}[] for _ in 1:N]
@@ -565,7 +565,7 @@ function array_bands(
                     )
                 end
             end
-            if any(y -> isequal(y, x), mixeddirs)
+            if any(isequal(x), mixeddirs)
                 bpc = derivweights.map[Differential(x)].boundary_point_count
                 lo = max(lo, bpc + 1)
                 hi = min(hi, n - bpc)
@@ -989,17 +989,11 @@ function array_mixed_difference(Dxop, Dyop, s, u, x, y, ranges, indexmap, period
     jy = indexmap[y]
     xweights, xtaps = array_interior_stencil(Dxop, ranges[jx], jx, N)
     yweights, ytaps = array_interior_stencil(Dyop, ranges[jy], jy, N)
-    weights = []
-    slices = []
-    for (wx, kx) in zip(xweights, xtaps), (wy, ky) in zip(yweights, ytaps)
-        push!(weights, broadcast(*, wx, wy))
-        push!(
-            slices,
-            array_shifted_slice(
-                u, s, ranges, indexmap, Dict(jx => kx, jy => ky), periodic
-            )
-        )
-    end
+    weights = [broadcast(*, wx, wy) for wx in xweights for wy in yweights]
+    slices = [
+        array_shifted_slice(u, s, ranges, indexmap, Dict(jx => kx, jy => ky), periodic)
+            for kx in xtaps for ky in ytaps
+    ]
     return array_stencil(weights, slices)
 end
 
