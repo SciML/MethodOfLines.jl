@@ -627,6 +627,147 @@ end
     @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
+@testset "1D spherical laplacian" begin
+    # Cardinalization rewrites Dt(u) ~ Dr(r^2*Dr(u))/r^2 with a Mul numerator, the shape
+    # the scalar path discretizes through the nonlinear laplacian rules: r^2 enters at
+    # the half-offset points, the outer r^-2 as a broadcast division by the grid values.
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    # MMS as in Diffusion Test 07: u = exp(-t)sin(r)/r, satisfies Dr(u(t, 0)) = 0.
+    u_exact = (r, t) -> exp(-t) * sin(r) / r
+    eq = Dt(u(t, r)) ~ Dr(r^2 * Dr(u(t, r))) / r^2
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0.0,
+        u(t, 1) ~ exp(-t) * sin(1.0),
+    ]
+    domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [r => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
+
+    rdisc = sol_arr[r][2:(end - 1)]
+    for (i, ti) in enumerate(sol_arr[t])
+        @test sol_arr[u(t, r)][i, 2:(end - 1)] ≈ u_exact.(rdisc, ti) atol = 0.05
+    end
+
+    # and the equation count does not grow with the grid
+    counts = map([21, 41]) do n
+        disc = MOLFiniteDifference(
+            [r => 1 / (n - 1)], t; discretization_strategy = ArrayDiscretization()
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        length(get_eqs(sys))
+    end
+    @test counts[1] == counts[2]
+end
+
+@testset "1D spherical laplacian, fourth order approximation" begin
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    eq = Dt(u(t, r)) ~ Dr(r^2 * Dr(u(t, r))) / r^2
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0.0,
+        u(t, 1) ~ exp(-t) * sin(1.0),
+    ]
+    domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(
+        pdesys, [r => 0.1], t; disc_kwargs = (; approx_order = 4)
+    )
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
+end
+
+@testset "1D spherical laplacian with a constant prefactor" begin
+    # Diffusion Test 08: 4/r^2 * Dr(r^2 * Dr(u)), the prefactor rides along as a
+    # grid-constant factor of the divided nonlinear laplacian.
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    u_exact = (r, t) -> exp(-4t) * sin(r) / r
+    eq = Dt(u(t, r)) ~ 4 / r^2 * Dr(r^2 * Dr(u(t, r)))
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0.0,
+        u(t, 1) ~ exp(-4t) * sin(1.0),
+    ]
+    domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [r => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
+
+    rdisc = sol_arr[r][2:(end - 1)]
+    for (i, ti) in enumerate(sol_arr[t])
+        @test sol_arr[u(t, r)][i, 2:(end - 1)] ≈ u_exact.(rdisc, ti) atol = 0.05
+    end
+end
+
+@testset "1D spherical laplacian, bare divided term uses the spherical scheme" begin
+    # With the laplacian written on the lhs the cardinalized numerator stays bare (no
+    # Mul), the one shape where the scalar spherical scheme wins over the nonlinear
+    # laplacian rules; the slice form mirrors `spherical_diffusion`.
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    eq = Dr(r^2 * Dr(u(t, r))) / r^2 ~ Dt(u(t, r))
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0.0,
+        u(t, 1) ~ exp(-t) * sin(1.0),
+    ]
+    domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [r => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
+end
+
+@testset "1D spherical laplacian on a nonuniform grid" begin
+    # Bare form: the spherical scheme's centered first derivative takes per-point
+    # numeric weights on nonuniform grids.
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    eq = Dr(r^2 * Dr(u(t, r))) / r^2 ~ Dt(u(t, r))
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0.0,
+        u(t, 1) ~ exp(-t) * sin(1.0),
+    ]
+    domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+
+    gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
+    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [r => gridvec], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
+end
+
 @testset "Fallback: grid-varying factor multiplying a nonlinear laplacian" begin
     # The scalar path leaves such factors undiscretized (a pre-existing scalar-path
     # bug), so no slice form can reproduce it; the equation stays pointwise for parity.
@@ -882,11 +1023,6 @@ end
     # pointwise.
     unsupported = [
         (
-            "spherical laplacian",
-            Dt(u(t, x)) ~ Dx(x^2 * Dx(u(t, x))) / x^2,
-            [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
-        ),
-        (
             "off-edge boundary sampling",
             Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 0.5),
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
@@ -949,6 +1085,22 @@ end
     sys_nllap, _ = symbolic_discretize(nllap_sys, strict)
     @test narrayeqs_interior(sys_nllap) == 1
 
+    # Spherical laplacians too, in both cardinalized shapes.
+    @named sph_sys = PDESystem(
+        Dt(u(t, x)) ~ Dx(x^2 * Dx(u(t, x))) / x^2,
+        [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
+        domains, [t, x], [u(t, x)]
+    )
+    sys_sph, _ = symbolic_discretize(sph_sys, strict)
+    @test narrayeqs_interior(sys_sph) == 1
+    @named sph_bare_sys = PDESystem(
+        Dx(x^2 * Dx(u(t, x))) / x^2 ~ Dt(u(t, x)),
+        [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
+        domains, [t, x], [u(t, x)]
+    )
+    sys_sph_bare, _ = symbolic_discretize(sph_bare_sys, strict)
+    @test narrayeqs_interior(sys_sph_bare) == 1
+
     # Periodic boundaries are supported: the points whose stencils wrap over the seam are
     # pointwise for the same structural reason the frame is, so strict mode accepts them.
     @named periodic_sys = PDESystem(
@@ -970,8 +1122,8 @@ end
 
     # The error names the offending equation and the reason.
     @named bad = PDESystem(
-        Dt(u(t, x)) ~ Dx(x^2 * Dx(u(t, x))) / x^2,
-        [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 1)),
+        [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         domains, [t, x], [u(t, x)]
     )
     msg = try

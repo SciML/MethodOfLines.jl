@@ -22,15 +22,16 @@
 # edge-aligned grids, fall back.
 #
 # Nonlinear laplacians `Dx(a(u) * Dx(u))` are emitted in slice form too; see
-# `array_nonlinear_laplacian`.
+# `array_nonlinear_laplacian`. Spherical laplacians `r^-2 Dr(r^2 Dr(u))` build on the
+# same half-offset machinery; see `array_spherical_diffusion`.
 #
 # Staggered grids collapse the same way: each variable's alignment fixes its two stencil
 # taps across the interior, so the interior is one array equation per PDE; the (1D,
 # single-point) boundaries stay pointwise.
 #
 # Unsupported patterns fall back to pointwise scalarization (same numerics as
-# `ScalarizedDiscretization`): WENO/functional advection, spherical
-# laplacians, integrals, mixed derivatives, two-variable interfaces, callbacks,
+# `ScalarizedDiscretization`): WENO/functional advection,
+# integrals, mixed derivatives, two-variable interfaces, callbacks,
 # differing dimensionality, boundary-value derivatives, time-literal
 # dependent-variable calls, edge-aligned boundary values, stationary systems.
 
@@ -190,19 +191,29 @@ function discretize_equation_array_form(
     terms = split_terms(pde, s.x̄)
     # Matched before the bands: half-offset stencils reach further than the order-2
     # central difference `d_orders` reports for these terms. The staggered path has no
-    # nonlinear-laplacian scheme; `validate_staggered_array_form` already rejects even
-    # orders, so there is nothing to match there.
+    # nonlinear-laplacian or spherical scheme; `validate_staggered_array_form` already
+    # rejects even orders, so there is nothing to match there.
     nllap_matches = NonlinlapMatch[]
     nllap_orders = Dict()
+    sph_matches = SphericalMatch[]
+    sph_orders = Dict()
     if !isstag
         nllap_matches = match_nonlinlap_terms(terms, s, depvars)
         for m in nllap_matches
             orders = Set(nonlinlap_coeff_orders(m, depvars, derivweights))
             nllap_orders[m.x] = union(get(nllap_orders, m.x, Set{Int}()), orders)
         end
+        sph_matches = match_spherical_terms(
+            split_additive_terms(pde), s, depvars, nllap_matches
+        )
+        for m in sph_matches
+            orders = Set(nonlinlap_coeff_orders(m, depvars, derivweights))
+            sph_orders[m.x] = union(get(sph_orders, m.x, Set{Int}()), orders)
+        end
     end
     bands, clean = array_bands(
-        interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders
+        interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders,
+        sph_orders
     )
     any(isempty, bands) && throw(ArrayDiscretizationFallback("empty core region"))
     N = length(args)
@@ -223,12 +234,6 @@ function discretize_equation_array_form(
         )
         special_rules = vcat(
             vec(generate_mixed_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms)),
-            vec(
-                generate_spherical_diffusion_rules(
-                    II0, s, depvars, derivweights, bcmap,
-                    indexmap, split_additive_terms(pde)
-                )
-            ),
             vec(generate_euler_integration_rules(II0, s, depvars, indexmap, terms)),
             vec(generate_whole_domain_integration_rules(II0, s, depvars, indexmap, terms)),
             vec(generate_cb_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms))
@@ -254,7 +259,7 @@ function discretize_equation_array_form(
         end
         return array_core_equation(
             pde, ranges, s, depvars, derivweights,
-            args, pdeorders, indexmap, terms, periodic, nllap_matches
+            args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches
         )
     end
 
@@ -275,7 +280,7 @@ range).
 """
 function array_core_equation(
         pde, ranges, s, depvars, derivweights, args, pdeorders, indexmap, terms,
-        periodic, nllap_matches
+        periodic, nllap_matches, sph_matches
     )
     N = length(args)
     shape = ntuple(j -> length(ranges[j]), N)
@@ -291,6 +296,7 @@ function array_core_equation(
         )
         windrules = Pair[]
         nllaprules = Pair[]
+        sphrules = Pair[]
     else
         derivrules = array_cartesian_rules(
             s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
@@ -305,10 +311,15 @@ function array_core_equation(
             nllap_matches, s, depvars, derivweights, ranges, indexmap,
             vcat(bvalrules, varrules, gridrules), periodic
         )
+        sphrules = array_spherical_rules(
+            sph_matches, s, depvars, derivweights, ranges, indexmap,
+            vcat(bvalrules, varrules, gridrules), periodic
+        )
     end
     # Family order is the reverse of the scalar path's last-key-wins `Dict`.
     ctx = ArrayifyContext(
-        vcat(bvalrules, windrules, nllaprules, derivrules, varrules, gridrules), s.time
+        vcat(bvalrules, windrules, nllaprules, sphrules, derivrules, varrules, gridrules),
+        s.time
     )
 
     lhs = arrayify(pde.lhs, ctx)
@@ -429,11 +440,13 @@ depend on the grid resolution.
 
 `nllap_orders` maps each direction carrying a nonlinear laplacian to the coefficient's
 derivative orders above one; those directions additionally take the half-offset branch
-conditions and tap extents of `array_nonlinlap_constraints`.
+conditions and tap extents of `array_nonlinlap_constraints`. `sph_orders` does the same
+for spherical laplacians via `array_spherical_constraints`, and additionally keeps any
+r ≈ 0 points out of the core (the scalar path treats them with a separate branch).
 """
 function array_bands(
         interior, s, args, pdeorders, derivweights, indexmap, periodic,
-        nllap_orders = Dict()
+        nllap_orders = Dict(), sph_orders = Dict()
     )
     N = length(args)
     bands = [UnitRange{Int}[] for _ in 1:N]
@@ -447,6 +460,19 @@ function array_bands(
         nl = if haskey(nllap_orders, x)
             c = array_nonlinlap_constraints(
                 x, n, derivweights, sort(collect(nllap_orders[x]))
+            )
+            mintap = min(mintap, c[3])
+            maxtap = max(maxtap, c[4])
+            c
+        else
+            nothing
+        end
+        sph = if haskey(sph_orders, x)
+            haskey(periodic, x) && throw(
+                ArrayDiscretizationFallback("spherical laplacian in a periodic direction")
+            )
+            c = array_spherical_constraints(
+                x, n, derivweights, sort(collect(sph_orders[x]))
             )
             mintap = min(mintap, c[3])
             maxtap = max(maxtap, c[4])
@@ -482,6 +508,23 @@ function array_bands(
             if nl !== nothing
                 lo = max(lo, nl[1])
                 hi = min(hi, nl[2])
+            end
+            if sph !== nothing
+                lo = max(lo, sph[1])
+                hi = min(hi, sph[2])
+                # r ≈ 0 takes a separate scalar branch (appendix B), keep it in the frame.
+                grid = s.grid[x]
+                while lo <= hi && abs(grid[lo]) <= 1.0e-6
+                    lo += 1
+                end
+                while lo <= hi && abs(grid[hi]) <= 1.0e-6
+                    hi -= 1
+                end
+                any(i -> abs(grid[i]) <= 1.0e-6, lo:hi) && throw(
+                    ArrayDiscretizationFallback(
+                        "spherical laplacian with r ≈ 0 inside the core"
+                    )
+                )
             end
             lo > hi && return bands, clean
             bands[j] = [lo:hi]
@@ -1082,9 +1125,10 @@ end
 
 """
 Derivative orders above one that the coefficient applies along `m.x`; order one is
-always contributed by the inner derivative.
+always contributed by the inner derivative. Accepts `NonlinlapMatch` and
+`SphericalMatch`.
 """
-function nonlinlap_coeff_orders(m::NonlinlapMatch, depvars, derivweights)
+function nonlinlap_coeff_orders(m, depvars, derivweights)
     expr = safe_unwrap(m.expr)
     orders = Int[]
     for d in unique(vcat(1, derivweights.orders[m.x]))
@@ -1270,6 +1314,155 @@ function array_nonlinlap_rules(
         )
         m.pre === nothing || (val = broadcast(*, arrayify(m.pre, basectx), val))
         m.div === nothing || (val = broadcast(/, val, arrayify(m.div, basectx)))
+        push!(rules, safe_unwrap(m.term) => val)
+    end
+    return rules
+end
+
+####
+# Spherical laplacian in slice form
+####
+
+"""
+A matched spherical laplacian `Dx(x^2 * expr * Dx(u)) / x^2`: `term` is the matched
+additive term, `expr` the inner coefficient besides `x^2` and `pre` any prefactor
+product (`nothing` when absent).
+"""
+struct SphericalMatch
+    term::Any
+    x::Any
+    u::Any
+    expr::Any
+    pre::Any
+end
+
+"""
+Match the three `@rule` patterns of `generate_spherical_diffusion_rules` against the
+additive `terms`, keeping the last match per term. Terms carrying a nonlinear laplacian
+match are skipped: the scalar path keys both rulesets by the same term and the nonlinear
+laplacian entry, added later, wins its rules `Dict`. Grid-varying prefactors throw for
+the same reason as in `match_nonlinlap_terms`.
+"""
+function match_spherical_terms(terms, s, depvars, nllap_matches)
+    ruleobjs = []
+    for u in depvars, x in ivs(depvar(u, s), s)
+        push!(
+            ruleobjs,
+            @rule *(
+                ~~a, 1 / (x^2),
+                ($(Differential(x))(*(~~c, (x^2), ~~d, $(Differential(x))(u), ~~e))),
+                ~~b
+            ) => SphericalMatch(
+                nothing, x, u, *(~c..., ~d..., ~e..., Num(1)),
+                _nllap_pre([~a..., ~b...])
+            )
+        )
+    end
+    for u in depvars, x in ivs(depvar(u, s), s)
+        push!(
+            ruleobjs,
+            @rule /(
+                *(
+                    ~~a,
+                    ($(Differential(x))(*(~~c, (x^2), ~~d, $(Differential(x))(u), ~~e))),
+                    ~~b
+                ),
+                (x^2)
+            ) => SphericalMatch(
+                nothing, x, u, *(~c..., ~d..., ~e..., Num(1)),
+                _nllap_pre([~a..., ~b...])
+            )
+        )
+    end
+    for u in depvars, x in ivs(depvar(u, s), s)
+        push!(
+            ruleobjs,
+            @rule /(
+                ($(Differential(x))(*(~~c, (x^2), ~~d, $(Differential(x))(u), ~~e))),
+                (x^2)
+            ) => SphericalMatch(nothing, x, u, *(~c..., ~d..., ~e..., Num(1)), nothing)
+        )
+    end
+
+    claimed = [safe_unwrap(m.term) for m in nllap_matches]
+    matches = SphericalMatch[]
+    for t in terms
+        any(c -> isequal(safe_unwrap(t), c), claimed) && continue
+        m = nothing
+        for r in ruleobjs
+            v = r(t)
+            v === nothing || (m = v)
+        end
+        m === nothing && continue
+        if m.pre !== nothing
+            pre = safe_unwrap(m.pre)
+            if !isempty(get_depvars(pre, s.vars.depvar_ops)) ||
+                    any(y -> subsmatch(pre, safe_unwrap(y) => nothing), s.x̄)
+                throw(
+                    ArrayDiscretizationFallback(
+                        "grid-varying factor $(m.pre) multiplying a spherical laplacian, which the scalar path leaves undiscretized"
+                    )
+                )
+            end
+        end
+        push!(matches, SphericalMatch(t, m.x, m.u, m.expr, m.pre))
+    end
+    return matches
+end
+
+"""
+Band bounds and tap extents `(lo, hi, mintap, maxtap)` a spherical laplacian imposes in
+direction `x`: those of the nonlinear laplacian it contains, plus the interior branch of
+the centered first derivative the scheme adds.
+"""
+function array_spherical_constraints(x, n, derivweights, coeff_orders)
+    lo, hi, mintap, maxtap = array_nonlinlap_constraints(x, n, derivweights, coeff_orders)
+    D_1 = derivweights.map[Differential(x)]
+    bpc = D_1.boundary_point_count
+    lo = max(lo, bpc + 1)
+    hi = min(hi, n - bpc)
+    taps = half_range(D_1.stencil_length)
+    mintap = min(mintap, first(taps))
+    maxtap = max(maxtap, last(taps))
+    return lo, hi, mintap, maxtap
+end
+
+"""
+Slice form of `spherical_diffusion` for a matched `Dx(x^2 * expr * Dx(u)) / x^2`, away
+from x ≈ 0 (scheme 1 in appendix A of the paper referenced there): the coefficient at
+the grid points times the centered first derivative divided by the grid values of `x`
+plus the nonlinear laplacian of the inner coefficient.
+"""
+function array_spherical_diffusion(
+        m::SphericalMatch, s, depvars, derivweights, ranges, indexmap, periodic, baserules
+    )
+    x, u = m.x, m.u
+    N = length(ranges)
+    D_1 = derivweights.map[Differential(x)]
+    D1u = array_central_difference(D_1, s, u, x, 1, ranges, indexmap, periodic)
+    xvals = array_grid_vals(x, s, ranges, indexmap, N)
+    exprhere = arrayify(m.expr, ArrayifyContext(baserules, s.time))
+    nll = array_nonlinear_laplacian(
+        NonlinlapMatch(nothing, x, u, m.expr, nothing, nothing),
+        s, depvars, derivweights, ranges, indexmap, periodic
+    )
+    return broadcast(*, exprhere, broadcast(+, broadcast(/, D1u, xvals), nll))
+end
+
+"""
+Rules binding each matched spherical term to its slice form, grid-constant prefactors
+broadcast on (mirrors the splicing in `generate_spherical_diffusion_rules`).
+"""
+function array_spherical_rules(
+        matches, s, depvars, derivweights, ranges, indexmap, baserules, periodic
+    )
+    basectx = ArrayifyContext(baserules, s.time)
+    rules = Pair[]
+    for m in matches
+        val = array_spherical_diffusion(
+            m, s, depvars, derivweights, ranges, indexmap, periodic, baserules
+        )
+        m.pre === nothing || (val = broadcast(*, arrayify(m.pre, basectx), val))
         push!(rules, safe_unwrap(m.term) => val)
     end
     return rules
