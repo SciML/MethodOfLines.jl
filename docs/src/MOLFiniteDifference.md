@@ -81,29 +81,31 @@ Time-independent systems have no derivative to keep implicit, and discretize to 
 The solution is a `PDETimeSeriesSolution` in every case, indexed and interpolated by the
 `PDESystem`'s own variables: `sol[u(t, x)]`, `sol(t, x)`.
 
-## Building a problem yourself: `symbolic_discretize`
+## Explicit Runge–Kutta methods and other problem types
 
-To construct a problem type `discretize` does not build — an `ODEProblem`, or anything
-else — start from `symbolic_discretize`, which returns the discretized system and the
-time span:
+Explicit Runge–Kutta methods such as `Tsit5()` and `SSPRK54()` solve `ODEProblem`s, not
+the `DAEProblem` returned by `discretize`. To use one, start from `symbolic_discretize`,
+which returns the discretized system and the time span, then compile the system into an
+`ODEProblem`:
 
 ```julia
 sys, tspan = symbolic_discretize(pdesys, disc)
 
 # an ODEProblem needs `D(x) = f(x)`, so compile first
 prob = ODEProblem(mtkcompile(sys), nothing, tspan)
-sol = solve(prob, Rodas5P())
+sol = solve(prob, Tsit5())
 ```
 
 Note that `mtkcompile` scalarizes the array equations, so this path gives up the scaling
 benefit of the array form. Prefer `discretize` unless you specifically need an
-`ODEProblem`.
+`ODEProblem` or an explicit time-stepping method.
 
 ## Migrating to v1
 
 - `discretize` returns a `DAEProblem` rather than an `ODEProblem` for time-dependent
-  systems. Call `solve(prob)` to use the default DAE algorithm; an `ODEProblem` solver
-  like `Tsit5()` will no longer accept the result. Solution indexing is unchanged.
+  systems. Call `solve(prob)` to use the default DAE algorithm. Explicit Runge–Kutta
+  methods like `Tsit5()` require the compiled `ODEProblem` path above. Solution indexing
+  is unchanged.
 - Discretization strategy options were removed. MethodOfLines always uses array-form
   equations with automatic pointwise fallback for unsupported patterns.
 - To construct the pre-v1 compiled `ODEProblem`, use `symbolic_discretize` plus

@@ -110,8 +110,7 @@ include("discretization/generate_ic_defaults.jl")
 include("discretization/staggered_discretize.jl")
 
 # Main
-include("scalar_discretization.jl")
-include("array_discretization.jl")
+include("discretization/discretize_equations.jl")
 include("dae_discretization.jl")
 include("MOL_discretization.jl")
 
