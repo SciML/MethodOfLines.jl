@@ -1,5 +1,6 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils,
     OrdinaryDiffEq
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 @testset "Discrete callback" begin
     @parameters x, t
@@ -27,10 +28,12 @@ using ModelingToolkit, MethodOfLines, DomainSets, Test, Symbolics, SymbolicUtils
 
     @named cbpdesys = PDESystem(cbeq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = MOLFiniteDifference([x => 0.1], t; approx_order = 2, callbacks = [cb])
+    disc = MOLFiniteDifference(
+        [x => 0.1], t; approx_order = 2, callbacks = [cb]
+    )
 
-    prob = discretize(pdesys, disc)
-    cbprob = discretize(cbpdesys, disc)
+    prob = ode_discretize(pdesys, disc)
+    cbprob = ode_discretize(cbpdesys, disc)
 
     sol1 = solve(prob, Tsit5(), saveat = 0.1)
     sol2 = solve(cbprob, Tsit5(), saveat = 0.1)

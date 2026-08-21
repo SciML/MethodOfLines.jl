@@ -32,7 +32,7 @@ disc = MOLFiniteDifference([x => 100], t)
 
 prob = discretize(sys, disc)
 
-sol = solve(prob, FBDF(), saveat = 0.01)
+sol = solve(prob; saveat = 0.01)
 
 discx = sol[x]
 disct = sol[t]

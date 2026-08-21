@@ -56,8 +56,7 @@ using ModelingToolkit: Differential
     # Method of lines discretization
     discretization = MOLFiniteDifference([x => dx, y => dy], t; approx_order = order)
     prob = SciMLBase.discretize(pdesys, discretization)
-    # Solution of the ODE system
-    sol = solve(prob, Tsit5())
+    sol = solve(prob)
     r_space_x = sol[x]
     r_space_y = sol[y]
     asf = [analytic_sol_func(t_max, X, Y) for X in r_space_x, Y in r_space_y]
@@ -127,11 +126,7 @@ end
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
     prob = SciMLBase.discretize(pdesys, discretization)
 
-    # Solution of the ODE system
-    sol = solve(prob, Rosenbrock23())
-
-    # Test against exact solution
-    sol = solve(prob, Tsit5())
+    sol = solve(prob)
     r_space_x = sol[x]
     r_space_y = sol[y]
     asf = [analytic_sol_func(t_max, X, Y) for X in r_space_x, Y in r_space_y]

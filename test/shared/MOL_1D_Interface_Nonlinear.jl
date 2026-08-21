@@ -46,7 +46,7 @@ discretization = MOLFiniteDifference([x1 => l, x2 => l], t)
 
 prob = discretize(pdesys, discretization)
 
-sol = solve(prob, Tsit5(), saveat = 0.1)
+sol = solve(prob; saveat = 0.1)
 
 x1_sol = sol[x1]
 x2_sol = sol[x2]

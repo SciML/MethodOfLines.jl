@@ -2,7 +2,6 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqRosenbrock: Rodas4
 using ModelingToolkit: Differential
 
 # Tests
@@ -48,10 +47,8 @@ using ModelingToolkit: Differential
     order = 2
     discretization = MOLFiniteDifference([x => dx_], t)
 
-    # Convert the PDE problem into an ODE problem
     prob = discretize(pdesys, discretization)
-    # Solve ODE problem
-    sol = solve(prob, Rodas4(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     x_sol = sol[x]
     t_sol = sol[t]

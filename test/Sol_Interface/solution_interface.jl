@@ -2,6 +2,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, NonlinearSolve,
     DomainSets
 using ModelingToolkit: Differential
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 @testset "Test 00a: Test solution interface, time dependent" begin
     # Parameters, variables, and derivatives
@@ -39,10 +40,8 @@ using ModelingToolkit: Differential
     )
     # explicitly specify upwind order
 
-    # Convert the PDE problem into an ODE problem
-    prob = discretize(pdesys, discretization)
+    prob = ode_discretize(pdesys, discretization)
 
-    # Solve ODE problem
     using OrdinaryDiffEq
     sol = solve(prob, FBDF(), saveat = 0.1)
 

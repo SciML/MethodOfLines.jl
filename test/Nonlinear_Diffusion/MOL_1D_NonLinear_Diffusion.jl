@@ -5,7 +5,6 @@
 
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
-using OrdinaryDiffEqRosenbrock: Rosenbrock32
 using SciMLBase
 using ModelingToolkit: Differential
 # Tests
@@ -51,7 +50,7 @@ using ModelingToolkit: Differential
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, Rosenbrock32())
+    sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
 
     # Test against exact solution
@@ -170,7 +169,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, Rosenbrock32())
+    sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
 
     # Test against exact solution
@@ -234,7 +233,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, Rosenbrock32())
+    sol = solve(prob)
 
     @test SciMLBase.successful_retcode(sol)
 
@@ -352,7 +351,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, Rosenbrock32()) # TODO: check warnings
+    sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
 
     # Test against exact solution
@@ -413,7 +412,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, Rosenbrock32()) # TODO: check warnings
+    sol = solve(prob)
     @test SciMLBase.successful_retcode(sol)
 
     # Test against exact solution
@@ -475,7 +474,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, Rosenbrock32())
+    sol = solve(prob)
     @test_broken SciMLBase.successful_retcode(sol)
     return # don't run the rest of the test
     # Test against exact solution
@@ -536,7 +535,7 @@ end
 
     # Solution of the ODE system
     using OrdinaryDiffEq
-    sol = solve(prob, Rosenbrock32())
+    sol = solve(prob)
     @test_broken SciMLBase.successful_retcode(sol)
     return #don't run later tests
     # Test against exact solution

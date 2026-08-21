@@ -60,7 +60,8 @@ dx_uniform = 1.0 / N
 
 function solve_uniform(scheme; solver = Tsit5(), kwargs...)
     disc = MOLFiniteDifference([x => dx_uniform], t; advection_scheme = scheme)
-    prob = discretize(pdesys, disc)
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    prob = ODEProblem(mtkcompile(sys), nothing, tspan)
     return solve(prob, solver; saveat = 0.4, kwargs...)
 end
 
@@ -153,7 +154,8 @@ x_clustered = grid_from_density(0.0, 1.0, N + 1, ρ)
 
 disc_burgers = MOLFiniteDifference([x => x_clustered], t;
     advection_scheme = WENOScheme())
-prob_burgers = discretize(pdesys_burgers, disc_burgers)
+sys, tspan = symbolic_discretize(pdesys_burgers, disc_burgers)
+prob_burgers = ODEProblem(mtkcompile(sys), nothing, tspan)
 
 dt_burgers = 0.3 * minimum(diff(x_clustered)) / maximum(u0_burgers.(x_clustered))
 sol_burgers = solve(prob_burgers, SSPRK33(); dt = dt_burgers,
@@ -184,7 +186,8 @@ function burgers_exact(x, t; iters = 400)
 end
 
 disc_uni = MOLFiniteDifference([x => 1.0 / N], t; advection_scheme = WENOScheme())
-prob_uni = discretize(pdesys_burgers, disc_uni)
+sys, tspan = symbolic_discretize(pdesys_burgers, disc_uni)
+prob_uni = ODEProblem(mtkcompile(sys), nothing, tspan)
 sol_uni = solve(prob_uni, SSPRK33(); dt = 0.3 / N / 0.9,
     saveat = [0.0, 0.35], adaptive = false)
 
@@ -227,7 +230,8 @@ function mms_error(xgrid; tf = 0.05)
     domains_mms = [t ∈ Interval(0.0, tf), x ∈ Interval(x0, xL)]
     @named pdesys_mms = PDESystem(eq_mms, bcs_mms, domains_mms, [t, x], [u(t, x)])
     disc = MOLFiniteDifference([x => xgrid], t; advection_scheme = WENOScheme())
-    prob = discretize(pdesys_mms, disc)
+    sys, tspan = symbolic_discretize(pdesys_mms, disc)
+    prob = ODEProblem(mtkcompile(sys), nothing, tspan)
     dt = 0.01 * minimum(diff(xgrid)) # tiny dt isolates the spatial error
     sol = solve(prob, SSPRK33(); dt, saveat = [0.0, tf], adaptive = false)
     xg = sol[x]
@@ -262,7 +266,7 @@ Note that both grids here are passed as explicit point vectors, so both are disc
 
   - `WENOScheme` discretizes **first-order spatial derivatives only**; higher odd-order derivatives are unsupported with this scheme. Even-order terms such as diffusion are handled by the standard centered schemes and may be freely mixed in the same equation.
   - With an explicit SSP integrator, the time step is limited by the smallest cell of a non-uniform grid.
-  - With `discretization_strategy = ArrayDiscretization()`, WENO is emitted in array (slice) form on both uniform and non-uniform grids, including periodic non-uniform grids, with the same numerics as the default strategy. See [Discretization](../MOLFiniteDifference.md).
+  - WENO is emitted in array (slice) form on both uniform and non-uniform grids, including periodic non-uniform grids. See [Discretization](../MOLFiniteDifference.md).
   - Periodic and interface boundary conditions are supported on non-uniform grids for first-order derivatives; systems with higher-order derivatives across a *mismatched-grid* interface are rejected at discretization time. See [Boundary Conditions](../boundary_conditions.md) and [Advection Schemes](@ref adschemes).
 
 ## References

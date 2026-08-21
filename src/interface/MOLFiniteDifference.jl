@@ -22,14 +22,7 @@ A discretization algorithm.
   stable and accurate at the cost of complexity.
 - `grid_align`: The grid alignment value. Use [`center_align`](@ref),
   [`edge_align`](@ref), or `StaggeredGrid()` as appropriate for the discretization.
-- `use_ODAE`: If `true`, the discretization will use the `ODAEproblem` constructor.
-    Defaults to `false`.
-- `discretization_strategy`: How the discretized equations are represented symbolically.
-    `ScalarizedDiscretization()` (the default) generates one scalar equation per interior
-    grid point. `ArrayDiscretization()` generates the interior of each PDE as a single
-    symbolic array equation over slices of the discretized variables, falling back to
-    pointwise scalar equations for patterns with no slice representation.
-- `kwargs`: Additional keyword arguments passed to the `ODEProblem`.
+- `kwargs`: Additional keyword arguments passed to the generated problem.
 
 # Fields
 
@@ -42,8 +35,6 @@ A discretization algorithm.
 - `grid_align`: The grid alignment marker.
 - `should_transform`: Whether supported symbolic transformations are applied before
   discretization.
-- `use_ODAE`: Whether the resulting problem may use an `ODAEProblem` formulation.
-- `disc_strategy`: The symbolic equation representation strategy.
 - `useIR`: Whether ModelingToolkit's intermediate representation is used.
 - `callbacks`: Symbolic discretization callbacks.
 - `kwargs`: Additional keyword arguments forwarded to the generated problem.
@@ -59,15 +50,13 @@ discretization = MOLFiniteDifference([x => 0.1], t)
 ```
 
 """
-struct MOLFiniteDifference{G, D} <: AbstractEquationSystemDiscretization
+struct MOLFiniteDifference{G} <: AbstractEquationSystemDiscretization
     dxs::Any
     time::Any
     approx_order::Int
     advection_scheme::Any
     grid_align::G
     should_transform::Bool
-    use_ODAE::Bool
-    disc_strategy::D
     useIR::Bool
     callbacks::Any
     kwargs::Any
@@ -77,9 +66,8 @@ end
 function MOLFiniteDifference(
         dxs, time = nothing; approx_order = 2,
         advection_scheme = UpwindScheme(), grid_align = CenterAlignedGrid(),
-        discretization_strategy = ScalarizedDiscretization(),
         upwind_order = nothing, should_transform = true,
-        use_ODAE = false, useIR = true, callbacks = [], kwargs...
+        useIR = true, callbacks = [], kwargs...
     )
     if upwind_order !== nothing
         @warn "`upwind_order` no longer does anything, and will be removed in a future release. See the docs for the current interface."
@@ -100,9 +88,9 @@ function MOLFiniteDifference(
 
     dxs = dxs isa Dict ? dxs : Dict(dxs)
 
-    return MOLFiniteDifference{typeof(grid_align), typeof(discretization_strategy)}(
+    return MOLFiniteDifference{typeof(grid_align)}(
         dxs, time, approx_order, advection_scheme, grid_align, should_transform,
-        use_ODAE, discretization_strategy, useIR, callbacks, kwargs
+        useIR, callbacks, kwargs
     )
 end
 

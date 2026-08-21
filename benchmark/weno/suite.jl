@@ -53,6 +53,11 @@ function solve_benchmark(prob, dt)
     ) evals = 1
 end
 
+function ode_problem(pdesys, disc)
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    return ODEProblem(mtkcompile(sys), nothing, tspan)
+end
+
 function discretize_benchmark(pdesys, disc)
     return @benchmarkable discretize($pdesys, $disc) seconds = 60 samples = 3 evals = 1
 end
@@ -87,7 +92,7 @@ function build_weno_suite(;
             slv[label][kstr] = BenchmarkGroup()
             dsc[label][kstr] = BenchmarkGroup()
             for n in resolutions
-                prob = discretize(sys.pdesys, mkdisc(sys, kind, n))
+                prob = ode_problem(sys.pdesys, mkdisc(sys, kind, n))
                 rhs[label][kstr]["N=$n"] = rhs_benchmark(prob)
                 dt = CFL_TARGET * min_spacing(kind, sys.xspan..., n) / wavespeed
                 slv[label][kstr]["N=$n"] = solve_benchmark(prob, dt)
@@ -108,7 +113,7 @@ function build_weno_suite(;
         slv["interface"][kstr] = BenchmarkGroup()
         dsc["interface"][kstr] = BenchmarkGroup()
         for n in interface_resolutions
-            prob = discretize(itf.pdesys, interface_discretization(itf, kind, n))
+            prob = ode_problem(itf.pdesys, interface_discretization(itf, kind, n))
             rhs["interface"][kstr]["N=$n"] = rhs_benchmark(prob)
             dt = CFL_TARGET * interface_min_spacing(kind, n)
             slv["interface"][kstr]["N=$n"] = solve_benchmark(prob, dt)

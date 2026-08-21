@@ -36,7 +36,7 @@ using StableRNGs
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob)
 
     x_disc = sol[x]
     solu = sol[u(t, x)]
@@ -86,7 +86,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob)
 
     x_disc = sol[x]
     solu = sol[u(t, x)]
@@ -139,7 +139,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob)
 
     x_disc = sol[x]
     solu = sol[u(t, x)]

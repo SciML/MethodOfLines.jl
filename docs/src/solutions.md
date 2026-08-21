@@ -1,8 +1,9 @@
 # [Solution Retrieval - PDESolutions](@id sol)
 
-MethodOfLines automatically wraps the `ODESolution` that results from its generated `ODEProblem` in
-a `PDESolution` object, reshaping it and providing a convenient interface for accessing your results,
-as well as interpolations.
+MethodOfLines wraps the solution of its generated `DAEProblem`, `ODEProblem`, or
+`NonlinearProblem` in a PDE solution object, reshaping it and providing a convenient
+interface for accessing results and interpolations. Time-dependent problems use
+`PDETimeSeriesSolution`; stationary problems use `PDENoTimeSolution`.
 
 ## Solution Retrieval
 
@@ -57,17 +58,18 @@ uv_interp = sol(0.4, 1.7, 2.6)
 
 ## Original solution
 
-The original `ODESolution` is stored in `sol.original_sol`.
+The original solver solution is stored in `sol.original_sol`.
 
 To avoid wrapping entirely, use the `wrap` keyword argument to `solve`:
 
 ```julia
-sol = solve(prob, Tsit5(); wrap = Val(false))
+
+sol = solve(prob; wrap = Val(false))
 ```
 
 ```
 > typeof(sol)
-ODESolution
+DAESolution
 ```
 
 This is useful where speed is important, but the shape of the solution is not.

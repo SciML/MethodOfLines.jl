@@ -36,7 +36,7 @@ using MethodOfLines, ModelingToolkit, LinearAlgebra, Test, OrdinaryDiffEq, Domai
 
     prob = discretize(pde_system, disc)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob)
 
     xdisc = sol[x]
     tdisc = sol[t]
@@ -76,7 +76,7 @@ end
 
     disc = MOLFiniteDifference([x => 120], t)
 
-    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    @test_broken discretize(pde_system, disc) isa DAEProblem
     # prob = discretize(pde_system, disc)
     # sol = solve(prob, Tsit5())
 
@@ -124,7 +124,7 @@ end
 
     prob = discretize(pde_system, disc)
 
-    sol = solve(prob, Tsit5())
+    sol = solve(prob)
 
     xdisc = sol[x]
     tdisc = sol[t]
@@ -168,7 +168,7 @@ end
 
     disc = MOLFiniteDifference([x => 120], t)
 
-    @test_broken (discretize(pde_system, disc) isa ODEProblem)
+    @test_broken discretize(pde_system, disc) isa DAEProblem
     # prob = discretize(pde_system, disc)
     # sol = solve(prob, Tsit5(), saveat=0.1)
 

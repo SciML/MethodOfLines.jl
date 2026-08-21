@@ -1,9 +1,6 @@
-# Tests for the ArrayDiscretization strategy (issue #428): the interior of each PDE is
+# Tests for array discretization (issue #428): the interior of each PDE is
 # represented as a single symbolic array equation over slices of the array variables.
-# Where both strategies can express the same substitutions, numerics match (often
-# bitwise on the RHS). The array path also covers periodic-face and free-standing-corner
-# boundary values that scalar `boundaryvalfuncs` leave symbolic; those cases assert the
-# array path is runnable rather than scalar parity. Unsupported patterns fall back.
+# Unsupported patterns fall back to pointwise equations automatically.
 
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Symbolics
 using SciMLBase
@@ -15,21 +12,16 @@ using NonlinearSolve: NewtonRaphson
 using ModelingToolkit: get_eqs
 using SymbolicUtils: symtype
 using Test
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
-# Solve pdesys with both strategies and return (array_sol, scalar_sol, array_sys)
-function solve_both(pdesys, dxs, t; disc_kwargs = (;), solver = Rodas4(), kwsolve = (;))
-    disc_arr = MOLFiniteDifference(
-        dxs, t; discretization_strategy = ArrayDiscretization(), disc_kwargs...
-    )
-    disc_scal = MOLFiniteDifference(
-        dxs, t; discretization_strategy = ScalarizedDiscretization(), disc_kwargs...
-    )
-    sys_arr, _ = symbolic_discretize(pdesys, disc_arr)
-    prob_arr = discretize(pdesys, disc_arr)
-    prob_scal = discretize(pdesys, disc_scal)
+# Solve the compiled ODE form used by explicit-solver tests and return its symbolic
+# array system for structural checks.
+function solve_array(pdesys, dxs, t; disc_kwargs = (;), solver = Rodas4(), kwsolve = (;))
+    disc = MOLFiniteDifference(dxs, t; disc_kwargs...)
+    sys_arr, _ = symbolic_discretize(pdesys, disc)
+    prob_arr = ode_discretize(pdesys, disc)
     sol_arr = solve(prob_arr, solver; reltol = 1.0e-10, abstol = 1.0e-10, kwsolve...)
-    sol_scal = solve(prob_scal, solver; reltol = 1.0e-10, abstol = 1.0e-10, kwsolve...)
-    return sol_arr, sol_scal, sys_arr
+    return sol_arr, sys_arr
 end
 
 # The number of equations whose left/right hand side is an unscalarized symbolic array.
@@ -67,11 +59,10 @@ narrayeqs_interior(sys) = count(
     domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # The interior must be a single array equation
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 
     # Against the analytic solution
     xdisc = sol_arr[x]
@@ -96,10 +87,9 @@ end
     domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D advection-diffusion, constant coefficient (winding rules)" begin
@@ -114,10 +104,9 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.02], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.02], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D nonlinear advection (Burgers-type, coefficient depends on u)" begin
@@ -132,10 +121,9 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.02], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.02], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D diffusion with space and time dependent coefficient" begin
@@ -149,10 +137,9 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D diffusion, fourth order approximation (frame points)" begin
@@ -166,13 +153,12 @@ end
     domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => 0.05], t; disc_kwargs = (; approx_order = 4)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # One array equation for the core, plus scalar frame equations near the boundaries
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D diffusion on a nonuniform grid" begin
@@ -188,10 +174,9 @@ end
 
     # A deterministic, smoothly stretched nonuniform grid
     gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => gridvec], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => gridvec], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "2D linear diffusion" begin
@@ -212,10 +197,9 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
 @testset "Coupled system of two variables" begin
@@ -236,11 +220,9 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 2
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
-    @test sol_arr[v(t, x)] ≈ sol_scal[v(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D periodic BCs" begin
@@ -254,13 +236,12 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # The stencil is translation invariant across the whole periodic direction, so the
     # interior is one array equation plus the points whose stencils wrap over the seam,
     # which in 1D are single points and stay scalar.
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 
     # The periodic solution is a decaying sine wave
     xdisc = sol_arr[x]
@@ -283,10 +264,9 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.02], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.02], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "2D periodic BCs in both directions" begin
@@ -307,19 +287,17 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # One equation for the points whose stencils do not wrap, one for each of the four
     # slabs along the seams, and a scalar one for each of the four points where two seams
     # meet: the slabs are the array equations that make this scale.
     @test narrayeqs_interior(sys_arr) == 5
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 
     # and the equation count does not grow with the grid
     counts = map([8, 16]) do n
         disc = MOLFiniteDifference(
-            [x => 1 / (n - 1), y => 1 / (n - 1)], t;
-            discretization_strategy = ArrayDiscretization()
+            [x => 1 / (n - 1), y => 1 / (n - 1)], t
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         length(get_eqs(sys))
@@ -345,11 +323,10 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # the core plus one slab per seam in x; y contributes no wrapping
     @test narrayeqs_interior(sys_arr) == 3
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
 @testset "Brusselator: coupled 2D system, periodic in both directions" begin
@@ -387,7 +364,7 @@ end
     # five interior equations per variable, as in the single variable 2D case
     counts = map([8, 16]) do n
         disc = MOLFiniteDifference(
-            [x => 1 / n, y => 1 / n], t; discretization_strategy = ArrayDiscretization()
+            [x => 1 / n, y => 1 / n], t
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         (; narr = narrayeqs_interior(sys), n = length(get_eqs(sys)))
@@ -395,18 +372,12 @@ end
     @test counts[1].narr == 10
     @test counts[1].n == counts[2].n
 
-    sols = map([ArrayDiscretization(), ScalarizedDiscretization()]) do st
-        disc = MOLFiniteDifference(
-            [x => 1 / 8, y => 1 / 8], t; discretization_strategy = st
-        )
-        sol = solve(
-            discretize(pdesys, disc), Rodas4();
-            reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.5
-        )
-        (sol[u(x, y, t)], sol[v(x, y, t)])
-    end
-    @test sols[1][1] ≈ sols[2][1] rtol = 1.0e-8
-    @test sols[1][2] ≈ sols[2][2] rtol = 1.0e-8
+    disc = MOLFiniteDifference([x => 1 / 8, y => 1 / 8], t)
+    sol = solve(
+        ode_discretize(pdesys, disc), Rodas4();
+        reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.5
+    )
+    @test successful_retcode(sol)
 end
 
 @testset "Fallback: interface joining two variables on two domains" begin
@@ -434,11 +405,9 @@ end
     ]
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x1 => 0.05, x2 => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x1 => 0.05, x2 => 0.05], t)
     @test SciMLBase.successful_retcode(sol_arr)
     @test narrayeqs_interior(sys_arr) == 0
-    @test sol_arr[c1(t, x1)] ≈ sol_scal[c1(t, x1)] rtol = 1.0e-6
-    @test sol_arr[c2(t, x2)] ≈ sol_scal[c2(t, x2)] rtol = 1.0e-6
 end
 
 @testset "1D nonlinear laplacian (u coefficient)" begin
@@ -452,17 +421,16 @@ end
     domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # The half-offset coefficient expression is translation invariant over the core, so
     # the interior collapses to one array equation (issue #623).
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 
     # and the equation count does not grow with the grid
     counts = map([21, 41]) do n
         disc = MOLFiniteDifference(
-            [x => 1 / (n - 1)], t; discretization_strategy = ArrayDiscretization()
+            [x => 1 / (n - 1)], t
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         length(get_eqs(sys))
@@ -488,10 +456,9 @@ end
     domains = [t ∈ Interval(0.0, 2.0), x ∈ Interval(0.0, 2.0)]
     @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.04], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.04], t)
     @test SciMLBase.successful_retcode(sol_arr)
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 
     xdisc = sol_arr[x]
     exact = [analytic(sol_arr[t][end], xi) for xi in xdisc]
@@ -511,10 +478,9 @@ end
     domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D nonlinear laplacian, division forms" begin
@@ -528,18 +494,16 @@ end
     # A divided coefficient, Dx(Dx(u)/a(u))
     eq = Dt(u(t, x)) ~ Dx(Dx(u(t, x)) / u(t, x))
     @named pdesys_div = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys_div, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys_div, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 
     # A grid-constant prefactor and a parameter divisor on the whole laplacian
     eq = Dt(u(t, x)) ~ 3.0 * Dx(u(t, x) * Dx(u(t, x))) / p
     @named pdesys_pre = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [p => 2.0])
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys_pre, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys_pre, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D nonlinear laplacian, fourth order approximation" begin
@@ -555,12 +519,11 @@ end
     domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => 0.05], t; disc_kwargs = (; approx_order = 4)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D nonlinear laplacian, periodic BCs" begin
@@ -576,10 +539,9 @@ end
     domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "1D nonlinear laplacian on a nonuniform grid" begin
@@ -596,10 +558,9 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => gridvec], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => gridvec], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
 @testset "2D nonlinear laplacian" begin
@@ -621,10 +582,9 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
 @testset "1D spherical laplacian" begin
@@ -647,10 +607,9 @@ end
     domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [r => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [r => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
 
     rdisc = sol_arr[r][2:(end - 1)]
     for (i, ti) in enumerate(sol_arr[t])
@@ -660,7 +619,7 @@ end
     # and the equation count does not grow with the grid
     counts = map([21, 41]) do n
         disc = MOLFiniteDifference(
-            [r => 1 / (n - 1)], t; discretization_strategy = ArrayDiscretization()
+            [r => 1 / (n - 1)], t
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         length(get_eqs(sys))
@@ -683,12 +642,11 @@ end
     domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [r => 0.1], t; disc_kwargs = (; approx_order = 4)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
 end
 
 @testset "1D spherical laplacian with a constant prefactor" begin
@@ -709,10 +667,9 @@ end
     domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [r => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [r => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
 
     rdisc = sol_arr[r][2:(end - 1)]
     for (i, ti) in enumerate(sol_arr[t])
@@ -738,10 +695,9 @@ end
     domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [r => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [r => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
 end
 
 @testset "1D spherical laplacian on a nonuniform grid" begin
@@ -762,10 +718,9 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
 
     gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [r => gridvec], t)
+    sol_arr, sys_arr = solve_array(pdesys, [r => gridvec], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, r)] ≈ sol_scal[u(t, r)] rtol = 1.0e-6
 end
 
 @testset "Fallback: grid-varying factor multiplying a nonlinear laplacian" begin
@@ -783,7 +738,7 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     lenient = MOLFiniteDifference(
-        [x => 0.05], t; discretization_strategy = ArrayDiscretization()
+        [x => 0.05], t
     )
     sys, _ = symbolic_discretize(pdesys, lenient)
     @test narrayeqs_interior(sys) == 0
@@ -802,20 +757,19 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => 0.02], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
 
     # the scheme is traced once, so the equation count is resolution independent
     counts = map([51, 101]) do n
         disc = MOLFiniteDifference(
             [x => 1 / (n - 1)], t; advection_scheme = WENOScheme(),
-            discretization_strategy = ArrayDiscretization()
+
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         length(get_eqs(sys))
@@ -837,14 +791,13 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => 0.02], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-4)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
 end
 
 @testset "WENO advection with periodic boundaries" begin
@@ -858,7 +811,7 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => 0.02], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
@@ -866,14 +819,13 @@ end
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # one array equation for the points whose taps do not wrap, the rest pointwise
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
 
     # the number of wrap points is fixed by the stencil, so the equation count is
     # resolution independent
     counts = map([51, 101]) do n
         disc = MOLFiniteDifference(
             [x => 1 / (n - 1)], t; advection_scheme = WENOScheme(),
-            discretization_strategy = ArrayDiscretization()
+
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         length(get_eqs(sys))
@@ -883,27 +835,19 @@ end
     # a periodic nonuniform direction goes through the coefficient split: seam windows
     # take the periodically shifted coordinates `bcoord` produces, so parity is bitwise
     gridvec = [0.5 * (1 - cospi(i / 50)) for i in 0:50]
-    solp_arr, solp_scal, sysp_arr = solve_both(
+    solp_arr, sysp_arr = solve_array(
         pdesys, [x => gridvec], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
     )
     @test solp_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sysp_arr) == 1
-    @test solp_arr[u(t, x)] == solp_scal[u(t, x)]
-    strictp = MOLFiniteDifference(
-        [x => gridvec], t; discretization_strategy = StrictArrayDiscretization(),
-        advection_scheme = WENOScheme()
-    )
-    sysp_strict, _ = symbolic_discretize(pdesys, strictp)
-    @test narrayeqs_interior(sysp_strict) == 1
 
     # resolution independence holds on the periodic nonuniform path too
     pcounts = map([40, 80]) do n
         disc = MOLFiniteDifference(
             [x => [0.5 * (1 - cospi(i / n)) for i in 0:n]], t;
-            advection_scheme = WENOScheme(),
-            discretization_strategy = ArrayDiscretization()
+            advection_scheme = WENOScheme()
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         length(get_eqs(sys))
@@ -925,21 +869,20 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     gridvec = [0.5 * (1 - cospi(i / 40)) for i in 0:40]
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => gridvec], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-4)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
 
     # the kernel is traced once, so the equation count is resolution independent
     counts = map([40, 80]) do n
         disc = MOLFiniteDifference(
             [x => [0.5 * (1 - cospi(i / n)) for i in 0:n]], t;
             advection_scheme = WENOScheme(),
-            discretization_strategy = ArrayDiscretization()
+
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         length(get_eqs(sys))
@@ -1020,14 +963,13 @@ end
         [u(0, x) ~ exp(-100 * (x - 0.3)^2), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         domains, [t, x], [u(t, x)]
     )
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         advdiff, [x => cosgrid(40)], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-4)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
 
     # coupled system: one trace per equation; coupling terms reorder one addition, so
     # parity is to reassociation level (measured ~1e-18) rather than bitwise
@@ -1042,15 +984,13 @@ end
         ],
         domains, [t, x], [u(t, x), v(t, x)]
     )
-    solc_arr, solc_scal, sysc_arr = solve_both(
+    solc_arr, sysc_arr = solve_array(
         coupled, [x => cosgrid(40)], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-4)
     )
     @test solc_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sysc_arr) == 2
-    @test maximum(abs.(solc_arr[u(t, x)] .- solc_scal[u(t, x)])) < 1.0e-12
-    @test maximum(abs.(solc_arr[v(t, x)] .- solc_scal[v(t, x)])) < 1.0e-12
 
     # smallest representable grid (n = 7: three-point core, frame at 2 and 6)
     @named adv = PDESystem(
@@ -1058,14 +998,13 @@ end
         [u(0, x) ~ exp(-100 * (x - 0.3)^2), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         domains, [t, x], [u(t, x)]
     )
-    sol7_arr, sol7_scal, sys7_arr = solve_both(
+    sol7_arr, sys7_arr = solve_array(
         adv, [x => cosgrid(6)], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-4)
     )
     @test sol7_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys7_arr) == 1
-    @test sol7_arr[u(t, x)] == sol7_scal[u(t, x)]
 end
 
 @testset "Periodic nonuniform WENO: minimal grid, guards" begin
@@ -1092,19 +1031,13 @@ end
         Dt(w(t, x, y)) ~ -Dx(w(t, x, y)) - Dy(w(t, x, y)),
         bcs2, dom2, [t, x, y], [w(t, x, y)]
     )
-    disc2(strat) = MOLFiniteDifference(
-        [x => cosgrid(20), y => 0.05], t; advection_scheme = WENOScheme(),
-        discretization_strategy = strat
+    sol2, sys2 = solve_array(
+        pdesys2, [x => cosgrid(20), y => 0.05], t;
+        disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-4)
     )
-    @test_throws AssertionError symbolic_discretize(
-        pdesys2, disc2(ScalarizedDiscretization())
-    )
-
-    strict2 = disc2(StrictArrayDiscretization())
-    sys2, _ = symbolic_discretize(pdesys2, strict2)
     interior2 = filter(isinterioreq, get_eqs(sys2))
     @test !isempty(interior2) && all(isarrayeq, interior2)
-    sol2 = solve(discretize(pdesys2, strict2), SSPRK22(); dt = 1.0e-4)
     @test sol2.retcode == SciMLBase.ReturnCode.Success
     xs2, ys2, T2 = sol2[x], sol2[y], sol2[t][end]
     exact2 = [
@@ -1117,8 +1050,11 @@ end
         Dt(w(t, x, y)) ~ -Dx(w(t, x, y)) - Dy(w(t, x, y)) + 0.01 * Dx(Dy(w(t, x, y))),
         bcs2, dom2, [t, x, y], [w(t, x, y)]
     )
-    @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
-        pdesys2m, strict2
+    @test_throws AssertionError symbolic_discretize(
+        pdesys2m,
+        MOLFiniteDifference(
+            [x => cosgrid(20), y => 0.05], t; advection_scheme = WENOScheme()
+        )
     )
 
     # smallest grid the boundary extrapolator admits (7 points); every window wraps
@@ -1127,13 +1063,13 @@ end
         [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
         dom1, [t, x], [u(t, x)]
     )
-    sol7_arr, sol7_scal, _ = solve_both(
+    sol7_arr, sys7_arr = solve_array(
         adv, [x => cosgrid(6)], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-4)
     )
     @test sol7_arr.retcode == SciMLBase.ReturnCode.Success
-    @test sol7_arr[u(t, x)] == sol7_scal[u(t, x)]
+    @test narrayeqs_interior(sys7_arr) == 1
 
     # linear stencils still have no seam form on a nonuniform grid
     @named advdiffp = PDESystem(
@@ -1141,12 +1077,11 @@ end
         [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
         dom1, [t, x], [u(t, x)]
     )
-    strictmix = MOLFiniteDifference(
-        [x => cosgrid(20)], t; discretization_strategy = StrictArrayDiscretization(),
-        advection_scheme = WENOScheme()
-    )
-    @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
-        advdiffp, strictmix
+    @test_throws AssertionError symbolic_discretize(
+        advdiffp,
+        MOLFiniteDifference(
+            [x => cosgrid(20)], t; advection_scheme = WENOScheme()
+        )
     )
 end
 
@@ -1167,25 +1102,23 @@ end
         Dt(w(t, x, y)) ~ -Dx(w(t, x, y)) - Dy(w(t, x, y)),
         bcs2, dom2, [t, x, y], [w(t, x, y)]
     )
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => 0.05, y => 0.05], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[w(t, x, y)] == sol_scal[w(t, x, y)]
 
     # mixed grid: x traces the uniform kernel, y goes through the coefficient split
     gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
-    solm_arr, solm_scal, sysm_arr = solve_both(
+    solm_arr, sysm_arr = solve_array(
         pdesys, [x => 0.05, y => gridvec], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
     )
     @test solm_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sysm_arr) == 1
-    @test solm_arr[w(t, x, y)] == solm_scal[w(t, x, y)]
 
     # a trace and central differences in one 2D equation
     Dxx = Differential(x)^2
@@ -1195,23 +1128,14 @@ end
             0.05 * (Dxx(w(t, x, y)) + Dyy(w(t, x, y))),
         bcs2, dom2, [t, x, y], [w(t, x, y)]
     )
-    sold_arr, sold_scal, sysd_arr = solve_both(
+    sold_arr, sysd_arr = solve_array(
         advdiff2d, [x => 0.05, y => 0.05], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
     )
     @test sold_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sysd_arr) == 1
-    @test sold_arr[w(t, x, y)] == sold_scal[w(t, x, y)]
 
-    # and both forms pass strict mode
-    strict2 = MOLFiniteDifference(
-        [x => 0.05, y => gridvec], t;
-        discretization_strategy = StrictArrayDiscretization(),
-        advection_scheme = WENOScheme()
-    )
-    sys_strict2, _ = symbolic_discretize(pdesys, strict2)
-    @test narrayeqs_interior(sys_strict2) == 1
 end
 
 @testset "User defined functional advection schemes" begin
@@ -1230,14 +1154,13 @@ end
     scheme = FunctionalScheme{3, 1}(
         central3, [nothing], [nothing], false, []; name = "central3"
     )
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => 0.02], t;
         disc_kwargs = (; advection_scheme = scheme), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x)] == sol_scal[u(t, x)]
 
     # A scheme that reads the grid coordinate falls back: a trace cannot reproduce the
     # scalar path's Float64 coordinate folds digit for digit.
@@ -1245,14 +1168,13 @@ end
     xscheme = FunctionalScheme{3, 1}(
         coord3, [nothing], [nothing], false, []; name = "coord3"
     )
-    sol_arr2, sol_scal2, sys_arr2 = solve_both(
+    sol_arr2, sys_arr2 = solve_array(
         pdesys, [x => 0.02], t;
         disc_kwargs = (; advection_scheme = xscheme), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr2.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr2) == 0
-    @test sol_arr2[u(t, x)] == sol_scal2[u(t, x)]
 
     # A nonuniform scheme without an `array_scheme_split` falls back; the pointwise
     # result is untouched.
@@ -1261,14 +1183,13 @@ end
         nu3, [nothing], [nothing], true, []; name = "nu3"
     )
     gridvec = [0.5 * (1 - cospi(i / 40)) for i in 0:40]
-    sol_arr3, sol_scal3, sys_arr3 = solve_both(
+    sol_arr3, sys_arr3 = solve_array(
         pdesys, [x => gridvec], t;
         disc_kwargs = (; advection_scheme = nuscheme), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-4)
     )
     @test sol_arr3.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr3) == 0
-    @test sol_arr3[u(t, x)] == sol_scal3[u(t, x)]
 
     # A trace failure (hard branch on coordinates, which are symbols while tracing)
     # falls back, not errors.
@@ -1276,28 +1197,26 @@ end
     bscheme = FunctionalScheme{3, 1}(
         xbranch, [nothing], [nothing], false, []; name = "xbranch"
     )
-    sol_arr4, sol_scal4, sys_arr4 = solve_both(
+    sol_arr4, sys_arr4 = solve_array(
         pdesys, [x => 0.02], t;
         disc_kwargs = (; advection_scheme = bscheme), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr4.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr4) == 0
-    @test sol_arr4[u(t, x)] == sol_scal4[u(t, x)]
 
     # A time-dependent flux traces fine: `t` stays symbolic in the array equation.
     tflux(u, p, t, x, dx) = (1 + 0.1 * t) * (u[3] - u[1]) / (2 * dx)
     tscheme = FunctionalScheme{3, 1}(
         tflux, [nothing], [nothing], false, []; name = "tflux"
     )
-    sol_arr5, sol_scal5, sys_arr5 = solve_both(
+    sol_arr5, sys_arr5 = solve_array(
         pdesys, [x => 0.02], t;
         disc_kwargs = (; advection_scheme = tscheme), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr5.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr5) == 1
-    @test sol_arr5[u(t, x)] == sol_scal5[u(t, x)]
 end
 
 @testset "WENO advection of a nonlinear flux (Burgers)" begin
@@ -1314,17 +1233,16 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => 0.02], t;
         disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
         kwsolve = (; dt = 1.0e-4)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test maximum(abs.(sol_arr[u(t, x)] .- sol_scal[u(t, x)])) < 1.0e-14
 end
 
-@testset "Stationary (NonlinearProblem) still works with ArrayDiscretization" begin
+@testset "Stationary systems still produce a NonlinearProblem" begin
     @parameters x
     @variables u(..)
     Dxx = Differential(x)^2
@@ -1334,25 +1252,10 @@ end
     domains = [x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem([eq], bcs, domains, [x], [u(x)])
 
-    disc_arr = MOLFiniteDifference(
-        [x => 0.05]; discretization_strategy = ArrayDiscretization()
-    )
-    disc_scal = MOLFiniteDifference(
-        [x => 0.05]; discretization_strategy = ScalarizedDiscretization()
-    )
-    prob = discretize(pdesys, disc_arr)
-    prob_scal = discretize(pdesys, disc_scal)
-    # `mtkcompile` tears this linear system down to a single unknown, for which the
-    # solver's progress-based stall criterion can trip while the returned solution is
-    # fully converged: locally the scalar path reports `Stalled` under `TrustRegion` and
-    # `Success` under `NewtonRaphson`, with the two solutions agreeing to 1.1e-14, and
-    # the array path reports `Success` under all three. The retcode therefore tests the
-    # solver's convergence reporting on a degenerate system rather than this strategy, so
-    # assert the solution itself (a stronger check: a non-converged solve fails these).
+    disc = MOLFiniteDifference([x => 0.05])
+    prob = discretize(pdesys, disc)
     sol = solve(prob, NewtonRaphson())
-    sol_scal = solve(prob_scal, NewtonRaphson())
     xs = sol[x]
-    @test sol[u(x)] ≈ sol_scal[u(x)] rtol = 1.0e-8
     @test sol[u(x)] ≈ sinpi.(xs) atol = 1.0e-2
     @test all(isfinite, sol[u(x)])
 end
@@ -1385,19 +1288,12 @@ end
         initial_conditions = Dict(p => [1.5, 2.0], q => [1.2, 1.8])
     )
 
-    disc_arr = MOLFiniteDifference(
-        [x => 0.1], t; discretization_strategy = ArrayDiscretization()
-    )
-    disc_scal = MOLFiniteDifference(
-        [x => 0.1], t; discretization_strategy = ScalarizedDiscretization()
-    )
-    prob_arr = discretize(pdesys, disc_arr)
-    prob_scal = discretize(pdesys, disc_scal)
+    disc = MOLFiniteDifference([x => 0.1], t)
+    prob_arr = ode_discretize(pdesys, disc)
     sol_arr = solve(prob_arr, Rodas4(); reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.2)
-    sol_scal = solve(prob_scal, Rodas4(); reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.2)
     @test SciMLBase.successful_retcode(sol_arr)
     for i in 1:n_comp
-        @test sol_arr[u(t, x)[i]] ≈ sol_scal[u(t, x)[i]] rtol = 1.0e-6
+        @test all(isfinite, sol_arr[u(t, x)[i]])
     end
 end
 
@@ -1438,42 +1334,27 @@ end
         ]
         eq = Dt(u(t, x)) ~ advection + 0.05 * Dxx(u(t, x))
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], ps)
-        sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+        sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
         @test any(eq -> hasoperation(eq, ifelse), get_eqs(sys_arr))
         @test narrayeqs_interior(sys_arr) == 1
-        @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
     end
 
     # A coefficient that varies over the grid still needs the per-point surrogate, since
     # `ifelse` cannot broadcast over a symbolic array condition.
     eq = Dt(u(t, x)) ~ -(1 + x) * Dx(u(t, x)) + 0.05 * Dxx(u(t, x))
     @named pdesys_x = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys_x, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys_x, [x => 0.05], t)
     @test !any(eq -> hasoperation(eq, ifelse), get_eqs(sys_arr))
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
 end
 
-@testset "Default strategy is unchanged (opt-in)" begin
-    # This strategy is opt-in: existing code must keep getting the scalarized
-    # discretization, so that adding it cannot change any current user's results.
-    @parameters t x
-    disc_default = MOLFiniteDifference([x => 0.1], t)
-    @test disc_default.disc_strategy isa ScalarizedDiscretization
-
-    disc_steady = MOLFiniteDifference([x => 0.1])
-    @test disc_steady.disc_strategy isa ScalarizedDiscretization
-
-    disc_opt = MOLFiniteDifference(
-        [x => 0.1], t; discretization_strategy = ArrayDiscretization()
-    )
-    @test disc_opt.disc_strategy isa ArrayDiscretization
+@testset "discretization strategy types were removed" begin
+    @test !isdefined(MethodOfLines, :ScalarizedDiscretization)
+    @test !isdefined(MethodOfLines, :ArrayDiscretization)
+    @test !isdefined(MethodOfLines, :StrictArrayDiscretization)
 end
 
 @testset "Interior representation is independent of grid resolution" begin
-    # The point of the array form: one interior equation whose expression size does not
-    # grow with the grid, where the scalarized form emits one equation per point. This is
-    # asserted structurally rather than by timing, but it is what makes generated code
-    # compile in constant rather than linear time (see the PR benchmark).
+    # One interior equation whose expression size does not grow with the grid.
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -1497,19 +1378,9 @@ end
     )
 
     sizes = map([21, 81]) do n
-        disc_a = MOLFiniteDifference(
-            [x => 1 / (n - 1)], t; discretization_strategy = ArrayDiscretization()
-        )
-        disc_s = MOLFiniteDifference(
-            [x => 1 / (n - 1)], t;
-            discretization_strategy = ScalarizedDiscretization()
-        )
-        sys_a, _ = symbolic_discretize(pdesys, disc_a)
-        sys_s, _ = symbolic_discretize(pdesys, disc_s)
-        (;
-            n, arr = interior_size(sys_a), scal = interior_size(sys_s),
-            narr = narrayeqs_interior(sys_a),
-        )
+        disc = MOLFiniteDifference([x => 1 / (n - 1)], t)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        (; n, size = interior_size(sys), narr = narrayeqs_interior(sys))
     end
 
     coarse, fine = sizes
@@ -1517,178 +1388,35 @@ end
     @test coarse.narr == 1
     @test fine.narr == 1
     # array interior expression does not grow with the grid
-    @test fine.arr == coarse.arr
-    # the scalarized interior does grow, roughly in proportion to the point count
-    @test fine.scal > 3 * coarse.scal
+    @test fine.size == coarse.size
 end
 
-@testset "StrictArrayDiscretization errors instead of falling back" begin
+@testset "unsupported patterns fall back to pointwise equations" begin
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
     Dx = Differential(x)
     Dxx = Differential(x)^2
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
-    strict = MOLFiniteDifference(
-        [x => 0.1], t; discretization_strategy = StrictArrayDiscretization()
-    )
-
-    # Patterns with no slice representation must raise rather than silently discretize
-    # pointwise.
-    unsupported = [
+    cases = [
         (
-            "off-edge boundary sampling",
             Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 0.5),
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         ),
         (
-            "derivative of boundary value",
             Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 1)),
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         ),
         (
-            "time-literal in interior",
             Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, x),
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         ),
     ]
-    for (name, eq, bcs) in unsupported
+    for (eq, bcs) in cases
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-        err = try
-            symbolic_discretize(pdesys, strict)
-            nothing
-        catch e
-            e
-        end
-        @test err isa MethodOfLines.ArrayDiscretizationError
-        @test !occursin("BoundsError", err.msg)
-        if name == "time-literal in interior"
-            @test occursin("time-literal", err.msg)
-        end
-        # the permissive strategy still handles it, pointwise
-        lenient = MOLFiniteDifference(
-            [x => 0.1], t; discretization_strategy = ArrayDiscretization()
-        )
-        sys, _ = symbolic_discretize(pdesys, lenient)
+        sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => 0.1], t))
         @test narrayeqs_interior(sys) == 0
     end
-
-    @named bval_sys = PDESystem(
-        Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1),
-        [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
-        domains, [t, x], [u(t, x)]
-    )
-    sys_bval, _ = symbolic_discretize(bval_sys, strict)
-    @test narrayeqs_interior(sys_bval) == 1
-    sol_bval_arr, sol_bval_scal, _ = solve_both(bval_sys, [x => 0.1], t)
-    @test maximum(abs.(sol_bval_arr[u(t, x)] .- sol_bval_scal[u(t, x)])) == 0.0
-
-    # A supported equation must go through strict mode unchanged.
-    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
-    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
-    @named ok_sys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-    sys_strict, _ = symbolic_discretize(ok_sys, strict)
-    @test narrayeqs_interior(sys_strict) == 1
-
-    # Nonlinear laplacians are supported and must go through strict mode too.
-    @named nllap_sys = PDESystem(
-        Dt(u(t, x)) ~ Dx(u(t, x) * Dx(u(t, x))),
-        [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
-        domains, [t, x], [u(t, x)]
-    )
-    sys_nllap, _ = symbolic_discretize(nllap_sys, strict)
-    @test narrayeqs_interior(sys_nllap) == 1
-
-    # Spherical laplacians too, in both cardinalized shapes.
-    @named sph_sys = PDESystem(
-        Dt(u(t, x)) ~ Dx(x^2 * Dx(u(t, x))) / x^2,
-        [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
-        domains, [t, x], [u(t, x)]
-    )
-    sys_sph, _ = symbolic_discretize(sph_sys, strict)
-    @test narrayeqs_interior(sys_sph) == 1
-    @named sph_bare_sys = PDESystem(
-        Dx(x^2 * Dx(u(t, x))) / x^2 ~ Dt(u(t, x)),
-        [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0],
-        domains, [t, x], [u(t, x)]
-    )
-    sys_sph_bare, _ = symbolic_discretize(sph_bare_sys, strict)
-    @test narrayeqs_interior(sys_sph_bare) == 1
-
-    # Periodic boundaries are supported: the points whose stencils wrap over the seam are
-    # pointwise for the same structural reason the frame is, so strict mode accepts them.
-    @named periodic_sys = PDESystem(
-        eq, [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)], domains, [t, x], [u(t, x)]
-    )
-    sys_periodic, _ = symbolic_discretize(periodic_sys, strict)
-    @test narrayeqs_interior(sys_periodic) == 1
-
-    # Frame points near a boundary are pointwise under either strategy because their
-    # stencils genuinely differ; that is structural, not an unsupported pattern, so
-    # strict mode must accept it.
-    strict4 = MOLFiniteDifference(
-        [x => 0.05], t; discretization_strategy = StrictArrayDiscretization(),
-        approx_order = 4
-    )
-    sys4, _ = symbolic_discretize(ok_sys, strict4)
-    @test narrayeqs_interior(sys4) == 1
-    @test length(get_eqs(sys4)) > 3   # array interior + BCs + scalar frame equations
-
-    # WENO is supported on uniform and (through its coefficient split) nonuniform
-    # grids, including periodic nonuniform directions; a nonuniform scheme without a
-    # split has no traced form and errors.
-    @named adv = PDESystem(
-        Dt(u(t, x)) ~ -Dx(u(t, x)),
-        [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
-        domains, [t, x], [u(t, x)]
-    )
-    strict_nu = MOLFiniteDifference(
-        [x => [0.5 * (1 - cospi(i / 20)) for i in 0:20]], t;
-        discretization_strategy = StrictArrayDiscretization(),
-        advection_scheme = WENOScheme()
-    )
-    sys_nu, _ = symbolic_discretize(adv, strict_nu)
-    @test narrayeqs_interior(sys_nu) == 1
-    @named advp = PDESystem(
-        Dt(u(t, x)) ~ -Dx(u(t, x)),
-        [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
-        domains, [t, x], [u(t, x)]
-    )
-    sys_nup, _ = symbolic_discretize(advp, strict_nu)
-    @test narrayeqs_interior(sys_nup) == 1
-    strict_weno = MOLFiniteDifference(
-        [x => 0.05], t; discretization_strategy = StrictArrayDiscretization(),
-        advection_scheme = WENOScheme()
-    )
-    sys_weno, _ = symbolic_discretize(adv, strict_weno)
-    @test narrayeqs_interior(sys_weno) == 1
-    nu3strict(u_, p_, t_, x_, dx_) = (u_[3] - u_[1]) / (x_[3] - x_[1])
-    strict_nosplit = MOLFiniteDifference(
-        [x => [0.5 * (1 - cospi(i / 20)) for i in 0:20]], t;
-        discretization_strategy = StrictArrayDiscretization(),
-        advection_scheme = FunctionalScheme{3, 1}(
-            nu3strict, [nothing], [nothing], true, []; name = "nu3"
-        )
-    )
-    @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(
-        adv, strict_nosplit
-    )
-
-    # The error names the offending equation and the reason.
-    @named bad = PDESystem(
-        Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 1)),
-        [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
-        domains, [t, x], [u(t, x)]
-    )
-    msg = try
-        symbolic_discretize(bad, strict)
-        ""
-    catch e
-        sprint(showerror, e)
-    end
-    @test occursin("StrictArrayDiscretization", msg)
-    @test occursin("Reason:", msg)
-    @test occursin("ArrayDiscretization()", msg)
 end
 
 @testset "Boundary conditions collapse to one equation per face" begin
@@ -1715,8 +1443,7 @@ end
 
     counts = map([8, 16]) do n
         disc = MOLFiniteDifference(
-            [x => 1 / (n - 1), y => 1 / (n - 1)], t;
-            discretization_strategy = ArrayDiscretization()
+            [x => 1 / (n - 1), y => 1 / (n - 1)], t
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         length(get_eqs(sys))
@@ -1726,19 +1453,12 @@ end
     # one interior equation plus one per face
     @test counts[1] <= 12
 
-    # and the solution still matches the scalar path exactly
-    sols = map(
-        [ArrayDiscretization(), ScalarizedDiscretization()]
-    ) do st
-        disc = MOLFiniteDifference(
-            [x => 0.1, y => 0.1], t; discretization_strategy = st
-        )
-        solve(
-            discretize(pdesys, disc), Rodas4();
-            reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.025
-        )[u(t, x, y)]
-    end
-    @test sols[1] ≈ sols[2] rtol = 1.0e-8
+    disc = MOLFiniteDifference([x => 0.1, y => 0.1], t)
+    sol = solve(
+        ode_discretize(pdesys, disc), Rodas4();
+        reltol = 1.0e-10, abstol = 1.0e-10, saveat = 0.025
+    )
+    @test successful_retcode(sol)
 end
 
 @testset "Boundary value in interior equation (1D both edges)" begin
@@ -1752,10 +1472,9 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test maximum(abs.(sol_arr[u(t, x)] .- sol_scal[u(t, x)])) == 0.0
     # dx = 0.05 → 21 points: u(t, 0) → [1], u(t, 1) → [21]
     int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
     int_str = string(int_eq)
@@ -1767,7 +1486,7 @@ end
     end
     counts = map([11, 41]) do n
         disc = MOLFiniteDifference(
-            [x => 1 / (n - 1)], t; discretization_strategy = ArrayDiscretization()
+            [x => 1 / (n - 1)], t
         )
         sys, _ = symbolic_discretize(pdesys, disc)
         int = only(filter(isinterioreq, get_eqs(sys)))
@@ -1791,30 +1510,20 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     dxs = [x => 0.05]
-    disc_arr = MOLFiniteDifference(
-        dxs, t; discretization_strategy = ArrayDiscretization()
-    )
-    disc_scal = MOLFiniteDifference(
-        dxs, t; discretization_strategy = ScalarizedDiscretization()
-    )
-    sys_arr, _ = symbolic_discretize(pdesys, disc_arr)
-    prob_arr = discretize(pdesys, disc_arr)
-    prob_scal = discretize(pdesys, disc_scal)
+    disc = MOLFiniteDifference(dxs, t)
+    sys_arr, _ = symbolic_discretize(pdesys, disc)
+    prob_arr = ode_discretize(pdesys, disc)
 
     @test narrayeqs_interior(sys_arr) == 1
     int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
     @test occursin("[21]", string(int_eq))
 
     du_arr = similar(prob_arr.u0)
-    du_scal = similar(prob_scal.u0)
     prob_arr.f(du_arr, prob_arr.u0, prob_arr.p, 0.0)
-    prob_scal.f(du_scal, prob_scal.u0, prob_scal.p, 0.0)
-    @test du_arr == du_scal
     @test maximum(abs.(du_arr)) > 1
 
-    sol_arr, sol_scal, _ = solve_both(pdesys, dxs, t)
+    sol_arr, _ = solve_array(pdesys, dxs, t)
     @test SciMLBase.successful_retcode(sol_arr)
-    @test sol_arr[u(t, x)] ≈ sol_scal[u(t, x)] rtol = 1.0e-6
     @test maximum(abs.(sol_arr[u(t, x)])) > 0.05
 
     @parameters y
@@ -1830,30 +1539,20 @@ end
     ]
     @named pdesys2 = PDESystem(eq2, bcs2, domains2, [t, x, y], [u(t, x, y)])
     dxs2 = [x => 0.1, y => 0.1]
-    disc2_arr = MOLFiniteDifference(
-        dxs2, t; discretization_strategy = ArrayDiscretization()
-    )
-    disc2_scal = MOLFiniteDifference(
-        dxs2, t; discretization_strategy = ScalarizedDiscretization()
-    )
-    sys2, _ = symbolic_discretize(pdesys2, disc2_arr)
-    prob2_arr = discretize(pdesys2, disc2_arr)
-    prob2_scal = discretize(pdesys2, disc2_scal)
+    disc2 = MOLFiniteDifference(dxs2, t)
+    sys2, _ = symbolic_discretize(pdesys2, disc2)
+    prob2_arr = ode_discretize(pdesys2, disc2)
 
     @test narrayeqs_interior(sys2) == 1
     face_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys2)))
     @test occursin("1:1", string(face_eq))
 
     du2_arr = similar(prob2_arr.u0)
-    du2_scal = similar(prob2_scal.u0)
     prob2_arr.f(du2_arr, prob2_arr.u0, prob2_arr.p, 0.0)
-    prob2_scal.f(du2_scal, prob2_scal.u0, prob2_scal.p, 0.0)
-    @test du2_arr == du2_scal
     @test maximum(abs.(du2_arr)) > 1
 
-    sol2_arr, sol2_scal, _ = solve_both(pdesys2, dxs2, t)
+    sol2_arr, _ = solve_array(pdesys2, dxs2, t)
     @test SciMLBase.successful_retcode(sol2_arr)
-    @test sol2_arr[u(t, x, y)] ≈ sol2_scal[u(t, x, y)] rtol = 1.0e-6
     @test maximum(abs.(sol2_arr[u(t, x, y)])) > 0.05
 end
 
@@ -1876,10 +1575,9 @@ end
         Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(t, 0, y),
         bcs, domains, [t, x, y], [u(t, x, y)]
     )
-    sol_arr, sol_scal, sys_arr = solve_both(face_sys, [x => 0.1, y => 0.1], t)
+    sol_arr, sys_arr = solve_array(face_sys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test maximum(abs.(sol_arr[u(t, x, y)] .- sol_scal[u(t, x, y)])) == 0.0
     face_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
     @test occursin("1:1", string(face_eq))
 
@@ -1896,7 +1594,7 @@ end
     )
     dxs_c = [x => 0.1, y => 0.1]
     disc = MOLFiniteDifference(
-        dxs_c, t; discretization_strategy = ArrayDiscretization()
+        dxs_c, t
     )
     sys_corner, _ = symbolic_discretize(corner_sys, disc)
     @test narrayeqs_interior(sys_corner) == 1
@@ -1909,7 +1607,7 @@ end
         @test !occursin("u(t, 0, 0)", s) && !occursin("u(t,0,0)", s)
     end
 
-    prob_c = discretize(corner_sys, disc)
+    prob_c = ode_discretize(corner_sys, disc)
     du_c = similar(prob_c.u0)
     prob_c.f(du_c, prob_c.u0, prob_c.p, 0.0)
     @test maximum(abs.(du_c)) > 1
@@ -1936,11 +1634,9 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.05], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 2
-    @test maximum(abs.(sol_arr[u(t, x)] .- sol_scal[u(t, x)])) == 0.0
-    @test maximum(abs.(sol_arr[v(t, x)] .- sol_scal[v(t, x)])) == 0.0
 end
 
 @testset "Boundary value in interior on a nonuniform grid" begin
@@ -1955,10 +1651,9 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
     gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => gridvec], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => gridvec], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test maximum(abs.(sol_arr[u(t, x)] .- sol_scal[u(t, x)])) == 0.0
 end
 
 @testset "Boundary value as upwind coefficient stays in array form" begin
@@ -1976,7 +1671,7 @@ end
 
     dxs = [x => 0.05]
     disc = MOLFiniteDifference(
-        dxs, t; discretization_strategy = ArrayDiscretization()
+        dxs, t
     )
     sys, _ = symbolic_discretize(pdesys, disc)
     @test narrayeqs_interior(sys) == 1
@@ -1988,13 +1683,7 @@ end
         @test !occursin("u(t, 1)", s) && !occursin("u(t,1)", s)
     end
 
-    strict = MOLFiniteDifference(
-        dxs, t; discretization_strategy = StrictArrayDiscretization()
-    )
-    sys_strict, _ = symbolic_discretize(pdesys, strict)
-    @test narrayeqs_interior(sys_strict) == 1
-
-    prob = discretize(pdesys, disc)
+    prob = ode_discretize(pdesys, disc)
     du = similar(prob.u0)
     prob.f(du, prob.u0, prob.p, 0.0)
     @test all(isfinite, du)
@@ -2018,7 +1707,7 @@ end
 
     dxs = [x => 0.05]
     disc = MOLFiniteDifference(
-        dxs, t; discretization_strategy = ArrayDiscretization()
+        dxs, t
     )
     sys, _ = symbolic_discretize(pdesys, disc)
     @test narrayeqs_interior(sys) == 1
@@ -2029,13 +1718,7 @@ end
         @test !occursin("u(t, 0)", s) && !occursin("u(t,0)", s)
     end
 
-    strict = MOLFiniteDifference(
-        dxs, t; discretization_strategy = StrictArrayDiscretization()
-    )
-    sys_strict, _ = symbolic_discretize(pdesys, strict)
-    @test narrayeqs_interior(sys_strict) == 1
-
-    prob = discretize(pdesys, disc)
+    prob = ode_discretize(pdesys, disc)
     du = similar(prob.u0)
     prob.f(du, prob.u0, prob.p, 0.0)
     @test all(isfinite, du)
@@ -2047,8 +1730,7 @@ end
 @testset "Face boundary value in a doubly periodic domain" begin
     # u(t,0,y) keeps a free argument, so on the four all-singleton wrap boxes the
     # pointwise equation carries it as u(t, 0, <grid value>) after valmaps; the element
-    # rules must key on that form. No scalar parity (boundaryvalfuncs skip interface
-    # faces): prove nothing stays symbolic and the ODE is runnable, in both modes.
+    # rules must key on that form. Prove nothing stays symbolic and the ODE is runnable.
     @parameters t x y
     @variables u(..)
     Dt = Differential(t)
@@ -2065,24 +1747,21 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
     dxs = [x => 0.2, y => 0.2]
 
-    for strategy in (ArrayDiscretization(), StrictArrayDiscretization())
-        disc = MOLFiniteDifference(dxs, t; discretization_strategy = strategy)
-        sys, _ = symbolic_discretize(pdesys, disc)
-        # 3 bands per periodic direction: 5 multi-point boxes in array form, 4
-        # all-singleton wrap boxes as scalar equations.
-        @test narrayeqs_interior(sys) == 5
-        for e in get_eqs(sys)
-            s = string(e)
-            @test !occursin("u(t, 0,", s) && !occursin("u(t,0,", s)
-        end
-        # Each wrap-point equation references the substituted seam element u[1, j].
-        wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
-        @test length(wrap_eqs) == 4
-        @test all(e -> occursin("[1, ", string(e)) || occursin("[1,", string(e)), wrap_eqs)
+    disc = MOLFiniteDifference(dxs, t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    # 3 bands per periodic direction: 5 multi-point boxes in array form, 4
+    # all-singleton wrap boxes as scalar equations.
+    @test narrayeqs_interior(sys) == 5
+    for e in get_eqs(sys)
+        s = string(e)
+        @test !occursin("u(t, 0,", s) && !occursin("u(t,0,", s)
     end
+    # Each wrap-point equation references the substituted seam element u[1, j].
+    wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
+    @test length(wrap_eqs) == 4
+    @test all(e -> occursin("[1, ", string(e)) || occursin("[1,", string(e)), wrap_eqs)
 
-    disc = MOLFiniteDifference(dxs, t; discretization_strategy = ArrayDiscretization())
-    prob = discretize(pdesys, disc)
+    prob = ode_discretize(pdesys, disc)
     du = similar(prob.u0)
     prob.f(du, prob.u0, prob.p, 0.0)
     @test all(isfinite, du)
@@ -2093,7 +1772,7 @@ end
 # Staggered grids: each variable's alignment fixes its interior stencil taps, so the
 # interior collapses to one array equation per PDE. Staggered problems build
 # SplitODEProblems without symbolic indexing, so solutions are compared positionally.
-function staggered_wave(dx; periodic = false, strategy = ArrayDiscretization())
+function staggered_wave(dx; periodic = false)
     @parameters t x
     @variables ρ(..) ϕ(..)
     Dt = Differential(t)
@@ -2119,7 +1798,7 @@ function staggered_wave(dx; periodic = false, strategy = ArrayDiscretization())
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
     disc = MOLFiniteDifference(
         [x => dx], t; grid_align = MethodOfLines.StaggeredGrid(),
-        edge_aligned_var = ϕ(t, x), discretization_strategy = strategy
+        edge_aligned_var = ϕ(t, x)
     )
     return pdesys, disc
 end
@@ -2135,16 +1814,10 @@ end
     sys2, _ = symbolic_discretize(pdesys2, disc2)
     @test length(get_eqs(sys2)) == length(get_eqs(sys))
 
-    pdesys_s, disc_s = staggered_wave(0.125; strategy = ScalarizedDiscretization())
     prob_arr = discretize(pdesys, disc)
-    prob_scal = discretize(pdesys_s, disc_s)
-    @test prob_arr.u0 == prob_scal.u0
     dt = (0.125 / 5.0)^2
     sol_arr = solve(prob_arr, SplitEuler(), dt = dt)
-    sol_scal = solve(prob_scal, SplitEuler(), dt = dt)
     @test successful_retcode(sol_arr)
-    @test successful_retcode(sol_scal)
-    @test Array(sol_arr) ≈ Array(sol_scal) atol = 1.0e-12
 end
 
 @testset "Staggered 1D wave equation, periodic BCs" begin
@@ -2156,26 +1829,10 @@ end
     sys2, _ = symbolic_discretize(pdesys2, disc2)
     @test length(get_eqs(sys2)) == length(get_eqs(sys))
 
-    pdesys_s, disc_s = staggered_wave(
-        0.125; periodic = true, strategy = ScalarizedDiscretization()
-    )
     prob_arr = discretize(pdesys, disc)
-    prob_scal = discretize(pdesys_s, disc_s)
-    @test prob_arr.u0 == prob_scal.u0
     dt = (0.125 / 5.0)^2
     sol_arr = solve(prob_arr, SplitEuler(), dt = dt)
-    sol_scal = solve(prob_scal, SplitEuler(), dt = dt)
     @test successful_retcode(sol_arr)
-    @test successful_retcode(sol_scal)
-    @test Array(sol_arr) ≈ Array(sol_scal) atol = 1.0e-12
-end
-
-@testset "Staggered grid under StrictArrayDiscretization" begin
-    # 1D staggered boundaries are single points — benign fallbacks — so strict mode
-    # accepts the whole system.
-    pdesys, disc = staggered_wave(0.125; strategy = StrictArrayDiscretization())
-    sys, _ = symbolic_discretize(pdesys, disc)
-    @test narrayeqs_interior(sys) == 2
 end
 
 @testset "2D mixed derivative" begin
@@ -2197,17 +1854,15 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 
     # Fourth order widens both stencils of the tensor product at once
-    sol_arr, sol_scal, sys_arr = solve_both(
+    sol_arr, sys_arr = solve_array(
         pdesys, [x => 0.1, y => 0.1], t; disc_kwargs = (; approx_order = 4)
     )
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
 @testset "2D mixed derivative with a variable coefficient" begin
@@ -2230,10 +1885,9 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
 @testset "Mixed derivative on a nonuniform grid" begin
@@ -2259,10 +1913,9 @@ end
 
     xgrid = collect(range(0.0, 1.0, length = 11)) .^ 1.2
     ygrid = collect(range(0.0, 1.0, length = 11)) .^ 0.9
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => xgrid, y => ygrid], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => xgrid, y => ygrid], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
 @testset "Mixed derivative with a periodic direction" begin
@@ -2287,11 +1940,10 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.1, y => 0.1], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # one box per band of the periodic decomposition, a count independent of the grid
     @test narrayeqs_interior(sys_arr) == 2
-    @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
 end
 
 @testset "3D mixed derivative" begin
@@ -2317,10 +1969,9 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y, z], [u(t, x, y, z)])
 
-    sol_arr, sol_scal, sys_arr = solve_both(pdesys, [x => 0.2, y => 0.2, z => 0.2], t)
+    sol_arr, sys_arr = solve_array(pdesys, [x => 0.2, y => 0.2, z => 0.2], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
-    @test sol_arr[u(t, x, y, z)] ≈ sol_scal[u(t, x, y, z)] rtol = 1.0e-6
 end
 
 @testset "Mixed derivative alone sets the band width" begin
@@ -2346,11 +1997,10 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
     for order in (2, 4, 6)
-        sol_arr, sol_scal, sys_arr = solve_both(
+        sol_arr, sys_arr = solve_array(
             pdesys, [x => 0.05, y => 0.05], t; disc_kwargs = (; approx_order = order)
         )
         @test narrayeqs_interior(sys_arr) == 1
-        @test sol_arr[u(t, x, y)] ≈ sol_scal[u(t, x, y)] rtol = 1.0e-6
     end
 end
 
@@ -2374,14 +2024,7 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    lenient = MOLFiniteDifference(
-        [x => 0.1, y => 0.1], t; discretization_strategy = ArrayDiscretization()
-    )
-    sys, _ = symbolic_discretize(pdesys, lenient)
+    disc = MOLFiniteDifference([x => 0.1, y => 0.1], t)
+    sys, _ = symbolic_discretize(pdesys, disc)
     @test narrayeqs_interior(sys) == 0
-
-    strict = MOLFiniteDifference(
-        [x => 0.1, y => 0.1], t; discretization_strategy = StrictArrayDiscretization()
-    )
-    @test_throws MethodOfLines.ArrayDiscretizationError symbolic_discretize(pdesys, strict)
 end

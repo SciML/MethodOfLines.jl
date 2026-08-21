@@ -33,12 +33,12 @@ dx = 0.1
 order = 2
 discretization = MOLFiniteDifference([x => dx], t)
 
-# Convert the PDE problem into an ODE problem
+# Convert the PDE system into a DAE problem
 prob = discretize(pdesys, discretization)
 
-# Solve ODE problem
+# Solve the DAE problem
 using OrdinaryDiffEq
-sol = solve(prob, Tsit5(), saveat = 0.2)
+sol = solve(prob; saveat = 0.2)
 
 # Plot results and compare with exact solution
 discrete_x = sol[x]
@@ -89,12 +89,12 @@ dx = 0.01
 order = 2
 discretization = MOLFiniteDifference([x => dx], t)
 
-# Convert the PDE problem into an ODE problem
+# Convert the PDE system into a DAE problem
 prob = discretize(pdesys, discretization)
 
-# Solve ODE problem
+# Solve the DAE problem
 using OrdinaryDiffEq
-sol = solve(prob, Tsit5(), saveat = 0.2)
+sol = solve(prob; saveat = 0.2)
 
 # Plot results and compare with exact solution
 discrete_x = sol[x]
@@ -146,12 +146,12 @@ dx = 0.05
 order = 2
 discretization = MOLFiniteDifference([x => dx], t)
 
-# Convert the PDE problem into an ODE problem
+# Convert the PDE system into a DAE problem
 prob = discretize(pdesys, discretization)
 
-# Solve ODE problem
+# Solve the DAE problem
 using OrdinaryDiffEq
-sol = solve(prob, Tsit5(), saveat = 0.2)
+sol = solve(prob; saveat = 0.2)
 
 # Plot results and compare with exact solution
 discrete_x = sol[x]

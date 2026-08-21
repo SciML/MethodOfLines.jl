@@ -6,6 +6,7 @@ using ModelingToolkit
 using ModelingToolkit: get_unknowns,
     get_eqs, get_bcs, get_dvs,
     get_ivs
+using ModelingToolkitBase: initialization_equations
 using SymbolicIndexingInterface
 using SymbolicUtils, Symbolics
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term,
@@ -61,7 +62,6 @@ import SciMLBase.discretize
 include("interface/grid_types.jl")
 include("interface/scheme_types.jl")
 include("interface/callbacks.jl")
-include("interface/disc_strategy_types.jl")
 include("interface/MOLFiniteDifference.jl")
 
 include("discretization/discretize_vars.jl")
@@ -112,6 +112,7 @@ include("discretization/staggered_discretize.jl")
 # Main
 include("scalar_discretization.jl")
 include("array_discretization.jl")
+include("dae_discretization.jl")
 include("MOL_discretization.jl")
 
 ## PrecompileTools
@@ -121,6 +122,5 @@ include("precompile.jl")
 export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
     edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme, MOLDiscCallback
-export ScalarizedDiscretization, ArrayDiscretization, StrictArrayDiscretization
 
 end

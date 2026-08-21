@@ -11,15 +11,7 @@ function PDEBase.interface_errors(
     if !any(s -> discretization.advection_scheme isa s, [UpwindScheme, FunctionalScheme])
         throw(ArgumentError("Only `UpwindScheme()` and `FunctionalScheme()` are supported advection schemes. Got $(typeof(discretization.advection_scheme))."))
     end
-    return if !(
-            typeof(discretization.disc_strategy) ∈
-                [
-                ScalarizedDiscretization, ArrayDiscretization,
-                StrictArrayDiscretization,
-            ]
-        )
-        throw(ArgumentError("Only `ScalarizedDiscretization()`, `ArrayDiscretization()` and `StrictArrayDiscretization()` are supported discretization strategies."))
-    end
+    return
 end
 
 # Single predicate shared by check_boundarymap and validate_interface_orders.
@@ -214,4 +206,82 @@ function generate_code(
     return open(filename, "a") do io
         println(io, code)
     end
+end
+
+"""
+    discretize(pdesys, discretization;
+               analytic = nothing, checks = true, fallback = true, kwargs...)
+
+Discretize `pdesys` and return a problem ready to `solve`.
+
+For a time-dependent system this builds a `DAEProblem`. MethodOfLines emits residuals of
+the form `D(u) - f ~ 0`, which are already implicit-DAE form, so no `mtkcompile` is
+needed and the array (slice-form) equations reach the generated code intact. Calling
+`solve(prob)` selects the default DAE algorithm.
+
+A few systems cannot be posed as a first-order DAE — those second order in time, and
+those whose initialization equations `BrownFullBasicInit` would not honour. Those fall
+back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations. Pass
+`fallback = false` to make that an error instead.
+
+Supplying `analytic` selects the compiled `ODEProblem` path because analytic solutions
+are attached through the compiled `ODEFunction`.
+
+Time-independent systems have no derivative to keep implicit and discretize to a
+`NonlinearProblem` as before.
+
+To build a problem yourself — an `ODEProblem`, or anything else — start from
+`symbolic_discretize`:
+
+```julia
+sys, tspan = symbolic_discretize(pdesys, discretization)
+prob = ODEProblem(mtkcompile(sys), nothing, tspan)
+```
+"""
+function SciMLBase.discretize(
+        pdesys::PDESystem, discretization::MOLFiniteDifference;
+        analytic = nothing, checks = true, fallback = true, kwargs...
+    )
+    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization; checks = checks)
+    if tspan === nothing
+        return _stationary_problem(sys, discretization; kwargs...)
+    end
+    ode_path = analytic !== nothing
+    if !ode_path
+        try
+            return _dae_problem(sys, tspan, discretization; kwargs...)
+        catch e
+            e isa InterruptException && rethrow(e)
+            fallback || rethrow(e)
+            @debug "Falling back to `mtkcompile` and an `ODEProblem`: $(sprint(showerror, e))"
+        end
+    end
+    return _ode_problem(sys, tspan, pdesys, discretization; analytic, kwargs...)
+end
+
+function _stationary_problem(sys, discretization::MOLFiniteDifference; kwargs...)
+    simpsys = mtkcompile(sys)
+    PDEBase.add_metadata!(getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
+    u0_guess = Dict(u => 1.0 for u in get_unknowns(simpsys))
+    return NonlinearProblem(
+        simpsys, u0_guess; discretization.kwargs..., kwargs...
+    )
+end
+
+function _ode_problem(
+        sys, tspan, pdesys, discretization::MOLFiniteDifference; analytic = nothing,
+        kwargs...
+    )
+    simpsys = mtkcompile(sys)
+    PDEBase.add_metadata!(
+        getmetadata(simpsys, ModelingToolkit.ProblemTypeCtx, nothing), sys
+    )
+    prob = ODEProblem(simpsys, nothing, tspan; discretization.kwargs..., kwargs...)
+    analytic === nothing && return prob
+    f = ODEFunction(
+        pdesys, discretization; analytic = analytic, discretization.kwargs..., kwargs...
+    )
+    return ODEProblem(
+        f, prob.u0, prob.tspan, prob.p; discretization.kwargs..., kwargs...
+    )
 end

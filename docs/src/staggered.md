@@ -10,7 +10,7 @@ Solvers should be chosen carefully, the only officially supported solver is `Spl
 
 Staggered grid functionality is still in its infancy. Please open issues if unexpected results occur or needed functionality is not present.
 
-Staggered grids are compatible with `discretization_strategy=ArrayDiscretization()`, which emits the interior of each PDE as a single symbolic array equation over slices, keeping the symbolic equation count independent of the grid resolution.
+Staggered grids emit the interior of each PDE as a single symbolic array equation over slices, keeping the symbolic equation count independent of the grid resolution.
 
 ```
 using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
@@ -39,7 +39,8 @@ domains = [t in Interval(0.0, tmax),
 @named pdesys = PDESystem(eq, bcs, domains, [t,x], [ρ(t,x), ϕ(t,x)]);
 
 discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid(), edge_aligned_var=ϕ(t,x));
-prob = discretize(pdesys, discretization);
+sys, tspan = symbolic_discretize(pdesys, discretization)
+prob = ODEProblem(mtkcompile(sys), nothing, tspan);
 
 sol = solve(prob, SplitEuler(), dt=dt);
 ```

@@ -81,7 +81,7 @@ end
     discretization = MOLFiniteDifference([x => dx, y => dy], t)
 
     prob = discretize(pdesys, discretization, advection_scheme = WENOScheme())
-    sol = solve(prob, FBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
     @test SciMLBase.successful_retcode(sol)
 end
 

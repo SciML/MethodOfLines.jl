@@ -83,7 +83,7 @@ end
 
     prob = discretize(pdesys, disc)
 
-    sol = solve(prob, FBDF())
+    sol = solve(prob)
 
     @test SciMLBase.successful_retcode(sol)
 

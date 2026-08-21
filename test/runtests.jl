@@ -109,7 +109,14 @@ run_tests(;
             end
         end,
         "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
-        "Array_Discretization" => joinpath(@__DIR__, "Array_Discretization", "array_discretization.jl"),
+        "Array_Discretization" => function ()
+            @safetestset "Array discretization" begin
+                include(joinpath(@__DIR__, "Array_Discretization", "array_discretization.jl"))
+            end
+            return @safetestset "DAEProblem on the array form" begin
+                include(joinpath(@__DIR__, "Array_Discretization", "dae_problem.jl"))
+            end
+        end,
     ),
     qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),
     all = FUNCTIONAL_GROUPS,

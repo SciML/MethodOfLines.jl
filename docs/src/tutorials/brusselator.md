@@ -103,21 +103,27 @@ order = 2 # This may be increased to improve accuracy of some schemes
 discretization = MOLFiniteDifference([x => N, y => N], t, approx_order = order)
 ```
 
-Next, we discretize the system, converting the `PDESystem` in to an `ODEProblem` or `NonlinearProblem`.
+Next, we discretize the system, converting the `PDESystem` into a `DAEProblem` or
+`NonlinearProblem`.
 
 ```julia
-# Convert the PDE problem into an ODE problem
+# Convert the PDE system into a numerical problem
 println("Discretization:")
 @time prob = discretize(pdesys, discretization)
 ```
 
 ## Solving the problem
 
-Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the `MOLFiniteDifference` constructor. Include these solvers with `using OrdinaryDiffEq` or `using NonlinearSolve`, then call `sol = solve(prob, AppropriateSolver())` or `sol = NonlinearSolve.solve(prob, AppropriateSolver())`. For more information on the available solvers, see the docs for [`DifferentialEquations.jl`](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/), [`NonlinearSolve.jl`](https://docs.sciml.ai/NonlinearSolve/stable/solvers/nonlinear_system_solvers/) and [SteadyStateDiffEq.jl](https://docs.sciml.ai/DiffEqDocs/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl). `Tsit5()` is a good first choice of solver for many problems. Some problems, particularly advection dominated ones, are better solved with [implicit DAE solvers](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/).
+Use an implicit [DAE solver](https://docs.sciml.ai/DiffEqDocs/stable/solvers/dae_solve/)
+for a time-dependent problem, or a NonlinearSolve algorithm when the
+`MOLFiniteDifference` constructor has no time dimension. Include these solvers with
+`using OrdinaryDiffEq` or `using NonlinearSolve`, then call
+`solve(prob, AppropriateSolver())`. Calling `solve(prob)` uses OrdinaryDiffEq's default
+DAE algorithm.
 
 ```julia
 println("Solve:")
-@time sol = solve(prob, TRBDF2(), saveat = 0.1)
+@time sol = solve(prob; saveat = 0.1)
 ```
 
 ## Extracting results

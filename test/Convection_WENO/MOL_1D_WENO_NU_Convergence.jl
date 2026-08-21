@@ -6,6 +6,7 @@ using ModelingToolkit, MethodOfLines, Test, DomainSets
 using OrdinaryDiffEqSSPRK: SSPRK33
 using SciMLBase
 using ModelingToolkit: Differential
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 const L = 2π
 const α = 0.15
@@ -70,8 +71,10 @@ function build_advection_prob(xgrid; v)
     ]
     domains = [t ∈ Interval(0.0, tf), x ∈ Interval(x0, xL)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-    disc = MOLFiniteDifference([x => xgrid], t; advection_scheme = WENOScheme())
-    return discretize(pdesys, disc)
+    disc = MOLFiniteDifference(
+        [x => xgrid], t; advection_scheme = WENOScheme()
+    )
+    return ode_discretize(pdesys, disc)
 end
 
 function solve_error(prob, xgrid; v, c = CFL)
@@ -162,8 +165,10 @@ end
     ]
     domains = [t ∈ Interval(0.0, t_end), x ∈ Interval(-1.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
-    disc = MOLFiniteDifference([x => xg], t; advection_scheme = WENOScheme())
-    prob = discretize(pdesys, disc)
+    disc = MOLFiniteDifference(
+        [x => xg], t; advection_scheme = WENOScheme()
+    )
+    prob = ode_discretize(pdesys, disc)
 
     dxmin = min_cell_width(xg)
     dt = 0.2 * min(dxmin, dxmin^2 / (2 * ν))

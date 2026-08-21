@@ -88,7 +88,7 @@ end
     discretization = MOLFiniteDifference([x => dx], t, approx_order = 4)
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, FBDF())
+    sol = solve(prob)
 end
 
 @testset "KdV Single Soliton equation" begin
@@ -131,7 +131,7 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [x, t], [u(x, t)])
     prob = discretize(pdesys, discretization)
 
-    sol = solve(prob, FBDF(), saveat = 0.1)
+    sol = solve(prob; saveat = 0.1)
 
     @test SciMLBase.successful_retcode(sol)
 

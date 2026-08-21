@@ -1,6 +1,7 @@
 using DomainSets
 using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq
 using OrdinaryDiffEqSDIRK: TRBDF2
+include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 # using Plots
 
@@ -60,12 +61,13 @@ using OrdinaryDiffEqSDIRK: TRBDF2
 
     order = 2
 
-    discretization = MOLFiniteDifference([x => dx, y => dy], t, approx_order = order)
+    discretization = MOLFiniteDifference(
+        [x => dx, y => dy], t; approx_order = order
+    )
 
     #MethodOfLines.generate_code(pdesys, discretization)
-    # Convert the PDE problem into an ODE problem
     println("Discretization:")
-    @time prob = discretize(pdesys, discretization)
+    @time prob = ode_discretize(pdesys, discretization)
 
     println("Solve:")
     @time sol = solve(prob, TRBDF2(), saveat = 0.01)
@@ -119,7 +121,7 @@ using OrdinaryDiffEqSDIRK: TRBDF2
     u0_manual = init_brusselator_2d(xyd_brusselator)
     prob = ODEProblem(brusselator_2d_loop, u0_manual, (0.0, 11.5), p)
 
-    msol = solve(prob, TRBDF2(), saveat = 0.01) # 2.771 s (5452 allocations: 65.73 MiB)
+    msol = solve(prob, TRBDF2(), saveat = 0.01)
 
     @testset "." begin
         for k in div(length(t), 2):length(t)

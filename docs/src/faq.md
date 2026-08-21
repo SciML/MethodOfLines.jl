@@ -71,7 +71,8 @@ domains = [
 discretization = MOLFiniteDifference(
     [x => dx, y => dy], t; advection_scheme = UpwindScheme())
 
-prob = discretize(pdesys, discretization)
+sys, tspan = symbolic_discretize(pdesys, discretization)
+prob = ODEProblem(mtkcompile(sys), nothing, tspan)
 
 sol = solve(prob, SSPRK54(), dt = 0.01, saveat = 0.1)
 
