@@ -1347,14 +1347,10 @@ end
     @test !any(eq -> hasoperation(eq, ifelse), get_eqs(sys_arr))
 end
 
-@testset "discretization strategy options were removed" begin
-    @parameters t x
+@testset "discretization strategy types were removed" begin
     @test !isdefined(MethodOfLines, :ScalarizedDiscretization)
     @test !isdefined(MethodOfLines, :ArrayDiscretization)
     @test !isdefined(MethodOfLines, :StrictArrayDiscretization)
-    @test_throws ArgumentError MOLFiniteDifference(
-        [x => 0.1], t; discretization_strategy = :anything
-    )
 end
 
 @testset "Interior representation is independent of grid resolution" begin

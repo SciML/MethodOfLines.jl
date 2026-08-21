@@ -275,7 +275,6 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    @test_throws ArgumentError MOLFiniteDifference([x => 11], t; use_ODAE = true)
     disc = MOLFiniteDifference([x => 11], t)
     sys, tspan = symbolic_discretize(pdesys, disc)
     prob = ODEProblem(mtkcompile(sys), nothing, tspan)

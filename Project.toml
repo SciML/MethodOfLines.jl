@@ -24,7 +24,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
 [compat]
 Combinatorics = "1"
-DiffEqBase = "7.17.1"
+DiffEqBase = "7.18.1"
 DomainSets = "0.7, 0.8"
 ForwardDiff = "0.10, 1"
 Interpolations = "0.15, 0.16"

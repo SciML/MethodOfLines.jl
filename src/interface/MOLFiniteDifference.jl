@@ -69,16 +69,6 @@ function MOLFiniteDifference(
         upwind_order = nothing, should_transform = true,
         useIR = true, callbacks = [], kwargs...
     )
-    :discretization_strategy in keys(kwargs) && throw(
-        ArgumentError(
-            "`discretization_strategy` was removed in v1; MethodOfLines always uses array-form discretization with automatic pointwise fallback."
-        )
-    )
-    :use_ODAE in keys(kwargs) && throw(
-        ArgumentError(
-            "`use_ODAE` was removed in v1; use `symbolic_discretize`, `mtkcompile`, and `ODEProblem` when an explicit ODE problem is required."
-        )
-    )
     if upwind_order !== nothing
         @warn "`upwind_order` no longer does anything, and will be removed in a future release. See the docs for the current interface."
     end
