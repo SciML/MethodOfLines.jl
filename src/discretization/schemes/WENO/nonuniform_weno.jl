@@ -211,13 +211,13 @@ Base.@propagate_inbounds @inline function (::WENONonUniformBoundary{T})(
     return weno_f_nonuniform(u, p, t, x, dx, Val(T))
 end
 
-# Coefficient split for the array discretization strategy
+# Coefficient split for array-form discretization.
 
 # Split of `_weno_f_nonuniform_core(u, ε, x, Val(3))` into grid geometry (`weno_nu_coeffs`,
 # numeric per point) and solution arithmetic (`weno_nu_apply`, traced once). Each slot must
 # hold exactly the constant the scalar trace folds at that spot and enter `weno_nu_apply`
 # linearly (no slot*slot arithmetic), or the traced form would canonicalize differently
-# from the scalar path. Pinned by the coefficient-split property test.
+# from the pointwise path. Pinned by the coefficient-split property test.
 
 const WENO_NU_NSLOTS = 55
 

@@ -24,7 +24,7 @@ const FUNCTIONAL_GROUPS = [
     "Convection",
     "Convection_NU",
     "Wave_Eq_Staggered",
-    "Array_Discretization",
+    "Discretization",
 ]
 
 run_tests(;
@@ -109,12 +109,12 @@ run_tests(;
             end
         end,
         "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
-        "Array_Discretization" => function ()
-            @safetestset "Array discretization" begin
-                include(joinpath(@__DIR__, "Array_Discretization", "array_discretization.jl"))
+        "Discretization" => function ()
+            @safetestset "Equation discretization" begin
+                include(joinpath(@__DIR__, "Discretization", "equation_discretization.jl"))
             end
-            return @safetestset "DAEProblem on the array form" begin
-                include(joinpath(@__DIR__, "Array_Discretization", "dae_problem.jl"))
+            return @safetestset "Problem construction" begin
+                include(joinpath(@__DIR__, "Discretization", "problem_construction.jl"))
             end
         end,
     ),

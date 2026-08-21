@@ -1,4 +1,4 @@
-# Array (slice/broadcast) discretization strategy, see issue #428.
+# Equation discretization using array slices.
 #
 # Instead of one scalar equation per interior grid point, the interior of each PDE is
 # emitted as a single symbolic array equation over slices of the underlying array
@@ -6,17 +6,17 @@
 #
 #   D(u[2:n-1]) ~ (u[1:n-2] .- 2u[2:n-1] .+ u[3:n]) ./ dx^2
 #
-# Boundary, extrapolation and corner equations reuse the scalar machinery, as do any
+# Boundary, extrapolation and corner equations reuse the pointwise machinery, as do any
 # interior points close enough to a boundary that their stencil differs from the
 # translation-invariant interior stencil (the "frame").
 #
-# Periodic directions are translation invariant over the whole interior — the scalar path
+# Periodic directions are translation invariant over the whole interior — the pointwise path
 # never selects a boundary stencil there, it wraps the taps across the seam — so the
 # interior is emitted as one array equation per box of the decomposition described in
 # `array_bands`, a count that does not depend on the grid resolution.
 #
 # Interior boundary values (e.g. `u(t, 1)`) map to the matching array element or face
-# slice on every array box, including size-1 wrap boxes and frame points (the scalar
+# slice on every array box, including size-1 wrap boxes and frame points (the pointwise
 # `boundaryvalfuncs` skip interface faces and free-standing corners; this path does not).
 # Derivatives of boundary values, time-literal references like `u(0, x)`, and
 # edge-aligned grids, fall back.
@@ -37,13 +37,36 @@
 # Mixed first-order derivatives `Dx(Dy(u))` are the tensor product of the two centered
 # first-order stencils; see `array_mixed_difference`. Higher mixed orders still fall back.
 #
-# Unsupported patterns fall back to pointwise scalarization: integrals,
+# Unsupported patterns fall back to pointwise equations: integrals,
 # two-variable interfaces, callbacks,
 # differing dimensionality, boundary-value derivatives, time-literal dependent-variable
 # calls, edge-aligned boundary values, stationary systems.
 
-struct ArrayDiscretizationFallback <: Exception
+struct ArrayFormFallback <: Exception
     msg::String
+end
+
+function discretize_equation_at_point(
+        II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs
+    )
+    boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs, init = [])
+    rules = vcat(
+        generate_finite_difference_rules(
+            II, s, depvars, pde, derivweights, bcmap, indexmap
+        ),
+        boundaryrules,
+        valmaps(s, eqvar, depvars, II, indexmap)
+    )
+    try
+        rdict = Dict(rules)
+        return expand_derivatives(pde_substitute(pde.lhs, rdict)) ~
+            pde_substitute(pde.rhs, rdict)
+    catch e
+        println("A scheme has been incorrectly applied to the following equation: $pde.\n")
+        println("The following rules were constructed at index $II:")
+        display(rules)
+        rethrow(e)
+    end
 end
 
 function PDEBase.discretize_equation!(
@@ -51,7 +74,7 @@ function PDEBase.discretize_equation!(
         eqvar, bcmap, depvars, s::DiscreteSpace, derivweights, indexmap,
         discretization::MOLFiniteDifference
     )
-    # Boundary handling is identical to the scalarized strategy
+    # Boundary handling is shared with the pointwise fallback.
     boundaryvalfuncs = generate_boundary_val_funcs(
         s, depvars, bcmap, indexmap, derivweights
     )
@@ -64,8 +87,8 @@ function PDEBase.discretize_equation!(
             )
         catch e
             e isa InterruptException && rethrow(e)
-            reason = e isa ArrayDiscretizationFallback ? e.msg : sprint(showerror, e)
-            @debug "ArrayDiscretization falling back to pointwise boundary equations for $(boundary.eq): $reason"
+            reason = e isa ArrayFormFallback ? e.msg : sprint(showerror, e)
+            @debug "Array form falling back to pointwise boundary equations for $(boundary.eq): $reason"
             generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
         end
     end
@@ -77,8 +100,8 @@ function PDEBase.discretize_equation!(
         )
     catch e
         e isa InterruptException && rethrow(e)
-        reason = e isa ArrayDiscretizationFallback ? e.msg : sprint(showerror, e)
-        @debug "ArrayDiscretization falling back to pointwise corner equations: $reason"
+        reason = e isa ArrayFormFallback ? e.msg : sprint(showerror, e)
+        @debug "Array form falling back to pointwise corner equations: $reason"
         generate_corner_eqs!(
             disc_state, s, interiormap, ndims(s.discvars[eqvar]), eqvar
         )
@@ -102,11 +125,11 @@ function PDEBase.discretize_equation!(
             e isa InterruptException && rethrow(e)
             # Any failure to *build* the array form degrades to the pointwise path, which
             # is the reference implementation: this strategy must never turn a system the
-            # scalar path can discretize into an error. Genuine problems with the equation
-            # itself resurface below, where the scalar path raises them directly.
-            reason = e isa ArrayDiscretizationFallback ? e.msg :
+            # pointwise path can discretize into an error. Genuine problems with the equation
+            # itself resurface below, where the pointwise path raises them directly.
+            reason = e isa ArrayFormFallback ? e.msg :
                 sprint(showerror, e)
-            @debug "ArrayDiscretization falling back to pointwise discretization for $pde: $reason"
+            @debug "Array form falling back to pointwise discretization for $pde: $reason"
             vec(
                 map(interior) do II
                     discretize_equation_at_point(
@@ -129,7 +152,7 @@ Discretize the interior of `pde` as symbolic array equations over slices of the
 discretized dependent variables — one per box of the decomposition built by
 `array_bands`, which is a single box unless the equation has periodic directions — plus
 pointwise scalar equations for any interior points whose stencils differ from the
-translation-invariant interior stencil. Throws `ArrayDiscretizationFallback` when `pde`
+translation-invariant interior stencil. Throws `ArrayFormFallback` when `pde`
 contains a pattern that cannot be represented this way.
 """
 function discretize_equation_array_form(
@@ -139,7 +162,7 @@ function discretize_equation_array_form(
     isstag = get_grid_type(s) <: StaggeredGrid
     # Stationary: PDEBase emits `0 ~ residual`; Symbolics rejects scalar ~ array.
     s.time === nothing && throw(
-        ArrayDiscretizationFallback(
+        ArrayFormFallback(
             "stationary (no time) systems have no array form in NonlinearSystem construction"
         )
     )
@@ -147,7 +170,7 @@ function discretize_equation_array_form(
     # `generate_finite_difference_rules`), so the requirement only applies otherwise.
     isstag || derivweights.advection_scheme isa Union{UpwindScheme, FunctionalScheme} ||
         throw(
-        ArrayDiscretizationFallback(
+        ArrayFormFallback(
             "unsupported advection scheme $(derivweights.advection_scheme)"
         )
     )
@@ -155,7 +178,7 @@ function discretize_equation_array_form(
     args = ivs(eqvar, s)
     for u in depvars
         isequal(ivs(u, s), args) ||
-            throw(ArrayDiscretizationFallback("variables of differing dimensionality"))
+            throw(ArrayFormFallback("variables of differing dimensionality"))
     end
     periodic = array_periodic_dims(s, depvars, args, bcmap)
 
@@ -190,7 +213,7 @@ function discretize_equation_array_form(
         interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders,
         sph_orders, mixeddirs
     )
-    any(isempty, bands) && throw(ArrayDiscretizationFallback("empty core region"))
+    any(isempty, bands) && throw(ArrayFormFallback("empty core region"))
     N = length(args)
     core = CartesianIndices(
         ntuple(j -> first(first(bands[j])):last(last(bands[j])), N)
@@ -198,9 +221,9 @@ function discretize_equation_array_form(
 
     # Probe the special-case rulesets at a representative core point, one whose stencils
     # do not wrap. Several of these generators return candidate rules unconditionally; the
-    # scalar path only applies a special scheme when a rule key occurs in the equation, so
+    # pointwise path only applies a special scheme when a rule key occurs in the equation, so
     # fall back exactly when one does. Any firing rule means a scheme with no slice
-    # representation here yet. The staggered scalar path applies none of these schemes,
+    # representation here yet. The staggered pointwise path applies none of these schemes,
     # so there is nothing to probe there; its unsupported patterns (integrals, ...)
     # surface in `arrayify` instead.
     if !isstag
@@ -214,7 +237,7 @@ function discretize_equation_array_form(
         )
         for r in special_rules
             (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) &&
-                throw(ArrayDiscretizationFallback("unsupported pattern $(r.first)"))
+                throw(ArrayFormFallback("unsupported pattern $(r.first)"))
         end
     end
     array_validate_boundary_values(pde, s)
@@ -299,7 +322,7 @@ function array_core_equation(
             pde, s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
         )
     end
-    # Family order is the reverse of the scalar path's last-key-wins `Dict`.
+    # Family order is the reverse of the pointwise path's last-key-wins `Dict`.
     ctx = ArrayifyContext(
         vcat(
             bvalrules, mixedrules, windrules, advrules, nllaprules, sphrules,
@@ -318,14 +341,14 @@ function array_core_equation(
     # (a scalar) 0 and the lhs holds the whole residual.
     if is_array_valued(lhs) && !is_array_valued(rhs)
         is_zero_scalar(rhs) ||
-            throw(ArrayDiscretizationFallback("array lhs with non-zero scalar rhs"))
+            throw(ArrayFormFallback("array lhs with non-zero scalar rhs"))
         rhs = zeros(shape)
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
         is_zero_scalar(lhs) ||
-            throw(ArrayDiscretizationFallback("array rhs with non-zero scalar lhs"))
+            throw(ArrayFormFallback("array rhs with non-zero scalar lhs"))
         lhs = zeros(shape)
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
-        throw(ArrayDiscretizationFallback("equation contains no discretizable terms"))
+        throw(ArrayFormFallback("equation contains no discretizable terms"))
     end
     return lhs ~ rhs
 end
@@ -336,14 +359,14 @@ points in that direction.
 
 A periodic direction is one whose interface boundaries join a variable to itself at the
 other end of the same independent variable, which is what `u(t, 0) ~ u(t, 1)` parses to.
-There the scalar path never selects a boundary stencil — `haslowerupper` reports both ends
+There the pointwise path never selects a boundary stencil — `haslowerupper` reports both ends
 as interfaces — so the interior stencil applies across the whole interior with its taps
 wrapped around the seam by `bwrap`, which `wrap_periodic_range` reproduces on slices.
 
 Interfaces that join two different variables, or one end of a domain only, shift taps onto
 another array and have no such form here; those throw.
 
-A nonuniform periodic direction is admitted: operators whose seam form the scalar path
+A nonuniform periodic direction is admitted: operators whose seam form the pointwise path
 cannot build (linear stencils, half-offset operators) throw at their own sites instead.
 """
 function array_periodic_dims(s, depvars, args, bcmap)
@@ -352,17 +375,17 @@ function array_periodic_dims(s, depvars, args, bcmap)
         withiface = filter(u -> !isempty(filter_interfaces(bcmap[operation(u)][x])), depvars)
         isempty(withiface) && continue
         length(withiface) == length(depvars) ||
-            throw(ArrayDiscretizationFallback("interface boundaries on only some variables in $x"))
+            throw(ArrayFormFallback("interface boundaries on only some variables in $x"))
         for u in withiface
             bs = filter_interfaces(bcmap[operation(u)][x])
             all(haslowerupper(bs, x)) ||
-                throw(ArrayDiscretizationFallback("interface boundary at one end of $x only"))
+                throw(ArrayFormFallback("interface boundary at one end of $x only"))
             for b in bs
                 isequal(b.x, x) && isequal(b.x2, x) &&
                     isequal(depvar(b.u, s), depvar(u, s)) &&
                     isequal(depvar(b.u2, s), depvar(u, s)) ||
                     throw(
-                    ArrayDiscretizationFallback(
+                    ArrayFormFallback(
                         "interface boundary $(b.eq) joins different variables"
                     )
                 )
@@ -450,7 +473,7 @@ depend on the grid resolution.
 derivative orders above one; those directions additionally take the half-offset branch
 conditions and tap extents of `array_nonlinlap_constraints`. `sph_orders` does the same
 for spherical laplacians via `array_spherical_constraints`, and additionally keeps any
-r ≈ 0 points out of the core (the scalar path treats them with a separate branch).
+r ≈ 0 points out of the core (the pointwise path treats them with a separate branch).
 `mixeddirs` are the directions a mixed derivative reaches along: those use the centered
 first-order stencil, which at higher approximation orders is wider than the winding
 stencil the order-1 entry of `pdeorders` would select.
@@ -482,7 +505,7 @@ function array_bands(
         end
         sph = if haskey(sph_orders, x)
             haskey(periodic, x) && throw(
-                ArrayDiscretizationFallback("spherical laplacian in a periodic direction")
+                ArrayFormFallback("spherical laplacian in a periodic direction")
             )
             c = array_spherical_constraints(
                 x, n, derivweights, sort(collect(sph_orders[x]))
@@ -546,7 +569,7 @@ function array_bands(
                     hi -= 1
                 end
                 any(i -> abs(grid[i]) <= 1.0e-6, lo:hi) && throw(
-                    ArrayDiscretizationFallback(
+                    ArrayFormFallback(
                         "spherical laplacian with r ≈ 0 inside the core"
                     )
                 )
@@ -585,7 +608,7 @@ function wrap_periodic_range(r, n)
     lo > n && return (lo - n + 1):(hi - n + 1)
     hi <= 1 && return (lo + n - 1):(hi + n - 1)
     (lo >= 2 && hi <= n) && return r
-    throw(ArrayDiscretizationFallback("periodic stencil tap straddles the seam"))
+    throw(ArrayFormFallback("periodic stencil tap straddles the seam"))
 end
 
 """
@@ -594,14 +617,14 @@ The underlying (unscalarized) array variable of which `s.discvars[u]` holds the 
 function array_variable(u, s)
     el = safe_unwrap(first(vec(s.discvars[u])))
     (iscall(el) && operation(el) === getindex) ||
-        throw(ArrayDiscretizationFallback("discrete variable for $u is not an array variable"))
+        throw(ArrayFormFallback("discrete variable for $u is not an array variable"))
     arr = first(arguments(el))
     # For an array-valued dependent variable (`@variables u(..)[1:n]`) the discrete
     # variable is a nested getindex, so the immediate parent is a component rather than
     # the grid-shaped array this path can slice.
     T = SymbolicUtils.symtype(arr)
     (T <: AbstractArray && ndims(T) == length(ivs(u, s))) ||
-        throw(ArrayDiscretizationFallback("discrete variable for $u is not a grid-shaped array"))
+        throw(ArrayFormFallback("discrete variable for $u is not a grid-shaped array"))
     return Symbolics.wrap(arr)
 end
 
@@ -609,7 +632,7 @@ end
 A slice of the array variable for `u` over the core region, shifted by `offsets[j]` in each
 dimension `j` it names and wrapped around the seam where that dimension is periodic (see
 `wrap_periodic_range`). Dimensions absent from `offsets` are taken unshifted and unwrapped,
-which is what the scalar path does with the dimensions a stencil does not reach along.
+which is what the pointwise path does with the dimensions a stencil does not reach along.
 
 Naming a dimension with offset `0` is not the same as omitting it: `_wrapperiodic` maps the
 first index of a periodic dimension onto the last for every tap of a stencil that reaches
@@ -651,7 +674,7 @@ function array_boundary_edge_index(xval, x, s)
         return length(s, x)
     else
         throw(
-            ArrayDiscretizationFallback(
+            ArrayFormFallback(
                 "boundary value is not at a domain edge for $x = $xval"
             )
         )
@@ -660,7 +683,7 @@ end
 
 """
 True when `expr` contains a spatial derivative of a boundary value such as
-`(Differential(x))(u(t, 1))`. Those have no slice form here yet (the scalar path
+`(Differential(x))(u(t, 1))`. Those have no slice form here yet (the pointwise path
 handles them via `depvarderivbcmaps`).
 """
 function array_has_boundary_value_derivative(expr, s)
@@ -703,7 +726,7 @@ end
 
 """
 Equation-level checks for boundary values in the interior equation. Throws
-`ArrayDiscretizationFallback` for patterns with no slice form yet (edge-aligned grids,
+`ArrayFormFallback` for patterns with no slice form yet (edge-aligned grids,
 derivatives of boundary values, time literals, off-edge sampling); otherwise succeeds so
 `array_boundary_value_rules` can substitute each term.
 """
@@ -711,7 +734,7 @@ function array_validate_boundary_values(pde, s)
     bvals = array_boundary_value_terms(pde, s)
     isempty(bvals) && return bvals
     get_grid_type(s) <: CenterAlignedGrid || throw(
-        ArrayDiscretizationFallback(
+        ArrayFormFallback(
             "boundary values in interior equations require a CenterAlignedGrid"
         )
     )
@@ -719,11 +742,11 @@ function array_validate_boundary_values(pde, s)
         array_has_boundary_value_derivative(pde.lhs, s) ||
             array_has_boundary_value_derivative(pde.rhs, s)
     ) && throw(
-        ArrayDiscretizationFallback("derivative of boundary value in interior equation")
+        ArrayFormFallback("derivative of boundary value in interior equation")
     )
     for u_ in bvals
         array_is_time_literal_term(u_, s) && throw(
-            ArrayDiscretizationFallback(
+            ArrayFormFallback(
                 "time-literal value $u_ in interior equation (not a spatial boundary value)"
             )
         )
@@ -731,7 +754,7 @@ function array_validate_boundary_values(pde, s)
         args = ivs(u, s)
         args_ = remove(arguments(u_), s.time)
         length(args_) == length(args) || throw(
-            ArrayDiscretizationFallback(
+            ArrayFormFallback(
                 "boundary value $u_ has unexpected argument structure"
             )
         )
@@ -888,9 +911,9 @@ Array form of `central_difference` on the core region for the even order derivat
 """
 function array_central_difference(Dop, s, u, x, d, ranges, indexmap, periodic)
     # `central_difference_weights_and_stencil` rejects interfaces on a nonuniform grid;
-    # the scalar path is the one that must report that.
+    # the pointwise path is the one that must report that.
     haskey(periodic, x) && !(Dop.dx isa Number) && throw(
-        ArrayDiscretizationFallback("even-order derivative in a periodic nonuniform direction")
+        ArrayFormFallback("even-order derivative in a periodic nonuniform direction")
     )
     N = length(ranges)
     j = indexmap[x]
@@ -923,7 +946,7 @@ end
 """
 The `(u, x, y)` triples for which the mixed derivative `Dx(Dy(u))` occurs in `pde`.
 
-`Dx(Dy(u))` for two distinct spatial variables is the only mixed pattern the scalar path
+`Dx(Dy(u))` for two distinct spatial variables is the only mixed pattern the pointwise path
 has a scheme for (`generate_mixed_rules`), and so the only one with a slice form here;
 anything else — a mixed derivative of higher order in one of its directions, say — reaches
 `arrayify` with a spatial differential still in place and falls back.
@@ -945,17 +968,17 @@ The scalar scheme is the tensor product of the two centered first order stencils
 over the taps in `x` of a sum over the taps in `y` of `wx*wy*u[II + kx + ky]`. Every point
 of the core takes the interior branch of both, so the whole thing is one broadcasted sum of
 slices shifted along two axes at once — `array_central_difference` with a second shifted
-axis. The weights come from the same `DerivativeOperator`s the scalar path uses and their
+axis. The weights come from the same `DerivativeOperator`s the pointwise path uses and their
 products are numeric, so the two agree term by term.
 """
 function array_mixed_difference(Dxop, Dyop, s, u, x, y, ranges, indexmap, periodic)
     # `central_difference_weights_and_stencil` rejects interfaces on a nonuniform grid;
-    # the scalar path is the one that must report that.
+    # the pointwise path is the one that must report that.
     haskey(periodic, x) && !(Dxop.dx isa Number) && throw(
-        ArrayDiscretizationFallback("mixed derivative in a periodic nonuniform direction")
+        ArrayFormFallback("mixed derivative in a periodic nonuniform direction")
     )
     haskey(periodic, y) && !(Dyop.dx isa Number) && throw(
-        ArrayDiscretizationFallback("mixed derivative in a periodic nonuniform direction")
+        ArrayFormFallback("mixed derivative in a periodic nonuniform direction")
     )
     N = length(ranges)
     jx = indexmap[x]
@@ -987,22 +1010,22 @@ end
 end
 
 """
-Patterns the staggered scalar path cannot discretize either; falling back keeps this
+Patterns the staggered pointwise path cannot discretize either; falling back keeps this
 strategy's behaviour identical to the pointwise form for them.
 """
 function validate_staggered_array_form(s, depvars, pdeorders, args)
     for x in args
         all(isodd, pdeorders[x]) ||
-            throw(ArrayDiscretizationFallback("even-order derivative on a staggered grid"))
+            throw(ArrayFormFallback("even-order derivative on a staggered grid"))
         isempty(pdeorders[x]) && continue
-        # the staggered scalar path applies `stencil_coefs` directly, which only holds a
+        # the staggered pointwise path applies `stencil_coefs` directly, which only holds a
         # single weight set on a uniform grid
         s.dxs[x] isa Number ||
-            throw(ArrayDiscretizationFallback("staggered grid with nonuniform d$x"))
+            throw(ArrayFormFallback("staggered grid with nonuniform d$x"))
     end
     for u in depvars
         haskey(s.staggeredvars, operation(depvar(u, s))) ||
-            throw(ArrayDiscretizationFallback("no alignment recorded for $u"))
+            throw(ArrayFormFallback("no alignment recorded for $u"))
     end
     return nothing
 end
@@ -1020,7 +1043,7 @@ function array_staggered_rules(
         for d in filter(isodd, pdeorders[x])
             Dop = get(derivweights.windmap[1], Differential(x)^d, nothing)
             Dop === nothing && throw(
-                ArrayDiscretizationFallback(
+                ArrayFormFallback(
                     "no upwind operator for order $d in $x on a staggered grid"
                 )
             )
@@ -1050,10 +1073,10 @@ function array_upwind_difference(
     )
     Dop = ispositive ? derivweights.windmap[2][Differential(x)^d] :
         derivweights.windmap[1][Differential(x)^d]
-    # `_upwind_difference` rejects interfaces on a nonuniform grid; the scalar path is
+    # `_upwind_difference` rejects interfaces on a nonuniform grid; the pointwise path is
     # the one that must report that.
     haskey(periodic, x) && !(Dop.dx isa Number) && throw(
-        ArrayDiscretizationFallback("upwind derivative in a periodic nonuniform direction")
+        ArrayFormFallback("upwind derivative in a periodic nonuniform direction")
     )
     N = length(ranges)
     j = indexmap[x]
@@ -1079,11 +1102,11 @@ end
 
 """
 Array form of the winding selection for an odd derivative multiplied by expression
-`expr`, mirroring the scalar path's `ifelse(coef > 0, coef*pos, coef*neg)`.
+`expr`, mirroring the pointwise path's `ifelse(coef > 0, coef*pos, coef*neg)`.
 
 When the coefficient does not vary over the grid — a literal, a parameter, or any
 expression of time alone — the wind direction is one scalar condition for the whole
-slice, so `ifelse` broadcasts and reproduces the scalar path exactly.
+slice, so `ifelse` broadcasts and reproduces the pointwise path exactly.
 
 A grid-varying coefficient needs a per-point condition, and `ifelse` cannot be broadcast
 over a symbolic array condition (the elementwise comparison carries symtype `Any` rather
@@ -1146,7 +1169,7 @@ nonuniform grids the coefficient slots `csyms` with their split.
 The interior is translation invariant, so the scheme traces once and its taps are later
 replaced by shifted slices; solution-dependent weights (WENO's smoothness indicators) are
 tap arithmetic and broadcast like any other term. Schemes that read the grid coordinate
-fall back: the scalar path folds those numeric coordinates, which a trace would rebuild
+fall back: the pointwise path folds those numeric coordinates, which a trace would rebuild
 reassociated. Nonuniform grids trace the `apply` kernel of the scheme's
 [`array_scheme_split`](@ref) instead; schemes without a split fall back. Periodic
 nonuniform directions share the split kernel, with coefficient windows unwrapped across
@@ -1156,7 +1179,7 @@ function array_function_scheme_trace(F, s, x, periodic)
     dx = s.dxs[x]
     # `get_f_taps_coords` rejects a stencil that wraps more than once around the seam
     (haskey(periodic, x) && periodic[x] - 1 < F.interior_points) &&
-        throw(ArrayDiscretizationFallback("too few points in $x for $(F.name) to wrap"))
+        throw(ArrayFormFallback("too few points in $x for $(F.name) to wrap"))
     taps = half_range(F.interior_points)
     usyms = array_scheme_syms("u", length(taps))
     if dx isa Number
@@ -1166,7 +1189,7 @@ function array_function_scheme_trace(F, s, x, periodic)
         catch e
             e isa InterruptException && rethrow(e)
             throw(
-                ArrayDiscretizationFallback(
+                ArrayFormFallback(
                     "could not trace scheme $(F.name): $(sprint(showerror, e))"
                 )
             )
@@ -1175,20 +1198,20 @@ function array_function_scheme_trace(F, s, x, periodic)
             v -> any(y -> isequal(v, safe_unwrap(y)), xsyms),
             Symbolics.get_variables(expr)
         ) && throw(
-            ArrayDiscretizationFallback("scheme $(F.name) depends on the grid coordinate")
+            ArrayFormFallback("scheme $(F.name) depends on the grid coordinate")
         )
         return (expr = expr, taps = taps, usyms = usyms, csyms = nothing, split = nothing)
     end
     split = array_scheme_split(F)
     split === nothing &&
-        throw(ArrayDiscretizationFallback("$(F.name) advection on a nonuniform grid"))
+        throw(ArrayFormFallback("$(F.name) advection on a nonuniform grid"))
     csyms = array_scheme_syms("c", split.nslots)
     expr = try
         split.apply(usyms, vcat(F.ps, params(s)), Num(s.time), csyms)
     catch e
         e isa InterruptException && rethrow(e)
         throw(
-            ArrayDiscretizationFallback(
+            ArrayFormFallback(
                 "could not trace the coefficient split of scheme $(F.name): $(sprint(showerror, e))"
             )
         )
@@ -1200,7 +1223,7 @@ end
 Coordinate of raw tap index `i` in a self-periodic direction of `n` points: taps at or
 below the first point shift down by the period, taps past the last point shift up.
 Mirrors `_wrapcoord` bit for bit and must stay in lockstep with it, or the coefficient
-slots lose bitwise parity with the scalar path.
+slots lose bitwise parity with the pointwise path.
 """
 function array_periodic_coord(grid, i, n)
     i <= 1 && return grid[i + n - 1] - (grid[end] - grid[1])
@@ -1211,7 +1234,7 @@ end
 """
 Rules binding the coefficient slots of a split scheme trace to their numeric per-point
 arrays over the core box; empty on uniform grids. The windows fed to `coeffs` are the
-same grid windows the scalar path sees; in a periodic direction taps beyond either end
+same grid windows the pointwise path sees; in a periodic direction taps beyond either end
 take the periodically shifted coordinate `bcoord` would produce.
 """
 function array_scheme_coeff_rules(trace, s, x, ranges, indexmap, periodic)
@@ -1359,8 +1382,8 @@ end
 
 """
 Match the five `@rule` patterns of `generate_nonlinlap_rules` against the additive
-`terms`, keeping the last match per term (mirrors the scalar path's `Dict` semantics).
-Grid-varying prefactors throw: the scalar path leaves them undiscretized, so no slice
+`terms`, keeping the last match per term (mirrors the pointwise path's `Dict` semantics).
+Grid-varying prefactors throw: the pointwise path leaves them undiscretized, so no slice
 form can reproduce them.
 """
 function match_nonlinlap_terms(terms, s, depvars)
@@ -1419,8 +1442,8 @@ function match_nonlinlap_terms(terms, s, depvars)
             if !isempty(get_depvars(pre, s.vars.depvar_ops)) ||
                     any(y -> subsmatch(pre, safe_unwrap(y) => nothing), s.x̄)
                 throw(
-                    ArrayDiscretizationFallback(
-                        "grid-varying factor $(m.pre) multiplying a nonlinear laplacian, which the scalar path leaves undiscretized"
+                    ArrayFormFallback(
+                        "grid-varying factor $(m.pre) multiplying a nonlinear laplacian, which the pointwise path leaves undiscretized"
                     )
                 )
             end
@@ -1538,14 +1561,14 @@ Slice form of `cartesian_nonlinear_laplacian` for a matched `Dx(expr * Dx(u))`: 
 half-offset point of the outer stencil, `expr * Dx(u)` is rebuilt over shifted slices
 (dependent variables interpolated, same-`x` derivatives via the half-offset operators,
 `x` interpolated numerically), then combined with the outer weights. Unhandled patterns
-in the coefficient surface as `ArrayDiscretizationFallback` from `arrayify`.
+in the coefficient surface as `ArrayFormFallback` from `arrayify`.
 """
 function array_nonlinear_laplacian(
         m::NonlinlapMatch, s, depvars, derivweights, ranges, indexmap, periodic
     )
     x, u = m.x, m.u
     haskey(periodic, x) && !(s.dxs[x] isa Number) && throw(
-        ArrayDiscretizationFallback("nonlinear laplacian in a periodic nonuniform direction")
+        ArrayFormFallback("nonlinear laplacian in a periodic nonuniform direction")
     )
     N = length(ranges)
     j = indexmap[x]
@@ -1553,7 +1576,7 @@ function array_nonlinear_laplacian(
 
     D_outer = derivweights.halfoffsetmap[2][Differential(x)]
     interp = derivweights.interpmap[x]
-    # Outer derivative is applied at II - 1 (`outerstencil` in the scalar path).
+    # Outer derivative is applied at II - 1 (`outerstencil` in the pointwise path).
     outer_taps = half_offset_taps(D_outer) .- 1
 
     # Only build rules for orders the coefficient uses: slices are built eagerly and the
@@ -1649,7 +1672,7 @@ end
 """
 Match the three `@rule` patterns of `generate_spherical_diffusion_rules` against the
 additive `terms`, keeping the last match per term. Terms carrying a nonlinear laplacian
-match are skipped: the scalar path keys both rulesets by the same term and the nonlinear
+match are skipped: the pointwise path keys both rulesets by the same term and the nonlinear
 laplacian entry, added later, wins its rules `Dict`. Grid-varying prefactors throw for
 the same reason as in `match_nonlinlap_terms`.
 """
@@ -1709,8 +1732,8 @@ function match_spherical_terms(terms, s, depvars, nllap_matches)
             if !isempty(get_depvars(pre, s.vars.depvar_ops)) ||
                     any(y -> subsmatch(pre, safe_unwrap(y) => nothing), s.x̄)
                 throw(
-                    ArrayDiscretizationFallback(
-                        "grid-varying factor $(m.pre) multiplying a spherical laplacian, which the scalar path leaves undiscretized"
+                    ArrayFormFallback(
+                        "grid-varying factor $(m.pre) multiplying a spherical laplacian, which the pointwise path leaves undiscretized"
                     )
                 )
             end
@@ -1805,14 +1828,14 @@ function arrayify(expr, ctx)
     op = operation(expr)
     if op isa Differential
         isequal(op.x, ctx.time) ||
-            throw(ArrayDiscretizationFallback("unhandled spatial derivative in $expr"))
+            throw(ArrayFormFallback("unhandled spatial derivative in $expr"))
         arg = arrayify(only(arguments(expr)), ctx)
         return op(arg)
     elseif !(op isa Function)
         # Symbolic operators (`Integral`, ...) and symbolic callables are not `Function`s
         # and cannot be broadcast over slices; anything reaching here was not replaced by
         # a rule, so there is no slice form for it.
-        throw(ArrayDiscretizationFallback("unhandled operation $op in $expr"))
+        throw(ArrayFormFallback("unhandled operation $op in $expr"))
     end
     newargs = [arrayify(a, ctx) for a in arguments(expr)]
     if any(is_array_valued, newargs)
@@ -1838,41 +1861,41 @@ translation invariance the interior exploits, applied one dimension down. Withou
 boundary equations stay pointwise and dominate the equation count in 2D and 3D, where
 they scale with the surface (`O(n)` and `O(n^2)`) while the interior collapses to one.
 
-Throws `ArrayDiscretizationFallback` for boundaries with no slice representation, in
+Throws `ArrayFormFallback` for boundaries with no slice representation, in
 which case the caller emits the pointwise form.
 """
 function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     boundary isa AbstractTruncatingBoundary ||
-        throw(ArrayDiscretizationFallback("non-truncating (interface) boundary"))
+        throw(ArrayFormFallback("non-truncating (interface) boundary"))
 
     u_, x_ = getvars(boundary)
     u = depvar(u_, s)
     args = ivs(u, s)
-    length(args) == 0 && throw(ArrayDiscretizationFallback("no spatial arguments"))
+    length(args) == 0 && throw(ArrayFormFallback("no spatial arguments"))
     indexmap = Dict([args[i] => i for i in 1:length(args)])
     haskey(indexmap, x_) ||
-        throw(ArrayDiscretizationFallback("boundary variable $x_ not an argument of $u"))
+        throw(ArrayFormFallback("boundary variable $x_ not an argument of $u"))
     j = indexmap[x_]
 
     E = edge(s, boundary, interiormap)
-    length(E) == 0 && throw(ArrayDiscretizationFallback("empty boundary edge"))
+    length(E) == 0 && throw(ArrayFormFallback("empty boundary edge"))
     lo = collect(Tuple(first(E)))
     hi = collect(Tuple(last(E)))
     # the face must be a contiguous box for a slice to describe it
     length(E) == prod(hi .- lo .+ 1) ||
-        throw(ArrayDiscretizationFallback("boundary edge is not a contiguous box"))
+        throw(ArrayFormFallback("boundary edge is not a contiguous box"))
     lo[j] == hi[j] ||
-        throw(ArrayDiscretizationFallback("boundary edge spans its own direction"))
+        throw(ArrayFormFallback("boundary edge spans its own direction"))
     ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
     N = length(args)
     # A single-point face (every 1D boundary) has nothing to collapse; a one-element
     # slice equation would just be a more convoluted spelling of the scalar one.
     prod(length(ranges[i]) for i in 1:N) == 1 &&
-        throw(ArrayDiscretizationFallback("single-point boundary"))
+        throw(ArrayFormFallback("single-point boundary"))
     # A staggered 1D boundary is always the single point above; multi-point staggered
     # faces would need the staggered stencil selection, which has no slice form here yet.
     get_grid_type(s) <: StaggeredGrid &&
-        throw(ArrayDiscretizationFallback("staggered boundary face"))
+        throw(ArrayFormFallback("staggered boundary face"))
 
     # Every dependent variable in the condition must be one this path can slice: either
     # the canonical variable, or a value on this same boundary.
@@ -1881,11 +1904,11 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     for v in bcdepvars
         vd = depvar(v, s)
         isequal(ivs(vd, s), args) ||
-            throw(ArrayDiscretizationFallback("variable $v of differing dimensionality"))
+            throw(ArrayFormFallback("variable $v of differing dimensionality"))
         for (k, a) in enumerate(remove(arguments(v), s.time))
             unwrap_const(safe_unwrap(a)) isa Number || continue
             k == j || throw(
-                ArrayDiscretizationFallback("boundary value of $v away from this boundary")
+                ArrayFormFallback("boundary value of $v away from this boundary")
             )
         end
     end
@@ -1893,12 +1916,12 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     # indices that are not a shift of the face; interfaces in the other directions do not
     # enter this equation at all.
     isempty(filter_interfaces(bcmap[operation(u)][x_])) ||
-        throw(ArrayDiscretizationFallback("interface boundary condition in $x_"))
+        throw(ArrayFormFallback("interface boundary condition in $x_"))
 
     II0 = first(E)
     ufunc(v, I, x) = s.discvars[v][I]
 
-    # Derivatives in the boundary direction: take the weights and taps the scalar path
+    # Derivatives in the boundary direction: take the weights and taps the pointwise path
     # would use at a representative point on the face, then express the taps as shifted
     # slices. The branch that selects them depends only on the index along `x_`, which is
     # constant across the face, so this is exact.
@@ -1912,11 +1935,11 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
             )
         catch e
             e isa InterruptException && rethrow(e)
-            throw(ArrayDiscretizationFallback("could not build boundary stencil for order $d"))
+            throw(ArrayFormFallback("could not build boundary stencil for order $d"))
         end
         offsets = [I[j] - II0[j] for I in Itap]
         all(I -> all(k -> k == j || I[k] == II0[k], 1:N), Itap) ||
-            throw(ArrayDiscretizationFallback("boundary stencil is not axis aligned"))
+            throw(ArrayFormFallback("boundary stencil is not axis aligned"))
         slices = [
             array_slice(u, s, ranges, indexmap; shiftx = x_, offset = o) for o in offsets
         ]
@@ -1958,7 +1981,7 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
         lhs = fill(Symbolics.unwrap(lhs), shape)
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
-        throw(ArrayDiscretizationFallback("boundary condition has no discretizable terms"))
+        throw(ArrayFormFallback("boundary condition has no discretizable terms"))
     end
     return [lhs ~ rhs]
 end
@@ -1967,9 +1990,9 @@ end
     array_bc_eqs(s, boundary::InterfaceBoundary, interiormap, derivweights, bcmap)
 
 Equate the two faces an interface (periodic) boundary joins as a single array equation,
-the slice form of the `disc1[II] ~ disc2[II + Ioffset]` the scalar path emits per point.
+the slice form of the `disc1[II] ~ disc2[II + Ioffset]` the pointwise path emits per point.
 
-As in the scalar path only the lower boundary of the pair carries the equations; the upper
+As in the pointwise path only the lower boundary of the pair carries the equations; the upper
 one repeats the same relation and contributes none.
 """
 function array_bc_eqs(s, boundary::InterfaceBoundary, interiormap, derivweights, bcmap)
@@ -1980,35 +2003,35 @@ function array_bc_eqs(s, boundary::InterfaceBoundary, interiormap, derivweights,
     args = ivs(u, s)
     indexmap = Dict([args[i] => i for i in 1:length(args)])
     haskey(indexmap, boundary.x) ||
-        throw(ArrayDiscretizationFallback("boundary variable $(boundary.x) not an argument of $u"))
+        throw(ArrayFormFallback("boundary variable $(boundary.x) not an argument of $u"))
     j = indexmap[boundary.x]
     N = length(args)
 
     E = edge(s, boundary, interiormap)
-    length(E) == 0 && throw(ArrayDiscretizationFallback("empty boundary edge"))
+    length(E) == 0 && throw(ArrayFormFallback("empty boundary edge"))
     lo = collect(Tuple(first(E)))
     hi = collect(Tuple(last(E)))
     length(E) == prod(hi .- lo .+ 1) ||
-        throw(ArrayDiscretizationFallback("boundary edge is not a contiguous box"))
+        throw(ArrayFormFallback("boundary edge is not a contiguous box"))
     lo[j] == hi[j] ||
-        throw(ArrayDiscretizationFallback("boundary edge spans its own direction"))
+        throw(ArrayFormFallback("boundary edge spans its own direction"))
     ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
     length(E) == 1 &&
-        throw(ArrayDiscretizationFallback("single-point interface boundary"))
+        throw(ArrayFormFallback("single-point interface boundary"))
     # 1D staggered interfaces are the single point above; multi-point staggered faces
-    # are untested on the scalar path, so decline rather than guess.
+    # are untested on the pointwise path, so decline rather than guess.
     get_grid_type(s) <: StaggeredGrid &&
-        throw(ArrayDiscretizationFallback("staggered interface face"))
+        throw(ArrayFormFallback("staggered interface face"))
 
     arr2 = array_variable(u2, s)
     disc2 = s.discvars[u2]
     ndims(disc2) == N ||
-        throw(ArrayDiscretizationFallback("interface joins variables of differing dimensionality"))
+        throw(ArrayFormFallback("interface joins variables of differing dimensionality"))
     # the same index shift `generate_bc_eqs!` applies pointwise
     shift = length(s, boundary.x2) - 1
     rs2 = ntuple(i -> i == j ? (ranges[i] .+ shift) : ranges[i], N)
     all(i -> checkindex(Bool, axes(disc2, i), rs2[i]), 1:N) ||
-        throw(ArrayDiscretizationFallback("interface slice falls outside $(u2)"))
+        throw(ArrayFormFallback("interface slice falls outside $(u2)"))
 
     return [array_slice(u, s, ranges, indexmap) ~ arr2[rs2...]]
 end
@@ -2031,9 +2054,9 @@ Without this the 3D edges stay pointwise and cost `12n - 10` equations, which is
 keeps 3D at `O(n)` once the faces are sliced.
 """
 function array_corner_eqs(s, interiormap, u, N)
-    N >= 2 || throw(ArrayDiscretizationFallback("no corner region below 2 dimensions"))
+    N >= 2 || throw(ArrayFormFallback("no corner region below 2 dimensions"))
     interior = interiormap.I[interiormap.pde[u]]
-    length(interior) == 0 && throw(ArrayDiscretizationFallback("empty interior"))
+    length(interior) == 0 && throw(ArrayFormFallback("empty interior"))
     arr = array_variable(u, s)
     lo = Tuple(first(interior))
     hi = Tuple(last(interior))

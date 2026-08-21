@@ -94,7 +94,7 @@ const _WENOBoundaryVec = AbstractVector{<:WENONonUniformBoundary}
 extent(::FunctionalScheme{<:Any, <:_WENOBoundaryVec}, dorder, dx::Number) = 2
 extent(::FunctionalScheme{<:Any, <:_WENOBoundaryVec}, dorder, dx::AbstractVector) = 0
 
-# Coefficient split used by ArrayDiscretization on nonuniform grids; kernels in
+# Coefficient split used by array-form discretization on nonuniform grids; kernels in
 # nonuniform_weno.jl.
 function array_scheme_split(::FunctionalScheme{typeof(weno_f)})
     return (coeffs = weno_nu_coeffs, apply = weno_nu_apply, nslots = WENO_NU_NSLOTS)

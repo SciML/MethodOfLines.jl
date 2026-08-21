@@ -230,12 +230,14 @@ are attached through the compiled `ODEFunction`.
 Time-independent systems have no derivative to keep implicit and discretize to a
 `NonlinearProblem` as before.
 
-To build a problem yourself — an `ODEProblem`, or anything else — start from
-`symbolic_discretize`:
+Explicit Runge–Kutta methods such as `Tsit5()` solve `ODEProblem`s, not the `DAEProblem`
+returned by this method. To use one, start from `symbolic_discretize` and compile the
+discretized system:
 
 ```julia
 sys, tspan = symbolic_discretize(pdesys, discretization)
 prob = ODEProblem(mtkcompile(sys), nothing, tspan)
+sol = solve(prob, Tsit5())
 ```
 """
 function SciMLBase.discretize(

@@ -1,7 +1,5 @@
-# Tests for the DAEProblem path, which builds an implicit-DAE problem from the residuals
-# MethodOfLines emits without running `mtkcompile`, so the array (slice-form) equations
-# survive into the generated code. Every case is checked against the compiled
-# `ODEProblem` path, which this must reproduce.
+# Tests for problem construction. The default DAE path preserves symbolic array equations;
+# the compiled ODE path is checked both for numerical agreement and explicit-RK support.
 
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Symbolics
 using SciMLBase
@@ -19,12 +17,12 @@ function isarrayeq(eq)
     return isarr(eq.lhs) || isarr(eq.rhs)
 end
 
-array_disc(dxs, t; kwargs...) = MOLFiniteDifference(dxs, t; kwargs...)
+mol_disc(dxs, t; kwargs...) = MOLFiniteDifference(dxs, t; kwargs...)
 
 # Solve the same system both ways and return the discretized values of `u` at the final
 # time, indexed identically, plus the DAE problem for structural checks.
 function solve_both(pdesys, dxs, t, u; disc_kwargs = (;), tol = 1.0e-10)
-    disc = array_disc(dxs, t; disc_kwargs...)
+    disc = mol_disc(dxs, t; disc_kwargs...)
     prob_dae = discretize(pdesys, disc)
     @test prob_dae isa SciMLBase.DAEProblem
     sol_dae = solve(prob_dae; reltol = tol, abstol = tol)
@@ -48,7 +46,7 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = array_disc([x => n], t)
+    disc = mol_disc([x => n], t)
     sys, _ = symbolic_discretize(pdesys, disc)
     @test isempty(MethodOfLines.brown_init_offenders(complete(sys)))
     # the guard is not vacuous: this system does carry initialization equations
@@ -83,7 +81,7 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = array_disc([x => n], t)
+    disc = mol_disc([x => n], t)
     @test isempty(MethodOfLines.brown_init_offenders(complete(first(symbolic_discretize(pdesys, disc)))))
 
     _, sol, dae_vals, ode_vals = solve_both(pdesys, [x => n], t, u(t, x))
@@ -110,7 +108,7 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    disc = array_disc([x => n, y => n], t)
+    disc = mol_disc([x => n, y => n], t)
     @test isempty(MethodOfLines.brown_init_offenders(complete(first(symbolic_discretize(pdesys, disc)))))
 
     _, sol, dae_vals, ode_vals = solve_both(
@@ -147,7 +145,7 @@ end
     ]
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)])
 
-    disc = array_disc([x => n, y => n], t)
+    disc = mol_disc([x => n, y => n], t)
     @test isempty(MethodOfLines.brown_init_offenders(complete(first(symbolic_discretize(pdesys, disc)))))
 
     _, sol, dae_vals, ode_vals = solve_both(
@@ -176,7 +174,7 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
 
-    disc = array_disc([x => n], t)
+    disc = mol_disc([x => n], t)
     sys = complete(first(symbolic_discretize(pdesys, disc)))
     # `v` is algebraic: its initial condition is a guess for the consistent-initialization
     # solve on either path, not a constraint, so no initialization equation is emitted for
@@ -204,7 +202,7 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = array_disc([x => n], t)
+    disc = mol_disc([x => n], t)
     offenders = MethodOfLines.brown_init_offenders(
         complete(first(symbolic_discretize(pdesys, disc)))
     )
@@ -256,7 +254,7 @@ end
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
 
-    disc = array_disc([x => n], t)
+    disc = mol_disc([x => n], t)
     prob = DAEProblem(pdesys, disc; initializealg = ShampineCollocationInit())
     @test prob.kwargs[:initializealg] isa ShampineCollocationInit
     @test SciMLBase.successful_retcode(
@@ -264,7 +262,7 @@ end
     )
 end
 
-@testset "explicit compiled ODE path" begin
+@testset "explicit Runge–Kutta ODE path" begin
     @parameters t x
     @variables u(..)
     Dt = Differential(t)
@@ -279,7 +277,7 @@ end
     sys, tspan = symbolic_discretize(pdesys, disc)
     prob = ODEProblem(mtkcompile(sys), nothing, tspan)
     @test prob isa SciMLBase.ODEProblem
-    @test SciMLBase.successful_retcode(solve(prob, Rodas4()))
+    @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
 end
 
 # The predicate's algebraic-variable and coupled-unknown branches are unreachable from what
