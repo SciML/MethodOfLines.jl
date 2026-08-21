@@ -1,13 +1,15 @@
 # [MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning](@id index)
 
 !!! warning "MethodOfLines v1.0 changes"
-    MethodOfLines v1.0 preserves spatial discretizations in symbolic array form. For
-    time-dependent systems, `discretize` now normally returns a `DAEProblem`; call
+    With a `DAEProblem`, MethodOfLines v1.0 makes symbolic compilation O(1) with respect
+    to the number of grid points and can be orders of magnitude faster than before.
+    `DAEProblem` is therefore the new default for time-dependent systems; call
     `solve(prob)` to use the default DAE solver.
 
-    Explicit Runge–Kutta methods such as `Tsit5()` and `SSPRK54()` require the compiled
-    ODE path: `symbolic_discretize`, then `mtkcompile`, then `ODEProblem`. See the
-    [v1.0 migration guide](@ref migrating-to-v1) for examples and compatibility details.
+    This improvement does not apply to `ODEProblem`. Explicit Runge–Kutta methods such as
+    `Tsit5()` and `SSPRK54()` require the compiled ODE path: `symbolic_discretize`, then
+    `mtkcompile`, then `ODEProblem`. See the [v1.0 migration guide](@ref migrating-to-v1)
+    for examples and compatibility details.
 
 [MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl)
 is a Julia package for automated finite difference discretization
