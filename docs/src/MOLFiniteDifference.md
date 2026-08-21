@@ -100,7 +100,7 @@ Note that `mtkcompile` scalarizes the array equations, so this path gives up the
 benefit of the array form. Prefer `discretize` unless you specifically need an
 `ODEProblem` or an explicit time-stepping method.
 
-## Migrating to v1
+## [Migrating to v1](@id migrating-to-v1)
 
 - `discretize` returns a `DAEProblem` rather than an `ODEProblem` for time-dependent
   systems. Call `solve(prob)` to use the default DAE algorithm. Explicit Runge–Kutta
