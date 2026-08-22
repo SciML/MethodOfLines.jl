@@ -1443,7 +1443,7 @@ function match_nonlinlap_terms(terms, s, depvars)
                     any(y -> subsmatch(pre, safe_unwrap(y) => nothing), s.x̄)
                 throw(
                     ArrayFormFallback(
-                        "grid-varying factor $(m.pre) multiplying a nonlinear laplacian, which the pointwise path leaves undiscretized"
+                        "grid-varying factor $(m.pre) multiplying a nonlinear laplacian has no slice form yet"
                     )
                 )
             end
@@ -1733,7 +1733,7 @@ function match_spherical_terms(terms, s, depvars, nllap_matches)
                     any(y -> subsmatch(pre, safe_unwrap(y) => nothing), s.x̄)
                 throw(
                     ArrayFormFallback(
-                        "grid-varying factor $(m.pre) multiplying a spherical laplacian, which the pointwise path leaves undiscretized"
+                        "grid-varying factor $(m.pre) multiplying a spherical laplacian has no slice form yet"
                     )
                 )
             end

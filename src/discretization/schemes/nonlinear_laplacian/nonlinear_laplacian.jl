@@ -150,9 +150,19 @@ function generate_deriv_rules(
     end
 end
 
+"""
+Evaluate `ex` at the grid point `II` by substituting dependent variables with their
+discrete counterparts and independent variables with their grid values. Rules that
+replace a whole matched term must pass every captured factor through this, as the
+general variable/grid substitution rules never reach a rule's output.
+"""
 function replacevals(ex, s, u, depvars, II, indexmap)
     rules = valmaps(s, u, depvars, II, indexmap)
     return substitute(ex, Dict(rules))
+end
+
+function replacevals(exs::AbstractVector, s, u, depvars, II, indexmap)
+    return map(ex -> replacevals(ex, s, u, depvars, II, indexmap), exs)
 end
 
 @inline function generate_nonlinlap_rules(
@@ -169,12 +179,12 @@ end
                             $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)),
                             ~~d
                         ) => *(
-                            ~c...,
+                            replacevals(~c, s, u, depvars, II, indexmap)...,
                             cartesian_nonlinear_laplacian(
                                 *(~a..., ~b...), Idx(II, s, u, indexmap),
                                 derivweights, s, indexmap, bcmap, depvars, x, u
                             ),
-                            ~d...
+                            replacevals(~d, s, u, depvars, II, indexmap)...
                         ) for x in ivs(u, s)
                     ]
                 ) for u in depvars
@@ -243,8 +253,8 @@ end
                                 ($(Differential(x))($(Differential(x))(u) / ~a)),
                                 ~~c
                             ) => *(
-                                ~b...,
-                                ~c...,
+                                replacevals(~b, s, u, depvars, II, indexmap)...,
+                                replacevals(~c, s, u, depvars, II, indexmap)...,
                                 cartesian_nonlinear_laplacian(
                                     1 / ~a, Idx(II, s, u, indexmap), derivweights,
                                     s, indexmap, bcmap, depvars, x, u
@@ -270,8 +280,8 @@ end
                                 ~e
                             ) => /(
                                 *(
-                                    ~b...,
-                                    ~c...,
+                                    replacevals(~b, s, u, depvars, II, indexmap)...,
+                                    replacevals(~c, s, u, depvars, II, indexmap)...,
                                     cartesian_nonlinear_laplacian(
                                         *(~a..., ~d...), Idx(II, s, u, indexmap),
                                         derivweights, s, indexmap, bcmap, depvars, x, u
