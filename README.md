@@ -16,8 +16,6 @@ It uses symbolic expressions for systems of partial differential equations as de
 
 This project is under active development, therefore the interface is subject to change. The [docs](https://docs.sciml.ai/MethodOfLines/dev/) will be updated to reflect any changes, please check back for current usage information.
 
-Note that this package does not currently scale well to high resolution (high point count) problems, though there are changes in the works to remedy this.
-
 Allowable terms in the system include, but are not limited to
 
   - Advection
