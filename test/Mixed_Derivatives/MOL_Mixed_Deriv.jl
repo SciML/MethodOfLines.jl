@@ -65,7 +65,9 @@ end
     bcs = [
         u(0, x, y) ~ sinpi(x + y),
         u(t, 0, y) ~ sinpi(y),
+        u(t, 1, y) ~ sinpi(1 + y),
         u(t, x, 0) ~ sinpi(x),
+        u(t, x, 1) ~ sinpi(x + 1),
     ]
 
     domain = [

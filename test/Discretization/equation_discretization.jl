@@ -1998,16 +1998,191 @@ end
     end
 end
 
-@testset "Fallback: mixed derivative of higher order in one direction" begin
-    # `generate_mixed_rules` only has a scheme for `Dx(Dy(u))`; anything else reaches
-    # `arrayify` with a spatial differential still in place, and must fall back rather
-    # than error.
+@testset "2D higher mixed derivatives" begin
+    # `(Differential(x)^m * Differential(y)^n)(u)` is the same tensor product as
+    # `Dx(Dy(u))`, with the centered operators of orders `m` and `n`. Bare high-order
+    # mixed terms are not dissipative (`u_xxyy` grows like π⁴u), so the solve cases
+    # sit next to `Dxx + Dyy` the way the first-order mixed tests do.
     @parameters t x y
     @variables u(..)
     Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    ops = (
+        (Differential(x)^2) * Differential(y),
+        Differential(x) * (Differential(y)^2),
+        (Differential(x)^2) * (Differential(y)^2),
+        (Differential(x)^3) * Differential(y),
+    )
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    for Dmix in ops
+        eq = Dt(u(t, x, y)) ~ Dmix(u(t, x, y))
+        @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+        disc = MOLFiniteDifference([x => 0.1, y => 0.1], t)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        @test narrayeqs_interior(sys) == 1
+    end
+
+    Dxxy = (Differential(x)^2) * Differential(y)
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + 0.5 * Dxxy(u(t, x, y))
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.1, y => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+
+    # Fourth and sixth order widen both factors of `Dxxy` at once
+    for order in (4, 6)
+        sol_arr, sys_arr = solve_discretized(
+            pdesys, [x => 0.05, y => 0.05], t; disc_kwargs = (; approx_order = order)
+        )
+        @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+        @test narrayeqs_interior(sys_arr) == 1
+    end
+end
+
+@testset "2D higher mixed derivative with a variable coefficient" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
     Dxxy = (Differential(x)^2) * Differential(y)
 
-    eq = Dt(u(t, x, y)) ~ Dxxy(u(t, x, y))
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) +
+        (0.3 + 0.2 * x * y) * Dxxy(u(t, x, y))
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.1, y => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+end
+
+@testset "Higher mixed derivative on a nonuniform grid" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dxxy = (Differential(x)^2) * Differential(y)
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + 0.5 * Dxxy(u(t, x, y))
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    xgrid = collect(range(0.0, 1.0, length = 11)) .^ 1.2
+    ygrid = collect(range(0.0, 1.0, length = 11)) .^ 0.9
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => xgrid, y => ygrid], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+end
+
+@testset "Higher mixed derivative with a periodic direction" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dxxy = (Differential(x)^2) * Differential(y)
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + 0.5 * Dxxy(u(t, x, y))
+    bcs = [
+        u(0, x, y) ~ sinpi(2x) * sinpi(y),
+        u(t, 0, y) ~ u(t, 1, y), Dx(u(t, 0, y)) ~ Dx(u(t, 1, y)),
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.1, y => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) >= 1
+
+    # Wrap-box count follows the stencil width, not the grid resolution. Total
+    # `get_eqs` still grows here: the Dirichlet y-frame is pointwise along x.
+    disc2 = MOLFiniteDifference([x => 0.05, y => 0.05], t)
+    sys_arr2, _ = symbolic_discretize(pdesys, disc2)
+    @test narrayeqs_interior(sys_arr2) == narrayeqs_interior(sys_arr)
+
+    # Doubly periodic: no Dirichlet frame, so the total equation count is O(stencil).
+    bcs_pp = [
+        u(0, x, y) ~ sinpi(2x) * sinpi(2y),
+        u(t, 0, y) ~ u(t, 1, y),
+        u(t, x, 0) ~ u(t, x, 1),
+    ]
+    @named pdesys_pp = PDESystem(eq, bcs_pp, domains, [t, x, y], [u(t, x, y)])
+    counts = map([8, 16]) do n
+        disc = MOLFiniteDifference([x => 1 / (n - 1), y => 1 / (n - 1)], t)
+        sys, _ = symbolic_discretize(pdesys_pp, disc)
+        (; n = length(get_eqs(sys)), narr = narrayeqs_interior(sys))
+    end
+    @test counts[1].n == counts[2].n
+    @test counts[1].narr >= 1
+    @test counts[1].narr == counts[2].narr
+end
+
+@testset "3D higher mixed derivative" begin
+    @parameters t x y z
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dzz = Differential(z)^2
+    Dxxz = (Differential(x)^2) * Differential(z)
+
+    eq = Dt(u(t, x, y, z)) ~ Dxx(u(t, x, y, z)) + Dyy(u(t, x, y, z)) +
+        Dzz(u(t, x, y, z)) + 0.4 * Dxxz(u(t, x, y, z))
+    bcs = [
+        u(0, x, y, z) ~ sinpi(x) * sinpi(y) * sinpi(z),
+        u(t, 0, y, z) ~ 0.0, u(t, 1, y, z) ~ 0.0,
+        u(t, x, 0, z) ~ 0.0, u(t, x, 1, z) ~ 0.0,
+        u(t, x, y, 0) ~ 0.0, u(t, x, y, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.02), x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y, z], [u(t, x, y, z)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2, z => 0.2], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+end
+
+@testset "Higher mixed derivative alone sets the band width" begin
+    # `Dx^3(Dy(u))` reaches along `x` with the centered third-order stencil, which is
+    # wider than the winding stencil the order-3 entry of `pdeorders` would select.
+    # With nothing else in the equation to widen the band, that is what has to set it.
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxxxy = (Differential(x)^3) * Differential(y)
+
+    eq = Dt(u(t, x, y)) ~ Dxxxy(u(t, x, y))
     bcs = [
         u(0, x, y) ~ sinpi(x) * sinpi(y),
         u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
@@ -2018,7 +2193,69 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    disc = MOLFiniteDifference([x => 0.1, y => 0.1], t)
+    for order in (2, 4, 6)
+        disc = MOLFiniteDifference(
+            [x => 0.05, y => 0.05], t; approx_order = order
+        )
+        sys_arr, _ = symbolic_discretize(pdesys, disc)
+        @test narrayeqs_interior(sys_arr) == 1
+    end
+end
+
+@testset "Higher mixed derivative manufactured solution" begin
+    # u = sin(πx) sin(πy) is steady for Dt(u) ~ u_xxy + π³ sin(πx) cos(πy)
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxxy = (Differential(x)^2) * Differential(y)
+
+    eq = Dt(u(t, x, y)) ~
+        Dxxy(u(t, x, y)) + (pi^3) * sinpi(x) * cospi(y)
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.05, y => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    xdisc = sol_arr[x]
+    ydisc = sol_arr[y]
+    exact = [sinpi(xi) * sinpi(yi) for xi in xdisc, yi in ydisc]
+    @test maximum(abs.(sol_arr[u(t, x, y)][end, :, :] .- exact)) < 5.0e-2
+end
+
+@testset "Fallback: three-direction mixed derivative without transform" begin
+    # `Dx(Dy(Dz(u)))` is not a two-direction mixed term. With transformation off it
+    # reaches `arrayify` unhandled and must fall back rather than error.
+    @parameters t x y z
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+    Dz = Differential(z)
+
+    eq = Dt(u(t, x, y, z)) ~ Dx(Dy(Dz(u(t, x, y, z))))
+    bcs = [
+        u(0, x, y, z) ~ sinpi(x) * sinpi(y) * sinpi(z),
+        u(t, 0, y, z) ~ 0.0, u(t, 1, y, z) ~ 0.0,
+        u(t, x, 0, z) ~ 0.0, u(t, x, 1, z) ~ 0.0,
+        u(t, x, y, 0) ~ 0.0, u(t, x, y, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y, z], [u(t, x, y, z)])
+
+    disc = MOLFiniteDifference(
+        [x => 0.2, y => 0.2, z => 0.2], t; should_transform = false
+    )
     sys, _ = symbolic_discretize(pdesys, disc)
     @test narrayeqs_interior(sys) == 0
 end
