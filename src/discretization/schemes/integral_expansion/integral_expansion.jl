@@ -364,13 +364,13 @@ end
                     )(u) => begin
                         try
                             compact_whole_domain_integral(s, u, x, II, indexmap)
-                        catch e
+                    catch e
                             e isa InterruptException && rethrow(e)
                             whole_domain_integral(
                                 wd_integral_Idx(II, s, u, x, indexmap),
                                 s, (x2i(s, u, x), x), u, ufunc
                             )
-                        end
+                    end
                     end
                     for x in filter(x -> (!haskey(indexmap, x) | isequal(x, bvar)), ivs(u, s))
                 ]

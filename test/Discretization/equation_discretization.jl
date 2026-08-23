@@ -2430,8 +2430,10 @@ end
 
     counts = map([12, 24]) do n
         sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => n], t))
-        (narrayeqs(sys), narrayeqs_interior(sys),
-            eq_scheme_size(only(filter(eq -> occursin("axis_cumsum", string(eq)), get_eqs(sys)))))
+        (
+            narrayeqs(sys), narrayeqs_interior(sys),
+            eq_scheme_size(only(filter(eq -> occursin("axis_cumsum", string(eq)), get_eqs(sys)))),
+        )
     end
     @test counts[1][1] == counts[2][1]
     @test counts[1][2] == counts[2][2] == 1
