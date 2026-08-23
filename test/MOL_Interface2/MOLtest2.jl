@@ -95,21 +95,21 @@ using Test
         diff_eq = ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x, t) * ∂x(c(x, t)))
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test_broken discretize(pdesys, discretization) isa DAEProblem
+        @test discretize(pdesys, discretization) isa DAEProblem
     end
 
     @testset "Test 09: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
         diff_eq = c(x, t) * ∂x(c(x, t) * ∂x(c(x, t))) / (1 + c(x, t)) ~ 0
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test_broken discretize(pdesys, discretization) isa DAEProblem
+        @test discretize(pdesys, discretization) isa DAEProblem
     end
 
     @testset "Test 10: ∂t(c(x, t)) ~ c(x, t) * ∂x(c(x,t) * ∂x(c(x, t)))/(1+c(x,t))" begin
         diff_eq = c(x, t) * ∂x(c(x, t)^(-1) * ∂x(c(x, t))) ~ 0
         @named pdesys = PDESystem(diff_eq, bcs, domains, [x, t], [c(x, t)])
         discretization = MOLFiniteDifference([x => Δx], t)
-        @test_broken discretize(pdesys, discretization) isa DAEProblem
+        @test discretize(pdesys, discretization) isa DAEProblem
     end
 
     @testset "Test 11: ∂t(c(x, t)) ~ ∂x(1/(1+c(x,t)^2) ∂x(c(x, t)))" begin

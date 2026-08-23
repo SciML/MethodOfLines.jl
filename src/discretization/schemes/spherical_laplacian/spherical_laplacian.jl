@@ -59,12 +59,12 @@ end
                             ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))),
                             ~~b
                         ) => *(
-                            ~a...,
+                            replacevals(~a, s, u, depvars, II, indexmap)...,
                             spherical_diffusion(
                                 *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
                                 derivweights, s, indexmap, bcmap, depvars, r, u
                             ),
-                            ~b...
+                            replacevals(~b, s, u, depvars, II, indexmap)...
                         )
                         for r in ivs(u, s)
                     ]
@@ -90,8 +90,8 @@ end
                                 ),
                                 (r^2)
                             ) => *(
-                                ~a...,
-                                ~b...,
+                                replacevals(~a, s, u, depvars, II, indexmap)...,
+                                replacevals(~b, s, u, depvars, II, indexmap)...,
                                 spherical_diffusion(
                                     *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
                                     derivweights, s, indexmap, bcmap, depvars, r, u

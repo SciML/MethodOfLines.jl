@@ -506,6 +506,31 @@ end
     @test narrayeqs_interior(sys_arr) == 1
 end
 
+@testset "1D nonlinear laplacian, grid-varying factor multiplying the laplacian" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    bcs = [u(0, x) ~ 1.0 + sinpi(x) / 2, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
+
+    eqs = [
+        # An independent variable factor
+        Dt(u(t, x)) ~ x * Dx(u(t, x)^2 * Dx(u(t, x))),
+        # A dependent variable factor
+        Dt(u(t, x)) ~ u(t, x) * Dx(u(t, x)^2 * Dx(u(t, x))),
+        # A factor on the divided-coefficient form
+        Dt(u(t, x)) ~ x * Dx(Dx(u(t, x)) / u(t, x)),
+        # A grid-varying factor together with a grid-varying divisor
+        Dt(u(t, x)) ~ (1 + x) * Dx(u(t, x)^2 * Dx(u(t, x))) / (2 + x),
+    ]
+    for eq in eqs
+        @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+        sol_arr, _ = solve_discretized(pdesys, [x => 0.05], t)
+        @test SciMLBase.successful_retcode(sol_arr)
+    end
+end
+
 @testset "1D nonlinear laplacian, fourth order approximation" begin
     # Band regression guard: at order 4 the half-offset operators are wider than the
     # central second difference `d_orders` reports, so the core must shrink accordingly.
@@ -698,6 +723,32 @@ end
     sol_arr, sys_arr = solve_discretized(pdesys, [r => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     @test narrayeqs_interior(sys_arr) == 1
+end
+
+@testset "1D spherical laplacian, grid-varying factor multiplying the laplacian" begin
+    @parameters t r
+    @variables u(..)
+    Dt = Differential(t)
+    Dr = Differential(r)
+
+    bcs = [
+        u(0, r) ~ sin(r) / r,
+        Dr(u(t, 0)) ~ 0.0,
+        u(t, 1) ~ exp(-t) * sin(1.0),
+    ]
+    domains = [t ∈ Interval(0.0, 1.0), r ∈ Interval(0.0, 1.0)]
+
+    eqs = [
+        # An independent variable factor
+        Dt(u(t, r)) ~ (1 + r) * Dr(r^2 * Dr(u(t, r))) / r^2,
+        # A dependent variable factor
+        Dt(u(t, r)) ~ u(t, r) * Dr(r^2 * Dr(u(t, r))) / r^2,
+    ]
+    for eq in eqs
+        @named pdesys = PDESystem(eq, bcs, domains, [t, r], [u(t, r)])
+        sol_arr, _ = solve_discretized(pdesys, [r => 0.1], t)
+        @test SciMLBase.successful_retcode(sol_arr)
+    end
 end
 
 @testset "1D spherical laplacian on a nonuniform grid" begin
