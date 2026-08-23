@@ -2,29 +2,11 @@
 # (`_euler_integral`); the array path writes the same increments once as a scan.
 
 """
-    axis_cumsum(A, dim)
-
-`cumsum(A; dims = dim)` as a registered symbolic array operation, so a prefix
-sum over a slice stays O(1) in the grid size. Base `cumsum` on MethodOfLines'
-array variables scalarizes.
-"""
-axis_cumsum(A::AbstractArray, dim::Integer) = cumsum(A; dims = Int(dim))
-
-Symbolics.@register_array_symbolic axis_cumsum(A::AbstractArray, dim::Int) begin
-    size = size(A)
-    eltype = Real
-end
-
-"""
     axis_cumsum_pad(A, dim)
 
-`cumsum` along `dim` after a leading zero slab, so the result is one longer
-than `A` and starts at 0 — the trapezoidal running integral on the first
-grid point. `vcat` of a symbolic slice scalarizes; this does not.
-
-`@register_array_symbolic` evaluates the `size` block with a symbolic `dim`,
-so `i == dim` is not a `Bool`. Each axis therefore has its own registered
-wrapper whose size expression compares `i` to a literal.
+`cumsum` along `dim` after a leading zero slab. The result is one longer than
+`A` and starts at 0. Per-axis wrappers exist because `@register_array_symbolic`
+evaluates `size` with a symbolic `dim`.
 """
 function _axis_cumsum_pad(A::AbstractArray, dim::Integer)
     dim = Int(dim)
@@ -62,9 +44,8 @@ end
 """
     axis_sum(A, dim)
 
-`dropdims(sum(A; dims = dim); dims = dim)` as a registered symbolic array
-operation. Base `sum(; dims =)` on a MethodOfLines slice can leave a broken
-size and `UndefRefError` in later broadcasts.
+`dropdims(sum(A; dims = dim); dims = dim)`. Base `sum(; dims =)` on a
+MethodOfLines slice can leave a broken size.
 """
 _axis_sum(A::AbstractArray, dim::Integer) = dropdims(sum(A; dims = Int(dim)); dims = Int(dim))
 axis_sum_1(A::AbstractArray) = _axis_sum(A, 1)
@@ -119,9 +100,7 @@ function reshape_along(vals, j, N)
     return reshape(vals, ntuple(i -> i == j ? length(vals) : 1, N))
 end
 
-# `broadcast(*, w, slice)` with a length-n weight vector becomes an `array_literal`
-# of n terms. A registered scale keeps `w` a single numeric argument so the
-# expression size does not grow with the grid. A scalar weight broadcasts as-is.
+# A registered scale keeps a length-n weight vector as one argument.
 array_weight_scale(w::AbstractArray, A::AbstractArray) = broadcast(*, w, A)
 Symbolics.@register_array_symbolic array_weight_scale(w::AbstractArray, A::AbstractArray) begin
     size = size(A)
@@ -168,7 +147,7 @@ function array_compatible_depvar(u, args, pde, s)
     return !isempty(extra) && all(y -> array_has_integral(pde, u, y, s), extra)
 end
 
-function array_zerod_value(u, s)
+function array_scalar_discvar(u, s)
     disc = s.discvars[depvar(u, s)]
     return ndims(disc) == 0 ? disc[] : only(disc)
 end
@@ -191,10 +170,10 @@ function array_integral_ranges(u, s, x, ranges, indexmap; xspan = nothing)
 end
 
 function array_integral_axis_index(u, s, x)
-    uivs = collect(ivs(depvar(u, s), s))
+    uivs = ivs(depvar(u, s), s)
     j = findfirst(y -> isequal(y, x), uivs)
     j === nothing && throw(ArrayFormFallback("integral axis $x is not an argument of $u"))
-    return j, length(uivs), uivs
+    return j, length(uivs)
 end
 
 """
@@ -204,7 +183,7 @@ described by `ranges`. Reads the full axis of `u` in `x`.
 function array_cumulative_integral(u, s, x, ranges, indexmap)
     u = depvar(u, s)
     arr = array_variable(u, s)
-    j, N, _ = array_integral_axis_index(u, s, x)
+    j, N = array_integral_axis_index(u, s, x)
     n = length(s, x)
     rs = array_integral_ranges(u, s, x, ranges, indexmap)
     n <= 1 && return arr[rs...] .* 0
@@ -226,7 +205,7 @@ integrand becomes a scalar; a higher-dimensional integrand keeps its other axes.
 function array_whole_domain_integral(u, s, x, ranges, indexmap)
     u = depvar(u, s)
     arr = array_variable(u, s)
-    j, N, _ = array_integral_axis_index(u, s, x)
+    j, N = array_integral_axis_index(u, s, x)
     n = length(s, x)
     rs = array_integral_ranges(u, s, x, ranges, indexmap)
     u_full = arr[rs...]
@@ -237,14 +216,12 @@ function array_whole_domain_integral(u, s, x, ranges, indexmap)
 end
 
 """
-Whole-domain trapezoidal integral as a scalar at the transverse location of `II`,
-the array-form analogue of `whole_domain_integral`. Falls back to the recursive
-expansion when `u` is not a grid-shaped array variable.
+Whole-domain trapezoidal integral as a scalar at the transverse location of `II`.
 """
 function compact_whole_domain_integral(s, u, x, II, indexmap)
     u = depvar(u, s)
     arr = array_variable(u, s)
-    j, N, _ = array_integral_axis_index(u, s, x)
+    j, N = array_integral_axis_index(u, s, x)
     n = length(s, x)
     IIu = wd_integral_Idx(II, s, u, x, indexmap)
     rs = ntuple(N) do i

@@ -290,14 +290,13 @@ function array_core_equation(
         periodic, nllap_matches, sph_matches, mixedterms
     )
     N = length(args)
-    shape = ntuple(j -> length(ranges[j]), N)
     # First matching rule wins. Boundary-value rules before core-variable rules.
     bvalrules = array_boundary_value_rules(pde, s, ranges, indexmap)
     varrules = Pair[]
     for u in depvars
         uivs = ivs(u, s)
         if isempty(uivs)
-            push!(varrules, safe_unwrap(u) => array_zerod_value(u, s))
+            push!(varrules, safe_unwrap(u) => array_scalar_discvar(u, s))
         elseif array_same_ivs(uivs, args)
             push!(varrules, safe_unwrap(u) => array_slice(u, s, ranges, indexmap))
         end
@@ -355,13 +354,11 @@ function array_core_equation(
 
     lhs = arrayify(pde.lhs, ctx)
     rhs = arrayify(pde.rhs, ctx)
-    # `~` cannot equate an array with a scalar. A zero residual is the interior
-    # convention; a non-zero scalar (a 0D variable, a whole-domain reduction) broadcasts
-    # the way `array_bc_eqs` already does.
+    # `~` rejects array ~ scalar. Broadcast the scalar onto a core slice.
     if is_array_valued(lhs) && !is_array_valued(rhs)
-        rhs = fill(Symbolics.unwrap(rhs), shape)
+        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
-        lhs = fill(Symbolics.unwrap(lhs), shape)
+        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
         throw(ArrayFormFallback("equation contains no discretizable terms"))
     end
@@ -1852,6 +1849,33 @@ end
 # symbolic arrays and scalars of either kind.
 is_array_valued(x) = SymbolicUtils.symtype(safe_unwrap(x)) <: AbstractArray
 
+function array_shape_donor(rules)
+    for r in rules
+        is_array_valued(r.second) && return r.second
+    end
+    throw(ArrayFormFallback("no array slice to broadcast a scalar onto"))
+end
+
+# `fill(val, shape)` is an `array_literal` of one node per point.
+function array_broadcast_onto(val, ref)
+    v = Symbolics.unwrap(val)
+    v isa Number && iszero(v) && return broadcast(*, 0, ref)
+    return broadcast(+, v, broadcast(*, 0, ref))
+end
+
+function array_integral_keys_equal(a, b)
+    iscall(a) && iscall(b) || return false
+    oa = operation(a)
+    ob = operation(b)
+    oa isa Integral && ob isa Integral || return false
+    isequal(oa.domain.variables, ob.domain.variables) || return false
+    da = oa.domain.domain
+    db = ob.domain.domain
+    isequal(safe_unwrap(da.left), safe_unwrap(db.left)) || return false
+    isequal(safe_unwrap(da.right), safe_unwrap(db.right)) || return false
+    return isequal(only(arguments(a)), only(arguments(b)))
+end
+
 """
     arrayify(expr, ctx)
 
@@ -1861,22 +1885,15 @@ receives an array-valued argument. Time differentials are applied directly to th
 (array-valued) arguments; any spatial differential that survives the rules means the
 expression contains a scheme this path does not support, so fall back.
 """
-function array_integral_keys_equal(a, b)
-    iscall(a) && iscall(b) || return false
-    oa = operation(a)
-    ob = operation(b)
-    oa isa Integral && ob isa Integral || return false
-    isequal(oa.domain.variables, ob.domain.variables) || return false
-    da = oa.domain.domain
-    db = ob.domain.domain
-    isequal(da.left, db.left) && isequal(da.right, db.right) || return false
-    return isequal(only(arguments(a)), only(arguments(b)))
-end
-
 function arrayify(expr, ctx)
     expr = safe_unwrap(expr)
     for (k, v) in ctx.rules
-        (isequal(expr, k) || array_integral_keys_equal(expr, k)) && return v
+        isequal(expr, k) && return v
+    end
+    if iscall(expr) && operation(expr) isa Integral
+        for (k, v) in ctx.rules
+            array_integral_keys_equal(expr, k) && return v
+        end
     end
     iscall(expr) || return Symbolics.wrap(expr)
     op = operation(expr)
@@ -1886,9 +1903,7 @@ function arrayify(expr, ctx)
         arg = arrayify(only(arguments(expr)), ctx)
         return op(arg)
     elseif !(op isa Function)
-        # Symbolic operators (`Integral`, ...) and symbolic callables are not `Function`s
-        # and cannot be broadcast over slices; anything reaching here was not replaced by
-        # a rule, so there is no slice form for it.
+        # Symbolic operators (`Integral`, ...) cannot be broadcast over slices.
         throw(ArrayFormFallback("unhandled operation $op in $expr"))
     end
     newargs = [arrayify(a, ctx) for a in arguments(expr)]
@@ -2016,7 +2031,7 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         vd = depvar(v, s)
         push!(bc_us, vd)
         if isempty(ivs(vd, s))
-            push!(varrules, safe_unwrap(v) => array_zerod_value(vd, s))
+            push!(varrules, safe_unwrap(v) => array_scalar_discvar(vd, s))
         else
             push!(varrules, safe_unwrap(v) => array_slice(vd, s, ranges, indexmap))
         end
@@ -2041,11 +2056,10 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     ctx = ArrayifyContext(vcat(derivrules, intrules, varrules, gridrules), s.time)
     lhs = arrayify(boundary.eq.lhs, ctx)
     rhs = arrayify(boundary.eq.rhs, ctx)
-    shape = Tuple(length(ranges[i]) for i in 1:N)
     if is_array_valued(lhs) && !is_array_valued(rhs)
-        rhs = fill(Symbolics.unwrap(rhs), shape)
+        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
-        lhs = fill(Symbolics.unwrap(lhs), shape)
+        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
         throw(ArrayFormFallback("boundary condition has no discretizable terms"))
     end
