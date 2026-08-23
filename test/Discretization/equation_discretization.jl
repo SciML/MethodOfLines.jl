@@ -10,6 +10,7 @@ using OrdinaryDiffEqSSPRK: SSPRK22
 using OrdinaryDiffEqLowOrderRK: SplitEuler
 using NonlinearSolve: NewtonRaphson
 using ModelingToolkit: get_eqs
+using SymbolicUtils
 using SymbolicUtils: symtype
 using Test
 include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
@@ -2304,6 +2305,310 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y, z], [u(t, x, y, z)])
 
+    disc = MOLFiniteDifference(
+        [x => 0.2, y => 0.2, z => 0.2], t; should_transform = false
+    )
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 0
+end
+
+# Numeric arrays / `array_literal`s are data, not a growing symbolic scheme.
+function scheme_treesize(x)
+    x = Symbolics.unwrap(x)
+    x isa AbstractArray && return 1
+    SymbolicUtils.iscall(x) || return 1
+    op = SymbolicUtils.operation(x)
+    if op === SymbolicUtils.array_literal ||
+            (op isa Function && nameof(op) === :array_literal)
+        return 1
+    end
+    return 1 + sum(scheme_treesize, SymbolicUtils.arguments(x); init = 0)
+end
+eq_scheme_size(eq) = scheme_treesize(eq.lhs) + scheme_treesize(eq.rhs)
+
+function trap_scan(u, dx)
+    n = length(u)
+    I = zeros(eltype(u), n)
+    for k in 2:n
+        Δ = dx isa Number ? dx : dx[k - 1]
+        I[k] = I[k - 1] + (Δ / 2) * (u[k - 1] + u[k])
+    end
+    return I
+end
+
+@testset "1D cumulative integral is a slice reduction" begin
+    @parameters t x
+    @variables integrand(..) cumuSum(..)
+    xmin = 0.0
+    xmax = 2.0 * pi
+    Ix = Integral(x in DomainSets.ClosedInterval(xmin, x))
+    eqs = [cumuSum(t, x) ~ Ix(integrand(t, x)), integrand(t, x) ~ t * cos(x)]
+    bcs = [cumuSum(0, x) ~ 0.0, integrand(0, x) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(xmin, xmax)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t, x)])
+
+    counts = map([11, 41]) do n
+        sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => n], t))
+        scan = only(filter(eq -> occursin("axis_cumsum", string(eq)), get_eqs(sys)))
+        (narrayeqs(sys), eq_scheme_size(scan))
+    end
+    @test counts[1][1] == counts[2][1] == 2
+    @test counts[1][2] == counts[2][2]
+
+    disc = MOLFiniteDifference([x => 21], t)
+    prob = discretize(pdesys, disc)
+    @test prob isa SciMLBase.DAEProblem
+    sol = solve(prob)
+    @test SciMLBase.successful_retcode(sol)
+    xdisc = sol[x]
+    exact = [ti * sin(xi) for ti in sol[t], xi in xdisc]
+    @test sol[cumuSum(t, x)] ≈ exact atol = 0.36
+    dx = xdisc[2] - xdisc[1]
+    @test sol[cumuSum(t, x)][end, :] ≈ trap_scan(sol[integrand(t, x)][end, :], dx) atol = 1.0e-10
+end
+
+@testset "Nonuniform cumulative integral stays a slice" begin
+    @parameters t x
+    @variables integrand(..) cumuSum(..)
+    xmin = 0.0
+    xmax = 2.0 * pi
+    Ix = Integral(x in DomainSets.ClosedInterval(xmin, x))
+    eqs = [cumuSum(t, x) ~ Ix(integrand(t, x)), integrand(t, x) ~ t * cos(x)]
+    bcs = [cumuSum(0, x) ~ 0.0, integrand(0, x) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(xmin, xmax)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t, x)])
+
+    counts = map([11, 31]) do n
+        xs = collect(range(xmin, xmax; length = n))
+        sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => xs], t))
+        scan = only(filter(eq -> occursin("axis_cumsum", string(eq)), get_eqs(sys)))
+        (narrayeqs(sys), eq_scheme_size(scan))
+    end
+    @test counts[1][1] == counts[2][1] == 2
+    @test counts[1][2] == counts[2][2]
+
+    xs = collect(range(xmin, xmax; length = 21))
+    sol = solve(discretize(pdesys, MOLFiniteDifference([x => xs], t)))
+    @test SciMLBase.successful_retcode(sol)
+    dxs = diff(collect(sol[x]))
+    @test sol[cumuSum(t, x)][end, :] ≈ trap_scan(sol[integrand(t, x)][end, :], dxs) atol = 1.0e-10
+end
+
+@testset "2D cumulative integral along one axis" begin
+    @parameters t x y
+    @variables u(..) cumuSum(..)
+    Ixc = Integral(x in DomainSets.ClosedInterval(0.0, x))
+    eqs = [cumuSum(t, x, y) ~ Ixc(u(t, x, y)), u(t, x, y) ~ t * cos(x) * sinpi(y)]
+    bcs = [cumuSum(0, x, y) ~ 0.0, u(0, x, y) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), cumuSum(t, x, y)])
+
+    counts = map([(8, 6), (16, 10)]) do (nx, ny)
+        sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => nx, y => ny], t))
+        scan = only(filter(eq -> occursin("axis_cumsum", string(eq)), get_eqs(sys)))
+        (narrayeqs(sys), eq_scheme_size(scan))
+    end
+    @test counts[1][1] == counts[2][1] == 2
+    @test counts[1][2] == counts[2][2]
+end
+
+@testset "PIDE: wrapped cumulative plus first-order derivative" begin
+    @parameters t x
+    @variables u(..) cumuSum(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    xmin = 0.0
+    xmax = 2.0 * pi
+    Ix = Integral(x in DomainSets.ClosedInterval(xmin, x))
+    eqs = [
+        cumuSum(t, x) ~ Ix(u(t, x)),
+        Dt(u(t, x)) + 2 * u(t, x) + 5 * Dx(cumuSum(t, x)) ~ 1,
+    ]
+    bcs = [u(0.0, x) ~ cos(x), Dx(u(t, xmin)) ~ 0.0, Dx(u(t, xmax)) ~ 0]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(xmin, xmax)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), cumuSum(t, x)])
+
+    counts = map([12, 24]) do n
+        sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => n], t))
+        (narrayeqs(sys), narrayeqs_interior(sys),
+            eq_scheme_size(only(filter(eq -> occursin("axis_cumsum", string(eq)), get_eqs(sys)))))
+    end
+    @test counts[1][1] == counts[2][1]
+    @test counts[1][2] == counts[2][2] == 1
+    @test counts[1][3] == counts[2][3]
+
+    sol = solve(discretize(pdesys, MOLFiniteDifference([x => 16], t)))
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Integral and central diffusion in one equation" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Ix = Integral(x in DomainSets.ClosedInterval(0.0, x))
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + Ix(u(t, x))
+    bcs = [u(0, x) ~ cos(x), u(t, 0) ~ 1.0, u(t, 2π) ~ 1.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 2π)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => 16], t))
+    @test narrayeqs_interior(sys) == 1
+    int = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+    @test occursin("axis_cumsum", string(int))
+end
+
+@testset "0D whole-domain integral is a compact sum" begin
+    @parameters t x
+    @variables integrand(..) cumuSum(..)
+    xmin = 0.0
+    xmax = 2.0 * pi
+    Ix = Integral(x in DomainSets.ClosedInterval(xmin, xmax))
+    eqs = [cumuSum(t) ~ Ix(integrand(t, x)), integrand(t, x) ~ t * cos(x)]
+    bcs = [cumuSum(0) ~ 0.0, integrand(0, x) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(xmin, xmax)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [integrand(t, x), cumuSum(t)])
+
+    counts = map([11, 41]) do n
+        sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => n], t))
+        zeq = only(filter(eq -> occursin("cumuSum", string(eq)), get_eqs(sys)))
+        (narrayeqs(sys), !isarrayeq(zeq), eq_scheme_size(zeq))
+    end
+    @test counts[1][1] == counts[2][1] == 1
+    @test counts[1][2] && counts[2][2]
+    @test counts[1][3] == counts[2][3]
+
+    sol = solve(discretize(pdesys, MOLFiniteDifference([x => 21], t)))
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[cumuSum(t)] ≈ zeros(length(sol[t])) atol = 0.3
+end
+
+@testset "Rank-dropping whole-domain integral (sum along one axis)" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Ix = Integral(x in DomainSets.ClosedInterval(0.0, 1.0))
+    eqs = [v(t, y) ~ Ix(u(t, x, y)), u(t, x, y) ~ t * cos(x) * sinpi(y)]
+    bcs = [v(0, y) ~ 0.0, u(0, x, y) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, y)])
+
+    counts = map([(8, 6), (16, 10)]) do (nx, ny)
+        sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => nx, y => ny], t))
+        red = only(filter(eq -> occursin("axis_sum", string(eq)), get_eqs(sys)))
+        (narrayeqs(sys), eq_scheme_size(red))
+    end
+    @test counts[1][1] == counts[2][1] == 2
+    @test counts[1][2] == counts[2][2]
+end
+
+@testset "SIR-age: 0D lift keeps the spatial equation in slice form" begin
+    β = 0.0005
+    γ = 0.25
+    @parameters t a
+    @variables S(..) I(..) R(..)
+    Dt = Differential(t)
+    Da = Differential(a)
+    Ia = Integral(a in DomainSets.ClosedInterval(0.0, 40.0))
+    eqs = [
+        Dt(S(t)) ~ -β * S(t) * Ia(I(a, t)),
+        Dt(I(a, t)) + Da(I(a, t)) ~ -γ * I(a, t),
+        Dt(R(t)) ~ γ * Ia(I(a, t)),
+    ]
+    bcs = [
+        S(0) ~ 990.0,
+        I(0, t) ~ β * S(t) * Ia(I(a, t)),
+        I(a, 0) ~ 10.0 / 40.0,
+        R(0) ~ 0.0,
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, [t ∈ (0.0, 1.0), a ∈ (0.0, 40.0)], [a, t], [S(t), I(a, t), R(t)]
+    )
+
+    counts = map([10, 20]) do n
+        sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([a => n], t))
+        eqs_out = get_eqs(sys)
+        Seq = only(
+            filter(
+                eq -> occursin("Differential(t", string(eq)) && occursin("S(t)", string(eq)) &&
+                    !isarrayeq(eq), eqs_out
+            )
+        )
+        Req = only(
+            filter(
+                eq -> occursin("Differential(t", string(eq)) && occursin("R(t)", string(eq)),
+                eqs_out
+            )
+        )
+        (
+            narrayeqs_interior(sys), length(eqs_out),
+            eq_scheme_size(Seq), eq_scheme_size(Req),
+            occursin("array_weight_scale", string(Seq)),
+            occursin("array_weight_scale", string(Req)),
+        )
+    end
+    @test counts[1][1] == counts[2][1] == 1
+    @test counts[1][2] == counts[2][2]
+    @test counts[1][3] == counts[2][3]
+    @test counts[1][4] == counts[2][4]
+    @test counts[1][5] && counts[2][5]
+    @test counts[1][6] && counts[2][6]
+
+    sol = solve(discretize(pdesys, MOLFiniteDifference([a => 16], t)))
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Fallback: stationary system with an integral" begin
+    @parameters x
+    @variables u(..) I(..)
+    Ix = Integral(x in DomainSets.ClosedInterval(0.0, x))
+    @named pdesys = PDESystem(
+        [I(x) ~ Ix(u(x)), u(x) ~ cos(x)], [I(0) ~ 0.0],
+        [x ∈ Interval(0.0, 1.0)], [x], [u(x), I(x)]
+    )
+    sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => 8]))
+    @test narrayeqs(sys) == 0
+end
+
+@testset "Higher mixed derivative and integral stay in slice form" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxxy = (Differential(x)^2) * Differential(y)
+    Ix = Integral(x in DomainSets.ClosedInterval(0.0, x))
+    eq = Dt(u(t, x, y)) ~ Dxxy(u(t, x, y)) + Ix(u(t, x, y))
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+    sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => 0.2, y => 0.2], t))
+    @test narrayeqs_interior(sys) == 1
+    int = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+    @test occursin("axis_cumsum", string(int))
+end
+
+@testset "Fallback: three-direction mixed still falls back with an integral" begin
+    @parameters t x y z
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+    Dz = Differential(z)
+    Ix = Integral(x in DomainSets.ClosedInterval(0.0, x))
+    eq = Dt(u(t, x, y, z)) ~ Dx(Dy(Dz(u(t, x, y, z)))) + Ix(u(t, x, y, z))
+    bcs = [
+        u(0, x, y, z) ~ sinpi(x) * sinpi(y) * sinpi(z),
+        u(t, 0, y, z) ~ 0.0, u(t, 1, y, z) ~ 0.0,
+        u(t, x, 0, z) ~ 0.0, u(t, x, 1, z) ~ 0.0,
+        u(t, x, y, 0) ~ 0.0, u(t, x, y, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0),
+        y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y, z], [u(t, x, y, z)])
     disc = MOLFiniteDifference(
         [x => 0.2, y => 0.2, z => 0.2], t; should_transform = false
     )
