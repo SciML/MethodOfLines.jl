@@ -34,8 +34,10 @@
 # taps across the interior, so the interior is one array equation per PDE; the (1D,
 # single-point) boundaries stay pointwise.
 #
-# Mixed first-order derivatives `Dx(Dy(u))` are the tensor product of the two centered
-# first-order stencils; see `array_mixed_difference`. Higher mixed orders still fall back.
+# Mixed derivatives `(Differential(x)^m * Differential(y)^n)(u)` are the tensor product
+# of the two centered stencils of those orders; see `array_mixed_difference`. The first-
+# order case `Dx(Dy(u))` is `m = n = 1`. Three-or-more spatial directions, mixed
+# derivatives of boundary values, and mixed derivatives on staggered grids still fall back.
 #
 # Unsupported patterns fall back to pointwise equations: integrals,
 # two-variable interfaces, callbacks,
@@ -207,11 +209,11 @@ function discretize_equation_array_form(
             sph_orders[m.x] = union(get(sph_orders, m.x, Set{Int}()), orders)
         end
     end
-    mixedterms = isstag ? [] : array_mixed_terms(pde, depvars, args)
-    mixeddirs = unique!([d for (_, x, y) in mixedterms for d in (x, y)])
+    mixedterms = isstag ? [] : array_mixed_terms(pde, depvars, args, pdeorders)
+    mixedorders = mixed_orders_by_direction(mixedterms)
     bands, clean = array_bands(
         interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders,
-        sph_orders, mixeddirs
+        sph_orders, mixedorders
     )
     any(isempty, bands) && throw(ArrayFormFallback("empty core region"))
     N = length(args)
@@ -414,17 +416,20 @@ On a staggered grid the interior taps are `(0, +1)` or `(-1, 0)` depending on ea
 variable's alignment; the union over both alignments is taken, so at worst one extra
 point per end lands in the pointwise frame.
 
-A mixed derivative reaches along `x` with the *centered* first order stencil rather than
-the winding one `pdeorders` would select for order 1, so those directions take its taps
-too.
+A mixed derivative reaches along `x` with the *centered* stencil of the mixed order in
+that direction, rather than the winding one `pdeorders` would select for an odd order, so
+those orders take their centered taps too. For order 1 this is the first-order centered
+stencil, which at approximation orders 4/6 is wider than the winding stencil.
 """
-function array_tap_extents(x, pdeorders, derivweights, ::Type{G}, mixeddirs) where {G}
+function array_tap_extents(x, pdeorders, derivweights, ::Type{G}, mixedorders) where {G}
     mintap = 0
     maxtap = 0
-    if any(isequal(x), mixeddirs)
-        taps = half_range(derivweights.map[Differential(x)].stencil_length)
-        mintap = min(mintap, first(taps))
-        maxtap = max(maxtap, last(taps))
+    if haskey(mixedorders, x)
+        for m in mixedorders[x]
+            taps = half_range(derivweights.map[Differential(x)^m].stencil_length)
+            mintap = min(mintap, first(taps))
+            maxtap = max(maxtap, last(taps))
+        end
     end
     for d in pdeorders[x]
         if iseven(d)
@@ -447,7 +452,7 @@ function array_tap_extents(x, pdeorders, derivweights, ::Type{G}, mixeddirs) whe
 end
 
 function array_tap_extents(
-        x, pdeorders, derivweights, ::Type{G}, mixeddirs
+        x, pdeorders, derivweights, ::Type{G}, mixedorders
     ) where {G <: StaggeredGrid}
     return isempty(pdeorders[x]) ? (0, 0) : (-1, 1)
 end
@@ -474,13 +479,14 @@ derivative orders above one; those directions additionally take the half-offset 
 conditions and tap extents of `array_nonlinlap_constraints`. `sph_orders` does the same
 for spherical laplacians via `array_spherical_constraints`, and additionally keeps any
 r ≈ 0 points out of the core (the pointwise path treats them with a separate branch).
-`mixeddirs` are the directions a mixed derivative reaches along: those use the centered
-first-order stencil, which at higher approximation orders is wider than the winding
-stencil the order-1 entry of `pdeorders` would select.
+`mixedorders` maps each direction a mixed derivative reaches along to the centered
+orders used there. Those use the centered stencil of that order, which for an odd
+mixed order is wider than the winding stencil the same entry of `pdeorders` would
+select — at first order and `approx_order` 4/6 this is the original mixed first-order case.
 """
 function array_bands(
         interior, s, args, pdeorders, derivweights, indexmap, periodic,
-        nllap_orders, sph_orders, mixeddirs
+        nllap_orders, sph_orders, mixedorders
     )
     N = length(args)
     bands = [UnitRange{Int}[] for _ in 1:N]
@@ -491,7 +497,7 @@ function array_bands(
         hi = last(interior)[j]
         n = length(s, x)
         mintap, maxtap = array_tap_extents(
-            x, pdeorders, derivweights, get_grid_type(s), mixeddirs
+            x, pdeorders, derivweights, get_grid_type(s), mixedorders
         )
         nl = if haskey(nllap_orders, x)
             c = array_nonlinlap_constraints(
@@ -548,10 +554,12 @@ function array_bands(
                     )
                 end
             end
-            if any(isequal(x), mixeddirs)
-                bpc = derivweights.map[Differential(x)].boundary_point_count
-                lo = max(lo, bpc + 1)
-                hi = min(hi, n - bpc)
+            if haskey(mixedorders, x)
+                for m in mixedorders[x]
+                    bpc = derivweights.map[Differential(x)^m].boundary_point_count
+                    lo = max(lo, bpc + 1)
+                    hi = min(hi, n - bpc)
+                end
             end
             if nl !== nothing
                 lo = max(lo, nl[1])
@@ -944,32 +952,47 @@ end
 end
 
 """
-The `(u, x, y)` triples for which the mixed derivative `Dx(Dy(u))` occurs in `pde`.
+The `(u, x, m, y, n)` records for which the mixed derivative
+`(Differential(x)^m * Differential(y)^n)(u)` occurs in `pde`.
 
-`Dx(Dy(u))` for two distinct spatial variables is the only mixed pattern the pointwise path
-has a scheme for (`generate_mixed_rules`), and so the only one with a slice form here;
-anything else — a mixed derivative of higher order in one of its directions, say — reaches
-`arrayify` with a spatial differential still in place and falls back.
+Two distinct spatial variables and a dependent variable is the only mixed family the
+pointwise path has a scheme for (`generate_mixed_rules`), and so the only one with a
+slice form here. Three-or-more spatial directions and mixed derivatives of anything
+other than a dependent variable reach `arrayify` with a spatial differential still in
+place and fall back.
 """
-function array_mixed_terms(pde, depvars, args)
+function array_mixed_terms(pde, depvars, args, pdeorders)
     found = []
+    seen = []
     for u in depvars, x in args, y in remove(args, x)
-        r = safe_unwrap((Differential(x) * Differential(y))(u)) => nothing
-        (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) || continue
-        push!(found, (u, x, y))
+        for mx in get(pdeorders, x, Int[]), my in get(pdeorders, y, Int[])
+            keys = mixed_derivative_keys(u, x, mx, y, my)
+            matched = false
+            for key in keys
+                any(k -> isequal(k, key), seen) && continue
+                r = key => nothing
+                (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) || continue
+                push!(seen, key)
+                matched = true
+            end
+            matched || continue
+            push!(found, (u, x, mx, y, my))
+        end
     end
     return found
 end
 
 """
-Array form of `mixed_central_difference` on the core region for `Dx(Dy(u))`.
+Array form of `mixed_central_difference` on the core region for
+`(Differential(x)^m * Differential(y)^n)(u)`.
 
-The scalar scheme is the tensor product of the two centered first order stencils: a sum
-over the taps in `x` of a sum over the taps in `y` of `wx*wy*u[II + kx + ky]`. Every point
-of the core takes the interior branch of both, so the whole thing is one broadcasted sum of
+The scalar scheme is the tensor product of the two centered stencils: a sum over the
+taps in `x` of a sum over the taps in `y` of `wx*wy*u[II + kx + ky]`. Every point of
+the core takes the interior branch of both, so the whole thing is one broadcasted sum of
 slices shifted along two axes at once — `array_central_difference` with a second shifted
 axis. The weights come from the same `DerivativeOperator`s the pointwise path uses and their
-products are numeric, so the two agree term by term.
+products are numeric, so the two agree term by term. The first-order case `Dx(Dy(u))` is
+`m = n = 1`.
 """
 function array_mixed_difference(Dxop, Dyop, s, u, x, y, ranges, indexmap, periodic)
     # `central_difference_weights_and_stencil` rejects interfaces on a nonuniform grid;
@@ -997,14 +1020,15 @@ end
         mixedterms, s, derivweights, ranges, indexmap, periodic
     )
     rules = Pair[]
-    for (u, x, y) in mixedterms
-        push!(
-            rules,
-            safe_unwrap((Differential(x) * Differential(y))(u)) => array_mixed_difference(
-                derivweights.map[Differential(x)], derivweights.map[Differential(y)],
-                s, u, x, y, ranges, indexmap, periodic
-            )
+    for (u, x, mx, y, my) in mixedterms
+        expr = array_mixed_difference(
+            derivweights.map[Differential(x)^mx],
+            derivweights.map[Differential(y)^my],
+            s, u, x, y, ranges, indexmap, periodic
         )
+        for key in mixed_derivative_keys(u, x, mx, y, my)
+            push!(rules, key => expr)
+        end
     end
     return rules
 end
