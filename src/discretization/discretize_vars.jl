@@ -286,7 +286,8 @@ end
         ModelingToolkit.VariableOutput
         ModelingToolkit.VariableStatePriority
         ModelingToolkit.VariableType
-        ModelingToolkit.VariableUnit]
+        ModelingToolkit.VariableUnit
+        ModelingToolkit.VariableNominal]
     for ctx in METADATA
         if hasmetadata(original, ctx)
             arrvar = setmetadata(arrvar, ctx, getmetadata(original, ctx))
