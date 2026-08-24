@@ -261,15 +261,38 @@ map dependent variables
         sym = nameof(op)
         if t === nothing
             uaxes = collect(axes(grid[x])[1] for x in arguments(u))
-            u => unwrap.(collect(first(@variables $sym[uaxes...])))
+            arrvar = unwrap(first(@variables $sym[uaxes...]))
+            arrvar = add_MTK_metadata(arrvar, u)
+            u => unwrap.(collect(arrvar))
         elseif isequal(SymbolicUtils.arguments(u), [t])
             u => fill(safe_unwrap(u), ()) #Create a 0-dimensional array
         else
             uaxes = collect(axes(grid[x])[1] for x in remove(arguments(u), t))
-            u => unwrap.(collect(first(@variables $sym(t)[uaxes...])))
+            arrvar = unwrap(first(@variables $sym(t)[uaxes...]))
+            arrvar = add_MTK_metadata(arrvar, u)
+            u => unwrap.(collect(arrvar))
         end
     end
     return depvarsdisc
+end
+
+@inline function add_MTK_metadata(arrvar, original)
+    METADATA = [ModelingToolkit.VariableBounds
+        ModelingToolkit.VariableConnectType
+        ModelingToolkit.VariableDescription
+        ModelingToolkit.VariableInput
+        ModelingToolkit.VariableIrreducible
+        ModelingToolkit.VariableMisc
+        ModelingToolkit.VariableOutput
+        ModelingToolkit.VariableStatePriority
+        ModelingToolkit.VariableType
+        ModelingToolkit.VariableUnit]
+    for ctx in METADATA
+        if hasmetadata(original, ctx)
+            arrvar = setmetadata(arrvar, ctx, getmetadata(original, ctx))
+        end
+    end
+    return arrvar
 end
 
 """
