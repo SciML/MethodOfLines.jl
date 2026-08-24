@@ -60,5 +60,5 @@ include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
     @test getmetadata(prob.f.sys.z, ModelingToolkit.VariableBounds) == (0.0, Inf)
     @test getmetadata(prob.f.sys.z, ModelingToolkit.VariableOutput) == true
 
-    @test length(analytically_integrated(prob)) == 6 # 3 for y and 3 for z
+    @test length(analytically_integrated(prob.f.sys)) == 6 # 3 for y and 3 for z
 end
