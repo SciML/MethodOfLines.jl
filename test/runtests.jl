@@ -67,6 +67,9 @@ run_tests(;
             @safetestset "MOLFiniteDifference Interface: Staggered constructors" begin
                 include(joinpath(@__DIR__, "Components", "staggered_constructors.jl"))
             end
+            @safetestset "MTK Metadata" begin
+                include(joinpath(@__DIR__, "Components", "metadata.jl"))
+            end
             return @safetestset "Discrete Callbacks" begin
                 include(joinpath(@__DIR__, "Components", "callbacks.jl"))
             end
