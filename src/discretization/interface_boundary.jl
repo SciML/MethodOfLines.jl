@@ -76,8 +76,44 @@ function get_interface_vars(b, s, j)
     return I1, discu2, l1, l2
 end
 
+"""
+    interface_layout_compatible(s, b, j)
+
+Whether interface `b` may write a `CartesianIndex` of `b.u` into `b.u2`.
+
+The pointwise wrap and face equations index the partner at the same slot `j`
+plus a shift along that axis. That is valid only when `b.x2` occupies argument
+position `j` in `b.u2`, the two variables have the same number of spatial
+arguments, and every non-interface axis has the same discrete length. A
+different layout is not remapped.
+"""
+function interface_layout_compatible(s, b, j)
+    u = depvar(b.u, s)
+    u2 = depvar(b.u2, s)
+    j2 = x2i(s, u2, b.x2)
+    (
+        j2 !== nothing && j2 == j &&
+            ndims(u, s) == ndims(u2, s)
+    ) || return false
+    disc1 = s.discvars[u]
+    disc2 = s.discvars[u2]
+    return all(i -> i == j || size(disc1, i) == size(disc2, i), 1:ndims(u, s))
+end
+
+function check_interface_layout(s, b, j)
+    interface_layout_compatible(s, b, j) || throw(
+        ArgumentError(
+            "Interface $(b.eq) joins variables with incompatible layout. " *
+                "The interface axis must occupy the same argument position in both " *
+                "variables, and every other axis must have the same discrete length."
+        )
+    )
+    return nothing
+end
+
 function _wrapinterface(I, s, b::InterfaceBoundary{Val{false}(), Val{true}()}, j)
     if I[j] <= 1
+        check_interface_layout(s, b, j)
         u = b.u
         u2 = b.u2
         discu2 = s.discvars[depvar(u2, s)]
@@ -94,6 +130,7 @@ end
 function _wrapinterface(I, s, b::InterfaceBoundary{Val{true}(), Val{false}()}, j)
     l1 = length(s, b.x)
     if I[j] > l1
+        check_interface_layout(s, b, j)
         u = b.u
         u2 = b.u2
         discu2 = s.discvars[depvar(u2, s)]

@@ -43,6 +43,11 @@ function generate_bc_eqs!(
     x__ = boundary.x2
     N = ndims(u_, s)
     j = x2i(s, depvar(u_, s), x_)
+    j === nothing && throw(
+        ArgumentError("Interface $(boundary.eq): $(x_) is not an argument of $(u_)")
+    )
+    # Partner is indexed at the same CartesianIndex plus a shift along `j`.
+    check_interface_layout(s, boundary, j)
     # * Assume that the interface BC is of the simple form u(t,0) ~ u(t,1)
     Ioffset = unitindex(N, j) * (length(s, x__) - 1)
     disc1 = s.discvars[depvar(u_, s)]
@@ -133,6 +138,7 @@ function boundary_value_maps(
         u__ = boundary.u2
         x__ = boundary.x2
         otheru = depvar(u__, s)
+        check_interface_layout(s, boundary, j)
 
         j = x2i(s, otheru, x__)
         is = [II[i] for i in 1:length(II)]
@@ -212,6 +218,7 @@ function boundary_value_maps(
         u__ = boundary.u2
         x__ = boundary.x2
         otheru = depvar(u__, s)
+        check_interface_layout(s, boundary, j)
 
         is = [II[i] for i in setdiff(1:length(II), [j])]
         j = x2i(s, otheru, x__)
@@ -287,6 +294,7 @@ function boundary_value_maps(
         u__ = boundary.u2
         x__ = boundary.x2
         otheru = depvar(u__, s)
+        check_interface_layout(s, boundary, j)
 
         is = [II[i] for i in setdiff(1:length(II), [j])]
         j = x2i(s, otheru, x__)

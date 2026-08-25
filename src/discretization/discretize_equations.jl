@@ -411,12 +411,10 @@ function array_wrap_dest(s, u, x, b::InterfaceBoundary)
         ArrayFormFallback("interface $(b.eq) is not a join of $u along $x")
     )
     src_j = x2i(s, u, x)
-    dst_j = x2i(s, u2, x2)
-    (
-        src_j !== nothing && dst_j !== nothing && src_j == dst_j &&
-            ndims(u, s) == ndims(u2, s)
-    ) ||
-        throw(
+    src_j === nothing && throw(
+        ArrayFormFallback("interface $(b.eq) is not a join of $u along $x")
+    )
+    interface_layout_compatible(s, b, src_j) || throw(
         ArrayFormFallback(
             "interface $(b.eq) joins variables with incompatible layout"
         )
@@ -2290,8 +2288,11 @@ function array_bc_eqs(s, boundary::InterfaceBoundary, interiormap, derivweights,
 
     arr2 = array_variable(u2, s)
     disc2 = s.discvars[u2]
-    ndims(disc2) == N ||
-        throw(ArrayFormFallback("interface joins variables of differing dimensionality"))
+    interface_layout_compatible(s, boundary, j) || throw(
+        ArrayFormFallback(
+            "interface $(boundary.eq) joins variables with incompatible layout"
+        )
+    )
     # the same index shift `generate_bc_eqs!` applies pointwise
     shift = length(s, boundary.x2) - 1
     rs2 = ntuple(i -> i == j ? (ranges[i] .+ shift) : ranges[i], N)
@@ -2326,11 +2327,10 @@ function array_bc_eqs(
         throw(ArrayFormFallback("boundary variable $x_ not an argument of $u"))
     j = indexmap[x_]
     j2 = x2i(s, u2, x2)
-    j2 === nothing && throw(
-        ArrayFormFallback("boundary variable $x2 not an argument of $u2")
-    )
-    j == j2 || throw(
-        ArrayFormFallback("interface $(boundary.eq) joins variables with incompatible layout")
+    interface_layout_compatible(s, boundary, j) || throw(
+        ArrayFormFallback(
+            "interface $(boundary.eq) joins variables with incompatible layout"
+        )
     )
     N = length(args)
 
