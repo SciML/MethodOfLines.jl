@@ -412,8 +412,10 @@ function array_wrap_dest(s, u, x, b::InterfaceBoundary)
     )
     src_j = x2i(s, u, x)
     dst_j = x2i(s, u2, x2)
-    (src_j !== nothing && dst_j !== nothing && src_j == dst_j &&
-        ndims(u, s) == ndims(u2, s)) ||
+    (
+        src_j !== nothing && dst_j !== nothing && src_j == dst_j &&
+            ndims(u, s) == ndims(u2, s)
+    ) ||
         throw(
         ArrayFormFallback(
             "interface $(b.eq) joins variables with incompatible layout"
@@ -2167,9 +2169,8 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
             )
         end
     end
-    # An interface on this same end wraps stencil taps off the face (those BCs are
-    # `InterfaceBoundary` / `HigherOrderInterfaceBoundary`). An interface at the
-    # opposite end of `x_` does not: this face's one-sided stencil points inward.
+    # An interface on this same end wraps stencil taps off the face. An interface
+    # at the opposite end of `x_` does not: this face's one-sided stencil points inward.
     ifaces = filter_interfaces(bcmap[operation(u)][x_])
     any(b -> isupper(b) == isupper(boundary), ifaces) &&
         throw(ArrayFormFallback("interface boundary condition in $x_"))
@@ -2303,11 +2304,10 @@ end
 """
     array_bc_eqs(s, boundary::HigherOrderInterfaceBoundary, interiormap, derivweights, bcmap)
 
-Flux (or other higher-order) interface condition as one array equation over the face,
-the slice form of the pointwise `boundary_value_maps` path: derivatives of `u` live on
-this boundary's edge, derivatives of `u2` on the partner face at index 1.
-
-A 1D (single-point) face has nothing to collapse and falls back.
+Flux (or other higher-order) interface condition as one array equation over the face.
+`boundary.u` is discretized on this edge; `boundary.u2` on the partner face at index 1.
+A self-periodic flux reuses one discrete variable on both ends; each call is bound to
+its own face. A 1D (single-point) face falls back.
 """
 function array_bc_eqs(
         s, boundary::HigherOrderInterfaceBoundary, interiormap, derivweights, bcmap
@@ -2385,37 +2385,53 @@ function array_bc_eqs(
 
     II0 = first(E)
     II0_2 = CartesianIndex(ntuple(i -> i == j2 ? 1 : first(ranges[i]), N))
+    samevar = isequal(u, u2)
+    # Partner = `boundary.u2`. Same discrete variable: distinguish by the lower-end argument.
+    function on_partner(v)
+        v = safe_unwrap(v)
+        isequal(v, safe_unwrap(boundary.u2)) && return true
+        isequal(depvar(v, s), u2) || return false
+        samevar || return true
+        for (a, x) in zip(remove(arguments(v), s.time), ivs(depvar(v, s), s))
+            isequal(x, x2) || continue
+            aval = unwrap_const(safe_unwrap(a))
+            return aval isa Number && isequal(aval, first(s.axies[x2]))
+        end
+        return false
+    end
+
     derivrules = Pair[]
     for d in get(derivweights.orders, x_, Int[])
         expr = face_deriv(u, x_, II0, ranges, indexmap, d)
         expr === nothing && continue
         for v in bcdepvars
-            isequal(depvar(v, s), u) || continue
+            on_partner(v) && continue
             push!(derivrules, safe_unwrap((Differential(x_)^d)(v)) => expr)
         end
-        push!(derivrules, safe_unwrap((Differential(x_)^d)(u)) => expr)
+        samevar || push!(derivrules, safe_unwrap((Differential(x_)^d)(u)) => expr)
     end
     for d in get(derivweights.orders, x2, Int[])
         expr = face_deriv(u2, x2, II0_2, ranges2, indexmap2, d)
         expr === nothing && continue
         for v in bcdepvars
-            isequal(depvar(v, s), u2) || continue
+            on_partner(v) || continue
             push!(derivrules, safe_unwrap((Differential(x2)^d)(v)) => expr)
         end
-        push!(derivrules, safe_unwrap((Differential(x2)^d)(u2)) => expr)
+        samevar || push!(derivrules, safe_unwrap((Differential(x2)^d)(u2)) => expr)
     end
 
     varrules = Pair[]
     for v in bcdepvars
-        vd = depvar(v, s)
-        if isequal(vd, u)
-            push!(varrules, safe_unwrap(v) => array_slice(u, s, ranges, indexmap))
-        else
+        if on_partner(v)
             push!(varrules, safe_unwrap(v) => array_slice(u2, s, ranges2, indexmap2))
+        else
+            push!(varrules, safe_unwrap(v) => array_slice(u, s, ranges, indexmap))
         end
     end
-    push!(varrules, safe_unwrap(u) => array_slice(u, s, ranges, indexmap))
-    push!(varrules, safe_unwrap(u2) => array_slice(u2, s, ranges2, indexmap2))
+    if !samevar
+        push!(varrules, safe_unwrap(u) => array_slice(u, s, ranges, indexmap))
+        push!(varrules, safe_unwrap(u2) => array_slice(u2, s, ranges2, indexmap2))
+    end
 
     gridrules = Pair[]
     for x in args
@@ -2450,6 +2466,8 @@ function array_bc_eqs(
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
         throw(ArrayFormFallback("boundary condition has no discretizable terms"))
     end
+    isequal(safe_unwrap(lhs), safe_unwrap(rhs)) &&
+        throw(ArrayFormFallback("higher-order interface condition collapsed to an identity"))
     return [lhs ~ rhs]
 end
 
