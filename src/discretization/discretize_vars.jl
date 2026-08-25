@@ -277,7 +277,8 @@ map dependent variables
 end
 
 @inline function add_MTK_metadata(arrvar, original)
-    METADATA = [ModelingToolkit.VariableBounds
+    METADATA = [
+        ModelingToolkit.VariableBounds
         ModelingToolkit.VariableConnectType
         ModelingToolkit.VariableDescription
         ModelingToolkit.VariableInput
@@ -287,7 +288,8 @@ end
         ModelingToolkit.VariableStatePriority
         ModelingToolkit.VariableType
         ModelingToolkit.VariableUnit
-        ModelingToolkitBase.VariableNominal]
+        ModelingToolkitBase.VariableNominal
+    ]
     for ctx in METADATA
         if hasmetadata(original, ctx)
             arrvar = setmetadata(arrvar, ctx, getmetadata(original, ctx))
