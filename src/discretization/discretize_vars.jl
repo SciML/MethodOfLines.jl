@@ -288,7 +288,6 @@ end
         ModelingToolkit.VariableStatePriority
         ModelingToolkit.VariableType
         ModelingToolkit.VariableUnit
-        ModelingToolkitBase.VariableNominal
     ]
     for ctx in METADATA
         if hasmetadata(original, ctx)
