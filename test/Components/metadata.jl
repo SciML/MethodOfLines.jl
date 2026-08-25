@@ -10,11 +10,14 @@ include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
     Dxx = Differential(x)^2
 
     # 1D PDE and boundary conditions
-    eq = [Dt(u(t, x)) ~ Dxx(u(t, x)) + g(t, x) + y(t, x) + z(t, x),
+    eq = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + g(t, x) + y(t, x) + z(t, x),
         Dt(g(t, x)) ~ 0,
         Dt(y(t, x)) ~ 0,
-        Dt(z(t, x)) ~ 0]
-    bcs = [u(0, x) ~ sin(pi * x),
+        Dt(z(t, x)) ~ 0,
+    ]
+    bcs = [
+        u(0, x) ~ sin(pi * x),
         u(t, 0) ~ 0,
         u(t, 1) ~ 0,
         g(0, x) ~ 0,
@@ -25,11 +28,14 @@ include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
         Dx(y(t, 1)) ~ 0,
         z(0, x) ~ 0,
         Dx(z(t, 0)) ~ 0,
-        Dx(z(t, 1)) ~ 0]
+        Dx(z(t, 1)) ~ 0,
+    ]
 
     # Space and time domains
-    domains = [t ∈ Interval(0.0, 0.01),
-        x ∈ Interval(0.0, 1.0)]
+    domains = [
+        t ∈ Interval(0.0, 0.01),
+        x ∈ Interval(0.0, 1.0),
+    ]
 
     # PDE system
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [g(t, x), u(t, x), y(t, x), z(t, x)])
