@@ -117,8 +117,8 @@ Physical coordinate of raw tap index `I` in the differentiated grid's chart. Wra
 use the exact interface chart transition: periodic shift = period length, contiguous
 shift = 0. Result is strictly increasing across the seam.
 
-Mirrored bit for bit by `array_periodic_coord` for self-periodic directions; keep them
-in lockstep.
+Mirrored bit for bit by `array_periodic_coord` for self-periodic directions and by
+`array_wrap_coord` for two-domain interfaces; keep them in lockstep.
 """
 function bcoord(I, bs, s, jx)
     j, x = jx

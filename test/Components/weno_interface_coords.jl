@@ -171,4 +171,29 @@ end
     @test M.bcoord(CartesianIndex(-1), bs2, s, (j2, x2)) ≈ g1[N1 - 2]
     coords2 = [M.bcoord(CartesianIndex(2 + i), bs2, s, (j2, x2)) for i in -2:2]
     @test all(diff(coords2) .> 0)
+
+    # array_wrap_coord must match bcoord bit for bit on both sides of the seam.
+    u1d = M.depvar(M.unwrap(u1(t, x1)), s)
+    u2d = M.depvar(M.unwrap(u2(t, x2)), s)
+    spec1 = (n = N1, lower = nothing, upper = (u = u2d, x = x2, n = length(g2)))
+    spec2 = (n = length(g2), lower = (u = u1d, x = x1, n = N1), upper = nothing)
+    @test M.array_wrap_coord(g1, N1, spec1, s) ==
+        M.bcoord(CartesianIndex(N1), bs1, s, (j1, x1))
+    @test M.array_wrap_coord(g1, N1 + 1, spec1, s) ==
+        M.bcoord(CartesianIndex(N1 + 1), bs1, s, (j1, x1))
+    @test M.array_wrap_coord(g1, N1 + 2, spec1, s) ==
+        M.bcoord(CartesianIndex(N1 + 2), bs1, s, (j1, x1))
+    @test M.array_wrap_coord(g2, 2, spec2, s) ==
+        M.bcoord(CartesianIndex(2), bs2, s, (j2, x2))
+    @test M.array_wrap_coord(g2, 1, spec2, s) ==
+        M.bcoord(CartesianIndex(1), bs2, s, (j2, x2))
+    @test M.array_wrap_coord(g2, 0, spec2, s) ==
+        M.bcoord(CartesianIndex(0), bs2, s, (j2, x2))
+
+    dest, r = M.wrap_tap_range((N1 + 1):(N1 + 1), spec1)
+    @test dest.n == length(g2)
+    @test r == 2:2
+    dest, r = M.wrap_tap_range(0:0, spec2)
+    @test dest.n == N1
+    @test r == (N1 - 1):(N1 - 1)
 end

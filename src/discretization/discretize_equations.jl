@@ -10,10 +10,12 @@
 # interior points close enough to a boundary that their stencil differs from the
 # translation-invariant interior stencil (the "frame").
 #
-# Periodic directions are translation invariant over the whole interior — the pointwise path
-# never selects a boundary stencil there, it wraps the taps across the seam — so the
-# interior is emitted as one array equation per box of the decomposition described in
-# `array_bands`, a count that does not depend on the grid resolution.
+# Periodic and two-domain interface directions are translation invariant over the
+# interior at a wrapping end — the pointwise path never selects a boundary stencil
+# there, it wraps the taps across the seam (onto the same array, or another
+# variable's array) — so the interior is emitted as one array equation per box of
+# the decomposition described in `array_bands`, a count that does not depend on
+# the grid resolution.
 #
 # Interior boundary values (e.g. `u(t, 1)`) map to the matching array element or face
 # slice on every array box, including size-1 wrap boxes and frame points (the pointwise
@@ -45,10 +47,11 @@
 # only when the integration axis is absent from the equation variable (the pointwise
 # `indexmap` / `bvar` filter). Time-only dependents broadcast as scalars.
 #
-# Unsupported patterns fall back to pointwise equations: two-variable interfaces,
-# callbacks, differing dimensionality (beyond a 0D broadcast or an integral rank drop),
+# Unsupported patterns fall back to pointwise equations: callbacks,
+# differing dimensionality (beyond a 0D broadcast or an integral rank drop),
 # boundary-value derivatives, time-literal dependent-variable
-# calls, edge-aligned boundary values, stationary systems.
+# calls, edge-aligned boundary values, stationary systems, linear operators on a
+# nonuniform two-domain interface.
 
 struct ArrayFormFallback <: Exception
     msg::String
@@ -190,7 +193,7 @@ function discretize_equation_array_form(
         array_compatible_depvar(u, args, pde, s) ||
             throw(ArrayFormFallback("variables of differing dimensionality"))
     end
-    periodic = array_periodic_dims(s, depvars, args, bcmap)
+    periodic = array_wrap_dims(s, depvars, args, bcmap)
 
     pdeorders = Dict(x => d_orders(x, [pde]) for x in args)
     isstag && validate_staggered_array_form(s, depvars, pdeorders, args)
@@ -366,44 +369,120 @@ function array_core_equation(
 end
 
 """
-The directions in which every dependent variable is periodic, mapped to the number of grid
-points in that direction.
+Wrap specification for one direction: source length `n` and, per end, where a tap
+that leaves the grid is read from.
 
-A periodic direction is one whose interface boundaries join a variable to itself at the
-other end of the same independent variable, which is what `u(t, 0) ~ u(t, 1)` parses to.
-There the pointwise path never selects a boundary stencil — `haslowerupper` reports both ends
-as interfaces — so the interior stencil applies across the whole interior with its taps
-wrapped around the seam by `bwrap`, which `wrap_periodic_range` reproduces on slices.
+`lower` / `upper` are `nothing` (that end is a regular boundary; shrink the core),
+`:self` (self-periodic: wrap onto the same array with the same length), or
+`(; u, x, n)` naming the partner variable a two-domain interface joins.
+"""
+array_wrap_is_twodomain(spec) =
+    spec.lower isa NamedTuple || spec.upper isa NamedTuple
 
-Interfaces that join two different variables, or one end of a domain only, shift taps onto
-another array and have no such form here; those throw.
+array_wrap_dest_n(dest, n_src) = dest isa NamedTuple ? dest.n : n_src
 
-A nonuniform periodic direction is admitted: operators whose seam form the pointwise path
+function array_mentions_iv(expr, x)
+    expr === nothing && return false
+    xe = safe_unwrap(x)
+    return any(v -> isequal(safe_unwrap(v), xe), Symbolics.get_variables(expr))
+end
+
+"""
+The wrap destination of interface boundary `b` on `u` along `x`: `:self` when the
+join is the same variable at the other end of the same independent variable, otherwise
+the partner's discrete variable, independent variable and grid length.
+
+Throws when the join is the same end of both domains, or when the partner's array
+layout is not the same `CartesianIndex` the pointwise `wrapinterface` writes into.
+"""
+function array_wrap_dest(s, u, x, b::InterfaceBoundary{B, B}) where {B}
+    throw(
+        ArrayFormFallback(
+            "interface $(b.eq) joins two variables at the same end of the domain"
+        )
+    )
+end
+
+function array_wrap_dest(s, u, x, b::InterfaceBoundary)
+    u = depvar(u, s)
+    u2 = depvar(b.u2, s)
+    x2 = b.x2
+    isequal(depvar(b.u, s), u) && isequal(b.x, x) || throw(
+        ArrayFormFallback("interface $(b.eq) is not a join of $u along $x")
+    )
+    src_j = x2i(s, u, x)
+    dst_j = x2i(s, u2, x2)
+    (src_j !== nothing && dst_j !== nothing && src_j == dst_j &&
+        ndims(u, s) == ndims(u2, s)) ||
+        throw(
+        ArrayFormFallback(
+            "interface $(b.eq) joins variables with incompatible layout"
+        )
+    )
+    isequal(u2, u) && isequal(x2, x) && return :self
+    return (u = u2, x = x2, n = length(s, x2))
+end
+
+"""
+The directions in which every dependent variable wraps — self-periodic or two-domain
+interface — mapped to a wrap specification.
+
+A self-periodic direction is one whose interface boundaries join a variable to itself at
+the other end of the same independent variable, which is what `u(t, 0) ~ u(t, 1)` parses
+to. A two-domain interface joins different variables (typically at one end only);
+`haslowerupper` still reports that end as an interface, so the interior stencil applies
+there with taps wrapped onto the partner array by `bwrap`, which `wrap_tap_range`
+reproduces on slices.
+
+A nonuniform wrapping direction is admitted: operators whose seam form the pointwise path
 cannot build (linear stencils, half-offset operators) throw at their own sites instead.
 """
-function array_periodic_dims(s, depvars, args, bcmap)
+function array_wrap_dims(s, depvars, args, bcmap)
     periodic = Dict()
     for x in args
         withiface = filter(u -> !isempty(filter_interfaces(bcmap[operation(u)][x])), depvars)
         isempty(withiface) && continue
         length(withiface) == length(depvars) ||
             throw(ArrayFormFallback("interface boundaries on only some variables in $x"))
-        for u in withiface
+        specs = map(withiface) do u
             bs = filter_interfaces(bcmap[operation(u)][x])
-            all(haslowerupper(bs, x)) ||
-                throw(ArrayFormFallback("interface boundary at one end of $x only"))
+            lower = nothing
+            upper = nothing
             for b in bs
-                isequal(b.x, x) && isequal(b.x2, x) &&
-                    isequal(depvar(b.u, s), depvar(u, s)) &&
-                    isequal(depvar(b.u2, s), depvar(u, s)) ||
-                    throw(
-                    ArrayFormFallback(
-                        "interface boundary $(b.eq) joins different variables"
+                dest = array_wrap_dest(s, u, x, b)
+                if isupper(b)
+                    upper === nothing || throw(
+                        ArrayFormFallback("multiple upper interfaces for $u in $x")
                     )
+                    upper = dest
+                else
+                    lower === nothing || throw(
+                        ArrayFormFallback("multiple lower interfaces for $u in $x")
+                    )
+                    lower = dest
+                end
+            end
+            if lower === :self || upper === :self
+                (lower === :self && upper === :self) || throw(
+                    ArrayFormFallback("interface boundary at one end of $x only")
                 )
             end
+            (lower === nothing && upper === nothing) && throw(
+                ArrayFormFallback("interface boundaries in $x did not produce a wrap")
+            )
+            return (n = length(s, x), lower = lower, upper = upper)
         end
-        periodic[x] = length(s, x)
+        twodomain = any(array_wrap_is_twodomain, specs)
+        if twodomain
+            length(specs) == 1 || throw(
+                ArrayFormFallback(
+                    "two-domain interface on more than one variable in $x"
+                )
+            )
+            periodic[x] = only(specs)
+        else
+            periodic[x] = (n = length(s, x), lower = :self, upper = :self)
+        end
     end
     return periodic
 end
@@ -477,12 +556,13 @@ which every derivative resolves to the translation-invariant interior stencil, m
 the branch conditions in `central_difference_weights_and_stencil` and
 `_upwind_difference`; interior points outside it — the frame — are discretized pointwise.
 
-A periodic direction has no such boundary branch: the interior stencil applies across the
-whole interior, but for points within a stencil of either end some taps wrap around the
-seam and the wrapped tap is not contiguous with the rest. Splitting those points off as
+A wrapping end — self-periodic or two-domain — has no such boundary branch: the interior
+stencil applies through that end, but for points within a stencil of the seam some taps
+wrap and the wrapped tap is not contiguous with the rest. Splitting those points off as
 one range each keeps every tap of every box a single contiguous slice, at the cost of a
 handful of extra equations — as many as the stencil is wide, so the count still does not
-depend on the grid resolution.
+depend on the grid resolution. A direction may wrap at one end only; the other end still
+shrinks as a regular boundary.
 
 `nllap_orders` maps each direction carrying a nonlinear laplacian to the coefficient's
 derivative orders above one; those directions additionally take the half-offset branch
@@ -532,72 +612,84 @@ function array_bands(
         else
             nothing
         end
-        if !haskey(periodic, x)
-            # Taps must stay in range, and no point may take a boundary branch: the
-            # centered one at II <= boundary_point_count or II > n - boundary_point_count,
-            # the positive winding at II <= offside, the negative one at
-            # II > n - boundary_point_count. The staggered branch conditions use the
-            # centered operator's boundary_point_count for every order.
+        wlower = haskey(periodic, x) ? periodic[x].lower : nothing
+        wupper = haskey(periodic, x) ? periodic[x].upper : nothing
+        # Taps must stay in range at a non-wrapping end, and no point may take a
+        # boundary branch there: the centered one at II <= boundary_point_count or
+        # II > n - boundary_point_count, the positive winding at II <= offside, the
+        # negative one at II > n - boundary_point_count. The staggered branch
+        # conditions use the centered operator's boundary_point_count for every order.
+        # A wrapping end keeps the interior stencil and is split below.
+        if wlower === nothing
             lo = max(lo, 1 - mintap)
+        end
+        if wupper === nothing
             hi = min(hi, n - maxtap)
-            for d in pdeorders[x]
-                if get_grid_type(s) <: StaggeredGrid
-                    bpc = derivweights.map[Differential(x)^d].boundary_point_count
-                    lo = max(lo, bpc + 1)
-                    hi = min(hi, n - bpc)
-                elseif iseven(d)
-                    bpc = derivweights.map[Differential(x)^d].boundary_point_count
-                    lo = max(lo, bpc + 1)
-                    hi = min(hi, n - bpc)
-                elseif array_functional_advection(derivweights, d)
-                    # the branch conditions of `get_f_taps_coords`: points within
-                    # `length(F.lower)` of the start, or `length(F.upper)` of the end, take
-                    # a boundary function of the scheme instead of its interior one
-                    F = derivweights.advection_scheme
-                    lo = max(lo, length(F.lower) + 1)
-                    hi = min(hi, n - length(F.upper))
-                else
-                    lo = max(lo, derivweights.windmap[2][Differential(x)^d].offside + 1)
+        end
+        for d in pdeorders[x]
+            if get_grid_type(s) <: StaggeredGrid
+                bpc = derivweights.map[Differential(x)^d].boundary_point_count
+                wlower === nothing && (lo = max(lo, bpc + 1))
+                wupper === nothing && (hi = min(hi, n - bpc))
+            elseif iseven(d)
+                bpc = derivweights.map[Differential(x)^d].boundary_point_count
+                wlower === nothing && (lo = max(lo, bpc + 1))
+                wupper === nothing && (hi = min(hi, n - bpc))
+            elseif array_functional_advection(derivweights, d)
+                # the branch conditions of `get_f_taps_coords`: points within
+                # `length(F.lower)` of the start, or `length(F.upper)` of the end, take
+                # a boundary function of the scheme instead of its interior one
+                F = derivweights.advection_scheme
+                wlower === nothing && (lo = max(lo, length(F.lower) + 1))
+                wupper === nothing && (hi = min(hi, n - length(F.upper)))
+            else
+                wlower === nothing &&
+                    (lo = max(lo, derivweights.windmap[2][Differential(x)^d].offside + 1))
+                wupper === nothing && (
                     hi = min(
                         hi,
                         n - derivweights.windmap[1][Differential(x)^d].boundary_point_count
                     )
-                end
-            end
-            if haskey(mixedorders, x)
-                for m in mixedorders[x]
-                    bpc = derivweights.map[Differential(x)^m].boundary_point_count
-                    lo = max(lo, bpc + 1)
-                    hi = min(hi, n - bpc)
-                end
-            end
-            if nl !== nothing
-                lo = max(lo, nl[1])
-                hi = min(hi, nl[2])
-            end
-            if sph !== nothing
-                lo = max(lo, sph[1])
-                hi = min(hi, sph[2])
-                # r ≈ 0 takes a separate scalar branch (appendix B), keep it in the frame.
-                grid = s.grid[x]
-                while lo <= hi && abs(grid[lo]) <= 1.0e-6
-                    lo += 1
-                end
-                while lo <= hi && abs(grid[hi]) <= 1.0e-6
-                    hi -= 1
-                end
-                any(i -> abs(grid[i]) <= 1.0e-6, lo:hi) && throw(
-                    ArrayFormFallback(
-                        "spherical laplacian with r ≈ 0 inside the core"
-                    )
                 )
             end
+        end
+        if haskey(mixedorders, x)
+            for m in mixedorders[x]
+                bpc = derivweights.map[Differential(x)^m].boundary_point_count
+                wlower === nothing && (lo = max(lo, bpc + 1))
+                wupper === nothing && (hi = min(hi, n - bpc))
+            end
+        end
+        if nl !== nothing
+            wlower === nothing && (lo = max(lo, nl[1]))
+            wupper === nothing && (hi = min(hi, nl[2]))
+        end
+        if sph !== nothing
+            lo = max(lo, sph[1])
+            hi = min(hi, sph[2])
+            # r ≈ 0 takes a separate scalar branch (appendix B), keep it in the frame.
+            grid = s.grid[x]
+            while lo <= hi && abs(grid[lo]) <= 1.0e-6
+                lo += 1
+            end
+            while lo <= hi && abs(grid[hi]) <= 1.0e-6
+                hi -= 1
+            end
+            any(i -> abs(grid[i]) <= 1.0e-6, lo:hi) && throw(
+                ArrayFormFallback(
+                    "spherical laplacian with r ≈ 0 inside the core"
+                )
+            )
+        end
+        if wlower === nothing && wupper === nothing
             lo > hi && return bands, clean
             bands[j] = [lo:hi]
             clean[j] = 1
             continue
         end
-        wraps(i) = (i + mintap <= 1) || (i + maxtap > n)
+        lo > hi && return bands, clean
+        wraps(i) = (wlower !== nothing && i + mintap <= 1) ||
+            (wupper !== nothing && i + maxtap > n)
         lastlow = lo - 1
         while lastlow < hi && wraps(lastlow + 1)
             lastlow += 1
@@ -617,16 +709,52 @@ function array_bands(
 end
 
 """
-The index range a tap slice takes across a periodic seam, mirroring `_wrapinterface`:
-indices at or below the first point come from the far end of the grid, indices past the
-last point from its start. A range that straddles the seam is not a slice.
+The index range a tap slice takes across a wrapping seam, mirroring `_wrapinterface`:
+indices at or below the first point come from the lower-end destination, indices past
+the last point from the upper-end destination. A range that straddles the seam is not a
+slice.
+
+Returns `(dest, range)` where `dest` is `nothing` (same array, unshifted interior),
+`:self` (same array, remapped across a periodic seam), or the partner named tuple of a
+two-domain interface. `wrap_periodic_range` is the self-periodic special case.
 """
-function wrap_periodic_range(r, n)
+function wrap_tap_range(r, spec)
     lo, hi = first(r), last(r)
-    lo > n && return (lo - n + 1):(hi - n + 1)
-    hi <= 1 && return (lo + n - 1):(hi + n - 1)
-    (lo >= 2 && hi <= n) && return r
-    throw(ArrayFormFallback("periodic stencil tap straddles the seam"))
+    n = spec.n
+    # Entirely past the last point: upper wrap. `_wrapinterface` maps n+k → dest[k+1].
+    if lo > n
+        dest = spec.upper
+        dest === nothing && throw(
+            ArrayFormFallback("tap leaves a non-wrapping end")
+        )
+        return dest, (lo - n + 1):(hi - n + 1)
+    end
+    # Entirely at or below the first point. Index 1 wraps only when this end is an
+    # interface (`_wrapperiodic`: I[j] <= 1); on a regular lower boundary it is a
+    # valid source index (the Dirichlet/Neumann face).
+    if hi <= 1
+        dest = spec.lower
+        if dest === nothing
+            (lo >= 1 && hi <= n) && return nothing, r
+            throw(ArrayFormFallback("tap leaves a non-wrapping end"))
+        end
+        n′ = array_wrap_dest_n(dest, n)
+        return dest, (lo + n′ - 1):(hi + n′ - 1)
+    end
+    # Touches the source grid. A lower interface wraps index 1, so a range that
+    # includes both 1 and 2+ is not a single slice.
+    if lo >= 1 && hi <= n
+        spec.lower !== nothing && lo <= 1 && throw(
+            ArrayFormFallback("interface stencil tap straddles the seam")
+        )
+        return nothing, r
+    end
+    throw(ArrayFormFallback("interface stencil tap straddles the seam"))
+end
+
+function wrap_periodic_range(r, n::Integer)
+    _, r′ = wrap_tap_range(r, (n = n, lower = :self, upper = :self))
+    return r′
 end
 
 """
@@ -648,23 +776,46 @@ end
 
 """
 A slice of the array variable for `u` over the core region, shifted by `offsets[j]` in each
-dimension `j` it names and wrapped around the seam where that dimension is periodic (see
-`wrap_periodic_range`). Dimensions absent from `offsets` are taken unshifted and unwrapped,
-which is what the pointwise path does with the dimensions a stencil does not reach along.
+dimension `j` it names and wrapped around the seam where that dimension wraps (see
+`wrap_tap_range`). A two-domain wrap reads the partner array; a self-periodic wrap stays
+on `u`. Dimensions absent from `offsets` are taken unshifted and unwrapped, which is
+what the pointwise path does with the dimensions a stencil does not reach along.
 
 Naming a dimension with offset `0` is not the same as omitting it: `_wrapperiodic` maps the
 first index of a periodic dimension onto the last for every tap of a stencil that reaches
-along it, the centre tap included.
+along it, the centre tap included. A destination wrap is applied once: the partner
+array is not wrapped again, matching `wrapinterface` on a `RefCartesianIndex`.
 """
 function array_shifted_slice(u, s, ranges, indexmap, offsets, periodic)
-    arr = array_variable(depvar(u, s), s)
-    rs = map(ivs(depvar(u, s), s)) do y
+    ud = depvar(u, s)
+    arr = array_variable(ud, s)
+    dest_u = nothing
+    rs = map(ivs(ud, s)) do y
         j = indexmap[y]
         r = ranges[j]
         haskey(offsets, j) || return r
         r = r .+ offsets[j]
-        return (periodic !== nothing && haskey(periodic, y)) ?
-            wrap_periodic_range(r, periodic[y]) : r
+        (periodic !== nothing && haskey(periodic, y)) || return r
+        dest, r′ = wrap_tap_range(r, periodic[y])
+        if dest isa NamedTuple
+            dest_u === nothing || isequal(dest_u, dest.u) || throw(
+                ArrayFormFallback(
+                    "mixed wrap onto two different variables in one stencil tap"
+                )
+            )
+            dest_u = dest.u
+        end
+        return r′
+    end
+    if dest_u !== nothing
+        arr = array_variable(dest_u, s)
+        disc = s.discvars[dest_u]
+        ndims(disc) == length(rs) || throw(
+            ArrayFormFallback("interface joins variables of differing dimensionality")
+        )
+        all(i -> checkindex(Bool, axes(disc, i), rs[i]), eachindex(rs)) || throw(
+            ArrayFormFallback("interface slice falls outside $(dest_u)")
+        )
     end
     return arr[rs...]
 end
@@ -1214,7 +1365,7 @@ the seam by `array_scheme_coeff_rules`.
 function array_function_scheme_trace(F, s, x, periodic)
     dx = s.dxs[x]
     # `get_f_taps_coords` rejects a stencil that wraps more than once around the seam
-    (haskey(periodic, x) && periodic[x] - 1 < F.interior_points) &&
+    (haskey(periodic, x) && periodic[x].n - 1 < F.interior_points) &&
         throw(ArrayFormFallback("too few points in $x for $(F.name) to wrap"))
     taps = half_range(F.interior_points)
     usyms = array_scheme_syms("u", length(taps))
@@ -1256,15 +1407,37 @@ function array_function_scheme_trace(F, s, x, periodic)
 end
 
 """
-Coordinate of raw tap index `i` in a self-periodic direction of `n` points: taps at or
-below the first point shift down by the period, taps past the last point shift up.
-Mirrors `_wrapcoord` bit for bit and must stay in lockstep with it, or the coefficient
-slots lose bitwise parity with the pointwise path.
+Coordinate of raw tap index `i` in a wrapping direction. Taps at or below the first
+point take the lower-end destination chart, taps past the last point the upper-end
+destination. Self-periodic (`dest === :self`) is a single add/subtract of the period;
+a two-domain interface uses the partner grid and a contiguous (zero) shift when the
+physical edges coincide. Mirrors `_wrapcoord` bit for bit — keep them in lockstep.
+
+`array_periodic_coord` is the self-periodic special case.
 """
+function array_wrap_coord(grid, i, spec, s)
+    n = spec.n
+    if i <= 1
+        dest = spec.lower
+        dest === nothing && return grid[i]
+        grid′, n′ = if dest === :self
+            grid, n
+        else
+            s.grid[dest.x], dest.n
+        end
+        return grid′[i + n′ - 1] - (grid′[end] - grid[1])
+    elseif i > n
+        dest = spec.upper
+        dest === nothing && return grid[i]
+        grid′ = dest === :self ? grid : s.grid[dest.x]
+        return grid′[i + 1 - n] + (grid[end] - grid′[1])
+    else
+        return grid[i]
+    end
+end
+
 function array_periodic_coord(grid, i, n)
-    i <= 1 && return grid[i + n - 1] - (grid[end] - grid[1])
-    i > n && return grid[i + 1 - n] + (grid[end] - grid[1])
-    return grid[i]
+    return array_wrap_coord(grid, i, (n = n, lower = :self, upper = :self), nothing)
 end
 
 """
@@ -1280,8 +1453,8 @@ function array_scheme_coeff_rules(trace, s, x, ranges, indexmap, periodic)
     rng = ranges[j]
     grid = s.grid[x]
     window = if haskey(periodic, x)
-        n = length(s, x)
-        i -> [array_periodic_coord(grid, i + k, n) for k in trace.taps]
+        spec = periodic[x]
+        i -> [array_wrap_coord(grid, i + k, spec, s) for k in trace.taps]
     else
         i -> view(grid, i .+ trace.taps)
     end
@@ -1583,7 +1756,7 @@ function array_interp_grid_vals(interp, o, s, x, ranges, indexmap, periodic, N)
     grid = s.grid[x]
     n = length(s, x)
     taps = half_offset_taps(interp)
-    wrap(i) = if haskey(periodic, x)
+    wrap(i) = if haskey(periodic, x) && !array_wrap_is_twodomain(periodic[x])
         i <= 1 ? i + n - 1 : (i > n ? i - n + 1 : i)
     else
         i
@@ -1609,6 +1782,14 @@ function array_nonlinear_laplacian(
     haskey(periodic, x) && !(s.dxs[x] isa Number) && throw(
         ArrayFormFallback("nonlinear laplacian in a periodic nonuniform direction")
     )
+    if haskey(periodic, x) && array_wrap_is_twodomain(periodic[x]) &&
+            array_mentions_iv(m.expr, x)
+        throw(
+            ArrayFormFallback(
+                "nonlinear laplacian coefficient depends on $x across a two-domain interface"
+            )
+        )
+    end
     N = length(ranges)
     j = indexmap[x]
     rng = ranges[j]
@@ -1642,12 +1823,14 @@ function array_nonlinear_laplacian(
                 )
             )
         end
-        push!(
-            rules,
-            safe_unwrap(x) => array_interp_grid_vals(
-                interp, o, s, x, ranges, indexmap, periodic, N
+        if !(haskey(periodic, x) && array_wrap_is_twodomain(periodic[x]))
+            push!(
+                rules,
+                safe_unwrap(x) => array_interp_grid_vals(
+                    interp, o, s, x, ranges, indexmap, periodic, N
+                )
             )
-        )
+        end
         for y in ivs(depvar(u, s), s)
             isequal(y, x) && continue
             push!(rules, safe_unwrap(y) => array_grid_vals(y, s, ranges, indexmap, N))
@@ -1984,10 +2167,11 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
             )
         end
     end
-    # An interface in this boundary's own direction wraps the stencil taps below onto
-    # indices that are not a shift of the face; interfaces in the other directions do not
-    # enter this equation at all.
-    isempty(filter_interfaces(bcmap[operation(u)][x_])) ||
+    # An interface on this same end wraps stencil taps off the face (those BCs are
+    # `InterfaceBoundary` / `HigherOrderInterfaceBoundary`). An interface at the
+    # opposite end of `x_` does not: this face's one-sided stencil points inward.
+    ifaces = filter_interfaces(bcmap[operation(u)][x_])
+    any(b -> isupper(b) == isupper(boundary), ifaces) &&
         throw(ArrayFormFallback("interface boundary condition in $x_"))
 
     II0 = first(E)
@@ -2114,6 +2298,159 @@ function array_bc_eqs(s, boundary::InterfaceBoundary, interiormap, derivweights,
         throw(ArrayFormFallback("interface slice falls outside $(u2)"))
 
     return [array_slice(u, s, ranges, indexmap) ~ arr2[rs2...]]
+end
+
+"""
+    array_bc_eqs(s, boundary::HigherOrderInterfaceBoundary, interiormap, derivweights, bcmap)
+
+Flux (or other higher-order) interface condition as one array equation over the face,
+the slice form of the pointwise `boundary_value_maps` path: derivatives of `u` live on
+this boundary's edge, derivatives of `u2` on the partner face at index 1.
+
+A 1D (single-point) face has nothing to collapse and falls back.
+"""
+function array_bc_eqs(
+        s, boundary::HigherOrderInterfaceBoundary, interiormap, derivweights, bcmap
+    )
+    u = depvar(boundary.u, s)
+    u2 = depvar(boundary.u2, s)
+    x_ = boundary.x
+    x2 = boundary.x2
+    args = ivs(u, s)
+    args2 = ivs(u2, s)
+    length(args) == length(args2) ||
+        throw(ArrayFormFallback("interface joins variables of differing dimensionality"))
+    indexmap = Dict([args[i] => i for i in 1:length(args)])
+    indexmap2 = Dict([args2[i] => i for i in 1:length(args2)])
+    haskey(indexmap, x_) ||
+        throw(ArrayFormFallback("boundary variable $x_ not an argument of $u"))
+    j = indexmap[x_]
+    j2 = x2i(s, u2, x2)
+    j2 === nothing && throw(
+        ArrayFormFallback("boundary variable $x2 not an argument of $u2")
+    )
+    j == j2 || throw(
+        ArrayFormFallback("interface $(boundary.eq) joins variables with incompatible layout")
+    )
+    N = length(args)
+
+    E = edge(s, boundary, interiormap)
+    length(E) == 0 && throw(ArrayFormFallback("empty boundary edge"))
+    lo = collect(Tuple(first(E)))
+    hi = collect(Tuple(last(E)))
+    length(E) == prod(hi .- lo .+ 1) ||
+        throw(ArrayFormFallback("boundary edge is not a contiguous box"))
+    lo[j] == hi[j] ||
+        throw(ArrayFormFallback("boundary edge spans its own direction"))
+    ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
+    length(E) == 1 &&
+        throw(ArrayFormFallback("single-point interface boundary"))
+    get_grid_type(s) <: StaggeredGrid &&
+        throw(ArrayFormFallback("staggered interface face"))
+
+    ranges2 = Dict(i => i == j2 ? (1:1) : ranges[i] for i in 1:N)
+    disc2 = s.discvars[u2]
+    ndims(disc2) == N ||
+        throw(ArrayFormFallback("interface joins variables of differing dimensionality"))
+    rs2 = ntuple(i -> ranges2[i], N)
+    all(i -> checkindex(Bool, axes(disc2, i), rs2[i]), 1:N) ||
+        throw(ArrayFormFallback("interface slice falls outside $(u2)"))
+
+    bcdepvars = get_depvars(boundary.eq.lhs, s.vars.depvar_ops) ∪
+        get_depvars(boundary.eq.rhs, s.vars.depvar_ops)
+    for v in bcdepvars
+        vd = depvar(v, s)
+        isequal(vd, u) || isequal(vd, u2) ||
+            throw(ArrayFormFallback("variable $v is not on this interface"))
+    end
+
+    function face_deriv(ud, xd, II0, rs, imap, d)
+        Dop = get(derivweights.map, Differential(xd)^d, nothing)
+        Dop === nothing && return nothing
+        jd = imap[xd]
+        ws, Itap = try
+            central_difference_weights_and_stencil(Dop, II0, s, [], (jd, xd), ud)
+        catch e
+            e isa InterruptException && rethrow(e)
+            throw(ArrayFormFallback("could not build boundary stencil for order $d"))
+        end
+        offsets = [I[jd] - II0[jd] for I in Itap]
+        all(I -> all(k -> k == jd || I[k] == II0[k], 1:N), Itap) ||
+            throw(ArrayFormFallback("boundary stencil is not axis aligned"))
+        slices = [
+            array_slice(ud, s, rs, imap; shiftx = xd, offset = o) for o in offsets
+        ]
+        return array_stencil(collect(ws), slices)
+    end
+
+    II0 = first(E)
+    II0_2 = CartesianIndex(ntuple(i -> i == j2 ? 1 : first(ranges[i]), N))
+    derivrules = Pair[]
+    for d in get(derivweights.orders, x_, Int[])
+        expr = face_deriv(u, x_, II0, ranges, indexmap, d)
+        expr === nothing && continue
+        for v in bcdepvars
+            isequal(depvar(v, s), u) || continue
+            push!(derivrules, safe_unwrap((Differential(x_)^d)(v)) => expr)
+        end
+        push!(derivrules, safe_unwrap((Differential(x_)^d)(u)) => expr)
+    end
+    for d in get(derivweights.orders, x2, Int[])
+        expr = face_deriv(u2, x2, II0_2, ranges2, indexmap2, d)
+        expr === nothing && continue
+        for v in bcdepvars
+            isequal(depvar(v, s), u2) || continue
+            push!(derivrules, safe_unwrap((Differential(x2)^d)(v)) => expr)
+        end
+        push!(derivrules, safe_unwrap((Differential(x2)^d)(u2)) => expr)
+    end
+
+    varrules = Pair[]
+    for v in bcdepvars
+        vd = depvar(v, s)
+        if isequal(vd, u)
+            push!(varrules, safe_unwrap(v) => array_slice(u, s, ranges, indexmap))
+        else
+            push!(varrules, safe_unwrap(v) => array_slice(u2, s, ranges2, indexmap2))
+        end
+    end
+    push!(varrules, safe_unwrap(u) => array_slice(u, s, ranges, indexmap))
+    push!(varrules, safe_unwrap(u2) => array_slice(u2, s, ranges2, indexmap2))
+
+    gridrules = Pair[]
+    for x in args
+        if isequal(x, x_)
+            val = lo[j] == 1 ? first(s.axies[x]) : last(s.axies[x])
+            push!(gridrules, safe_unwrap(x) => val)
+        else
+            push!(gridrules, safe_unwrap(x) => array_grid_vals(x, s, ranges, indexmap, N))
+        end
+    end
+    for x in args2
+        any(y -> isequal(y, x), args) && continue
+        if isequal(x, x2)
+            push!(gridrules, safe_unwrap(x) => first(s.axies[x]))
+        else
+            push!(gridrules, safe_unwrap(x) => array_grid_vals(x, s, ranges2, indexmap2, N))
+        end
+    end
+    # x2 is typically a different IV from x_; give it the partner-face endpoint.
+    any(p -> isequal(p.first, safe_unwrap(x2)), gridrules) || push!(
+        gridrules, safe_unwrap(x2) => first(s.axies[x2])
+    )
+
+    ctx = ArrayifyContext(vcat(derivrules, varrules, gridrules), s.time)
+    lhs = arrayify(boundary.eq.lhs, ctx)
+    rhs = arrayify(boundary.eq.rhs, ctx)
+    shape = Tuple(length(ranges[i]) for i in 1:N)
+    if is_array_valued(lhs) && !is_array_valued(rhs)
+        rhs = fill(Symbolics.unwrap(rhs), shape)
+    elseif !is_array_valued(lhs) && is_array_valued(rhs)
+        lhs = fill(Symbolics.unwrap(lhs), shape)
+    elseif !is_array_valued(lhs) && !is_array_valued(rhs)
+        throw(ArrayFormFallback("boundary condition has no discretizable terms"))
+    end
+    return [lhs ~ rhs]
 end
 
 """
