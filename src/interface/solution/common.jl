@@ -1,7 +1,4 @@
-function (sol::SciMLBase.PDESolution{T, N, S, D})(
-        args...;
-        dv = nothing
-    ) where {T, N, S, D <: MOLMetadata}
+function _pde_call(sol, args...; dv = nothing)
     # Colon reconstructs on gridpoints
     args = map(enumerate(args)) do (i, arg)
         if arg isa Colon
@@ -34,10 +31,19 @@ function (sol::SciMLBase.PDESolution{T, N, S, D})(
     end
 end
 
-Base.@propagate_inbounds function Base.getindex(
-        A::SciMLBase.PDESolution{T, N, S, D},
-        sym
+function (sol::SciMLBase.PDETimeSeriesSolution{T, N, S, D})(
+        args::Vararg{Union{Num, Number, AbstractArray, Colon}}; dv = nothing
     ) where {T, N, S, D <: MOLMetadata}
+    return _pde_call(sol, args...; dv)
+end
+
+function (sol::SciMLBase.PDENoTimeSolution{T, N, S, D})(
+        args::Vararg{Union{Num, Number, AbstractArray, Colon}}; dv = nothing
+    ) where {T, N, S, D <: MOLMetadata}
+    return _pde_call(sol, args...; dv)
+end
+
+function _pde_getindex(A, sym)
     iv = nothing
     dv = nothing
     iiv = sym_to_index(sym, A.ivs)
@@ -67,9 +73,18 @@ Base.@propagate_inbounds function Base.getindex(
 end
 
 Base.@propagate_inbounds function Base.getindex(
-        A::SciMLBase.PDESolution{T, N, S, D}, sym,
-        args...
+        A::SciMLBase.PDETimeSeriesSolution{T, N, S, D}, sym::Union{Num, Symbol}
     ) where {T, N, S, D <: MOLMetadata}
+    return _pde_getindex(A, sym)
+end
+
+Base.@propagate_inbounds function Base.getindex(
+        A::SciMLBase.PDENoTimeSolution{T, N, S, D}, sym::Union{Num, Symbol}
+    ) where {T, N, S, D <: MOLMetadata}
+    return _pde_getindex(A, sym)
+end
+
+function _pde_getindex(A, sym, args...)
     iv = nothing
     dv = nothing
     iiv = sym_to_index(sym, A.ivs)
@@ -92,6 +107,20 @@ Base.@propagate_inbounds function Base.getindex(
     else
         error("Invalid indexing of solution")
     end
+end
+
+Base.@propagate_inbounds function Base.getindex(
+        A::SciMLBase.PDETimeSeriesSolution{T, N, S, D},
+        sym::Union{Num, Symbol}, args...
+    ) where {T, N, S, D <: MOLMetadata}
+    return _pde_getindex(A, sym, args...)
+end
+
+Base.@propagate_inbounds function Base.getindex(
+        A::SciMLBase.PDENoTimeSolution{T, N, S, D},
+        sym::Union{Num, Symbol}, args...
+    ) where {T, N, S, D <: MOLMetadata}
+    return _pde_getindex(A, sym, args...)
 end
 
 # The PDE solution stores `u` as a `Dict` of dependent variable => array, so the generic

@@ -72,7 +72,7 @@ Dict{Sym{Real, Base.ImmutableDict{DataType, Any}}, StepRangeLen{Float64, Base.Tw
 ```
 """
 struct DiscreteSpace{N, M, G} <: AbstractCartesianDiscreteSpace
-    vars::Any
+    vars::PDEBase.VariableMap
     discvars::Any
     axies::Any
     grid::Any
@@ -206,11 +206,14 @@ function PDEBase.construct_discrete_space(
 end
 
 function Base.getproperty(s::DiscreteSpace, p::Symbol)
-    return if p in [:ū, :x̄, :ps, :time, :args, :x2i, :i2x]
-        getfield(s.vars, p)
-    else
-        getfield(s, p)
-    end
+    p === :ū && return getfield(getfield(s, :vars), :ū)
+    p === :x̄ && return getfield(getfield(s, :vars), :x̄)
+    p === :ps && return getfield(getfield(s, :vars), :ps)
+    p === :time && return getfield(getfield(s, :vars), :time)
+    p === :args && return getfield(getfield(s, :vars), :args)
+    p === :x2i && return getfield(getfield(s, :vars), :x2i)
+    p === :i2x && return getfield(getfield(s, :vars), :i2x)
+    return getfield(s, p)
 end
 
 """
@@ -300,7 +303,7 @@ end
 """
 Gets the parameter symbols of the system
 """
-params(s::DiscreteSpace) = s.ps
+params(s::DiscreteSpace) = getfield(s.vars, :ps)
 
 get_grid_type(::DiscreteSpace{N, M, G}) where {N, M, G} = G
 PDEBase.get_discvars(s::DiscreteSpace) = s.discvars
