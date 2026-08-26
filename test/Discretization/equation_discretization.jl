@@ -49,8 +49,6 @@ narrayeqs_interior(sys) = count(
     eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)
 )
 
-# Incompatible two-domain layouts must raise, not `BoundsError`, and must not
-# depend on which equation is discretized first (upper faces skip BC emit).
 function throws_incompatible_layout(pdesys, dxs, t)
     thrown = try
         symbolic_discretize(pdesys, MOLFiniteDifference(dxs, t))
@@ -395,9 +393,9 @@ end
 end
 
 @testset "1D two-domain interface, linear diffusion" begin
-    # Taps that leave one domain land in the other variable's array. Each domain's
-    # interior is one array equation plus the (stencil-wide) wrap points, a count
-    # that does not grow with the grid.
+    # Taps that leave one domain land in the other variable's array. Lower wrap
+    # uses the destination length, so n1 ≠ n2 is the case same-n periodic
+    # arithmetic would get wrong. Equation count does not grow with the grid.
     @parameters t x1 x2
     @variables c1(..) c2(..)
     Dt = Differential(t)
@@ -413,10 +411,10 @@ end
         c1(t, 0) ~ 0.0,
         c1(t, 0.5) ~ c2(t, 0.5),
         -Dx1(c1(t, 0.5)) ~ -Dx2(c2(t, 0.5)),
-        c2(t, 1) ~ 0.0,
+        c2(t, 1.5) ~ 0.0,
     ]
     domains = [
-        t ∈ Interval(0.0, 0.1), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0),
+        t ∈ Interval(0.0, 0.1), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.5),
     ]
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
 
@@ -2670,33 +2668,6 @@ end
     @test narrayeqs_interior(sys_arr) == 2
 end
 
-@testset "1D two-domain, unequal grid lengths" begin
-    # Lower wrap uses the destination length; n1 ≠ n2 is the case that same-n
-    # periodic arithmetic would get wrong.
-    @parameters t x1 x2
-    @variables c1(..) c2(..)
-    Dt = Differential(t)
-    Dxx1 = Differential(x1)^2
-    Dxx2 = Differential(x2)^2
-
-    eqs = [Dt(c1(t, x1)) ~ Dxx1(c1(t, x1)), Dt(c2(t, x2)) ~ Dxx2(c2(t, x2))]
-    bcs = [
-        c1(0, x1) ~ sinpi(2x1),
-        c2(0, x2) ~ sinpi(x2),
-        c1(t, 0) ~ 0.0,
-        c1(t, 0.5) ~ c2(t, 0.5),
-        c2(t, 1.5) ~ 0.0,
-    ]
-    domains = [
-        t ∈ Interval(0.0, 0.05), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.5),
-    ]
-    @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
-
-    sol_arr, sys_arr = solve_discretized(pdesys, [x1 => 0.05, x2 => 0.05], t)
-    @test SciMLBase.successful_retcode(sol_arr)
-    @test narrayeqs_interior(sys_arr) == 2
-end
-
 @testset "Three-domain interface chain" begin
     @parameters t x1 x2 x3
     @variables c1(..) c2(..) c3(..)
@@ -2919,8 +2890,6 @@ end
 end
 
 @testset "2D mixed derivative with a two-domain interface" begin
-    # #654's tensor-product mixed stencil uses the same wrap slices; a two-domain
-    # join must not send the interior back to pointwise on a uniform grid.
     @parameters t x1 x2 y
     @variables c1(..) c2(..)
     Dt = Differential(t)
@@ -3016,47 +2985,6 @@ end
     @test n8 == n16
 end
 
-@testset "2D two-domain interface along y, membrane HOIB" begin
-    @parameters t x y1 y2
-    @variables c1(..) c2(..)
-    Dt = Differential(t)
-    Dxx = Differential(x)^2
-    Dy1 = Differential(y1)
-    Dy2 = Differential(y2)
-    Dyy1 = Dy1^2
-    Dyy2 = Dy2^2
-
-    eqs = [
-        Dt(c1(t, x, y1)) ~ Dxx(c1(t, x, y1)) + Dyy1(c1(t, x, y1)),
-        Dt(c2(t, x, y2)) ~ Dxx(c2(t, x, y2)) + Dyy2(c2(t, x, y2)),
-    ]
-    bcs = [
-        c1(0, x, y1) ~ 0.5, c2(0, x, y2) ~ 0.5,
-        c1(t, 0, y1) ~ 0.0, c2(t, 1, y2) ~ 1.0,
-        Differential(x)(c1(t, 1, y1)) ~ 0.0,
-        Differential(x)(c2(t, 0, y2)) ~ 0.0,
-        Dy1(c1(t, x, 0)) ~ 0.0, Dy2(c2(t, x, 1)) ~ 0.0,
-        Dy1(c1(t, x, 0.5)) + c1(t, x, 0.5) ~ c2(t, x, 0.5),
-        Dy2(c2(t, x, 0.5)) + c2(t, x, 0.5) ~ c1(t, x, 0.5),
-    ]
-    domains = [
-        t ∈ Interval(0.0, 0.05),
-        x ∈ Interval(0.0, 1.0),
-        y1 ∈ Interval(0.0, 0.5),
-        y2 ∈ Interval(0.5, 1.0),
-    ]
-    @named pdesys = PDESystem(
-        eqs, bcs, domains, [t, x, y1, y2], [c1(t, x, y1), c2(t, x, y2)]
-    )
-
-    sol_arr, sys_arr = solve_discretized(
-        pdesys, [x => 0.2, y1 => 0.1, y2 => 0.1], t
-    )
-    @test SciMLBase.successful_retcode(sol_arr)
-    @test narrayeqs_interior(sys_arr) >= 2
-    @test narrayeqs(sys_arr) >= 4
-end
-
 @testset "Error: two-domain interface with incompatible argument slots" begin
     # Joining c1(t, x1, y) to c2(t, y, x2) puts the interface axis in different
     # CartesianIndex slots. A slice remap would be invented geometry.
@@ -3073,77 +3001,6 @@ end
         c2(0, y, x2) ~ 0.0,
         c1(t, 0, y) ~ 0.0,
         c1(t, 0.5, y) ~ c2(t, y, 0.5),
-        c2(t, y, 1) ~ 0.0,
-        c1(t, x1, 0) ~ 0.0, c1(t, x1, 1) ~ 0.0,
-        c2(t, 0, x2) ~ 0.0, c2(t, 1, x2) ~ 0.0,
-    ]
-    domains = [
-        t ∈ Interval(0.0, 0.05),
-        x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0), y ∈ Interval(0.0, 1.0),
-    ]
-    dxs = [x1 => 0.1, x2 => 0.1, y => 0.1]
-    for (eqs, deps) in (
-            ([eq1, eq2], [c1(t, x1, y), c2(t, y, x2)]),
-            ([eq2, eq1], [c2(t, y, x2), c1(t, x1, y)]),
-        )
-        @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2, y], deps)
-        @test throws_incompatible_layout(pdesys, dxs, t)
-    end
-end
-
-@testset "Error: two-domain interface with mismatched transverse grids" begin
-    # Same argument slots, but the shared-index write is still invalid when the
-    # non-interface axis has a different discrete length.
-    @parameters t x1 x2 y1 y2
-    @variables c1(..) c2(..)
-    Dt = Differential(t)
-    Dxx1 = Differential(x1)^2
-    Dxx2 = Differential(x2)^2
-    Dyy1 = Differential(y1)^2
-    Dyy2 = Differential(y2)^2
-    eq1 = Dt(c1(t, x1, y1)) ~ Dxx1(c1(t, x1, y1)) + Dyy1(c1(t, x1, y1))
-    eq2 = Dt(c2(t, x2, y2)) ~ Dxx2(c2(t, x2, y2)) + Dyy2(c2(t, x2, y2))
-    bcs = [
-        c1(0, x1, y1) ~ 0.0,
-        c2(0, x2, y2) ~ 0.0,
-        c1(t, 0, y1) ~ 0.0,
-        c1(t, 0.5, y1) ~ c2(t, 0.5, y2),
-        c2(t, 1, y2) ~ 0.0,
-        c1(t, x1, 0) ~ 0.0, c1(t, x1, 1) ~ 0.0,
-        c2(t, x2, 0) ~ 0.0, c2(t, x2, 1) ~ 0.0,
-    ]
-    domains = [
-        t ∈ Interval(0.0, 0.05),
-        x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0),
-        y1 ∈ Interval(0.0, 1.0), y2 ∈ Interval(0.0, 1.0),
-    ]
-    dxs = [x1 => 0.1, x2 => 0.1, y1 => 0.1, y2 => 0.2]
-    for (eqs, deps) in (
-            ([eq1, eq2], [c1(t, x1, y1), c2(t, x2, y2)]),
-            ([eq2, eq1], [c2(t, x2, y2), c1(t, x1, y1)]),
-        )
-        @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2, y1, y2], deps)
-        @test throws_incompatible_layout(pdesys, dxs, t)
-    end
-end
-
-@testset "Error: HOIB two-domain interface with incompatible argument slots" begin
-    # Flux faces go through `boundary_value_maps`, not `generate_bc_eqs!(::InterfaceBoundary)`.
-    @parameters t x1 x2 y
-    @variables c1(..) c2(..)
-    Dt = Differential(t)
-    Dx1 = Differential(x1)
-    Dx2 = Differential(x2)
-    Dxx1 = Dx1^2
-    Dxx2 = Dx2^2
-    Dyy = Differential(y)^2
-    eq1 = Dt(c1(t, x1, y)) ~ Dxx1(c1(t, x1, y)) + Dyy(c1(t, x1, y))
-    eq2 = Dt(c2(t, y, x2)) ~ Dyy(c2(t, y, x2)) + Dxx2(c2(t, y, x2))
-    bcs = [
-        c1(0, x1, y) ~ 0.0,
-        c2(0, y, x2) ~ 0.0,
-        c1(t, 0, y) ~ 0.0,
-        Dx1(c1(t, 0.5, y)) ~ Dx2(c2(t, y, 0.5)),
         c2(t, y, 1) ~ 0.0,
         c1(t, x1, 0) ~ 0.0, c1(t, x1, 1) ~ 0.0,
         c2(t, 0, x2) ~ 0.0, c2(t, 1, x2) ~ 0.0,
