@@ -16,7 +16,7 @@ using SymbolicIndexingInterface: NotSymbolic, symbolic_type
 import SymbolicUtils
 using SymbolicUtils: @rule, hasmetadata, setmetadata, substitute, term
 import Symbolics
-using Symbolics: @variables, Differential, Equation, Integral, Num, terms
+using Symbolics: @variables, @wrapped, Differential, Equation, Integral, Num, terms
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term,
     symbolic_to_float
 using SymbolicUtils: operation, arguments, iscall, getmetadata, unwrap_const
