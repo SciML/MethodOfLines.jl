@@ -39,9 +39,15 @@
 # order case `Dx(Dy(u))` is `m = n = 1`. Three-or-more spatial directions, mixed
 # derivatives of boundary values, and mixed derivatives on staggered grids still fall back.
 #
-# Unsupported patterns fall back to pointwise equations: integrals,
-# two-variable interfaces, callbacks,
-# differing dimensionality, boundary-value derivatives, time-literal dependent-variable
+# Integrals are reductions, not stencils: a cumulative `Integral(xmin, x)(u)` is a
+# trapezoidal running sum along that axis (`axis_cumsum_pad` of the same increments
+# `_euler_integral` walks); a whole-domain integral is a weighted `sum` and is emitted
+# only when the integration axis is absent from the equation variable (the pointwise
+# `indexmap` / `bvar` filter). Time-only dependents broadcast as scalars.
+#
+# Unsupported patterns fall back to pointwise equations: two-variable interfaces,
+# callbacks, differing dimensionality (beyond a 0D broadcast or an integral rank drop),
+# boundary-value derivatives, time-literal dependent-variable
 # calls, edge-aligned boundary values, stationary systems.
 
 struct ArrayFormFallback <: Exception
@@ -178,8 +184,10 @@ function discretize_equation_array_form(
     )
 
     args = ivs(eqvar, s)
-    for u in depvars
-        isequal(ivs(u, s), args) ||
+    pde_depvars = get_depvars(pde.lhs, s.vars.depvar_ops) ∪
+        get_depvars(pde.rhs, s.vars.depvar_ops)
+    for u in pde_depvars
+        array_compatible_depvar(u, args, pde, s) ||
             throw(ArrayFormFallback("variables of differing dimensionality"))
     end
     periodic = array_periodic_dims(s, depvars, args, bcmap)
@@ -225,17 +233,16 @@ function discretize_equation_array_form(
     # do not wrap. Several of these generators return candidate rules unconditionally; the
     # pointwise path only applies a special scheme when a rule key occurs in the equation, so
     # fall back exactly when one does. Any firing rule means a scheme with no slice
-    # representation here yet. The staggered pointwise path applies none of these schemes,
-    # so there is nothing to probe there; its unsupported patterns (integrals, ...)
-    # surface in `arrayify` instead.
+    # representation here yet. Integrals have a slice form (`array_integral_rules`);
+    # callbacks still do not. The staggered pointwise path applies none of these schemes,
+    # so there is nothing to probe there; remaining unsupported patterns surface in
+    # `arrayify` instead.
     if !isstag
         II0 = CartesianIndex(
             ntuple(j -> clean[j] === nothing ? first(core)[j] : first(bands[j][clean[j]]), N)
         )
-        special_rules = vcat(
-            vec(generate_euler_integration_rules(II0, s, depvars, indexmap, terms)),
-            vec(generate_whole_domain_integration_rules(II0, s, depvars, indexmap, terms)),
-            vec(generate_cb_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms))
+        special_rules = vec(
+            generate_cb_rules(II0, s, depvars, derivweights, bcmap, indexmap, terms)
         )
         for r in special_rules
             (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) &&
@@ -283,14 +290,25 @@ function array_core_equation(
         periodic, nllap_matches, sph_matches, mixedterms
     )
     N = length(args)
-    shape = ntuple(j -> length(ranges[j]), N)
     # First matching rule wins. Boundary-value rules before core-variable rules.
     bvalrules = array_boundary_value_rules(pde, s, ranges, indexmap)
-    varrules = [safe_unwrap(u) => array_slice(u, s, ranges, indexmap) for u in depvars]
+    varrules = Pair[]
+    for u in depvars
+        uivs = ivs(u, s)
+        if isempty(uivs)
+            push!(varrules, safe_unwrap(u) => array_scalar_discvar(u, s))
+        elseif array_same_ivs(uivs, args)
+            push!(varrules, safe_unwrap(u) => array_slice(u, s, ranges, indexmap))
+        end
+    end
+    isstag = get_grid_type(s) <: StaggeredGrid
+    intrules = array_integral_rules(
+        s, depvars, ranges, indexmap; staggered = isstag
+    )
     gridrules = [
         safe_unwrap(x) => array_grid_vals(x, s, ranges, indexmap, N) for x in args
     ]
-    if get_grid_type(s) <: StaggeredGrid
+    if isstag
         derivrules = array_staggered_rules(
             s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
         )
@@ -325,30 +343,22 @@ function array_core_equation(
         )
     end
     # Family order is the reverse of the pointwise path's last-key-wins `Dict`.
+    # Integrals sit with the other operators, before the bare-variable rules.
     ctx = ArrayifyContext(
         vcat(
             bvalrules, mixedrules, windrules, advrules, nllaprules, sphrules,
-            derivrules, varrules, gridrules
+            intrules, derivrules, varrules, gridrules
         ),
         s.time
     )
 
     lhs = arrayify(pde.lhs, ctx)
     rhs = arrayify(pde.rhs, ctx)
-    is_zero_scalar(x) =
-    let v = unwrap_const(safe_unwrap(x))
-        v isa Number && iszero(v)
-    end
-    # `~` cannot equate an array with a scalar; the system is cardinalized so the rhs is
-    # (a scalar) 0 and the lhs holds the whole residual.
+    # `~` rejects array ~ scalar. Broadcast the scalar onto a core slice.
     if is_array_valued(lhs) && !is_array_valued(rhs)
-        is_zero_scalar(rhs) ||
-            throw(ArrayFormFallback("array lhs with non-zero scalar rhs"))
-        rhs = zeros(shape)
+        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
-        is_zero_scalar(lhs) ||
-            throw(ArrayFormFallback("array rhs with non-zero scalar lhs"))
-        lhs = zeros(shape)
+        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
         throw(ArrayFormFallback("equation contains no discretizable terms"))
     end
@@ -938,6 +948,7 @@ end
     )
     rules = Pair[]
     for u in depvars, x in ivs(depvar(u, s), s)
+        haskey(pdeorders, x) || continue
         for d in filter(iseven, pdeorders[x])
             Dop = derivweights.map[Differential(x)^d]
             push!(
@@ -1064,6 +1075,7 @@ function array_staggered_rules(
     )
     rules = Pair[]
     for u in depvars, x in ivs(depvar(u, s), s)
+        haskey(pdeorders, x) || continue
         for d in filter(isodd, pdeorders[x])
             Dop = get(derivweights.windmap[1], Differential(x)^d, nothing)
             Dop === nothing && throw(
@@ -1302,6 +1314,7 @@ end
     # Only derivatives the equation contains: tracing absent pairs adds fallback surface.
     pairs = Tuple{Any, Any}[]
     for u in depvars, x in ivs(depvar(u, s), s)
+        haskey(pdeorders, x) || continue
         1 in pdeorders[x] || continue
         key = safe_unwrap(Differential(x)(u))
         (subsmatch(pde.lhs, key => nothing) || subsmatch(pde.rhs, key => nothing)) ||
@@ -1332,6 +1345,7 @@ end
     coefctx = ArrayifyContext(baserules, s.time)
     ruleobjs = []
     for u in depvars, x in ivs(depvar(u, s), s)
+        haskey(pdeorders, x) || continue
         for d in filter(d -> isodd(d) && !array_functional_advection(derivweights, d), pdeorders[x])
             push!(
                 ruleobjs,
@@ -1367,6 +1381,7 @@ end
     # Default rules for bare odd derivatives (no coefficient): positive winding,
     # mirroring the tail of `generate_winding_rules`.
     for u in depvars, x in ivs(depvar(u, s), s)
+        haskey(pdeorders, x) || continue
         for d in filter(d -> isodd(d) && !array_functional_advection(derivweights, d), pdeorders[x])
             push!(
                 windrules,
@@ -1834,6 +1849,33 @@ end
 # symbolic arrays and scalars of either kind.
 is_array_valued(x) = SymbolicUtils.symtype(safe_unwrap(x)) <: AbstractArray
 
+function array_shape_donor(rules)
+    for r in rules
+        is_array_valued(r.second) && return r.second
+    end
+    throw(ArrayFormFallback("no array slice to broadcast a scalar onto"))
+end
+
+# `fill(val, shape)` is an `array_literal` of one node per point.
+function array_broadcast_onto(val, ref)
+    v = Symbolics.unwrap(val)
+    v isa Number && iszero(v) && return broadcast(*, 0, ref)
+    return broadcast(+, v, broadcast(*, 0, ref))
+end
+
+function array_integral_keys_equal(a, b)
+    iscall(a) && iscall(b) || return false
+    oa = operation(a)
+    ob = operation(b)
+    oa isa Integral && ob isa Integral || return false
+    isequal(oa.domain.variables, ob.domain.variables) || return false
+    da = oa.domain.domain
+    db = ob.domain.domain
+    isequal(safe_unwrap(da.left), safe_unwrap(db.left)) || return false
+    isequal(safe_unwrap(da.right), safe_unwrap(db.right)) || return false
+    return isequal(only(arguments(a)), only(arguments(b)))
+end
+
 """
     arrayify(expr, ctx)
 
@@ -1848,6 +1890,11 @@ function arrayify(expr, ctx)
     for (k, v) in ctx.rules
         isequal(expr, k) && return v
     end
+    if iscall(expr) && operation(expr) isa Integral
+        for (k, v) in ctx.rules
+            array_integral_keys_equal(expr, k) && return v
+        end
+    end
     iscall(expr) || return Symbolics.wrap(expr)
     op = operation(expr)
     if op isa Differential
@@ -1856,9 +1903,7 @@ function arrayify(expr, ctx)
         arg = arrayify(only(arguments(expr)), ctx)
         return op(arg)
     elseif !(op isa Function)
-        # Symbolic operators (`Integral`, ...) and symbolic callables are not `Function`s
-        # and cannot be broadcast over slices; anything reaching here was not replaced by
-        # a rule, so there is no slice form for it.
+        # Symbolic operators (`Integral`, ...) cannot be broadcast over slices.
         throw(ArrayFormFallback("unhandled operation $op in $expr"))
     end
     newargs = [arrayify(a, ctx) for a in arguments(expr)]
@@ -1927,6 +1972,9 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         get_depvars(boundary.eq.rhs, s.vars.depvar_ops)
     for v in bcdepvars
         vd = depvar(v, s)
+        if isempty(ivs(vd, s))
+            continue
+        end
         isequal(ivs(vd, s), args) ||
             throw(ArrayFormFallback("variable $v of differing dimensionality"))
         for (k, a) in enumerate(remove(arguments(v), s.time))
@@ -1976,13 +2024,22 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     end
 
     # Dependent variables (both the canonical form and the value on this boundary) map to
-    # the slice over the face.
+    # the slice over the face. Time-only variables are scalars.
     varrules = Pair[]
+    bc_us = Any[u]
     for v in bcdepvars
         vd = depvar(v, s)
-        push!(varrules, safe_unwrap(v) => array_slice(vd, s, ranges, indexmap))
+        push!(bc_us, vd)
+        if isempty(ivs(vd, s))
+            push!(varrules, safe_unwrap(v) => array_scalar_discvar(vd, s))
+        else
+            push!(varrules, safe_unwrap(v) => array_slice(vd, s, ranges, indexmap))
+        end
     end
     push!(varrules, safe_unwrap(u) => array_slice(u, s, ranges, indexmap))
+    intrules = array_integral_rules(
+        s, unique(bc_us), ranges, indexmap; bvar = x_
+    )
 
     # Independent variables: the boundary's own variable takes its endpoint value (a
     # scalar), the others vary along the face. This mirrors `axiesvals`.
@@ -1996,14 +2053,13 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         end
     end
 
-    ctx = ArrayifyContext(vcat(derivrules, varrules, gridrules), s.time)
+    ctx = ArrayifyContext(vcat(derivrules, intrules, varrules, gridrules), s.time)
     lhs = arrayify(boundary.eq.lhs, ctx)
     rhs = arrayify(boundary.eq.rhs, ctx)
-    shape = Tuple(length(ranges[i]) for i in 1:N)
     if is_array_valued(lhs) && !is_array_valued(rhs)
-        rhs = fill(Symbolics.unwrap(rhs), shape)
+        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
-        lhs = fill(Symbolics.unwrap(lhs), shape)
+        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
         throw(ArrayFormFallback("boundary condition has no discretizable terms"))
     end
