@@ -1,27 +1,47 @@
 module MethodOfLines
-using LinearAlgebra
-using SciMLBase
-using DiffEqBase
-using ModelingToolkit
+import LinearAlgebra
+using LinearAlgebra: I, cond, dot
+import SciMLBase
+using SciMLBase: DAEProblem, NonlinearProblem, ODEFunction, ODEProblem, SplitODEProblem
+import DiffEqBase
+import ModelingToolkit
 using ModelingToolkit: get_unknowns,
     get_eqs, get_bcs, get_dvs,
     get_ivs
-using ModelingToolkitBase: initialization_equations
-using SymbolicIndexingInterface
-using SymbolicUtils, Symbolics
+import ModelingToolkitBase
+using ModelingToolkitBase: @named, @parameters, PDESystem, complete, initialization_equations,
+    mtkcompile, unknowns
+import SymbolicIndexingInterface
+using SymbolicIndexingInterface: NotSymbolic, symbolic_type
+import SymbolicUtils
+using SymbolicUtils: @rule, hasmetadata, setmetadata, substitute, term
+import Symbolics
+using Symbolics: @variables, Differential, Equation, Integral, Num, terms
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term,
     symbolic_to_float
 using SymbolicUtils: operation, arguments, iscall, getmetadata, unwrap_const
-using StaticArrays
-using Interpolations
-using Latexify
-using PrecompileTools
-using DomainSets
-using RuntimeGeneratedFunctions
+import StaticArrays
+using StaticArrays: SVector
+import Interpolations
+using Interpolations: Gridded, Linear, interpolate
+import Latexify
+using Latexify: latexify
+import PrecompileTools
+using PrecompileTools: @compile_workload, @setup_workload
+import DomainSets
+using DomainSets: boundary, interior
+import RuntimeGeneratedFunctions
 RuntimeGeneratedFunctions.init(@__MODULE__)
 
 # See here for the main `symbolic_discretize` and `generate_system` functions
-using PDEBase
+import PDEBase
+using PDEBase: AbstractBoundary, AbstractCartesianDiscreteSpace,
+    AbstractDifferentialDiscretizer, AbstractEquationSystemDiscretization,
+    AbstractTruncatingBoundary, AbstractVarEqMapping, HigherOrderInterfaceBoundary,
+    InterfaceBoundary, LowerBoundary, UpperBoundary, all_ivs, depvars, ex2term,
+    filter_interfaces, flatten_vardict, get_depvars, get_time, getvars,
+    has_derivatives, has_interfaces, haslowerupper, isupper, pde_substitute,
+    safe_unwrap, split_additive_terms, split_terms, subs_alleqs!, subsmatch
 using PDEBase: unitindices, unitindex, remove, insert, sym_dot, VariableMap, depvar, x2i,
     d_orders, vcat!, update_varmap!, get_ops
 

@@ -20,12 +20,12 @@ Base.:-(I::RefCartesianIndex, J::CartesianIndex) = RefCartesianIndex(I.I - J, I.
 Base.:+(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I + J.I, J.A)
 Base.:-(I::CartesianIndex, J::RefCartesianIndex) = RefCartesianIndex(I - J.I, J.A)
 
-(b::InterfaceBoundary)(I, s, jx) = wrapinterface(I, s, b, jx)
-(b::AbstractBoundary)(I, s, jx) = I
+boundary_index(I, s, b::InterfaceBoundary, jx) = wrapinterface(I, s, b, jx)
+boundary_index(I, s, ::AbstractBoundary, jx) = I
 
 function bwrap(I, bs, s, jx)
     for b in bs
-        I = b(I, s, jx)
+        I = boundary_index(I, s, b, jx)
     end
     return I
 end
