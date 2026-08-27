@@ -7,6 +7,10 @@ run_qa(
     reexports_allow = (:discretize, :symbolic_discretize),
     aqua_kwargs = (; persistent_tasks = (; tmax = 300)),
     ei_kwargs = (;
+        no_stale_explicit_imports = (;
+            # `@register_array_symbolic` expands to `@wrapped` in this module.
+            ignore = (Symbol("@wrapped"),),
+        ),
         all_explicit_imports_are_public = (;
             # These are PDEBase/Symbolics developer hooks required to implement the
             # discretizer extension points; their owners have not declared them public.
