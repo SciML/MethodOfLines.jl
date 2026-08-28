@@ -8,7 +8,7 @@ include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 # Self-similar stretching: refinement isolates asymptotic MMS order.
 stretched_grid(a, b, n; amp = 0.15) = [
     let ξ = a + (b - a) * (i - 1) / (n - 1)
-            ξ + amp * sinpi(2 * (ξ - a) / (b - a))
+        ξ + amp * sinpi(2 * (ξ - a) / (b - a))
     end
         for i in 1:n
 ]

@@ -107,16 +107,16 @@ function boundary_value_maps(
 
     depvarderivbcmaps = [
         (Differential(x_)^d)(u_) => half_offset_centered_difference(
-                derivweights.halfoffsetmap[1][Differential(x_)^d],
-                II, s, [], (j, x_), u, ufunc
-            ) for d in derivweights.orders[x_]
+            derivweights.halfoffsetmap[1][Differential(x_)^d],
+            II, s, [], (j, x_), u, ufunc
+        ) for d in derivweights.orders[x_]
     ]
 
     depvarbcmaps = [
         v_ => half_offset_centered_difference(
-                derivweights.interpmap[x_], II, s, [],
-                (x2i(s, depvar(v_, s), x_), x_), depvar(v_, s), ufunc
-            )
+            derivweights.interpmap[x_], II, s, [],
+            (x2i(s, depvar(v_, s), x_), x_), depvar(v_, s), ufunc
+        )
             for v_ in [u_; othervars]
     ]
 
@@ -141,9 +141,9 @@ function boundary_value_maps(
 
         otherderivmaps = [
             (Differential(x__)^d)(u__) => half_offset_centered_difference(
-                    derivweights.halfoffsetmap[1][Differential(x__)^d],
-                    II, s, [], (j, x__), otheru, ufunc
-                )
+                derivweights.halfoffsetmap[1][Differential(x__)^d],
+                II, s, [], (j, x__), otheru, ufunc
+            )
                 for d in derivweights.orders[x_]
         ]
 
@@ -189,8 +189,8 @@ function boundary_value_maps(
 
     depvarderivbcmaps = [
         (Differential(x_)^d)(u_) => central_difference(
-                derivweights, II, s, [], (x2i(s, u, x_), x_), u, ufunc, d
-            )
+            derivweights, II, s, [], (x2i(s, u, x_), x_), u, ufunc, d
+        )
             for d in derivweights.orders[x_]
     ]
     # generate_cartesian_rules(II, s, [u], derivweights, depvarbcmaps, indexmap, []);
@@ -221,9 +221,9 @@ function boundary_value_maps(
 
         otherderivmaps = [
             (Differential(x__)^d)(u__) => central_difference(
-                    derivweights.map[Differential(x__)^d], II, s,
-                    [], (x2i(s, otheru, x__), x__), otheru, ufunc
-                )
+                derivweights.map[Differential(x__)^d], II, s,
+                [], (x2i(s, otheru, x__), x__), otheru, ufunc
+            )
                 for d in derivweights.orders[x__]
         ]
         otherbcmaps = [u__ => s.discvars[otheru][II]]
@@ -264,9 +264,9 @@ function boundary_value_maps(
 
     depvarderivbcmaps = [
         (Differential(x_)^d)(u_) => central_difference(
-                derivweights.map[Differential(x_)^d], II,
-                s, [], (x2i(s, u, x_), x_), u, ufunc
-            )
+            derivweights.map[Differential(x_)^d], II,
+            s, [], (x2i(s, u, x_), x_), u, ufunc
+        )
             for d in derivweights.orders[x_]
     ]
     depvarbcmaps = [v_ => s.discvars[depvar(v_, s)][II] for v_ in [u_; othervars]]
@@ -296,9 +296,9 @@ function boundary_value_maps(
 
         otherderivmaps = [
             (Differential(x__)^d)(u__) => central_difference(
-                    derivweights.map[Differential(x__)^d], II, s,
-                    [], (x2i(s, otheru, x__), x__), otheru, ufunc
-                )
+                derivweights.map[Differential(x__)^d], II, s,
+                [], (x2i(s, otheru, x__), x__), otheru, ufunc
+            )
                 for d in derivweights.orders[x__]
         ]
         otherbcmaps = [u__ => s.discvars[otheru][II]]

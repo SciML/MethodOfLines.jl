@@ -53,8 +53,8 @@ function cartesian_nonlinear_laplacian(
     # Get the correct weights and stencils for this II
     interp_weights_and_stencil = [
         get_half_offset_weights_and_stencil(
-                inner_interpolater, I, s, bs, u, jx
-            )
+            inner_interpolater, I, s, bs, u, jx
+        )
             for I in outerstencil
     ]
     function deriv_weights_and_stencil(u, i, order)
@@ -173,21 +173,21 @@ end
         safe_vcat,
         [
             vec(
-                    [
-                        @rule *(
-                            ~~c,
-                            $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)),
-                            ~~d
-                        ) => *(
-                            replacevals(~c, s, u, depvars, II, indexmap)...,
-                            cartesian_nonlinear_laplacian(
-                                *(~a..., ~b...), Idx(II, s, u, indexmap),
-                                derivweights, s, indexmap, bcmap, depvars, x, u
-                            ),
-                            replacevals(~d, s, u, depvars, II, indexmap)...
-                        ) for x in ivs(u, s)
-                    ]
-                ) for u in depvars
+                [
+                    @rule *(
+                        ~~c,
+                        $(Differential(x))(*(~~a, $(Differential(x))(u), ~~b)),
+                        ~~d
+                    ) => *(
+                        replacevals(~c, s, u, depvars, II, indexmap)...,
+                        cartesian_nonlinear_laplacian(
+                            *(~a..., ~b...), Idx(II, s, u, indexmap),
+                            derivweights, s, indexmap, bcmap, depvars, x, u
+                        ),
+                        replacevals(~d, s, u, depvars, II, indexmap)...
+                    ) for x in ivs(u, s)
+                ]
+            ) for u in depvars
         ],
         init = []
     )
@@ -198,19 +198,19 @@ end
             safe_vcat,
             [
                 vec(
-                        [
-                            @rule $(Differential(x))(
-                                *(
-                                    ~~a,
-                                    $(Differential(x))(u),
-                                    ~~b
-                                )
-                            ) => cartesian_nonlinear_laplacian(
-                                *(~a..., ~b...), Idx(II, s, u, indexmap),
-                                derivweights, s, indexmap, bcmap, depvars, x, u
-                            ) for x in ivs(u, s)
-                        ]
-                    )
+                    [
+                        @rule $(Differential(x))(
+                            *(
+                                ~~a,
+                                $(Differential(x))(u),
+                                ~~b
+                            )
+                        ) => cartesian_nonlinear_laplacian(
+                            *(~a..., ~b...), Idx(II, s, u, indexmap),
+                            derivweights, s, indexmap, bcmap, depvars, x, u
+                        ) for x in ivs(u, s)
+                    ]
+                )
                     for u in depvars
             ],
             init = []
@@ -223,18 +223,45 @@ end
             safe_vcat,
             [
                 vec(
-                        [
-                            @rule (
-                                $(Differential(x))(
-                                    $(Differential(x))(u) /
+                    [
+                        @rule (
+                            $(Differential(x))(
+                                $(Differential(x))(u) /
                                     ~a
-                                )
-                            ) => cartesian_nonlinear_laplacian(
+                            )
+                        ) => cartesian_nonlinear_laplacian(
+                            1 / ~a, Idx(II, s, u, indexmap), derivweights,
+                            s, indexmap, bcmap, depvars, x, u
+                        ) for x in ivs(u, s)
+                    ]
+                )
+                    for u in depvars
+            ],
+            init = []
+        )
+    )
+
+    rules = safe_vcat(
+        rules,
+        reduce(
+            safe_vcat,
+            [
+                vec(
+                    [
+                        @rule *(
+                            ~~b,
+                            ($(Differential(x))($(Differential(x))(u) / ~a)),
+                            ~~c
+                        ) => *(
+                            replacevals(~b, s, u, depvars, II, indexmap)...,
+                            replacevals(~c, s, u, depvars, II, indexmap)...,
+                            cartesian_nonlinear_laplacian(
                                 1 / ~a, Idx(II, s, u, indexmap), derivweights,
                                 s, indexmap, bcmap, depvars, x, u
-                            ) for x in ivs(u, s)
-                        ]
-                    )
+                            )
+                        ) for x in ivs(u, s)
+                    ]
+                )
                     for u in depvars
             ],
             init = []
@@ -247,50 +274,23 @@ end
             safe_vcat,
             [
                 vec(
-                        [
-                            @rule *(
-                                ~~b,
-                                ($(Differential(x))($(Differential(x))(u) / ~a)),
-                                ~~c
-                            ) => *(
+                    [
+                        @rule /(
+                            *(~~b, ($(Differential(x))(*(~~a, $(Differential(x))(u), ~~d))), ~~c),
+                            ~e
+                        ) => /(
+                            *(
                                 replacevals(~b, s, u, depvars, II, indexmap)...,
                                 replacevals(~c, s, u, depvars, II, indexmap)...,
                                 cartesian_nonlinear_laplacian(
-                                    1 / ~a, Idx(II, s, u, indexmap), derivweights,
-                                    s, indexmap, bcmap, depvars, x, u
+                                    *(~a..., ~d...), Idx(II, s, u, indexmap),
+                                    derivweights, s, indexmap, bcmap, depvars, x, u
                                 )
-                            ) for x in ivs(u, s)
-                        ]
-                    )
-                    for u in depvars
-            ],
-            init = []
-        )
-    )
-
-    rules = safe_vcat(
-        rules,
-        reduce(
-            safe_vcat,
-            [
-                vec(
-                        [
-                            @rule /(
-                                *(~~b, ($(Differential(x))(*(~~a, $(Differential(x))(u), ~~d))), ~~c),
-                                ~e
-                            ) => /(
-                                *(
-                                    replacevals(~b, s, u, depvars, II, indexmap)...,
-                                    replacevals(~c, s, u, depvars, II, indexmap)...,
-                                    cartesian_nonlinear_laplacian(
-                                        *(~a..., ~d...), Idx(II, s, u, indexmap),
-                                        derivweights, s, indexmap, bcmap, depvars, x, u
-                                    )
-                                ),
-                                replacevals(~e, s, u, depvars, II, indexmap)
-                            ) for x in ivs(u, s)
-                        ]
-                    )
+                            ),
+                            replacevals(~e, s, u, depvars, II, indexmap)
+                        ) for x in ivs(u, s)
+                    ]
+                )
                     for u in depvars
             ],
             init = []

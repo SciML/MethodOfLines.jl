@@ -24,21 +24,21 @@ function CompleteUpwindDifference(
     L_boundary_deriv_spots = 0.0:(low_boundary_point_count - 1)
     _low_boundary_coefs = SVector{boundary_stencil_length, T}[
         convert(
-                SVector{
-                    boundary_stencil_length,
-                    T,
-                },
-                (
-                    1 /
+            SVector{
+                boundary_stencil_length,
+                T,
+            },
+            (
+                1 /
                     dx^derivative_order
-                ) *
+            ) *
                 calculate_weights(
-                    derivative_order,
-                    oneunit(T) *
+                derivative_order,
+                oneunit(T) *
                     x0,
-                    low_boundary_x
-                )
+                low_boundary_x
             )
+        )
             for x0 in
             L_boundary_deriv_spots
     ]
@@ -48,23 +48,23 @@ function CompleteUpwindDifference(
     R_boundary_deriv_spots = 0.0:-1.0:(-(high_boundary_point_count - 1.0))
     _high_boundary_coefs = SVector{boundary_stencil_length, T}[
         convert(
-                SVector{
-                    boundary_stencil_length,
-                    T,
-                },
+            SVector{
+                boundary_stencil_length,
+                T,
+            },
+            (
                 (
-                    (
-                        -1 /
+                    -1 /
                         dx
-                    )^derivative_order
-                ) *
+                )^derivative_order
+            ) *
                 calculate_weights(
-                    derivative_order,
-                    oneunit(T) *
+                derivative_order,
+                oneunit(T) *
                     x0,
-                    high_boundary_x
-                )
+                high_boundary_x
             )
+        )
             for x0 in
             R_boundary_deriv_spots
     ]
@@ -116,12 +116,12 @@ function CompleteUpwindDifference(
 
     stencil_coefs = [
         convert(
-                SVector{stencil_length, eltype(x)},
-                calculate_weights(
-                    derivative_order, x[i],
-                    @view(x[(i - offside):(i + stencil_length - 1 - offside)])
-                )
+            SVector{stencil_length, eltype(x)},
+            calculate_weights(
+                derivative_order, x[i],
+                @view(x[(i - offside):(i + stencil_length - 1 - offside)])
             )
+        )
             for i in
             (low_boundary_point_count + 1):(length(x) - high_boundary_point_count)
     ]
@@ -129,23 +129,23 @@ function CompleteUpwindDifference(
 
     low_boundary_coefs = [
         convert(
-                SVector{boundary_stencil_length, eltype(x)},
-                calculate_weights(
-                    derivative_order, offset,
-                    low_boundary_x
-                )
+            SVector{boundary_stencil_length, eltype(x)},
+            calculate_weights(
+                derivative_order, offset,
+                low_boundary_x
             )
+        )
             for offset in L_boundary_deriv_spots
     ]
 
     high_boundary_coefs = [
         convert(
-                SVector{boundary_stencil_length, eltype(x)},
-                calculate_weights(
-                    derivative_order, offset,
-                    high_boundary_x
-                )
+            SVector{boundary_stencil_length, eltype(x)},
+            calculate_weights(
+                derivative_order, offset,
+                high_boundary_x
             )
+        )
             for offset in R_boundary_deriv_spots
     ]
 

@@ -11,7 +11,7 @@ uniform_grid(a, b, n) = collect(range(a, b; length = n))
 # Same generator as the accuracy test suite.
 stretched_grid(a, b, n; amp = 0.05) = [
     let ξ = a + (b - a) * (i - 1) / (n - 1)
-            ξ + amp * sinpi(2 * (ξ - a) / (b - a))
+        ξ + amp * sinpi(2 * (ξ - a) / (b - a))
     end
         for i in 1:n
 ]

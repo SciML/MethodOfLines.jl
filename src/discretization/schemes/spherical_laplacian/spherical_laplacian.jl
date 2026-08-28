@@ -52,23 +52,23 @@ end
         safe_vcat,
         [
             vec(
-                    [
-                        @rule *(
-                            ~~a,
-                            1 / (r^2),
-                            ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))),
-                            ~~b
-                        ) => *(
-                            replacevals(~a, s, u, depvars, II, indexmap)...,
-                            spherical_diffusion(
-                                *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
-                                derivweights, s, indexmap, bcmap, depvars, r, u
-                            ),
-                            replacevals(~b, s, u, depvars, II, indexmap)...
-                        )
+                [
+                    @rule *(
+                        ~~a,
+                        1 / (r^2),
+                        ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))),
+                        ~~b
+                    ) => *(
+                        replacevals(~a, s, u, depvars, II, indexmap)...,
+                        spherical_diffusion(
+                            *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
+                            derivweights, s, indexmap, bcmap, depvars, r, u
+                        ),
+                        replacevals(~b, s, u, depvars, II, indexmap)...
+                    )
                         for r in ivs(u, s)
-                    ]
-                ) for u in depvars
+                ]
+            ) for u in depvars
         ],
         init = []
     )
@@ -79,27 +79,27 @@ end
             safe_vcat,
             [
                 vec(
-                        [
-                            @rule /(
-                                *(
-                                    ~~a, $(Differential(r))(
-                                        *(
-                                            ~~c, (r^2), ~~d, $(Differential(r))(u), ~~e
-                                        )
-                                    ), ~~b
-                                ),
-                                (r^2)
-                            ) => *(
-                                replacevals(~a, s, u, depvars, II, indexmap)...,
-                                replacevals(~b, s, u, depvars, II, indexmap)...,
-                                spherical_diffusion(
-                                    *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
-                                    derivweights, s, indexmap, bcmap, depvars, r, u
-                                )
+                    [
+                        @rule /(
+                            *(
+                                ~~a, $(Differential(r))(
+                                    *(
+                                        ~~c, (r^2), ~~d, $(Differential(r))(u), ~~e
+                                    )
+                                ), ~~b
+                            ),
+                            (r^2)
+                        ) => *(
+                            replacevals(~a, s, u, depvars, II, indexmap)...,
+                            replacevals(~b, s, u, depvars, II, indexmap)...,
+                            spherical_diffusion(
+                                *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
+                                derivweights, s, indexmap, bcmap, depvars, r, u
                             )
+                        )
                             for r in ivs(u, s)
-                        ]
-                    ) for u in depvars
+                    ]
+                ) for u in depvars
             ],
             init = []
         )
@@ -111,17 +111,17 @@ end
             safe_vcat,
             [
                 vec(
-                        [
-                            @rule /(
-                                ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))),
-                                (r^2)
-                            ) => spherical_diffusion(
-                                *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
-                                derivweights, s, indexmap, bcmap, depvars, r, u
-                            )
+                    [
+                        @rule /(
+                            ($(Differential(r))(*(~~c, (r^2), ~~d, $(Differential(r))(u), ~~e))),
+                            (r^2)
+                        ) => spherical_diffusion(
+                            *(~c..., ~d..., ~e..., Num(1)), Idx(II, s, u, indexmap),
+                            derivweights, s, indexmap, bcmap, depvars, r, u
+                        )
                             for r in ivs(u, s)
-                        ]
-                    ) for u in depvars
+                    ]
+                ) for u in depvars
             ],
             init = []
         )
