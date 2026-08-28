@@ -2742,27 +2742,28 @@ end
     )
     @test SciMLBase.successful_retcode(sol_arr)
     @test narrayeqs_interior(sys_arr) >= 2
-    # identification face + flux face are slices, so the equation count is
-    # independent of the transverse resolution
-    n8 = length(
-        get_eqs(
-            first(
-                symbolic_discretize(
-                    pdesys, MOLFiniteDifference([x1 => 0.1, x2 => 0.1, y => 1 / 8], t)
-                )
-            )
+    # Identification is algebraic: the two faces share a value at the seam.
+    @test sol_arr[c1(t, x1, y)][end, end, :] ≈ sol_arr[c2(t, x2, y)][end, 1, :] atol = 1.0e-8
+    # identification face + flux face are slices, so the equation count and the
+    # face-scheme size are independent of the transverse resolution
+    counts = map([8, 16]) do ny
+        sys, _ = symbolic_discretize(
+            pdesys, MOLFiniteDifference([x1 => 0.1, x2 => 0.1, y => 1 / ny], t)
         )
-    )
-    n16 = length(
-        get_eqs(
-            first(
-                symbolic_discretize(
-                    pdesys, MOLFiniteDifference([x1 => 0.1, x2 => 0.1, y => 1 / 16], t)
-                )
-            )
+        eqs = get_eqs(sys)
+        iface = filter(
+            eq -> !isinterioreq(eq) && isarrayeq(eq) &&
+                occursin("c1", string(eq)) && occursin("c2", string(eq)),
+            eqs,
         )
-    )
-    @test n8 == n16
+        (;
+            n = length(eqs), niface = length(iface),
+            size = sum(eq_scheme_size, iface; init = 0),
+        )
+    end
+    @test counts[1].n == counts[2].n
+    @test counts[1].niface == counts[2].niface == 2
+    @test counts[1].size == counts[2].size
 end
 
 @testset "2D two-domain in x, periodic in y" begin

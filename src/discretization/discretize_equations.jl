@@ -2458,11 +2458,10 @@ function array_bc_eqs(
     ctx = ArrayifyContext(vcat(derivrules, varrules, gridrules), s.time)
     lhs = arrayify(boundary.eq.lhs, ctx)
     rhs = arrayify(boundary.eq.rhs, ctx)
-    shape = Tuple(length(ranges[i]) for i in 1:N)
     if is_array_valued(lhs) && !is_array_valued(rhs)
-        rhs = fill(Symbolics.unwrap(rhs), shape)
+        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
-        lhs = fill(Symbolics.unwrap(lhs), shape)
+        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules))
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
         throw(ArrayFormFallback("boundary condition has no discretizable terms"))
     end
