@@ -20,8 +20,9 @@
 # Interior boundary values (e.g. `u(t, 1)`) map to the matching array element or face
 # slice on every array box, including size-1 wrap boxes and frame points (the pointwise
 # `boundaryvalfuncs` skip interface faces and free-standing corners; this path does not).
-# Derivatives of boundary values, time-literal references like `u(0, x)`, and
-# edge-aligned grids, fall back.
+# Pinned-direction derivatives of those values (`Dx(u(t, 1))`) use the same
+# `depvarderivbcmaps` stencil (one-sided at a truncating edge, wrapped if periodic).
+# Time-literal references like `u(0, x)`, and edge-aligned grids, fall back.
 #
 # Nonlinear laplacians `Dx(a(u) * Dx(u))` are emitted in slice form too; see
 # `array_nonlinear_laplacian`. Spherical laplacians `r^-2 Dr(r^2 Dr(u))` build on the
@@ -54,8 +55,9 @@
 #
 # Unsupported patterns fall back to pointwise equations: callbacks,
 # a higher-dimensional field whose extra axes are free (not a boundary
-# value and not an integral rank drop), boundary-value derivatives, time-literal
-# dependent-variable calls, edge-aligned boundary values, stationary systems,
+# value and not an integral rank drop), time-literal
+# dependent-variable calls, edge-aligned boundary values, tangential or
+# mixed derivatives of boundary values, stationary systems,
 # linear operators on a nonuniform two-domain interface.
 
 struct ArrayFormFallback <: Exception
@@ -63,15 +65,18 @@ struct ArrayFormFallback <: Exception
 end
 
 function discretize_equation_at_point(
-        II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs
+        II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs;
+        extra_rules = []
     )
     boundaryrules = mapreduce(f -> f(II), vcat, boundaryvalfuncs, init = [])
+    # extra_rules last: Dict last-key-wins, and before expand_derivatives.
     rules = vcat(
         generate_finite_difference_rules(
             II, s, depvars, pde, derivweights, bcmap, indexmap
         ),
         boundaryrules,
-        valmaps(s, eqvar, depvars, II, indexmap)
+        valmaps(s, eqvar, depvars, II, indexmap),
+        extra_rules
     )
     try
         rdict = Dict(rules)
@@ -265,24 +270,34 @@ function discretize_equation_array_form(
             # still apply array bval rules (periodic faces have empty boundaryvalfuncs)
             eq = discretize_equation_at_point(
                 CartesianIndex(map(first, rs)), s, depvars, pde, derivweights,
-                bcmap, eqvar, indexmap, boundaryvalfuncs
+                bcmap, eqvar, indexmap, boundaryvalfuncs;
+                extra_rules = array_point_boundary_derivative_rules(
+                    pde, s, ranges, indexmap, derivweights, periodic, bcmap
+                )
             )
-            return array_substitute_boundary_values(eq, pde, s, ranges, indexmap)
+            return array_substitute_boundary_values(
+                eq, pde, s, ranges, indexmap, derivweights, periodic, bcmap
+            )
         end
         return array_core_equation(
             pde, ranges, s, slicevars, derivweights,
             args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches,
-            mixedterms, depvars
+            mixedterms, bcmap, depvars
         )
     end
 
     frame = setdiff(vec(collect(interior)), vec(collect(core)))
     frame_eqs = map(frame) do II
-        eq = discretize_equation_at_point(
-            II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs
-        )
         ranges = Dict(j => II[j]:II[j] for j in 1:N)
-        return array_substitute_boundary_values(eq, pde, s, ranges, indexmap)
+        eq = discretize_equation_at_point(
+            II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs;
+            extra_rules = array_point_boundary_derivative_rules(
+                pde, s, ranges, indexmap, derivweights, periodic, bcmap
+            )
+        )
+        return array_substitute_boundary_values(
+            eq, pde, s, ranges, indexmap, derivweights, periodic, bcmap
+        )
     end
     return vcat(vec(core_eqs), frame_eqs)
 end
@@ -290,14 +305,20 @@ end
 """
 The array equation for one box of the interior, given as `ranges` (dimension => index
 range). `depvars` are the sliceable fields; `allvars` includes rank-dropping integrands.
+`bcmap` builds pinned-direction derivatives of interior boundary values.
 """
 function array_core_equation(
         pde, ranges, s, depvars, derivweights, args, pdeorders, indexmap, terms,
-        periodic, nllap_matches, sph_matches, mixedterms, allvars = depvars
+        periodic, nllap_matches, sph_matches, mixedterms, bcmap, allvars = depvars
     )
     N = length(args)
-    # First matching rule wins. Boundary-value rules before core-variable rules.
-    bvalrules = array_boundary_value_rules(pde, s, ranges, indexmap)
+    # Deriv rules before bare bvals, both before field rules, so `Dx(u(t, 1))` wins.
+    bvalrules = vcat(
+        array_boundary_value_derivative_rules(
+            pde, s, ranges, indexmap, derivweights, periodic, bcmap
+        ),
+        array_boundary_value_rules(pde, s, ranges, indexmap)
+    )
     varrules = Pair[]
     for u in depvars
         if isempty(ivs(u, s))
@@ -330,8 +351,7 @@ function array_core_equation(
         mixedrules = array_mixed_rules(
             mixedterms, s, derivweights, ranges, indexmap, periodic
         )
-        # Winding coefficients are arrayified with the same baserules; include bvalrules so
-        # e.g. `u(t, 1)*Dx(u)` substitutes the boundary element before the wind rule fires.
+        # Include bvalrules so `u(t, 1)*Dx(u)` and `Dx(u(t, 1))*Dx(u)` substitute first.
         windrules = array_winding_rules(
             terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
             vcat(bvalrules, varrules, gridrules), periodic
@@ -1024,25 +1044,56 @@ function array_boundary_edge_index(xval, x, s)
     end
 end
 
-"""
-True when `expr` contains a spatial derivative of a boundary value such as
-`(Differential(x))(u(t, 1))`. Those have no slice form here yet (the pointwise path
-handles them via `depvarderivbcmaps`).
-"""
-function array_has_boundary_value_derivative(expr, s)
+"""True when the argument of `u_` for `x` is numeric."""
+function array_iv_is_pinned(u_, x, s)
+    u = depvar(u_, s)
+    args = ivs(u, s)
+    args_ = remove(arguments(u_), s.time)
+    length(args_) == length(args) || return false
+    for (j, a) in enumerate(args_)
+        isequal(args[j], x) || continue
+        return unwrap_const(safe_unwrap(a)) isa Number
+    end
+    return false
+end
+
+"""True when `expr` is `(Differential(x)^d)(u_)` with `x` numeric on `u_`."""
+function array_is_boundary_value_derivative(expr, s)
     expr = safe_unwrap(expr)
     iscall(expr) || return false
     op = operation(expr)
-    if op isa Differential && (s.time === nothing || !isequal(op.x, s.time))
-        for a in arguments(expr)
-            for v in get_depvars(a, s.vars.depvar_ops)
-                any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(v)) &&
-                    return true
-            end
-            array_has_boundary_value_derivative(a, s) && return true
-        end
+    op isa Differential || return false
+    (s.time !== nothing && isequal(op.x, s.time)) && return false
+    op.order isa Integer || return false
+    arg = safe_unwrap(only(arguments(expr)))
+    iscall(arg) || return false
+    any(u -> isequal(operation(arg), u), s.vars.depvar_ops) || return false
+    any(a -> unwrap_const(safe_unwrap(a)) isa Number, arguments(arg)) || return false
+    return array_iv_is_pinned(arg, op.x, s)
+end
+
+function array_collect_boundary_value_derivatives!(out, expr, s)
+    expr = safe_unwrap(expr)
+    iscall(expr) || return out
+    if array_is_boundary_value_derivative(expr, s)
+        op = operation(expr)
+        arg = safe_unwrap(only(arguments(expr)))
+        any(t -> isequal(t[1], expr), out) ||
+            push!(out, (expr, op.x, Int(op.order), arg))
+        return out
     end
-    return any(a -> array_has_boundary_value_derivative(a, s), arguments(expr))
+    for a in arguments(expr)
+        array_collect_boundary_value_derivatives!(out, a, s)
+    end
+    return out
+end
+
+"""Handleable `(expr, x, d, u_)` records in `pde`, e.g. `Dx(u(t, 1))`."""
+function array_boundary_value_derivative_terms(pde, s)
+    found = []
+    array_collect_boundary_value_derivatives!(found, pde.lhs, s)
+    array_collect_boundary_value_derivatives!(found, pde.rhs, s)
+    return found
 end
 
 """
@@ -1070,8 +1121,10 @@ end
 """
 Equation-level checks for boundary values in the interior equation. Throws
 `ArrayFormFallback` for patterns with no slice form yet (edge-aligned grids,
-derivatives of boundary values, time literals, off-edge sampling); otherwise succeeds so
-`array_boundary_value_rules` can substitute each term.
+time literals, off-edge sampling); otherwise succeeds so
+`array_boundary_value_rules` can substitute each term. Pinned-direction
+derivatives of those values are accepted; other spatial differentials fall
+through `arrayify`.
 """
 function array_validate_boundary_values(pde, s)
     bvals = array_boundary_value_terms(pde, s)
@@ -1080,12 +1133,6 @@ function array_validate_boundary_values(pde, s)
         ArrayFormFallback(
             "boundary values in interior equations require a CenterAlignedGrid"
         )
-    )
-    (
-        array_has_boundary_value_derivative(pde.lhs, s) ||
-            array_has_boundary_value_derivative(pde.rhs, s)
-    ) && throw(
-        ArrayFormFallback("derivative of boundary value in interior equation")
     )
     for u_ in bvals
         array_is_time_literal_term(u_, s) && throw(
@@ -1152,6 +1199,156 @@ function array_boundary_value_rules(pde, s, ranges, indexmap)
     ]
 end
 
+"""Interfaces for a boundary-value derivative in `x`: wrap if periodic, else `[]`."""
+function array_boundary_derivative_bs(u, x, s, bcmap, periodic)
+    haskey(periodic, x) || return []
+    uop = operation(depvar(u, s))
+    haskey(bcmap, uop) && haskey(bcmap[uop], x) || throw(
+        ArrayFormFallback(
+            "periodic boundary-value derivative missing interface map for $x"
+        )
+    )
+    return filter_interfaces(bcmap[uop][x])
+end
+
+"""Index for `u_`: edge on pinned arguments, first core index on free ones."""
+function array_boundary_value_index(u_, s, ranges, indexmap)
+    u = depvar(u_, s)
+    args = ivs(u, s)
+    args_ = remove(arguments(u_), s.time)
+    length(args_) == length(args) || throw(
+        ArrayFormFallback("boundary value $u_ has unexpected argument structure")
+    )
+    return ntuple(length(args_)) do j
+        aval = unwrap_const(safe_unwrap(args_[j]))
+        if aval isa Number
+            return array_boundary_edge_index(aval, args[j], s)
+        end
+        haskey(indexmap, args[j]) || throw(
+            ArrayFormFallback("boundary value $u_ has a free argument not on the equation")
+        )
+        return first(ranges[indexmap[args[j]]])
+    end
+end
+
+"""
+`depvarderivbcmaps` stencil for `(Differential(x)^d)(u_)` as a scalar or face slice
+over the core box.
+"""
+function array_boundary_value_derivative(
+        x, d, u_, s, ranges, indexmap, derivweights, periodic, bcmap
+    )
+    u = depvar(u_, s)
+    args = ivs(u, s)
+    N = length(args)
+    j = findfirst(isequal(x), args)
+    j === nothing && throw(
+        ArrayFormFallback("derivative direction $x is not an argument of $u")
+    )
+    Dop = get(derivweights.map, Differential(x)^d, nothing)
+    Dop === nothing && throw(
+        ArrayFormFallback("no centered operator for order $d in $x")
+    )
+    II0 = CartesianIndex(array_boundary_value_index(u_, s, ranges, indexmap))
+    bs = array_boundary_derivative_bs(u, x, s, bcmap, periodic)
+    stencil = try
+        central_difference_weights_and_stencil(Dop, II0, s, bs, (j, x), u)
+    catch e
+        e isa InterruptException && rethrow(e)
+        throw(
+            ArrayFormFallback(
+                "could not build boundary-value derivative stencil for order $d"
+            )
+        )
+    end
+    stencil == 0 && throw(
+        ArrayFormFallback("boundary-value derivative of a 0-dimensional variable")
+    )
+    ws, Itap = stencil
+    all(I -> all(k -> k == j || I[k] == II0[k], 1:N), Itap) ||
+        throw(ArrayFormFallback("boundary-value derivative stencil is not axis aligned"))
+
+    arr = array_variable(u, s)
+    args_ = remove(arguments(u_), s.time)
+    all_fixed = all(
+        a -> unwrap_const(safe_unwrap(a)) isa Number, args_
+    )
+    slices = map(Itap) do I
+        if all_fixed
+            return arr[ntuple(k -> I[k], N)...]
+        end
+        rs = ntuple(N) do k
+            aval = unwrap_const(safe_unwrap(args_[k]))
+            if aval isa Number || k == j
+                return I[k]:I[k]
+            end
+            haskey(indexmap, args[k]) || throw(
+                ArrayFormFallback(
+                    "boundary value $u_ has a free argument not on the equation"
+                )
+            )
+            return ranges[indexmap[args[k]]]
+        end
+        return arr[rs...]
+    end
+    return array_stencil(collect(ws), slices)
+end
+
+"""Pointwise `depvarderivbcmaps` value for `(Differential(x)^d)(u_)` at this box."""
+function array_point_boundary_derivative(
+        x, d, u_, s, ranges, indexmap, derivweights, periodic, bcmap
+    )
+    u = depvar(u_, s)
+    idxs = array_boundary_value_index(u_, s, ranges, indexmap)
+    II = CartesianIndex(idxs)
+    Dop = get(derivweights.map, Differential(x)^d, nothing)
+    Dop === nothing && throw(
+        ArrayFormFallback("no centered operator for order $d in $x")
+    )
+    bs = array_boundary_derivative_bs(u, x, s, bcmap, periodic)
+    ufunc(v, I, _) = s.discvars[v][I]
+    return central_difference(Dop, II, s, bs, (x2i(s, u, x), x), u, ufunc)
+end
+
+"""
+Original and grid-valued keys for each handleable boundary-value derivative at
+this singleton box. Applied before `expand_derivatives` in the pointwise path.
+"""
+function array_point_boundary_derivative_rules(
+        pde, s, ranges, indexmap, derivweights, periodic, bcmap
+    )
+    rules = Pair[]
+    for (expr, x, d, u_) in array_boundary_value_derivative_terms(pde, s)
+        val = array_point_boundary_derivative(
+            x, d, u_, s, ranges, indexmap, derivweights, periodic, bcmap
+        )
+        u = depvar(u_, s)
+        args = ivs(u, s)
+        args_ = remove(arguments(u_), s.time)
+        idxs = array_boundary_value_index(u_, s, ranges, indexmap)
+        gridsubs = Dict(
+            safe_unwrap(args[j]) => s.grid[args[j]][idxs[j]]
+                for (j, a) in enumerate(args_)
+                if !(unwrap_const(safe_unwrap(a)) isa Number)
+        )
+        push!(rules, safe_unwrap(expr) => val)
+        push!(rules, pde_substitute(expr, gridsubs) => val)
+    end
+    return rules
+end
+
+"""Rules mapping each handleable boundary-value derivative in `pde` to its stencil."""
+function array_boundary_value_derivative_rules(
+        pde, s, ranges, indexmap, derivweights, periodic, bcmap
+    )
+    return Pair[
+        safe_unwrap(expr) => array_boundary_value_derivative(
+            x, d, u_, s, ranges, indexmap, derivweights, periodic, bcmap
+        )
+            for (expr, x, d, u_) in array_boundary_value_derivative_terms(pde, s)
+    ]
+end
+
 """
 Substitute boundary values into an already pointwise-discretized equation at the
 single point described by `ranges` (all singleton). Used for size-1 wrap boxes and
@@ -1160,8 +1357,13 @@ free-standing-corner boundary values symbolic. `valmaps` has already replaced fr
 spatial arguments with their grid values inside those leftover terms (`u(t, 0, y)`
 appears as e.g. `u(t, 0, 0.2)`), so each rule keys on that grid-valued form and maps
 to the scalar array element at this point, never a slice.
+
+Boundary-value derivatives are already replaced via `extra_rules` before
+`expand_derivatives`; this leftover sweep is only for leftover values.
 """
-function array_substitute_boundary_values(eq, pde, s, ranges, indexmap)
+function array_substitute_boundary_values(
+        eq, pde, s, ranges, indexmap, _derivweights, _periodic, _bcmap
+    )
     bvals = array_boundary_value_terms(pde, s)
     isempty(bvals) && return eq
     rdict = Dict()
@@ -1169,11 +1371,7 @@ function array_substitute_boundary_values(eq, pde, s, ranges, indexmap)
         u = depvar(u_, s)
         args = ivs(u, s)
         args_ = remove(arguments(u_), s.time)
-        idxs = map(enumerate(args_)) do (j, a)
-            aval = unwrap_const(safe_unwrap(a))
-            aval isa Number ? array_boundary_edge_index(aval, args[j], s) :
-                first(ranges[indexmap[args[j]]])
-        end
+        idxs = array_boundary_value_index(u_, s, ranges, indexmap)
         gridsubs = Dict(
             safe_unwrap(args[j]) => s.grid[args[j]][idxs[j]]
                 for (j, a) in enumerate(args_)
