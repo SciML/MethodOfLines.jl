@@ -60,6 +60,18 @@ function throws_incompatible_layout(pdesys, dxs, t)
         occursin("incompatible layout", sprint(showerror, thrown))
 end
 
+
+function _interior_treesize(sys)
+    treesize(x) = let u = Symbolics.unwrap(x)
+        SymbolicUtils.iscall(u) ? 1 + sum(treesize, SymbolicUtils.arguments(u); init = 0) : 1
+    end
+    return sum(
+        treesize(eq.lhs) + treesize(eq.rhs)
+            for eq in get_eqs(sys) if isinterioreq(eq) && isarrayeq(eq);
+        init = 0
+    )
+end
+
 @testset "1D linear diffusion, Dirichlet BCs" begin
     @parameters t x
     @variables u(..)
@@ -2520,6 +2532,21 @@ end
     end
     @test counts[1][1] == counts[2][1] == 2
     @test counts[1][2] == counts[2][2]
+
+    eqs_y = [
+        v(t, x) ~ Integral(y in DomainSets.ClosedInterval(0.0, 1.0))(u(t, x, y)),
+        u(t, x, y) ~ t * cos(x) * sinpi(y),
+    ]
+    bcs_y = [v(0, x) ~ 0.0, u(0, x, y) ~ 0.0]
+    @named pdesys_y = PDESystem(eqs_y, bcs_y, domains, [t, x, y], [u(t, x, y), v(t, x)])
+    sys_y, _ = symbolic_discretize(pdesys_y, MOLFiniteDifference([x => 8, y => 6], t))
+    @test narrayeqs(sys_y) == 2
+    @test any(eq -> occursin("axis_sum", string(eq)), get_eqs(sys_y))
+
+    sys4, _ = symbolic_discretize(
+        pdesys, MOLFiniteDifference([x => 10, y => 8], t; approx_order = 4)
+    )
+    @test any(eq -> occursin("axis_sum", string(eq)), get_eqs(sys4))
 end
 
 @testset "SIR-age: 0D lift keeps the spatial equation in slice form" begin
@@ -3018,4 +3045,483 @@ end
         @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2, y], deps)
         @test throws_incompatible_layout(pdesys, dxs, t)
     end
+end
+
+function collect_optype(eqs, ::Type{T}) where {T}
+    found = Any[]
+    function walk(x)
+        x = Symbolics.unwrap(x)
+        SymbolicUtils.iscall(x) || return
+        op = SymbolicUtils.operation(x)
+        op isa T && push!(found, x)
+        return foreach(walk, SymbolicUtils.arguments(x))
+    end
+    for eq in eqs
+        walk(eq.lhs)
+        walk(eq.rhs)
+    end
+    return found
+end
+
+expected_axes(S) = SymbolicUtils.ShapeVecT(map(Base.UnitRange{Int} ∘ Base.OneTo, S))
+
+@testset "Axis alignment primitives keep a concrete array shape" begin
+    @variables A[1:3, 1:4]
+    data = reshape(collect(1.0:12.0), 3, 4)
+    reshape_S = (2, 6)
+    perm = (2, 1)
+    perm_S = (4, 3)
+
+    slr = MethodOfLines.array_reshape(A, reshape_S)
+    slp = MethodOfLines.array_permutedims(A, perm)
+    ur = Symbolics.unwrap(slr)
+    up = Symbolics.unwrap(slp)
+
+    @test SymbolicUtils.operation(ur) isa MethodOfLines.AxisReshape{2, reshape_S}
+    @test SymbolicUtils.symtype(ur) == Array{Real, 2}
+    @test SymbolicUtils.shape(ur) == expected_axes(reshape_S)
+    @test SymbolicUtils.operation(up) isa MethodOfLines.AxisPermutedims{2, perm, perm_S}
+    @test SymbolicUtils.symtype(up) == Array{Real, 2}
+    @test SymbolicUtils.shape(up) == expected_axes(perm_S)
+
+    rebuilt_r = SymbolicUtils.term(
+        SymbolicUtils.operation(ur), SymbolicUtils.arguments(ur)...
+    )
+    rebuilt_p = SymbolicUtils.term(
+        SymbolicUtils.operation(up), SymbolicUtils.arguments(up)...
+    )
+    @test SymbolicUtils.symtype(rebuilt_r) == Array{Real, 2}
+    @test SymbolicUtils.shape(rebuilt_r) == expected_axes(reshape_S)
+    @test SymbolicUtils.symtype(rebuilt_p) == Array{Real, 2}
+    @test SymbolicUtils.shape(rebuilt_p) == expected_axes(perm_S)
+
+    @variables B[1:3, 1:4]
+    sub_r = Symbolics.substitute(slr, Dict(A => B); fold = Val(false))
+    sub_p = Symbolics.substitute(slp, Dict(A => B); fold = Val(false))
+    @test SymbolicUtils.symtype(Symbolics.unwrap(sub_r)) == Array{Real, 2}
+    @test SymbolicUtils.shape(Symbolics.unwrap(sub_r)) == expected_axes(reshape_S)
+    @test SymbolicUtils.symtype(Symbolics.unwrap(sub_p)) == Array{Real, 2}
+    @test SymbolicUtils.shape(Symbolics.unwrap(sub_p)) == expected_axes(perm_S)
+
+    @test MethodOfLines.AxisReshape{2, reshape_S}()(data) == reshape(data, reshape_S)
+    @test MethodOfLines.AxisPermutedims{2, perm, perm_S}()(data) == permutedims(data, perm)
+end
+
+@testset "0D source in a 1D equation stays in array form" begin
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + v(t),
+        Dt(v(t)) ~ -v(t),
+    ]
+    bcs = [
+        u(0, x) ~ sinpi(x), v(0) ~ 1.0,
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+end
+
+@testset "Non-zero 0D rhs of a 1D equation stays in array form" begin
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+
+    eqs = [
+        Dt(u(t, x)) ~ v(t),
+        Dt(v(t)) ~ -v(t),
+    ]
+    bcs = [
+        u(0, x) ~ sinpi(x), v(0) ~ 1.0,
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t)])
+
+    disc = MOLFiniteDifference([x => 0.05], t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+    interiors = filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys))
+    @test any(eq -> occursin("broadcast", string(eq)), interiors)
+end
+
+@testset "0D source in a 2D equation stays in array form" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + v(t),
+        Dt(v(t)) ~ -v(t),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0) ~ 1.0,
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+end
+
+@testset "Prefix 1D field in a 2D equation stays in array form" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + v(t, x),
+        Dt(v(t, x)) ~ Dxx(v(t, x)),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0, x) ~ sinpi(x),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 2
+    interiors = filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr))
+    @test isempty(collect_optype(interiors, MethodOfLines.AxisReshape))
+    @test isempty(collect_optype(interiors, MethodOfLines.AxisPermutedims))
+end
+
+@testset "Non-prefix 1D field in a 2D equation stays in array form" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dy = Differential(y)
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + v(t, y) + Dy(v(t, y)),
+        Dt(v(t, y)) ~ Dyy(v(t, y)),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0, y) ~ sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, y)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 2
+    interiors = filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr))
+    reshapes = collect_optype(interiors, MethodOfLines.AxisReshape)
+    @test !isempty(reshapes)
+    for r in reshapes
+        @test SymbolicUtils.symtype(r) == Array{Real, 2}
+        sh = collect(SymbolicUtils.shape(r))
+        @test length(sh) == 2
+        @test length(sh[1]) == 1
+        @test length(sh[2]) > 1
+    end
+end
+
+@testset "Non-prefix 1D field varies along y, not x" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+
+    eqs = [
+        Dt(u(t, x, y)) ~ v(t, y),
+        Dt(v(t, y)) ~ 0,
+    ]
+    bcs = [
+        u(0, x, y) ~ 0.0, v(0, y) ~ sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, y)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 2
+    uT = sol_arr[u(t, x, y)][end, 2:(end - 1), 2:(end - 1)]
+    x_spread = maximum(maximum(uT; dims = 1) .- minimum(uT; dims = 1))
+    y_spread = maximum(maximum(uT; dims = 2) .- minimum(uT; dims = 2))
+    @test x_spread < 1.0e-8
+    @test y_spread > 1.0e-2
+end
+
+@testset "Same IVs in different order stay in array form" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + v(t, y, x),
+        Dt(v(t, y, x)) ~ Dyy(v(t, y, x)) + Dxx(v(t, y, x)),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0, y, x) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, y, 0) ~ 0.0, v(t, y, 1) ~ 0.0,
+        v(t, 0, x) ~ 0.0, v(t, 1, x) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, y, x)])
+
+    sizes = map([(6, 5), (11, 9)]) do (nx, ny)
+        disc = MOLFiniteDifference([x => 1 / (nx - 1), y => 1 / (ny - 1)], t)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        interiors = filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys))
+        perms = collect_optype(interiors, MethodOfLines.AxisPermutedims)
+        (;
+            narr = narrayeqs_interior(sys),
+            size = _interior_treesize(sys),
+            nperm = length(perms),
+            perms,
+        )
+    end
+    coarse, fine = sizes
+    @test coarse.narr == 2
+    @test fine.narr == 2
+    @test fine.size == coarse.size
+    @test coarse.nperm > 0
+    @test fine.nperm == coarse.nperm
+    for p in coarse.perms
+        @test SymbolicUtils.operation(p) isa MethodOfLines.AxisPermutedims{2, (2, 1)}
+        @test SymbolicUtils.symtype(p) == Array{Real, 2}
+    end
+end
+
+@testset "Mixed dimensionality absent from one equation stays in array form" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)),
+        Dt(v(t, x)) ~ Dxx(v(t, x)),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0, x) ~ sinpi(x),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 2
+end
+
+@testset "Prefix-first variable order broadcasts a scalar onto the 2D core" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ 0,
+        Dt(v(t, x)) ~ Dxx(v(t, x)),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0, x) ~ sinpi(x),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [v(t, x), u(t, x, y)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 2
+end
+
+@testset "Lower-dimensional face BC stays in array form" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)),
+        Dt(v(t, y)) ~ Dyy(v(t, y)),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0, y) ~ 0.0,
+        u(t, 0, y) ~ v(t, y), u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, y)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 2
+    @test any(eq -> !isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr))
+end
+
+@testset "Non-prefix field is resolution-independent" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + v(t, y),
+        Dt(v(t, y)) ~ Dyy(v(t, y)),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0, y) ~ sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, y)])
+
+    sizes = map([(6, 5), (11, 9)]) do (nx, ny)
+        disc = MOLFiniteDifference([x => 1 / (nx - 1), y => 1 / (ny - 1)], t)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        (; narr = narrayeqs_interior(sys), size = _interior_treesize(sys))
+    end
+    coarse, fine = sizes
+    @test coarse.narr == 2
+    @test fine.narr == 2
+    @test fine.size == coarse.size
+end
+
+@testset "Fallback: free extra axis of a higher-dimensional field" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)),
+        Dt(v(t, x)) ~ Dxx(v(t, x)) + u(t, x, y),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0, x) ~ sinpi(x),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x)])
+
+    disc = MOLFiniteDifference([x => 0.25, y => 0.25], t)
+    # No well-defined slice against the 1D core. The pointwise path has the
+    # same gap (`Idx` cannot invent the extra axis); the system is still
+    # produced, with `u` in array form and `v` pointwise.
+    vmap = MethodOfLines.VariableMap(pdesys, disc)
+    s = MethodOfLines.construct_discrete_space(vmap, disc)
+    @test_throws MethodOfLines.ArrayFormFallback MethodOfLines.array_validate_depvar_axes(
+        eqs[2], s, [x]
+    )
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+end
+
+@testset "Lower-dimensional field with periodic extra axis of the higher-dimensional variable" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + v(t, x),
+        Dt(v(t, x)) ~ Dxx(v(t, x)),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * cospi(2y), v(0, x) ~ sinpi(x),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ u(t, x, 1),
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 4
+end
+
+@testset "Uncoupled periodic and Dirichlet fields stay in array form" begin
+    @parameters t x y
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)),
+        Dt(v(t, x)) ~ Dxx(v(t, x)),
+    ]
+    bcs = [
+        u(0, x, y) ~ cospi(2x) * sinpi(y), v(0, x) ~ sinpi(x),
+        u(t, 0, y) ~ u(t, 1, y),
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.2, y => 0.2], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 4
 end

@@ -47,11 +47,16 @@
 # only when the integration axis is absent from the equation variable (the pointwise
 # `indexmap` / `bvar` filter). Time-only dependents broadcast as scalars.
 #
+# Lower-dimensional fields (`v(t, x)` or `S(t)` in a `u(t, x, y)` equation) slice
+# on their own axes and broadcast against the core. Non-prefix subsets are
+# permuted and reshaped with singleton dimensions, matching `Idx`. A whole-domain
+# integrand with extra axes is a reduction (`array_integral_rules`), not a slice.
+#
 # Unsupported patterns fall back to pointwise equations: callbacks,
-# differing dimensionality (beyond a 0D broadcast or an integral rank drop),
-# boundary-value derivatives, time-literal dependent-variable
-# calls, edge-aligned boundary values, stationary systems, linear operators on a
-# nonuniform two-domain interface.
+# a higher-dimensional field whose extra axes are free (not a boundary
+# value and not an integral rank drop), boundary-value derivatives, time-literal
+# dependent-variable calls, edge-aligned boundary values, stationary systems,
+# linear operators on a nonuniform two-domain interface.
 
 struct ArrayFormFallback <: Exception
     msg::String
@@ -187,13 +192,11 @@ function discretize_equation_array_form(
     )
 
     args = ivs(eqvar, s)
-    pde_depvars = get_depvars(pde.lhs, s.vars.depvar_ops) ∪
-        get_depvars(pde.rhs, s.vars.depvar_ops)
-    for u in pde_depvars
-        array_compatible_depvar(u, args, pde, s) ||
-            throw(ArrayFormFallback("variables of differing dimensionality"))
-    end
-    periodic = array_wrap_dims(s, depvars, args, bcmap)
+    array_validate_depvar_axes(pde, s, args)
+    slicevars = array_sliceable_depvars(
+        s, array_unique_depvars(array_pde_occurrences(pde, s), s), args
+    )
+    periodic = array_wrap_dims(s, slicevars, args, bcmap)
 
     pdeorders = Dict(x => d_orders(x, [pde]) for x in args)
     isstag && validate_staggered_array_form(s, depvars, pdeorders, args)
@@ -220,7 +223,7 @@ function discretize_equation_array_form(
             sph_orders[m.x] = union(get(sph_orders, m.x, Set{Int}()), orders)
         end
     end
-    mixedterms = isstag ? [] : array_mixed_terms(pde, depvars, args, pdeorders)
+    mixedterms = isstag ? [] : array_mixed_terms(pde, slicevars, args, pdeorders, s)
     mixedorders = mixed_orders_by_direction(mixedterms)
     bands, clean = array_bands(
         interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders,
@@ -267,9 +270,9 @@ function discretize_equation_array_form(
             return array_substitute_boundary_values(eq, pde, s, ranges, indexmap)
         end
         return array_core_equation(
-            pde, ranges, s, depvars, derivweights,
+            pde, ranges, s, slicevars, derivweights,
             args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches,
-            mixedterms
+            mixedterms, depvars
         )
     end
 
@@ -286,27 +289,27 @@ end
 
 """
 The array equation for one box of the interior, given as `ranges` (dimension => index
-range).
+range). `depvars` are the sliceable fields; `allvars` includes rank-dropping integrands.
 """
 function array_core_equation(
         pde, ranges, s, depvars, derivweights, args, pdeorders, indexmap, terms,
-        periodic, nllap_matches, sph_matches, mixedterms
+        periodic, nllap_matches, sph_matches, mixedterms, allvars = depvars
     )
     N = length(args)
     # First matching rule wins. Boundary-value rules before core-variable rules.
     bvalrules = array_boundary_value_rules(pde, s, ranges, indexmap)
     varrules = Pair[]
     for u in depvars
-        uivs = ivs(u, s)
-        if isempty(uivs)
+        if isempty(ivs(u, s))
             push!(varrules, safe_unwrap(u) => array_scalar_discvar(u, s))
-        elseif array_same_ivs(uivs, args)
+        else
             push!(varrules, safe_unwrap(u) => array_slice(u, s, ranges, indexmap))
         end
     end
     isstag = get_grid_type(s) <: StaggeredGrid
+    # Integrands may carry axes that the equation core does not.
     intrules = array_integral_rules(
-        s, depvars, ranges, indexmap; staggered = isstag
+        s, allvars, ranges, indexmap; staggered = isstag
     )
     gridrules = [
         safe_unwrap(x) => array_grid_vals(x, s, ranges, indexmap, N) for x in args
@@ -357,11 +360,12 @@ function array_core_equation(
 
     lhs = arrayify(pde.lhs, ctx)
     rhs = arrayify(pde.rhs, ctx)
-    # `~` rejects array ~ scalar. Broadcast the scalar onto a core slice.
+    # `~` rejects array ~ scalar. Broadcast a 0D scalar onto the core slice,
+    # not a lower-dimensional aligned field that happens to come first.
     if is_array_valued(lhs) && !is_array_valued(rhs)
-        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules))
+        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules, ranges))
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
-        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules))
+        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules, ranges))
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
         throw(ArrayFormFallback("equation contains no discretizable terms"))
     end
@@ -440,9 +444,11 @@ cannot build (linear stencils, half-offset operators) throw at their own sites i
 function array_wrap_dims(s, depvars, args, bcmap)
     periodic = Dict()
     for x in args
-        withiface = filter(u -> !isempty(filter_interfaces(bcmap[operation(u)][x])), depvars)
+        candidates = filter(u -> array_iv_in(x, ivs(u, s)), depvars)
+        isempty(candidates) && continue
+        withiface = filter(u -> array_has_interface(bcmap, u, x), candidates)
         isempty(withiface) && continue
-        length(withiface) == length(depvars) ||
+        length(withiface) == length(candidates) ||
             throw(ArrayFormFallback("interface boundaries on only some variables in $x"))
         specs = map(withiface) do u
             bs = filter_interfaces(bcmap[operation(u)][x])
@@ -757,6 +763,167 @@ function wrap_periodic_range(r, n::Integer)
     return r′
 end
 
+array_iv_in(x, xs) = any(y -> isequal(x, y), xs)
+
+array_ivs_subset(uivs, args) = all(x -> array_iv_in(x, args), uivs)
+
+function array_has_interface(bcmap, u, x)
+    haskey(bcmap, operation(u)) || return false
+    haskey(bcmap[operation(u)], x) || return false
+    return !isempty(filter_interfaces(bcmap[operation(u)][x]))
+end
+
+"""
+Dependent-variable occurrences on both sides of `pde`.
+"""
+array_pde_occurrences(pde, s) =
+    get_depvars(pde.lhs, s.vars.depvar_ops) ∪
+    get_depvars(pde.rhs, s.vars.depvar_ops)
+
+"""
+The canonical fields named by `occs`, uniqued by `isequal`.
+"""
+function array_unique_depvars(occs, s)
+    uniques = []
+    for u_ in occs
+        u = depvar(u_, s)
+        any(v -> isequal(u, v), uniques) || push!(uniques, u)
+    end
+    return uniques
+end
+
+"""
+Dependent variables whose spatial IVs are a subset of `args` (including 0D).
+Rank-dropping integrands are excluded; `array_integral_rules` handles them.
+"""
+array_sliceable_depvars(s, depvars, args) =
+    filter(u -> array_ivs_subset(ivs(u, s), args), depvars)
+
+"""
+True when an occurrence of a higher-dimensional variable leaves an extra IV
+free. A face reference such as `φ(t, x, 1.0)` is not free.
+"""
+function array_occurrence_has_free_extra_ivs(u_, u, s, args)
+    uivs = ivs(u, s)
+    extra = [y for y in uivs if !array_iv_in(y, args)]
+    isempty(extra) && return false
+    args_ = remove(arguments(u_), s.time)
+    length(args_) == length(uivs) || return true
+    for (y, a) in zip(uivs, args_)
+        array_iv_in(y, args) && continue
+        unwrap_const(safe_unwrap(a)) isa Number || return true
+    end
+    return false
+end
+
+"""
+Equation-level check: every dependent-variable occurrence is a subset of the
+equation axes (including 0D), an integral rank drop (`array_compatible_depvar`),
+or a boundary value that fixes every extra IV.
+"""
+function array_validate_depvar_axes(pde, s, args)
+    occs = array_pde_occurrences(pde, s)
+    for u_ in occs
+        u = depvar(u_, s)
+        array_ivs_subset(ivs(u, s), args) && continue
+        array_compatible_depvar(u_, args, pde, s) && continue
+        array_occurrence_has_free_extra_ivs(u_, u, s, args) &&
+            throw(ArrayFormFallback("variables of differing dimensionality"))
+    end
+    return nothing
+end
+
+function array_eq_axes(indexmap, N)
+    ax = Vector{Any}(undef, N)
+    for (x, j) in indexmap
+        ax[j] = x
+    end
+    return ax
+end
+
+function array_is_prefix_aligned(uivs, eq_axes)
+    length(uivs) > length(eq_axes) && return false
+    return all(i -> isequal(uivs[i], eq_axes[i]), eachindex(uivs))
+end
+
+# Axes live in the type. `reshape(A, dims::Tuple)` reconstructs as a vector;
+# `promote_symtype` / `promote_shape` keep the axes after `maketerm`.
+struct AxisReshape{N, S} <: Function end
+
+(op::AxisReshape{N, S})(A) where {N, S} = reshape(A, S)
+
+function SymbolicUtils.promote_symtype(::AxisReshape{N}, ::Type) where {N}
+    return Array{Real, N}
+end
+
+function SymbolicUtils.promote_shape(
+        ::AxisReshape{N, S}, ::SymbolicUtils.ShapeT
+    ) where {N, S}
+    return SymbolicUtils.ShapeVecT(map(Base.UnitRange{Int} ∘ Base.OneTo, S))
+end
+
+"""
+`reshape` as a symbolic array term. Promotion methods keep the axes.
+"""
+function array_reshape(sl, shape::NTuple{N, Int}) where {N}
+    N == ndims(sl) && Tuple(size(sl)) == shape && return sl
+    slu = safe_unwrap(sl)
+    sh = SymbolicUtils.ShapeVecT(map(Base.UnitRange{Int} ∘ Base.OneTo, shape))
+    t = SymbolicUtils.term(
+        AxisReshape{N, shape}(), slu; type = Array{Real, N}, shape = sh
+    )
+    return Symbolics.wrap(t)
+end
+
+struct AxisPermutedims{N, P, S} <: Function end
+
+(op::AxisPermutedims{N, P, S})(A) where {N, P, S} = permutedims(A, P)
+
+function SymbolicUtils.promote_symtype(::AxisPermutedims{N}, ::Type) where {N}
+    return Array{Real, N}
+end
+
+function SymbolicUtils.promote_shape(
+        ::AxisPermutedims{N, P, S}, ::SymbolicUtils.ShapeT
+    ) where {N, P, S}
+    return SymbolicUtils.ShapeVecT(map(Base.UnitRange{Int} ∘ Base.OneTo, S))
+end
+
+"""
+`permutedims` as a symbolic array term. Promotion methods keep the axes.
+"""
+function array_permutedims(sl, perm::NTuple{N, Int}) where {N}
+    N <= 1 && return sl
+    issorted(perm) && return sl
+    slu = safe_unwrap(sl)
+    sz = size(sl)
+    newsz = ntuple(i -> Int(sz[perm[i]]), N)
+    sh = SymbolicUtils.ShapeVecT(map(Base.UnitRange{Int} ∘ Base.OneTo, newsz))
+    t = SymbolicUtils.term(
+        AxisPermutedims{N, perm, newsz}(), slu; type = Array{Real, N}, shape = sh
+    )
+    return Symbolics.wrap(t)
+end
+
+"""
+Align a slice of `u` (in `u`'s IV order) to the equation axes in `ranges`.
+Prefix axes are left as-is; any other subset is permuted and reshaped with
+singleton dimensions — the array form of `Idx`.
+"""
+function array_align_axes(sl, u, s, ranges, indexmap)
+    u = depvar(u, s)
+    uivs = ivs(u, s)
+    N = length(ranges)
+    isempty(uivs) && return sl
+    eq_axes = array_eq_axes(indexmap, N)
+    array_is_prefix_aligned(uivs, eq_axes) && return sl
+    src = [indexmap[x] for x in uivs]
+    aligned = array_permutedims(sl, Tuple(sortperm(src)))
+    length(uivs) == N && return aligned
+    target = ntuple(j -> array_iv_in(eq_axes[j], uivs) ? length(ranges[j]) : 1, N)
+    return array_reshape(aligned, target)
+end
+
 """
 The underlying (unscalarized) array variable of which `s.discvars[u]` holds the elements.
 """
@@ -787,10 +954,14 @@ along it, the centre tap included. A destination wrap is applied once: the partn
 array is not wrapped again, matching `wrapinterface` on a `RefCartesianIndex`.
 """
 function array_shifted_slice(u, s, ranges, indexmap, offsets, periodic)
-    ud = depvar(u, s)
-    arr = array_variable(ud, s)
+    u = depvar(u, s)
+    uivs = ivs(u, s)
+    isempty(uivs) && return array_scalar_discvar(u, s)
+    all(y -> haskey(indexmap, y), uivs) ||
+        throw(ArrayFormFallback("variable $u of differing dimensionality"))
+    arr = array_variable(u, s)
     dest_u = nothing
-    rs = map(ivs(ud, s)) do y
+    rs = map(uivs) do y
         j = indexmap[y]
         r = ranges[j]
         haskey(offsets, j) || return r
@@ -817,15 +988,18 @@ function array_shifted_slice(u, s, ranges, indexmap, offsets, periodic)
             ArrayFormFallback("interface slice falls outside $(dest_u)")
         )
     end
-    return arr[rs...]
+    return array_align_axes(arr[rs...], u, s, ranges, indexmap)
 end
 
 """
 A slice of the array variable for `u` over the core region, optionally shifted by
 `offset` in the dimension of `shiftx`, wrapped around the seam if that dimension is
-periodic (see `wrap_periodic_range`).
+periodic (see `wrap_periodic_range`). A 0D variable is the matching scalar.
+The slice is aligned to the equation axes.
 """
 function array_slice(u, s, ranges, indexmap; shiftx = nothing, offset = 0, periodic = nothing)
+    u = depvar(u, s)
+    isempty(ivs(u, s)) && return array_scalar_discvar(u, s)
     offsets = shiftx === nothing ? Dict{Int, Int}() : Dict(indexmap[shiftx] => offset)
     return array_shifted_slice(u, s, ranges, indexmap, offsets, periodic)
 end
@@ -1123,22 +1297,25 @@ slice form here. Three-or-more spatial directions and mixed derivatives of anyth
 other than a dependent variable reach `arrayify` with a spatial differential still in
 place and fall back.
 """
-function array_mixed_terms(pde, depvars, args, pdeorders)
+function array_mixed_terms(pde, depvars, args, pdeorders, s)
     found = []
     seen = []
-    for u in depvars, x in args, y in remove(args, x)
-        for mx in get(pdeorders, x, Int[]), my in get(pdeorders, y, Int[])
-            keys = mixed_derivative_keys(u, x, mx, y, my)
-            matched = false
-            for key in keys
-                any(k -> isequal(k, key), seen) && continue
-                r = key => nothing
-                (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) || continue
-                push!(seen, key)
-                matched = true
+    for u in depvars
+        xs = filter(x -> array_iv_in(x, args), ivs(u, s))
+        for x in xs, y in remove(xs, x)
+            for mx in get(pdeorders, x, Int[]), my in get(pdeorders, y, Int[])
+                keys = mixed_derivative_keys(u, x, mx, y, my)
+                matched = false
+                for key in keys
+                    any(k -> isequal(k, key), seen) && continue
+                    r = key => nothing
+                    (subsmatch(pde.lhs, r) || subsmatch(pde.rhs, r)) || continue
+                    push!(seen, key)
+                    matched = true
+                end
+                matched || continue
+                push!(found, (u, x, mx, y, my))
             end
-            matched || continue
-            push!(found, (u, x, mx, y, my))
         end
     end
     return found
@@ -1210,6 +1387,7 @@ function validate_staggered_array_form(s, depvars, pdeorders, args)
             throw(ArrayFormFallback("staggered grid with nonuniform d$x"))
     end
     for u in depvars
+        ndims(u, s) == 0 && continue
         haskey(s.staggeredvars, operation(depvar(u, s))) ||
             throw(ArrayFormFallback("no alignment recorded for $u"))
     end
@@ -2039,6 +2217,20 @@ function array_shape_donor(rules)
     throw(ArrayFormFallback("no array slice to broadcast a scalar onto"))
 end
 
+function array_core_size(ranges)
+    return ntuple(j -> length(ranges[j]), length(ranges))
+end
+
+function array_shape_donor(rules, ranges)
+    target = array_core_size(ranges)
+    for r in rules
+        sl = r.second
+        is_array_valued(sl) || continue
+        Tuple(size(sl)) == target && return sl
+    end
+    return array_shape_donor(rules)
+end
+
 # `fill(val, shape)` is an `array_literal` of one node per point.
 function array_broadcast_onto(val, ref)
     v = Symbolics.unwrap(val)
@@ -2158,7 +2350,7 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         if isempty(ivs(vd, s))
             continue
         end
-        isequal(ivs(vd, s), args) ||
+        array_ivs_subset(ivs(vd, s), args) ||
             throw(ArrayFormFallback("variable $v of differing dimensionality"))
         for (k, a) in enumerate(remove(arguments(v), s.time))
             unwrap_const(safe_unwrap(a)) isa Number || continue
@@ -2206,8 +2398,7 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         push!(derivrules, safe_unwrap((Differential(x_)^d)(u)) => expr)
     end
 
-    # Dependent variables (both the canonical form and the value on this boundary) map to
-    # the slice over the face. Time-only variables are scalars.
+    # Face slice, aligned to the face axes. Time-only variables are scalars.
     varrules = Pair[]
     bc_us = Any[u]
     for v in bcdepvars
@@ -2240,9 +2431,9 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     lhs = arrayify(boundary.eq.lhs, ctx)
     rhs = arrayify(boundary.eq.rhs, ctx)
     if is_array_valued(lhs) && !is_array_valued(rhs)
-        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules))
+        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules, ranges))
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
-        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules))
+        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules, ranges))
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
         throw(ArrayFormFallback("boundary condition has no discretizable terms"))
     end

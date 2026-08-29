@@ -50,28 +50,31 @@ function generate_finite_difference_rules(
     )
     terms = split_terms(pde, s.x̄)
     if length(II) != 0
+        # Whole-domain integrals may drop rank; stencil generators and running
+        # (dummy-upper-bound) integrals cannot — those need every IV in `indexmap`.
+        stencilvars = idx_depvars(depvars, s, indexmap)
         # Standard cartesian centered difference scheme
         central_deriv_rules_cartesian = generate_cartesian_rules(
-            II, s, depvars, derivweights, bmap, indexmap, terms
+            II, s, stencilvars, derivweights, bmap, indexmap, terms
         )
         # Mixed derivative rules
         mixed_deriv_rules_cartesian = generate_mixed_rules(
-            II, s, depvars, derivweights, bmap, indexmap, terms
+            II, s, stencilvars, derivweights, bmap, indexmap, terms
         )
         # Advection rules
         if derivweights.advection_scheme isa UpwindScheme
             advection_rules = generate_winding_rules(
-                II, s, depvars, derivweights, bmap, indexmap, terms
+                II, s, stencilvars, derivweights, bmap, indexmap, terms
             )
         elseif derivweights.advection_scheme isa FunctionalScheme
             advection_rules = generate_advection_rules(
                 derivweights.advection_scheme, II, s,
-                depvars, derivweights, bmap, indexmap, terms
+                stencilvars, derivweights, bmap, indexmap, terms
             )
             advection_rules = vcat(
                 advection_rules,
                 generate_winding_rules(
-                    II, s, depvars, derivweights, bmap,
+                    II, s, stencilvars, derivweights, bmap,
                     indexmap, terms; skip = [1]
                 )
             )
@@ -81,16 +84,16 @@ function generate_finite_difference_rules(
 
         # Nonlinear laplacian scheme
         nonlinlap_rules = generate_nonlinlap_rules(
-            II, s, depvars, derivweights, bmap, indexmap, terms
+            II, s, stencilvars, derivweights, bmap, indexmap, terms
         )
 
         # Spherical diffusion scheme
         spherical_diffusion_rules = generate_spherical_diffusion_rules(
-            II, s, depvars, derivweights, bmap, indexmap, split_additive_terms(pde)
+            II, s, stencilvars, derivweights, bmap, indexmap, split_additive_terms(pde)
         )
         integration_rules = vec(
             generate_euler_integration_rules(
-                II, s, depvars, indexmap, terms
+                II, s, stencilvars, indexmap, terms
             )
         )
     else
@@ -122,9 +125,10 @@ function generate_finite_difference_rules(
     ) where {W, M, G <: StaggeredGrid}
     terms = split_terms(pde, s.x̄)
     if length(II) != 0
+        stencilvars = idx_depvars(depvars, s, indexmap)
         # Standard cartesian centered difference scheme
         central_deriv_rules_cartesian = generate_cartesian_rules(
-            II, s, depvars, derivweights, bmap, indexmap, terms
+            II, s, stencilvars, derivweights, bmap, indexmap, terms
         )
     else
         central_deriv_rules_cartesian = []
