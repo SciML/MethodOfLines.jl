@@ -49,6 +49,17 @@ narrayeqs_interior(sys) = count(
     eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)
 )
 
+function throws_incompatible_layout(pdesys, dxs, t)
+    thrown = try
+        symbolic_discretize(pdesys, MOLFiniteDifference(dxs, t))
+        nothing
+    catch e
+        e
+    end
+    return thrown isa ArgumentError &&
+        occursin("incompatible layout", sprint(showerror, thrown))
+end
+
 @testset "1D linear diffusion, Dirichlet BCs" begin
     @parameters t x
     @variables u(..)
@@ -381,9 +392,10 @@ end
     @test successful_retcode(sol)
 end
 
-@testset "Fallback: interface joining two variables on two domains" begin
-    # An interface between two domains shifts the stencil taps onto another variable's
-    # array; that has no slice form here, so it must fall back rather than error.
+@testset "1D two-domain interface, linear diffusion" begin
+    # Taps that leave one domain land in the other variable's array. Lower wrap
+    # uses the destination length, so n1 ≠ n2 is the case same-n periodic
+    # arithmetic would get wrong. Equation count does not grow with the grid.
     @parameters t x1 x2
     @variables c1(..) c2(..)
     Dt = Differential(t)
@@ -399,16 +411,23 @@ end
         c1(t, 0) ~ 0.0,
         c1(t, 0.5) ~ c2(t, 0.5),
         -Dx1(c1(t, 0.5)) ~ -Dx2(c2(t, 0.5)),
-        c2(t, 1) ~ 0.0,
+        c2(t, 1.5) ~ 0.0,
     ]
     domains = [
-        t ∈ Interval(0.0, 0.1), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0),
+        t ∈ Interval(0.0, 0.1), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.5),
     ]
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
 
     sol_arr, sys_arr = solve_discretized(pdesys, [x1 => 0.05, x2 => 0.05], t)
     @test SciMLBase.successful_retcode(sol_arr)
-    @test narrayeqs_interior(sys_arr) == 0
+    @test narrayeqs_interior(sys_arr) == 2
+
+    counts = map([0.05, 0.025]) do dx
+        disc = MOLFiniteDifference([x1 => dx, x2 => dx], t)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        length(get_eqs(sys))
+    end
+    @test counts[1] == counts[2]
 end
 
 @testset "1D nonlinear laplacian (u coefficient)" begin
@@ -2616,4 +2635,387 @@ end
     )
     sys, _ = symbolic_discretize(pdesys, disc)
     @test narrayeqs_interior(sys) == 0
+end
+
+@testset "1D two-domain nonlinear laplacian" begin
+    @parameters t x1 x2
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+    D1(c) = 1 + c / 10
+    D2(c) = 1 / 10 + c / 10
+
+    eqs = [
+        Dt(c1(t, x1)) ~ Dx1(D1(c1(t, x1)) * Dx1(c1(t, x1))),
+        Dt(c2(t, x2)) ~ Dx2(D2(c2(t, x2)) * Dx2(c2(t, x2))),
+    ]
+    bcs = [
+        c1(0, x1) ~ 1 + cospi(2 * x1),
+        c2(0, x2) ~ 1 + cospi(2 * x2),
+        Dx1(c1(t, 0)) ~ 0,
+        c1(t, 0.5) ~ c2(t, 0.5),
+        -D1(c1(t, 0.5)) * Dx1(c1(t, 0.5)) ~ -D2(c2(t, 0.5)) * Dx2(c2(t, 0.5)),
+        Dx2(c2(t, 1)) ~ 0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x1 => 0.05, x2 => 0.05], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 2
+end
+
+@testset "Three-domain interface chain" begin
+    @parameters t x1 x2 x3
+    @variables c1(..) c2(..) c3(..)
+    Dt = Differential(t)
+    Dxx1 = Differential(x1)^2
+    Dxx2 = Differential(x2)^2
+    Dxx3 = Differential(x3)^2
+
+    eqs = [
+        Dt(c1(t, x1)) ~ Dxx1(c1(t, x1)),
+        Dt(c2(t, x2)) ~ Dxx2(c2(t, x2)),
+        Dt(c3(t, x3)) ~ Dxx3(c3(t, x3)),
+    ]
+    bcs = [
+        c1(0, x1) ~ sinpi(3x1),
+        c2(0, x2) ~ sinpi(3x2),
+        c3(0, x3) ~ sinpi(3x3),
+        c1(t, 0) ~ 0.0,
+        c1(t, 1 / 3) ~ c2(t, 1 / 3),
+        c2(t, 2 / 3) ~ c3(t, 2 / 3),
+        c3(t, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05),
+        x1 ∈ Interval(0.0, 1 / 3),
+        x2 ∈ Interval(1 / 3, 2 / 3),
+        x3 ∈ Interval(2 / 3, 1.0),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2, x3], [c1(t, x1), c2(t, x2), c3(t, x3)]
+    )
+
+    sol_arr, sys_arr = solve_discretized(
+        pdesys, [x1 => 1 / 12, x2 => 1 / 12, x3 => 1 / 12], t
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 3
+end
+
+@testset "2D two-domain interface" begin
+    @parameters t x1 x2 y
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dxx1 = Differential(x1)^2
+    Dxx2 = Differential(x2)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(c1(t, x1, y)) ~ Dxx1(c1(t, x1, y)) + Dyy(c1(t, x1, y)),
+        Dt(c2(t, x2, y)) ~ Dxx2(c2(t, x2, y)) + Dyy(c2(t, x2, y)),
+    ]
+    bcs = [
+        c1(0, x1, y) ~ sinpi(2x1) * sinpi(y),
+        c2(0, x2, y) ~ sinpi(2x2) * sinpi(y),
+        c1(t, 0, y) ~ 0.0,
+        c1(t, 0.5, y) ~ c2(t, 0.5, y),
+        -Differential(x1)(c1(t, 0.5, y)) ~ -Differential(x2)(c2(t, 0.5, y)),
+        c2(t, 1, y) ~ 0.0,
+        c1(t, x1, 0) ~ 0.0, c1(t, x1, 1) ~ 0.0,
+        c2(t, x2, 0) ~ 0.0, c2(t, x2, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05),
+        x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2, y], [c1(t, x1, y), c2(t, x2, y)]
+    )
+
+    sol_arr, sys_arr = solve_discretized(
+        pdesys, [x1 => 0.1, x2 => 0.1, y => 0.1], t
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) >= 2
+    # Identification is algebraic: the two faces share a value at the seam.
+    @test sol_arr[c1(t, x1, y)][end, end, :] ≈ sol_arr[c2(t, x2, y)][end, 1, :] atol = 1.0e-8
+    # identification face + flux face are slices, so the equation count and the
+    # face-scheme size are independent of the transverse resolution
+    counts = map([8, 16]) do ny
+        sys, _ = symbolic_discretize(
+            pdesys, MOLFiniteDifference([x1 => 0.1, x2 => 0.1, y => 1 / ny], t)
+        )
+        eqs = get_eqs(sys)
+        iface = filter(
+            eq -> !isinterioreq(eq) && isarrayeq(eq) &&
+                occursin("c1", string(eq)) && occursin("c2", string(eq)),
+            eqs,
+        )
+        (;
+            n = length(eqs), niface = length(iface),
+            size = sum(eq_scheme_size, iface; init = 0),
+        )
+    end
+    @test counts[1].n == counts[2].n
+    @test counts[1].niface == counts[2].niface == 2
+    @test counts[1].size == counts[2].size
+end
+
+@testset "2D two-domain in x, periodic in y" begin
+    @parameters t x1 x2 y
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dxx1 = Differential(x1)^2
+    Dxx2 = Differential(x2)^2
+    Dyy = Differential(y)^2
+
+    eqs = [
+        Dt(c1(t, x1, y)) ~ Dxx1(c1(t, x1, y)) + Dyy(c1(t, x1, y)),
+        Dt(c2(t, x2, y)) ~ Dxx2(c2(t, x2, y)) + Dyy(c2(t, x2, y)),
+    ]
+    bcs = [
+        c1(0, x1, y) ~ sinpi(2x1) * sinpi(2y),
+        c2(0, x2, y) ~ sinpi(2x2) * sinpi(2y),
+        c1(t, 0, y) ~ 0.0,
+        c1(t, 0.5, y) ~ c2(t, 0.5, y),
+        c2(t, 1, y) ~ 0.0,
+        c1(t, x1, 0) ~ c1(t, x1, 1),
+        c2(t, x2, 0) ~ c2(t, x2, 1),
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05),
+        x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2, y], [c1(t, x1, y), c2(t, x2, y)]
+    )
+
+    sol_arr, sys_arr = solve_discretized(
+        pdesys, [x1 => 0.1, x2 => 0.1, y => 0.1], t
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) >= 2
+end
+
+@testset "WENO two-domain interface on nonuniform grids" begin
+    @parameters t x1 x2
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+
+    eqs = [Dt(c1(t, x1)) ~ -Dx1(c1(t, x1)), Dt(c2(t, x2)) ~ -Dx2(c2(t, x2))]
+    bcs = [
+        c1(0, x1) ~ exp(-100 * (x1 - 0.25)^2),
+        c2(0, x2) ~ exp(-100 * (x2 - 0.25)^2),
+        c1(t, 0) ~ 0.0,
+        c1(t, 0.5) ~ c2(t, 0.5),
+        Dx2(c2(t, 1)) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
+
+    g1 = [0.25 * (1 - cospi(i / 20)) for i in 0:20]
+    g2 = [0.5 + 0.25 * (1 - cospi(i / 24)) for i in 0:24]
+    sol_arr, sys_arr = solve_discretized(
+        pdesys, [x1 => g1, x2 => g2], t;
+        disc_kwargs = (; advection_scheme = WENOScheme()), solver = SSPRK22(),
+        kwsolve = (; dt = 1.0e-3)
+    )
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 2
+end
+
+@testset "Fallback: linear operators on a nonuniform two-domain interface" begin
+    # First-order upwind on NU two-domain is coordinate-aware on the pointwise path,
+    # but the array weights are not; the whole equation stays pointwise.
+    @parameters t x1 x2
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+
+    eqs = [Dt(c1(t, x1)) ~ -Dx1(c1(t, x1)), Dt(c2(t, x2)) ~ -Dx2(c2(t, x2))]
+    bcs = [
+        c1(0, x1) ~ exp(-80 * (x1 - 0.2)^2),
+        c2(0, x2) ~ exp(-80 * (x2 - 0.2)^2),
+        c1(t, 0) ~ 0.0,
+        c1(t, 0.5) ~ c2(t, 0.5),
+        Dx2(c2(t, 1)) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
+
+    g1 = [0.25 * (1 - cospi(i / 16)) for i in 0:16]
+    g2 = [0.5 + 0.25 * (1 - cospi(i / 16)) for i in 0:16]
+    disc = MOLFiniteDifference([x1 => g1, x2 => g2], t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 0
+end
+
+@testset "Fallback: nonlinear laplacian coefficient depends on the interface IV" begin
+    @parameters t x1 x2
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+
+    eqs = [
+        Dt(c1(t, x1)) ~ Dx1((1 + x1) * c1(t, x1) * Dx1(c1(t, x1))),
+        Dt(c2(t, x2)) ~ Dx2((1 + x2) * c2(t, x2) * Dx2(c2(t, x2))),
+    ]
+    bcs = [
+        c1(0, x1) ~ 1 + 0.1 * sinpi(2x1),
+        c2(0, x2) ~ 1 + 0.1 * sinpi(2x2),
+        c1(t, 0) ~ 1.0,
+        c1(t, 0.5) ~ c2(t, 0.5),
+        c2(t, 1) ~ 1.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.02), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0),
+    ]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [c1(t, x1), c2(t, x2)])
+
+    disc = MOLFiniteDifference([x1 => 0.05, x2 => 0.05], t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 0
+end
+
+@testset "2D mixed derivative with a two-domain interface" begin
+    @parameters t x1 x2 y
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dxx1 = Differential(x1)^2
+    Dxx2 = Differential(x2)^2
+    Dyy = Differential(y)^2
+    Dxy1 = Differential(x1) * Differential(y)
+    Dxy2 = Differential(x2) * Differential(y)
+
+    eqs = [
+        Dt(c1(t, x1, y)) ~ Dxx1(c1(t, x1, y)) + Dyy(c1(t, x1, y)) + 0.5 * Dxy1(c1(t, x1, y)),
+        Dt(c2(t, x2, y)) ~ Dxx2(c2(t, x2, y)) + Dyy(c2(t, x2, y)) + 0.5 * Dxy2(c2(t, x2, y)),
+    ]
+    bcs = [
+        c1(0, x1, y) ~ 0.0, c2(0, x2, y) ~ 0.0,
+        c1(t, 0, y) ~ 0.0,
+        c1(t, 0.5, y) ~ c2(t, 0.5, y),
+        c2(t, 1, y) ~ 0.0,
+        c1(t, x1, 0) ~ 0.0, c1(t, x1, 1) ~ 0.0,
+        c2(t, x2, 0) ~ 0.0, c2(t, x2, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05),
+        x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2, y], [c1(t, x1, y), c2(t, x2, y)]
+    )
+
+    sol_arr, sys_arr = solve_discretized(
+        pdesys, [x1 => 0.1, x2 => 0.1, y => 0.1], t
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) >= 2
+end
+
+@testset "2D two-domain interface along y" begin
+    # Wrap and face slices must be valid when the interface axis is not the first
+    # spatial argument.
+    @parameters t x y1 y2
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy1 = Differential(y1)^2
+    Dyy2 = Differential(y2)^2
+
+    eqs = [
+        Dt(c1(t, x, y1)) ~ Dxx(c1(t, x, y1)) + Dyy1(c1(t, x, y1)),
+        Dt(c2(t, x, y2)) ~ Dxx(c2(t, x, y2)) + Dyy2(c2(t, x, y2)),
+    ]
+    bcs = [
+        c1(0, x, y1) ~ sinpi(x) * sinpi(2y1),
+        c2(0, x, y2) ~ sinpi(x) * sinpi(2y2),
+        c1(t, 0, y1) ~ 0.0, c1(t, 1, y1) ~ 0.0,
+        c2(t, 0, y2) ~ 0.0, c2(t, 1, y2) ~ 0.0,
+        c1(t, x, 0) ~ 0.0,
+        c1(t, x, 0.5) ~ c2(t, x, 0.5),
+        c2(t, x, 1) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05),
+        x ∈ Interval(0.0, 1.0),
+        y1 ∈ Interval(0.0, 0.5),
+        y2 ∈ Interval(0.5, 1.0),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x, y1, y2], [c1(t, x, y1), c2(t, x, y2)]
+    )
+
+    sol_arr, sys_arr = solve_discretized(
+        pdesys, [x => 0.2, y1 => 0.1, y2 => 0.1], t
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) >= 2
+    n8 = length(
+        get_eqs(
+            first(
+                symbolic_discretize(
+                    pdesys, MOLFiniteDifference([x => 1 / 8, y1 => 0.1, y2 => 0.1], t)
+                )
+            )
+        )
+    )
+    n16 = length(
+        get_eqs(
+            first(
+                symbolic_discretize(
+                    pdesys, MOLFiniteDifference([x => 1 / 16, y1 => 0.1, y2 => 0.1], t)
+                )
+            )
+        )
+    )
+    @test n8 == n16
+end
+
+@testset "Error: two-domain interface with incompatible argument slots" begin
+    # Joining c1(t, x1, y) to c2(t, y, x2) puts the interface axis in different
+    # CartesianIndex slots. A slice remap would be invented geometry.
+    @parameters t x1 x2 y
+    @variables c1(..) c2(..)
+    Dt = Differential(t)
+    Dxx1 = Differential(x1)^2
+    Dxx2 = Differential(x2)^2
+    Dyy = Differential(y)^2
+    eq1 = Dt(c1(t, x1, y)) ~ Dxx1(c1(t, x1, y)) + Dyy(c1(t, x1, y))
+    eq2 = Dt(c2(t, y, x2)) ~ Dyy(c2(t, y, x2)) + Dxx2(c2(t, y, x2))
+    bcs = [
+        c1(0, x1, y) ~ 0.0,
+        c2(0, y, x2) ~ 0.0,
+        c1(t, 0, y) ~ 0.0,
+        c1(t, 0.5, y) ~ c2(t, y, 0.5),
+        c2(t, y, 1) ~ 0.0,
+        c1(t, x1, 0) ~ 0.0, c1(t, x1, 1) ~ 0.0,
+        c2(t, 0, x2) ~ 0.0, c2(t, 1, x2) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.05),
+        x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    dxs = [x1 => 0.1, x2 => 0.1, y => 0.1]
+    for (eqs, deps) in (
+            ([eq1, eq2], [c1(t, x1, y), c2(t, y, x2)]),
+            ([eq2, eq1], [c2(t, y, x2), c1(t, x1, y)]),
+        )
+        @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2, y], deps)
+        @test throws_incompatible_layout(pdesys, dxs, t)
+    end
 end
