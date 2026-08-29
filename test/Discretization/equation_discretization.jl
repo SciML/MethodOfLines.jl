@@ -1481,10 +1481,6 @@ end
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         ),
         (
-            Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 1)),
-            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
-        ),
-        (
             Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, x),
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         ),
@@ -1493,6 +1489,27 @@ end
         @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
         sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => 0.1], t))
         @test narrayeqs_interior(sys) == 0
+    end
+
+    # Tangential and mixed derivatives of a face value have no scalar scheme.
+    @parameters y
+    Dyy = Differential(y)^2
+    Dy = Differential(y)
+    domains2 = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    bcs2 = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    for eq in (
+            Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + Dy(u(t, 0, y)),
+            Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + Dx(Dy(u(t, 0, y))),
+        )
+        @named pdesys2 = PDESystem(eq, bcs2, domains2, [t, x, y], [u(t, x, y)])
+        sys2, _ = symbolic_discretize(pdesys2, MOLFiniteDifference([x => 0.2, y => 0.2], t))
+        @test narrayeqs_interior(sys2) == 0
     end
 end
 
@@ -1842,6 +1859,342 @@ end
     du = similar(prob.u0)
     prob.f(du, prob.u0, prob.p, 0.0)
     @test all(isfinite, du)
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Derivative of a boundary value in the interior (1D both edges)" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    treesize(x) = let u = Symbolics.unwrap(x)
+        SymbolicUtils.iscall(u) ?
+            1 + sum(treesize, SymbolicUtils.arguments(u); init = 0) : 1
+    end
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 0)) - Dx(u(t, 1))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+    int_str = string(int_eq)
+    # dx = 0.05 → 21 points: one-sided stencils at [1] and [21] reach inward.
+    @test occursin("[1]", int_str)
+    @test occursin("[21]", int_str)
+    for e in get_eqs(sys_arr)
+        s = string(e)
+        @test !occursin("u(t, 0)", s) && !occursin("u(t,0)", s)
+        @test !occursin("u(t, 1)", s) && !occursin("u(t,1)", s)
+    end
+
+    counts = map([11, 41]) do n
+        disc = MOLFiniteDifference([x => 1 / (n - 1)], t)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        int = only(filter(isinterioreq, get_eqs(sys)))
+        (narrayeqs_interior(sys), treesize(int.lhs) + treesize(int.rhs))
+    end
+    @test counts[1][1] == counts[2][1] == 1
+    @test counts[1][2] == counts[2][2]
+end
+
+@testset "Derivative of a boundary value drives the interior" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 1))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc = MOLFiniteDifference(dxs, t)
+    sys_arr, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys_arr) == 1
+    int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+    @test occursin("[21]", string(int_eq))
+
+    @named pdesys_plain = PDESystem(
+        Dt(u(t, x)) ~ Dxx(u(t, x)), bcs, domains, [t, x], [u(t, x)]
+    )
+    prob_arr = ode_discretize(pdesys, disc)
+    prob_plain = ode_discretize(pdesys_plain, disc)
+    @test prob_arr.u0 == prob_plain.u0
+    du_arr = similar(prob_arr.u0)
+    du_plain = similar(prob_plain.u0)
+    prob_arr.f(du_arr, prob_arr.u0, prob_arr.p, 0.0)
+    prob_plain.f(du_plain, prob_arr.u0, prob_plain.p, 0.0)
+    @test all(isfinite, du_arr)
+    @test maximum(abs.(du_arr)) > 0
+    delta = du_arr .- du_plain
+    @test du_arr != du_plain
+    @test all(!iszero, delta)
+    # Independently compiled `f`s reassociate the Laplacian, so the wall-derivative
+    # offset is constant to working precision rather than bitwise.
+    @test maximum(abs.(delta .- first(delta))) < 1.0e-12
+
+    sol_arr, _ = solve_discretized(pdesys, dxs, t)
+    @test SciMLBase.successful_retcode(sol_arr)
+end
+
+@testset "Higher-order and higher-approx-order boundary-value derivatives" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + Dxx(u(t, 1))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    for order in (2, 4, 6)
+        disc = MOLFiniteDifference([x => 0.05], t; approx_order = order)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        @test narrayeqs_interior(sys) == 1
+        for e in get_eqs(sys)
+            s = string(e)
+            @test !occursin("u(t, 1)", s) && !occursin("u(t,1)", s)
+        end
+    end
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.05], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 1
+end
+
+@testset "Boundary-value derivative on a nonuniform grid" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 1))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => gridvec], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    for e in get_eqs(sys_arr)
+        s = string(e)
+        @test !occursin("u(t, 1)", s) && !occursin("u(t,1)", s)
+    end
+end
+
+@testset "Boundary-value derivative as upwind coefficient stays in array form" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -Dx(u(t, 1)) * Dx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ exp(-t)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc = MOLFiniteDifference(dxs, t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+    wind_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+    @test occursin("[21]", string(wind_eq))
+    for e in get_eqs(sys)
+        s = string(e)
+        @test !occursin("u(t, 1)", s) && !occursin("u(t,1)", s)
+    end
+
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    @test maximum(abs.(du)) > 0
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Boundary-value derivative of a coupled variable" begin
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(v(t, 1)),
+        Dt(v(t, x)) ~ Dxx(v(t, x)) - u(t, x),
+    ]
+    bcs = [
+        u(0, x) ~ sinpi(x), v(0, x) ~ 0.0,
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.05], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 2
+    for e in get_eqs(sys_arr)
+        s = string(e)
+        @test !occursin("v(t, 1)", s) && !occursin("v(t,1)", s)
+    end
+end
+
+@testset "Face and corner boundary-value derivatives in 2D" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+
+    @named face_sys = PDESystem(
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + Dx(u(t, 0, y)),
+        bcs, domains, [t, x, y], [u(t, x, y)]
+    )
+    sol_arr, sys_arr = solve_discretized(face_sys, [x => 0.1, y => 0.1], t)
+    @test sol_arr.retcode == SciMLBase.ReturnCode.Success
+    @test narrayeqs_interior(sys_arr) == 1
+    face_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+    @test occursin("1:1", string(face_eq))
+    for e in get_eqs(sys_arr)
+        s = string(e)
+        @test !occursin("u(t, 0,", s) && !occursin("u(t,0,", s)
+    end
+
+    corner_bcs = [
+        u(0, x, y) ~ 0.0,
+        u(t, 0, y) ~ 1.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 1.0, u(t, x, 1) ~ 0.0,
+    ]
+    @named corner_sys = PDESystem(
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + Dx(u(t, 0, 0)),
+        corner_bcs, domains, [t, x, y], [u(t, x, y)]
+    )
+    dxs_c = [x => 0.1, y => 0.1]
+    disc = MOLFiniteDifference(dxs_c, t)
+    sys_corner, _ = symbolic_discretize(corner_sys, disc)
+    @test narrayeqs_interior(sys_corner) == 1
+    corner_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_corner)))
+    corner_str = string(corner_eq)
+    @test occursin("[1, 1]", corner_str) || occursin("[1,1]", corner_str)
+    for e in get_eqs(sys_corner)
+        s = string(e)
+        @test !occursin("u(t, 0, 0)", s) && !occursin("u(t,0,0)", s)
+    end
+
+    prob_c = ode_discretize(corner_sys, disc)
+    du_c = similar(prob_c.u0)
+    prob_c.f(du_c, prob_c.u0, prob_c.p, 0.0)
+    @test all(isfinite, du_c)
+    @test maximum(abs.(du_c)) > 0
+    sol_c = solve(prob_c, Rodas4())
+    @test SciMLBase.successful_retcode(sol_c)
+end
+
+@testset "Boundary-value derivative in a periodic direction stays in array form" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 0))
+    bcs = [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc = MOLFiniteDifference(dxs, t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+    per_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+    # Periodic seam derivative wraps to the two neighbors (n = 21 → [2], [20]).
+    per_str = string(per_eq)
+    @test occursin("(u(t))[2]", per_str) && occursin("(u(t))[20]", per_str)
+    wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
+    @test !isempty(wrap_eqs)
+    @test all(
+        e -> occursin("(u(t))[2]", string(e)) && occursin("(u(t))[20]", string(e)),
+        wrap_eqs
+    )
+    for e in get_eqs(sys)
+        s = string(e)
+        @test !occursin("u(t, 0)", s) && !occursin("u(t,0)", s)
+    end
+
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    @test maximum(abs.(du)) > 0
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Face boundary-value derivative in a doubly periodic domain" begin
+    # Same 5-box / 4-wrap split as the face-value case.
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + Dx(u(t, 0, y))
+    bcs = [
+        u(0, x, y) ~ sinpi(2x) * sinpi(2y),
+        u(t, 0, y) ~ u(t, 1, y),
+        u(t, x, 0) ~ u(t, x, 1),
+    ]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+    disc = MOLFiniteDifference([x => 0.2, y => 0.2], t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 5
+    for e in get_eqs(sys)
+        s = string(e)
+        @test !occursin("u(t, 0,", s) && !occursin("u(t,0,", s)
+    end
+    wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
+    @test length(wrap_eqs) == 4
+    # Periodic seam derivative wraps to the two neighbors (n = 6 → [2, …], [5, …]).
+    @test all(
+        e -> occursin("(u(t))[2,", string(e)) && occursin("(u(t))[5,", string(e)),
+        wrap_eqs
+    )
+    array_eqs = filter(e -> isinterioreq(e) && isarrayeq(e), get_eqs(sys))
+    @test all(
+        e -> occursin("[2:2", string(e)) && occursin("[5:5", string(e)),
+        array_eqs
+    )
+
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    @test maximum(abs.(du)) > 0
     sol = solve(prob, Rodas4())
     @test SciMLBase.successful_retcode(sol)
 end
