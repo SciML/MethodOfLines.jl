@@ -22,7 +22,9 @@
 # `boundaryvalfuncs` skip interface faces and free-standing corners; this path does not).
 # Pinned-direction derivatives of those values (`Dx(u(t, 1))`) use the same
 # `depvarderivbcmaps` stencil (one-sided at a truncating edge, wrapped if periodic).
-# Time-literal references like `u(0, x)`, and edge-aligned grids, fall back.
+# Time-literal references such as `u(0, x)` evaluate that variable's initial-condition
+# formula on the matching slice. Derivatives of time-literals, non-IC times, and
+# edge-aligned mixed boundary values fall back.
 #
 # Nonlinear laplacians `Dx(a(u) * Dx(u))` are emitted in slice form too; see
 # `array_nonlinear_laplacian`. Spherical laplacians `r^-2 Dr(r^2 Dr(u))` build on the
@@ -55,8 +57,8 @@
 #
 # Unsupported patterns fall back to pointwise equations: callbacks,
 # a higher-dimensional field whose extra axes are free (not a boundary
-# value and not an integral rank drop), time-literal
-# dependent-variable calls, edge-aligned boundary values, tangential or
+# value and not an integral rank drop), derivatives of time-literals,
+# edge-aligned boundary values, tangential or
 # mixed derivatives of boundary values, stationary systems,
 # linear operators on a nonuniform two-domain interface.
 
@@ -260,7 +262,7 @@ function discretize_equation_array_form(
                 throw(ArrayFormFallback("unsupported pattern $(r.first)"))
         end
     end
-    array_validate_boundary_values(pde, s)
+    array_validate_boundary_values(pde, s, derivweights)
 
     core_eqs = map(Iterators.product(map(eachindex, bands)...)) do combo
         rs = ntuple(j -> bands[j][combo[j]], N)
@@ -312,12 +314,14 @@ function array_core_equation(
         periodic, nllap_matches, sph_matches, mixedterms, bcmap, allvars = depvars
     )
     N = length(args)
-    # Deriv rules before bare bvals, both before field rules, so `Dx(u(t, 1))` wins.
+    # Deriv rules before bare bvals and time-literals, both before field rules.
+    # Keys are disjoint (`Dx(u(t, 1))` ≠ `u(t, 1)` ≠ `u(0, x)` ≠ `u(t, x)`).
     bvalrules = vcat(
         array_boundary_value_derivative_rules(
             pde, s, ranges, indexmap, derivweights, periodic, bcmap
         ),
-        array_boundary_value_rules(pde, s, ranges, indexmap)
+        array_boundary_value_rules(pde, s, ranges, indexmap),
+        array_time_literal_rules(pde, s, ranges, indexmap, derivweights)
     )
     varrules = Pair[]
     for u in depvars
@@ -351,7 +355,8 @@ function array_core_equation(
         mixedrules = array_mixed_rules(
             mixedterms, s, derivweights, ranges, indexmap, periodic
         )
-        # Include bvalrules so `u(t, 1)*Dx(u)` and `Dx(u(t, 1))*Dx(u)` substitute first.
+        # Include bvalrules so `u(t, 1)*Dx(u)`, `Dx(u(t, 1))*Dx(u)`, and
+        # `u(0, x)*Dx(u)` substitute first.
         windrules = array_winding_rules(
             terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
             vcat(bvalrules, varrules, gridrules), periodic
@@ -1097,9 +1102,31 @@ function array_boundary_value_derivative_terms(pde, s)
 end
 
 """
-Dependent-variable terms in `pde` that carry at least one numeric (boundary) argument.
+Numeric literal in the time slot of `u_`, or `nothing`.
+
+Aligns `arguments(u_)` with `s.args[operation(u_)]` so `u(x, 0)` is recognized
+when time is not first. A bare Number test would read `u(0, x)` as the spatial
+edge `u(t, 0)` whenever `0` is the left end of `x`.
 """
-function array_boundary_value_terms(pde, s)
+function array_time_slot_literal(u_, s)
+    s.time === nothing && return nothing
+    canon = s.args[operation(u_)]
+    occ = arguments(u_)
+    length(canon) == length(occ) || return nothing
+    t0 = nothing
+    for (c, a) in zip(canon, occ)
+        if isequal(c, s.time)
+            aval = unwrap_const(safe_unwrap(a))
+            aval isa Number || return nothing
+            t0 = aval
+        end
+    end
+    return t0
+end
+
+array_is_time_literal_term(u_, s) = array_time_slot_literal(u_, s) !== nothing
+
+function array_numeric_arg_depvars(pde, s)
     terms = []
     for u in get_depvars(pde.lhs, s.vars.depvar_ops) ∪ get_depvars(pde.rhs, s.vars.depvar_ops)
         any(x -> unwrap_const(safe_unwrap(x)) isa Number, arguments(u)) && push!(terms, u)
@@ -1108,38 +1135,72 @@ function array_boundary_value_terms(pde, s)
 end
 
 """
-True when `u_` replaces the time variable with a numeric literal, e.g. `u(0, x)`.
-Those are not spatial boundary values; there is no slice form for them here yet.
+Numeric-arg depvars whose time slot is still `s.time`. Time-literals are
+collected by `array_time_literal_terms` so `u(0, x)` is not read as `u(t, 0)`.
 """
-function array_is_time_literal_term(u_, s)
-    s.time === nothing && return false
-    args = arguments(u_)
-    any(a -> isequal(a, s.time), args) && return false
-    return any(a -> unwrap_const(safe_unwrap(a)) isa Number, args)
+function array_boundary_value_terms(pde, s)
+    return [u_ for u_ in array_numeric_arg_depvars(pde, s) if !array_is_time_literal_term(u_, s)]
+end
+
+function array_time_literal_terms(pde, s)
+    return [u_ for u_ in array_numeric_arg_depvars(pde, s) if array_is_time_literal_term(u_, s)]
+end
+
+function array_time_literal_has_spatial_edge(u_, s)
+    for (c, a) in zip(s.args[operation(u_)], arguments(u_))
+        isequal(c, s.time) && continue
+        unwrap_const(safe_unwrap(a)) isa Number && return true
+    end
+    return false
 end
 
 """
-Equation-level checks for boundary values in the interior equation. Throws
-`ArrayFormFallback` for patterns with no slice form yet (edge-aligned grids,
-time literals, off-edge sampling); otherwise succeeds so
-`array_boundary_value_rules` can substitute each term. Pinned-direction
-derivatives of those values are accepted; other spatial differentials fall
-through `arrayify`.
+True when a time-literal sits under any `Differential`. `Dt` of a frozen field
+is zero and would drop an initial-velocity residual; `Dx(u(0, x))` stays
+fallback so this does not overlap `#664`.
 """
-function array_validate_boundary_values(pde, s)
+function array_has_time_literal_derivative(expr, s)
+    expr = safe_unwrap(expr)
+    iscall(expr) || return false
+    op = operation(expr)
+    if op isa Differential
+        for a in arguments(expr)
+            for v in get_depvars(a, s.vars.depvar_ops)
+                array_is_time_literal_term(v, s) && return true
+            end
+            array_has_time_literal_derivative(a, s) && return true
+        end
+    end
+    return any(a -> array_has_time_literal_derivative(a, s), arguments(expr))
+end
+
+"""
+Equation-level checks for interior boundary values and time-literals. Throws
+`ArrayFormFallback` when there is no slice form (edge-aligned mixed edges,
+derivatives, non-IC times, off-edge samples).
+
+Pure time-literals are valid on every grid alignment. Mixed time+spatial
+literals and spatial boundary values require `CenterAlignedGrid`.
+"""
+function array_validate_boundary_values(pde, s, derivweights)
     bvals = array_boundary_value_terms(pde, s)
-    isempty(bvals) && return bvals
-    get_grid_type(s) <: CenterAlignedGrid || throw(
-        ArrayFormFallback(
-            "boundary values in interior equations require a CenterAlignedGrid"
-        )
-    )
-    for u_ in bvals
-        array_is_time_literal_term(u_, s) && throw(
+    tlits = array_time_literal_terms(pde, s)
+    isempty(bvals) && isempty(tlits) && return bvals
+    needs_center = !isempty(bvals) || any(u_ -> array_time_literal_has_spatial_edge(u_, s), tlits)
+    if needs_center && !(get_grid_type(s) <: CenterAlignedGrid)
+        throw(
             ArrayFormFallback(
-                "time-literal value $u_ in interior equation (not a spatial boundary value)"
+                "boundary values in interior equations require a CenterAlignedGrid"
             )
         )
+    end
+    (
+        array_has_time_literal_derivative(pde.lhs, s) ||
+            array_has_time_literal_derivative(pde.rhs, s)
+    ) && throw(
+        ArrayFormFallback("derivative of time-literal in interior equation")
+    )
+    for u_ in bvals
         u = depvar(u_, s)
         args = ivs(u, s)
         args_ = remove(arguments(u_), s.time)
@@ -1153,6 +1214,20 @@ function array_validate_boundary_values(pde, s)
             aval isa Number || continue
             array_boundary_edge_index(aval, args[j], s)
         end
+    end
+    t0_ic = s.vars.intervals[s.time][1]
+    for u_ in tlits
+        t0 = array_time_slot_literal(u_, s)
+        isequal(t0, t0_ic) || throw(
+            ArrayFormFallback("time-literal $u_ is not the initial time")
+        )
+        for (c, a) in zip(s.args[operation(u_)], arguments(u_))
+            isequal(c, s.time) && continue
+            aval = unwrap_const(safe_unwrap(a))
+            aval isa Number || continue
+            array_boundary_edge_index(aval, c, s)
+        end
+        array_resolved_ic_formula(depvar(u_, s), s, derivweights.icformulas)
     end
     return bvals
 end
@@ -1350,22 +1425,162 @@ function array_boundary_value_derivative_rules(
 end
 
 """
-Substitute boundary values into an already pointwise-discretized equation at the
-single point described by `ranges` (all singleton). Used for size-1 wrap boxes and
-frame points, where `discretize_equation_at_point` leaves interface-face and
-free-standing-corner boundary values symbolic. `valmaps` has already replaced free
-spatial arguments with their grid values inside those leftover terms (`u(t, 0, y)`
-appears as e.g. `u(t, 0, 0.2)`), so each rule keys on that grid-valued form and maps
-to the scalar array element at this point, never a slice.
+Look up the order-0 IC formula for canonical `u`.
+"""
+function array_ic_formula_lookup(u, icformulas)
+    ukey = safe_unwrap(u)
+    haskey(icformulas, ukey) && return icformulas[ukey]
+    for (k, v) in icformulas
+        isequal(k, ukey) && return v
+    end
+    return nothing
+end
+
+"""
+IC formula for `u`, with nested time-literals resolved.
+
+`u(0,x) ~ v(0,x)` substitutes `v`'s formula. A fixed spatial argument is
+bound in continuous coordinates (`v(0, 1)` becomes the formula at `x = 1`),
+not replaced by the whole field of `v`. Remaining depvars, including live
+fields left by `parse_bcs`, are replaced by that variable's IC.
+"""
+function array_resolved_ic_formula(u, s, icformulas, seen = nothing)
+    # Path copy: `u ~ v(0, x) + v(0, 1)` visits `v` twice as siblings, not a cycle.
+    seen = seen === nothing ? Any[] : copy(seen)
+    ukey = safe_unwrap(u)
+    formula = array_ic_formula_lookup(ukey, icformulas)
+    formula === nothing && throw(
+        ArrayFormFallback("no initial condition for time-literal of $u")
+    )
+    any(x -> isequal(x, ukey), seen) && throw(
+        ArrayFormFallback("cyclic initial conditions involving $u")
+    )
+    push!(seen, ukey)
+    expr = formula
+    for v in get_depvars(expr, s.vars.depvar_ops)
+        # `parse_bcs` may rewrite `v(0, x)` to `v(t, x)` and `v(0, 1)` to
+        # `v(t, 1)`. Both are this variable's IC, with numeric spatial args
+        # bound in continuous coordinates.
+        inner = array_resolved_ic_formula(depvar(v, s), s, icformulas, seen)
+        inner = array_bind_time_literal_spatial(v, s, inner)
+        expr = pde_substitute(expr, Dict(v => inner))
+    end
+    return expr
+end
+
+"""
+Bind numeric spatial arguments of time-literal `v` into `formula`.
+
+The IC is a continuous expression, so `v(0, 1)` substitutes `x => 1`, not a
+grid index. Free spatial arguments are left for the outer view to evaluate.
+"""
+function array_bind_time_literal_spatial(v, s, formula)
+    subs = Dict()
+    for (c, a) in zip(s.args[operation(v)], arguments(v))
+        isequal(c, s.time) && continue
+        aval = unwrap_const(safe_unwrap(a))
+        aval isa Number || continue
+        subs[safe_unwrap(c)] = aval
+    end
+    isempty(subs) && return formula
+    return pde_substitute(formula, subs)
+end
+
+function array_ic_fold(v)
+    v = unwrap_const(safe_unwrap(v))
+    v isa Number && return float(v)
+    return float(symbolic_to_float(v))
+end
+
+"""
+Evaluate an IC formula at `spatial_subs` and the initial time.
+"""
+function array_ic_eval(formula, s, spatial_subs)
+    subs = Dict{Any, Any}(spatial_subs)
+    subs[safe_unwrap(s.time)] = s.vars.intervals[s.time][1]
+    return array_ic_fold(pde_substitute(formula, subs))
+end
+
+"""
+Spatial indices of a time-literal over `ranges`. Free arguments take the core
+range (or its first index when `singleton`); fixed arguments are domain-edge
+indices. The time slot is skipped.
+"""
+function array_time_literal_spatial_indices(u_, s, ranges, indexmap; singleton = false)
+    idxs = []
+    all_fixed = true
+    coords = []
+    for (c, a) in zip(s.args[operation(u_)], arguments(u_))
+        isequal(c, s.time) && continue
+        aval = unwrap_const(safe_unwrap(a))
+        if aval isa Number
+            i = array_boundary_edge_index(aval, c, s)
+            push!(idxs, i)
+            push!(coords, c)
+        else
+            all_fixed = false
+            r = ranges[indexmap[c]]
+            push!(idxs, singleton ? first(r) : r)
+            push!(coords, c)
+        end
+    end
+    return idxs, coords, all_fixed
+end
+
+"""
+Evaluate the IC formula of `u_` on the spatial view. Arrays are one symbolic
+term so `treesize` does not grow with the grid. Fixed spatial arguments become
+length-1 axes to broadcast against the core, as in `array_boundary_value_view`.
+"""
+function array_time_literal_view(u_, s, ranges, indexmap, icformulas)
+    formula = array_resolved_ic_formula(depvar(u_, s), s, icformulas)
+    idxs, coords, all_fixed = array_time_literal_spatial_indices(u_, s, ranges, indexmap)
+    if all_fixed
+        subs = Dict(
+            safe_unwrap(coords[j]) => s.grid[coords[j]][idxs[j]] for j in eachindex(coords)
+        )
+        return array_ic_eval(formula, s, subs)
+    end
+    rs = ntuple(j -> idxs[j] isa Integer ? (idxs[j]:idxs[j]) : idxs[j], length(idxs))
+    out = Array{Float64}(undef, map(length, rs)...)
+    for J in CartesianIndices(out)
+        subs = Dict(
+            safe_unwrap(coords[j]) => s.grid[coords[j]][rs[j][J[j]]]
+                for j in eachindex(coords)
+        )
+        out[J] = array_ic_eval(formula, s, subs)
+    end
+    return array_hold_numeric(out)
+end
+
+function array_time_literal_rules(pde, s, ranges, indexmap, derivweights)
+    return Pair[
+        safe_unwrap(u_) => array_time_literal_view(
+            u_, s, ranges, indexmap, derivweights.icformulas
+        )
+            for u_ in array_time_literal_terms(pde, s)
+    ]
+end
+
+"""
+Substitute boundary values and time-literals into an already pointwise-discretized
+equation at the single point described by `ranges` (all singleton). Used for
+size-1 wrap boxes and frame points, where `discretize_equation_at_point` leaves
+interface-face and free-standing-corner boundary values symbolic. `valmaps` has
+already replaced free spatial arguments with their grid values inside those
+leftover terms (`u(t, 0, y)` appears as e.g. `u(t, 0, 0.2)`, `u(0, x)` as
+`u(0, x_i)`), so each rule keys on that grid-valued form and maps to a scalar.
 
 Boundary-value derivatives are already replaced via `extra_rules` before
-`expand_derivatives`; this leftover sweep is only for leftover values.
+`expand_derivatives`; this leftover sweep is for leftover values and time-literals.
+A time-literal's time slot is not substituted; the value is the IC formula.
 """
 function array_substitute_boundary_values(
-        eq, pde, s, ranges, indexmap, _derivweights, _periodic, _bcmap
+        eq, pde, s, ranges, indexmap, derivweights, _periodic, _bcmap
     )
     bvals = array_boundary_value_terms(pde, s)
-    isempty(bvals) && return eq
+    tlits = array_time_literal_terms(pde, s)
+    isempty(bvals) && isempty(tlits) && return eq
     rdict = Dict()
     for u_ in bvals
         u = depvar(u_, s)
@@ -1378,6 +1593,21 @@ function array_substitute_boundary_values(
                 if !(unwrap_const(safe_unwrap(a)) isa Number)
         )
         rdict[pde_substitute(u_, gridsubs)] = array_variable(u, s)[idxs...]
+    end
+    for u_ in tlits
+        idxs, coords, _ = array_time_literal_spatial_indices(
+            u_, s, ranges, indexmap; singleton = true
+        )
+        pointsubs = Dict(
+            safe_unwrap(coords[j]) => s.grid[coords[j]][idxs[j]] for j in eachindex(coords)
+        )
+        gridsubs = Dict(
+            safe_unwrap(c) => pointsubs[safe_unwrap(c)]
+                for (c, a) in zip(s.args[operation(u_)], arguments(u_))
+                if !isequal(c, s.time) && !(unwrap_const(safe_unwrap(a)) isa Number)
+        )
+        formula = array_resolved_ic_formula(depvar(u_, s), s, derivweights.icformulas)
+        rdict[pde_substitute(u_, gridsubs)] = array_ic_eval(formula, s, pointsubs)
     end
     return pde_substitute(eq.lhs, rdict) ~ pde_substitute(eq.rhs, rdict)
 end

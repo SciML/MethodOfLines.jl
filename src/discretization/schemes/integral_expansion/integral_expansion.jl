@@ -100,6 +100,28 @@ function reshape_along(vals, j, N)
     return reshape(vals, ntuple(i -> i == j ? length(vals) : 1, N))
 end
 
+# Concrete numeric field as one term. A bare Vector is an `array_literal` and
+# `treesize` grows with the grid. `term` is the first construction;
+# `promote_symtype` / `promote_shape` keep type and axes after reconstruction.
+array_const_field_1(A::AbstractArray) = A
+array_const_field_2(A::AbstractArray) = A
+array_const_field_3(A::AbstractArray) = A
+SymbolicUtils.promote_symtype(::typeof(array_const_field_1), ::Type) = Vector{Float64}
+SymbolicUtils.promote_symtype(::typeof(array_const_field_2), ::Type) = Matrix{Float64}
+SymbolicUtils.promote_symtype(::typeof(array_const_field_3), ::Type) = Array{Float64, 3}
+SymbolicUtils.promote_shape(::typeof(array_const_field_1), sh::SymbolicUtils.ShapeT) = sh
+SymbolicUtils.promote_shape(::typeof(array_const_field_2), sh::SymbolicUtils.ShapeT) = sh
+SymbolicUtils.promote_shape(::typeof(array_const_field_3), sh::SymbolicUtils.ShapeT) = sh
+
+function array_hold_numeric(A::AbstractArray)
+    A = convert(Array{Float64}, A)
+    nd = ndims(A)
+    f = nd == 1 ? array_const_field_1 : nd == 2 ? array_const_field_2 :
+        nd == 3 ? array_const_field_3 :
+        throw(ArrayFormFallback("time-literal IC field of dimension $nd"))
+    return term(f, A)
+end
+
 # A registered scale keeps a length-n weight vector as one argument.
 array_weight_scale(w::AbstractArray, A::AbstractArray) = broadcast(*, w, A)
 Symbolics.@register_array_symbolic array_weight_scale(w::AbstractArray, A::AbstractArray) begin
