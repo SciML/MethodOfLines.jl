@@ -76,8 +76,8 @@ function PDEBase.construct_differential_discretizer(
             windneg,
             [
                 (Differential(x)^d) => CompleteUpwindDifference(
-                        d, upwind_order, dx, d + upwind_order - 1
-                    ) for d in upwind_orders
+                    d, upwind_order, dx, d + upwind_order - 1
+                ) for d in upwind_orders
             ]
         )
         # only calculate all orders if they are needed for the edge aligned grid

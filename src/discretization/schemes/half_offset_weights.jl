@@ -32,13 +32,13 @@ function CompleteHalfCenteredDifference(
 
     _low_boundary_coefs = [
         convert(
-                SVector{boundary_stencil_length, T},
-                (1 / dx^derivative_order) *
+            SVector{boundary_stencil_length, T},
+            (1 / dx^derivative_order) *
                 calculate_weights(
-                    derivative_order, offset,
-                    left_boundary_x
-                )
+                derivative_order, offset,
+                left_boundary_x
             )
+        )
             for offset in L_boundary_deriv_spots
     ]
     low_boundary_coefs = convert(SVector{boundary_point_count}, _low_boundary_coefs)
@@ -96,35 +96,35 @@ function CompleteHalfCenteredDifference(
 
     stencil_coefs = [
         convert(
-                SVector{centered_stencil_length, eltype(x)},
-                calculate_weights(
-                    derivative_order, hx[i],
-                    x[(i - endpoint + 1):(i + endpoint)]
-                )
+            SVector{centered_stencil_length, eltype(x)},
+            calculate_weights(
+                derivative_order, hx[i],
+                x[(i - endpoint + 1):(i + endpoint)]
             )
+        )
             for i in (endpoint + 1):(length(x) - endpoint)
     ]
     # For each boundary point, for each tappoint in the half offset central difference stencil, we need to calculate the coefficients for the stencil.
 
     low_boundary_coefs = [
         convert(
-                SVector{boundary_stencil_length, eltype(x)},
-                calculate_weights(
-                    derivative_order, offset,
-                    low_boundary_x
-                )
+            SVector{boundary_stencil_length, eltype(x)},
+            calculate_weights(
+                derivative_order, offset,
+                low_boundary_x
             )
+        )
             for offset in L_boundary_deriv_spots
     ]
 
     high_boundary_coefs = [
         convert(
-                SVector{boundary_stencil_length, eltype(x)},
-                calculate_weights(
-                    derivative_order, offset,
-                    high_boundary_x
-                )
+            SVector{boundary_stencil_length, eltype(x)},
+            calculate_weights(
+                derivative_order, offset,
+                high_boundary_x
             )
+        )
             for offset in R_boundary_deriv_spots
     ]
 

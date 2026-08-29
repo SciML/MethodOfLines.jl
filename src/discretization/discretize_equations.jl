@@ -1238,9 +1238,9 @@ function array_staggered_rules(
                 (0:1) : (-1:0)
             slices = [
                 array_slice(
-                        u, s, ranges, indexmap;
-                        shiftx = x, offset = k, periodic = periodic
-                    ) for k in taps
+                    u, s, ranges, indexmap;
+                    shiftx = x, offset = k, periodic = periodic
+                ) for k in taps
             ]
             push!(
                 rules,
@@ -1730,16 +1730,16 @@ function array_half_offset_stencil(D, v, o, s, x, ranges, indexmap, periodic)
     taps = half_offset_taps(D)
     slices = [
         array_slice(
-                v, s, ranges, indexmap; shiftx = x, offset = o + q, periodic = periodic
-            ) for q in taps
+            v, s, ranges, indexmap; shiftx = x, offset = o + q, periodic = periodic
+        ) for q in taps
     ]
     weights = if D.dx isa Number
         collect(D.stencil_coefs)
     else
         [
             array_weight_vals(
-                    i -> D.stencil_coefs[i + o - D.boundary_point_count], k, rng, j, N
-                ) for k in eachindex(taps)
+                i -> D.stencil_coefs[i + o - D.boundary_point_count], k, rng, j, N
+            ) for k in eachindex(taps)
         ]
     end
     return array_stencil(weights, slices)
@@ -1845,9 +1845,9 @@ function array_nonlinear_laplacian(
         # -1: the outer derivative sits at II - 1.
         [
             array_weight_vals(
-                    i -> D_outer.stencil_coefs[i - 1 - D_outer.boundary_point_count],
-                    k, rng, j, N
-                ) for k in eachindex(outer_taps)
+                i -> D_outer.stencil_coefs[i - 1 - D_outer.boundary_point_count],
+                k, rng, j, N
+            ) for k in eachindex(outer_taps)
         ]
     end
     return array_stencil(outerweights, interpolated)

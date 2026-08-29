@@ -1347,10 +1347,10 @@ end
         vcat,
         [
             [
-                    u(0, x)[i] ~ q[i] * cos(x),
-                    u(t, 0)[i] ~ sin(t),
-                    u(t, 1)[i] ~ exp(-t) * cos(1),
-                ] for i in 1:n_comp
+                u(0, x)[i] ~ q[i] * cos(x),
+                u(t, 0)[i] ~ sin(t),
+                u(t, 1)[i] ~ exp(-t) * cos(1),
+            ] for i in 1:n_comp
         ]
     )
     domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]

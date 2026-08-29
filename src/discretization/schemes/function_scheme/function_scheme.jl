@@ -84,15 +84,15 @@ end
         safe_vcat,
         [
             [
-                    (Differential(x))(u) => function_scheme(
-                        F,
-                        Idx(II, s, u, indexmap), s,
-                        filter_interfaces(bcmap[operation(u)][x]),
-                        (x2i(s, u, x), x), u,
-                        central_ufunc
-                    )
+                (Differential(x))(u) => function_scheme(
+                    F,
+                    Idx(II, s, u, indexmap), s,
+                    filter_interfaces(bcmap[operation(u)][x]),
+                    (x2i(s, u, x), x), u,
+                    central_ufunc
+                )
                     for x in ivs(u, s)
-                ]
+            ]
                 for u in depvars
         ],
         init = []

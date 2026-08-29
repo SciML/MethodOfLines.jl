@@ -25,21 +25,21 @@ function CompleteCenteredDifference(
     )
     _low_boundary_coefs = SVector{boundary_stencil_length, T}[
         convert(
-                SVector{
-                    boundary_stencil_length,
-                    T,
-                },
-                (
-                    1 /
+            SVector{
+                boundary_stencil_length,
+                T,
+            },
+            (
+                1 /
                     dx^derivative_order
-                ) *
+            ) *
                 calculate_weights(
-                    derivative_order,
-                    oneunit(T) *
+                derivative_order,
+                oneunit(T) *
                     x0,
-                    left_boundary_x
-                )
+                left_boundary_x
             )
+        )
             for x0 in
             L_boundary_deriv_spots
     ]
@@ -93,42 +93,42 @@ function CompleteCenteredDifference(
 
     stencil_coefs = [
         convert(
-                SVector{stencil_length, T},
-                calculate_weights(
-                    derivative_order, x[i],
-                    x[(i - endpoint):(i + endpoint)]
-                )
+            SVector{stencil_length, T},
+            calculate_weights(
+                derivative_order, x[i],
+                x[(i - endpoint):(i + endpoint)]
             )
+        )
             for i in interior_x
     ]
     low_boundary_coefs = SVector{boundary_stencil_length, T}[
         convert(
-                SVector{
-                    boundary_stencil_length,
-                    T,
-                },
-                calculate_weights(
-                    derivative_order,
-                    low_boundary_x[i + 1],
-                    low_boundary_x
-                )
+            SVector{
+                boundary_stencil_length,
+                T,
+            },
+            calculate_weights(
+                derivative_order,
+                low_boundary_x[i + 1],
+                low_boundary_x
             )
+        )
             for i in
             0:(boundary_point_count - 1)
     ]
 
     high_boundary_coefs = SVector{boundary_stencil_length, T}[
         convert(
-                SVector{
-                    boundary_stencil_length,
-                    T,
-                },
-                calculate_weights(
-                    derivative_order,
-                    high_boundary_x[end - i],
-                    high_boundary_x
-                )
+            SVector{
+                boundary_stencil_length,
+                T,
+            },
+            calculate_weights(
+                derivative_order,
+                high_boundary_x[end - i],
+                high_boundary_x
             )
+        )
             for i in
             0:(boundary_point_count - 1)
     ]

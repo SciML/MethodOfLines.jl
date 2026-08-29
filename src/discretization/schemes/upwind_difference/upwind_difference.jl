@@ -209,27 +209,27 @@ end
             safe_vcat,
             [
                 reduce(
-                        safe_vcat,
+                    safe_vcat,
+                    [
                         [
-                            [
-                                @rule *(
-                                    ~~a,
-                                    $(Differential(x)^d)(u),
-                                    ~~b
-                                ) => upwind_difference(
-                                    *(~a..., ~b...), d, Idx(II, s, u, indexmap), s,
-                                    filter_interfaces(bcmap[operation(u)][x]), depvars,
-                                    derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap
-                                )
+                            @rule *(
+                                ~~a,
+                                $(Differential(x)^d)(u),
+                                ~~b
+                            ) => upwind_difference(
+                                *(~a..., ~b...), d, Idx(II, s, u, indexmap), s,
+                                filter_interfaces(bcmap[operation(u)][x]), depvars,
+                                derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap
+                            )
                                 for d in (
                                     let orders = derivweights.orders[x]
                                         setdiff(orders[isodd.(orders)], skip)
                                 end
                                 )
-                            ] for x in ivs(u, s)
-                        ],
-                        init = []
-                    ) for u in depvars
+                        ] for x in ivs(u, s)
+                    ],
+                    init = []
+                ) for u in depvars
             ],
             init = []
         ),
@@ -239,26 +239,26 @@ end
             safe_vcat,
             [
                 reduce(
-                        safe_vcat,
+                    safe_vcat,
+                    [
                         [
-                            [
-                                @rule /(
-                                    *(~~a, $(Differential(x)^d)(u), ~~b),
-                                    ~c
-                                ) => upwind_difference(
-                                    *(~a..., ~b...) / ~c, d, Idx(II, s, u, indexmap), s,
-                                    filter_interfaces(bcmap[operation(u)][x]), depvars,
-                                    derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap
-                                )
+                            @rule /(
+                                *(~~a, $(Differential(x)^d)(u), ~~b),
+                                ~c
+                            ) => upwind_difference(
+                                *(~a..., ~b...) / ~c, d, Idx(II, s, u, indexmap), s,
+                                filter_interfaces(bcmap[operation(u)][x]), depvars,
+                                derivweights, (x2i(s, u, x), x), u, wind_ufunc, indexmap
+                            )
                                 for d in (
                                     let orders = derivweights.orders[x]
                                         setdiff(orders[isodd.(orders)], skip)
                                 end
                                 )
-                            ] for x in ivs(u, s)
-                        ],
-                        init = []
-                    ) for u in depvars
+                        ] for x in ivs(u, s)
+                    ],
+                    init = []
+                ) for u in depvars
             ],
             init = []
         )

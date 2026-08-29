@@ -108,24 +108,24 @@ function PDEBase.construct_discrete_space(
     # Build symbolic variables
     Iaxies = [
         u => CartesianIndices(
+            (
                 (
-                    (
-                        axes(axies[x])[1]
+                    axes(axies[x])[1]
                         for x in remove(arguments(u), t)
-                    )...,
-                )
+                )...,
             )
+        )
             for u in depvars
     ]
     Igrid = [
         u => CartesianIndices(
+            (
                 (
-                    (
-                        axes(grid[x])[1]
+                    axes(grid[x])[1]
                         for x in remove(arguments(u), t)
-                    )...,
-                )
+                )...,
             )
+        )
             for u in depvars
     ]
 
@@ -161,24 +161,24 @@ function PDEBase.construct_discrete_space(
     # Build symbolic variables
     Iaxies = [
         u => CartesianIndices(
+            (
                 (
-                    (
-                        axes(axies[x])[1]
+                    axes(axies[x])[1]
                         for x in remove(arguments(u), t)
-                    )...,
-                )
+                )...,
             )
+        )
             for u in depvars
     ]
     Igrid = [
         u => CartesianIndices(
+            (
                 (
-                    (
-                        axes(grid[x])[1]
+                    axes(grid[x])[1]
                         for x in remove(arguments(u), t)
-                    )...,
-                )
+                )...,
             )
+        )
             for u in depvars
     ]
 

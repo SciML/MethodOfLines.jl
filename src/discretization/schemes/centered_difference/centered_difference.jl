@@ -74,23 +74,23 @@ This is a catch all ruleset, as such it does not use @rule. Any even ordered der
         safe_vcat,
         [
             reduce(
-                    safe_vcat,
+                safe_vcat,
+                [
                     [
-                        [
-                            (Differential(x)^d)(u) => central_difference(
-                                derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap),
-                                s, filter_interfaces(bcmap[operation(u)][x]),
-                                (x2i(s, u, x), x), u, central_ufunc
-                            )
+                        (Differential(x)^d)(u) => central_difference(
+                            derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap),
+                            s, filter_interfaces(bcmap[operation(u)][x]),
+                            (x2i(s, u, x), x), u, central_ufunc
+                        )
                             for d in (
                                 let orders = derivweights.orders[x]
                                     orders[iseven.(orders)]
                             end
                             )
-                        ] for x in ivs(u, s)
-                    ],
-                    init = []
-                ) for u in depvars
+                    ] for x in ivs(u, s)
+                ],
+                init = []
+            ) for u in depvars
         ],
         init = []
     )
