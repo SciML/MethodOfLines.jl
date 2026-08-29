@@ -16,11 +16,13 @@ run_qa(
             ),
         ),
         all_qualified_accesses_are_public = (;
-            # These are required by the Base/PDEBase/SciMLBase developer interfaces;
-            # their owners do not declare them public, and they are not user-facing API.
+            # These are required by the Base/PDEBase/SciMLBase/SymbolicUtils
+            # developer interfaces; their owners do not declare them public,
+            # and they are not user-facing API.
             ignore = (
                 :AbstractCartesianIndex, :EquationState, :PDESolution,
                 :cardinalize_eqs!, :observed, :parse_bcs,
+                :promote_symtype, # public since SymbolicUtils 4.46; older supported releases lack the metadata
             ),
         ),
     ),

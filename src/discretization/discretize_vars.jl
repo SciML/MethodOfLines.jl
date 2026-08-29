@@ -343,6 +343,10 @@ function Idx(II::CartesianIndex, s::DiscreteSpace, u, indexmap)
     return II
 end
 
+# `Idx` cannot invent an axis missing from `indexmap`.
+idx_depvars(depvars, s, indexmap) =
+    filter(u -> all(x -> haskey(indexmap, x), ivs(u, s)), depvars)
+
 """
 A function that returns what to replace independent variables with in boundary equations
 """
@@ -366,7 +370,10 @@ function gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where {N}
 end
 
 function varmaps(s::DiscreteSpace, depvars, II, indexmap)
-    return [u => s.discvars[u][Idx(II, s, u, indexmap)] for u in depvars]
+    return [
+        u => s.discvars[u][Idx(II, s, u, indexmap)]
+            for u in idx_depvars(depvars, s, indexmap)
+    ]
 end
 
 function valmaps(s::DiscreteSpace, u, depvars, II, indexmap)
