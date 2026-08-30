@@ -20,11 +20,13 @@
 # Interior boundary values (e.g. `u(t, 1)`) map to the matching array element or face
 # slice on every array box, including size-1 wrap boxes and frame points (the pointwise
 # `boundaryvalfuncs` skip interface faces and free-standing corners; this path does not).
-# Pinned-direction derivatives of those values (`Dx(u(t, 1))`) use the same
-# `depvarderivbcmaps` stencil (one-sided at a truncating edge, wrapped if periodic).
+# On an edge-aligned grid the same references interpolate to the domain edge via
+# `interpmap` (the pointwise `half_offset_centered_difference`). Pinned-direction
+# derivatives of those values (`Dx(u(t, 1))`) use the same `depvarderivbcmaps` stencil
+# on a center-aligned grid (one-sided at a truncating edge, wrapped if periodic).
 # Time-literal references such as `u(0, x)` evaluate that variable's initial-condition
-# formula on the matching slice. Derivatives of time-literals, non-IC times, and
-# edge-aligned mixed boundary values fall back.
+# formula on the matching slice. Derivatives of time-literals, non-IC times,
+# edge-aligned boundary-value derivatives, and staggered-grid boundary values fall back.
 #
 # Nonlinear laplacians `Dx(a(u) * Dx(u))` are emitted in slice form too; see
 # `array_nonlinear_laplacian`. Spherical laplacians `r^-2 Dr(r^2 Dr(u))` build on the
@@ -58,9 +60,9 @@
 # Unsupported patterns fall back to pointwise equations: callbacks,
 # a higher-dimensional field whose extra axes are free (not a boundary
 # value and not an integral rank drop), derivatives of time-literals,
-# edge-aligned boundary values, tangential or
-# mixed derivatives of boundary values, stationary systems,
-# linear operators on a nonuniform two-domain interface.
+# derivatives of boundary values on an edge-aligned grid, staggered-grid
+# boundary values, tangential or mixed derivatives of boundary values,
+# stationary systems, linear operators on a nonuniform two-domain interface.
 
 struct ArrayFormFallback <: Exception
     msg::String
@@ -320,7 +322,7 @@ function array_core_equation(
         array_boundary_value_derivative_rules(
             pde, s, ranges, indexmap, derivweights, periodic, bcmap
         ),
-        array_boundary_value_rules(pde, s, ranges, indexmap),
+        array_boundary_value_rules(pde, s, ranges, indexmap, derivweights),
         array_time_literal_rules(pde, s, ranges, indexmap, derivweights)
     )
     varrules = Pair[]
@@ -1176,23 +1178,43 @@ end
 
 """
 Equation-level checks for interior boundary values and time-literals. Throws
-`ArrayFormFallback` when there is no slice form (edge-aligned mixed edges,
-derivatives, non-IC times, off-edge samples).
+`ArrayFormFallback` when there is no slice form (staggered spatial edges,
+edge-aligned mixed time+spatial edges, edge-aligned boundary-value derivatives,
+non-IC times, off-edge samples).
 
-Pure time-literals are valid on every grid alignment. Mixed time+spatial
-literals and spatial boundary values require `CenterAlignedGrid`.
+Pure time-literals are valid on every grid alignment. Spatial boundary values
+are accepted on `CenterAlignedGrid` and `EdgeAlignedGrid` (the latter via
+`array_edge_aligned_boundary_value`). Mixed time+spatial literals require
+`CenterAlignedGrid`.
 """
 function array_validate_boundary_values(pde, s, derivweights)
     bvals = array_boundary_value_terms(pde, s)
     tlits = array_time_literal_terms(pde, s)
     isempty(bvals) && isempty(tlits) && return bvals
-    needs_center = !isempty(bvals) || any(u_ -> array_time_literal_has_spatial_edge(u_, s), tlits)
-    if needs_center && !(get_grid_type(s) <: CenterAlignedGrid)
-        throw(
-            ArrayFormFallback(
-                "boundary values in interior equations require a CenterAlignedGrid"
-            )
+    G = get_grid_type(s)
+    has_mixed_tlit = any(u_ -> array_time_literal_has_spatial_edge(u_, s), tlits)
+    if !isempty(bvals) || has_mixed_tlit
+        G <: StaggeredGrid && throw(
+            ArrayFormFallback("boundary values on a staggered grid")
         )
+        if G <: EdgeAlignedGrid
+            has_mixed_tlit && throw(
+                ArrayFormFallback(
+                    "mixed time-literal and spatial edge on an edge-aligned grid"
+                )
+            )
+            !isempty(array_boundary_value_derivative_terms(pde, s)) && throw(
+                ArrayFormFallback(
+                    "derivative of boundary value on an edge-aligned grid"
+                )
+            )
+        elseif !(G <: CenterAlignedGrid)
+            throw(
+                ArrayFormFallback(
+                    "boundary values in interior equations require a CenterAlignedGrid or EdgeAlignedGrid"
+                )
+            )
+        end
     end
     (
         array_has_time_literal_derivative(pde.lhs, s) ||
@@ -1233,12 +1255,150 @@ function array_validate_boundary_values(pde, s, derivweights)
 end
 
 """
+Resolve a numeric boundary argument to the interpolation index `newindex` uses
+with `shift = true` on an `EdgeAlignedGrid`: the lower domain edge is 1, the
+upper is `n - 1` so `half_offset_centered_difference` sits on the midpoint
+between that node and the next.
+
+`array_boundary_edge_index` is the unshifted (`n`) form and must stay that way:
+center-aligned views and any later derivative path index the last node directly.
+"""
+function array_edge_aligned_interp_index(xval, x, s)
+    if isequal(xval, s.axies[x][1])
+        return 1
+    elseif isequal(xval, s.axies[x][end])
+        return length(s, x) - 1
+    else
+        throw(
+            ArrayFormFallback(
+                "boundary value is not at a domain edge for $x = $xval"
+            )
+        )
+    end
+end
+
+"""
+Weights and tap indices of `derivweights.interpmap[x]` at the edge-aligned
+interpolation index `II_j`, from `get_half_offset_weights_and_stencil` with
+`bs = []` — the same call `boundary_value_maps` makes for `EdgeAlignedGrid`.
+"""
+function array_interp_weights_and_taps(u, x, II_j, s, derivweights)
+    j = x2i(s, u, x)
+    N = ndims(u, s)
+    II = CartesianIndex(ntuple(k -> k == j ? II_j : 1, N))
+    haskey(derivweights.interpmap, x) || throw(
+        ArrayFormFallback("no interpolation operator for $x")
+    )
+    D = derivweights.interpmap[x]
+    ws, Itap = try
+        get_half_offset_weights_and_stencil(D, II, s, [], u, (j, x))
+    catch e
+        e isa InterruptException && rethrow(e)
+        throw(ArrayFormFallback("could not build interpolation stencil for $u at $x"))
+    end
+    taps = [I[j] for I in Itap]
+    ax = axes(s.discvars[u], j)
+    all(t -> checkindex(Bool, ax, t), taps) || throw(
+        ArrayFormFallback("interpolation taps for $u at $x fall outside the grid")
+    )
+    return collect(ws), taps
+end
+
+"""
+The interpolated domain-edge value of `u_` on an `EdgeAlignedGrid`.
+
+A single pinned argument (`u(t, 1)`, `u(t, 0, y)`) is the `interpmap`
+stencil along that axis — a scalar when every spatial argument is fixed (or
+the remaining ranges are length 1), a face of singleton-range taps otherwise.
+Several pinned arguments (`u(t, 0, 0)`) are the tensor product of those
+interpolators, which is the value at the domain corner the one-axis pointwise
+map does not form.
+"""
+function array_edge_aligned_boundary_value(u_, s, ranges, indexmap, derivweights)
+    u = depvar(u_, s)
+    arr = array_variable(u, s)
+    args = ivs(u, s)
+    args_ = remove(arguments(u_), s.time)
+    N = length(args_)
+    length(args_) == length(args) || throw(
+        ArrayFormFallback("boundary value $u_ has unexpected argument structure")
+    )
+
+    pin_dims = Int[]
+    pin_index = Int[]
+    pin_weights = Vector[]
+    pin_taps = Vector{Int}[]
+    dim_range = Vector{Any}(undef, N)
+    for (j, a) in enumerate(args_)
+        aval = unwrap_const(safe_unwrap(a))
+        if aval isa Number
+            II_j = array_edge_aligned_interp_index(aval, args[j], s)
+            ws, taps = array_interp_weights_and_taps(u, args[j], II_j, s, derivweights)
+            push!(pin_dims, j)
+            push!(pin_index, II_j)
+            push!(pin_weights, ws)
+            push!(pin_taps, taps)
+        else
+            haskey(indexmap, args[j]) || throw(
+                ArrayFormFallback(
+                    "boundary value $u_ has a free argument not on the equation"
+                )
+            )
+            dim_range[j] = ranges[indexmap[args[j]]]
+        end
+    end
+    isempty(pin_dims) && throw(
+        ArrayFormFallback("boundary value $u_ has no pinned spatial argument")
+    )
+
+    scalar_out = all(j -> (j in pin_dims) || length(dim_range[j]) == 1, 1:N)
+    if scalar_out && length(pin_dims) == 1
+        j = pin_dims[1]
+        II = CartesianIndex(
+            ntuple(k -> k == j ? pin_index[1] : first(dim_range[k]), N)
+        )
+        ufunc(v, I, _) = s.discvars[v][I]
+        return half_offset_centered_difference(
+            derivweights.interpmap[args[j]], II, s, [], (j, args[j]), u, ufunc
+        )
+    end
+
+    np = length(pin_dims)
+    weights = []
+    slices = []
+    for combo in Iterators.product(ntuple(i -> eachindex(pin_taps[i]), np)...)
+        w = pin_weights[1][combo[1]]
+        for k in 2:np
+            w *= pin_weights[k][combo[k]]
+        end
+        rs = ntuple(N) do j
+            pin_i = findfirst(isequal(j), pin_dims)
+            if pin_i !== nothing
+                t = pin_taps[pin_i][combo[pin_i]]
+                return scalar_out ? t : (t:t)
+            else
+                r = dim_range[j]
+                return scalar_out ? first(r) : r
+            end
+        end
+        push!(weights, w)
+        push!(slices, arr[rs...])
+    end
+    return scalar_out ? sym_dot(weights, slices) : array_stencil(weights, slices)
+end
+
+"""
 The array element (every spatial argument fixed) or face slice (some arguments free
 over the core box) corresponding to a boundary value like `u(t, 1)` or `u(t, 0, y)`.
-Fixed dimensions use a singleton `k:k` range so the result broadcasts against the
-core slice; a fully-fixed reference is a scalar element, which broadcasts as well.
+On a center-aligned grid this is a direct index; on an edge-aligned grid it is the
+`interpmap` interpolant at the domain edge. Fixed dimensions use a singleton `k:k`
+range so the result broadcasts against the core slice; a fully-fixed reference is a
+scalar, which broadcasts as well.
 """
-function array_boundary_value_view(u_, s, ranges, indexmap)
+function array_boundary_value_view(u_, s, ranges, indexmap, derivweights)
+    get_grid_type(s) <: EdgeAlignedGrid && return array_edge_aligned_boundary_value(
+        u_, s, ranges, indexmap, derivweights
+    )
     u = depvar(u_, s)
     arr = array_variable(u, s)
     args = ivs(u, s)
@@ -1260,16 +1420,18 @@ function array_boundary_value_view(u_, s, ranges, indexmap)
 end
 
 """
-Substitution rules mapping each boundary value in `pde` to its array element or face
-slice over the core box described by `ranges`. Call after
-`array_validate_boundary_values`.
+Substitution rules mapping each boundary value in `pde` to its array element, face
+slice, or edge-aligned interpolant over the core box described by `ranges`. Call
+after `array_validate_boundary_values`.
 
 Returns a `Vector{<:Pair}` even when empty, so `vcat` into `ArrayifyContext.rules`
 stays well-typed.
 """
-function array_boundary_value_rules(pde, s, ranges, indexmap)
+function array_boundary_value_rules(pde, s, ranges, indexmap, derivweights)
     return Pair[
-        safe_unwrap(u_) => array_boundary_value_view(u_, s, ranges, indexmap)
+        safe_unwrap(u_) => array_boundary_value_view(
+            u_, s, ranges, indexmap, derivweights
+        )
             for u_ in array_boundary_value_terms(pde, s)
     ]
 end
@@ -1569,7 +1731,8 @@ size-1 wrap boxes and frame points, where `discretize_equation_at_point` leaves
 interface-face and free-standing-corner boundary values symbolic. `valmaps` has
 already replaced free spatial arguments with their grid values inside those
 leftover terms (`u(t, 0, y)` appears as e.g. `u(t, 0, 0.2)`, `u(0, x)` as
-`u(0, x_i)`), so each rule keys on that grid-valued form and maps to a scalar.
+`u(0, x_i)`), so each rule keys on that grid-valued form and maps to a scalar
+array element (center-aligned) or interpolant (edge-aligned).
 
 Boundary-value derivatives are already replaced via `extra_rules` before
 `expand_derivatives`; this leftover sweep is for leftover values and time-literals.
@@ -1592,7 +1755,11 @@ function array_substitute_boundary_values(
                 for (j, a) in enumerate(args_)
                 if !(unwrap_const(safe_unwrap(a)) isa Number)
         )
-        rdict[pde_substitute(u_, gridsubs)] = array_variable(u, s)[idxs...]
+        val = get_grid_type(s) <: EdgeAlignedGrid ?
+            array_edge_aligned_boundary_value(
+                u_, s, ranges, indexmap, derivweights
+            ) : array_variable(u, s)[idxs...]
+        rdict[pde_substitute(u_, gridsubs)] = val
     end
     for u_ in tlits
         idxs, coords, _ = array_time_literal_spatial_indices(
