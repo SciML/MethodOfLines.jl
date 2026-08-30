@@ -1481,7 +1481,19 @@ end
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         ),
         (
-            Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, x),
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + u(1, x),
+            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        ),
+        (
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(0, x)),
+            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        ),
+        (
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + Dt(u(0, x)),
+            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        ),
+        (
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, 0.5),
             [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         ),
     ]
@@ -2198,6 +2210,349 @@ end
     sol = solve(prob, Rodas4())
     @test SciMLBase.successful_retcode(sol)
 end
+
+function has_time_literal_leftover(eq)
+    return occursin(r"[A-Za-z_][\w]*\((?:0|0\.0),", string(eq))
+end
+
+const _IC_FIELD_OPS = (
+    MethodOfLines.array_const_field_1,
+    MethodOfLines.array_const_field_2,
+    MethodOfLines.array_const_field_3,
+)
+
+function ic_field_floats(A)
+    A = SymbolicUtils.unwrap_const(Symbolics.unwrap(A))
+    A isa AbstractArray || throw(ArgumentError("held IC field is not an array"))
+    return vec(
+        Float64[float(SymbolicUtils.unwrap_const(Symbolics.unwrap(x))) for x in A]
+    )
+end
+
+function held_ic_field(eq)
+    function walk(x)
+        x = Symbolics.unwrap(x)
+        SymbolicUtils.iscall(x) || return nothing
+        op = SymbolicUtils.operation(x)
+        if any(f -> op === f, _IC_FIELD_OPS)
+            return ic_field_floats(only(SymbolicUtils.arguments(x)))
+        end
+        for a in SymbolicUtils.arguments(x)
+            v = walk(a)
+            v === nothing || return v
+        end
+        return nothing
+    end
+    return something(walk(eq.lhs), walk(eq.rhs))
+end
+
+interior_x(dx) = collect(dx:dx:(1 - dx))
+
+@testset "Time-literal in interior equation (1D)" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, x)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    disc = MOLFiniteDifference([x => 0.05], t)
+    sys_arr, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys_arr) == 1
+    int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+    @test occursin("array_const_field", string(int_eq))
+    @test held_ic_field(int_eq) == sinpi.(interior_x(0.05))
+    @test !any(has_time_literal_leftover, get_eqs(sys_arr))
+
+    prob_dae = discretize(pdesys, disc)
+    @test prob_dae isa SciMLBase.DAEProblem
+    resid = similar(prob_dae.u0)
+    du0 = zero(prob_dae.u0)
+    prob_dae.f(resid, du0, prob_dae.u0, prob_dae.p, 0.0)
+    @test all(isfinite, resid)
+
+    sol_arr, _ = solve_discretized(pdesys, [x => 0.05], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+
+    treesize(x) = let u = Symbolics.unwrap(x)
+        SymbolicUtils.iscall(u) ? 1 + sum(treesize, SymbolicUtils.arguments(u); init = 0) : 1
+    end
+    counts = map([11, 41]) do n
+        disc = MOLFiniteDifference([x => 1 / (n - 1)], t)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        int = only(filter(isinterioreq, get_eqs(sys)))
+        (narrayeqs_interior(sys), treesize(int.lhs) + treesize(int.rhs))
+    end
+    @test counts[1][1] == counts[2][1] == 1
+    @test counts[1][2] == counts[2][2]
+
+    # `u(0.0, x)` is the same IC time as `u(0, x)` (`isequal(0, 0.0)`).
+    eq00 = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0.0, x)
+    @named pdesys00 = PDESystem(eq00, bcs, domains, [t, x], [u(t, x)])
+    sys00, _ = symbolic_discretize(pdesys00, MOLFiniteDifference([x => 0.1], t))
+    @test narrayeqs_interior(sys00) == 1
+    @test !any(has_time_literal_leftover, get_eqs(sys00))
+
+    # Frame points at approximation order 4 must substitute leftovers too.
+    sys4, _ = symbolic_discretize(
+        pdesys, MOLFiniteDifference([x => 0.05], t; approx_order = 4)
+    )
+    @test narrayeqs_interior(sys4) == 1
+    @test !any(has_time_literal_leftover, get_eqs(sys4))
+
+    # Nonzero initial time: `u(1, x)` on `[1, 1.1]`.
+    domains1 = [t ∈ Interval(1.0, 1.1), x ∈ Interval(0.0, 1.0)]
+    eq1 = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(1, x)
+    bcs1 = [u(1, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    @named pdesys1 = PDESystem(eq1, bcs1, domains1, [t, x], [u(t, x)])
+    sys1, _ = symbolic_discretize(pdesys1, MOLFiniteDifference([x => 0.1], t))
+    @test narrayeqs_interior(sys1) == 1
+    @test !any(eq -> occursin(r"[A-Za-z_][\w]*\((?:1|1\.0),", string(eq)), get_eqs(sys1))
+
+    # Pure time-literals are valid on an edge-aligned grid.
+    sys_e, _ = symbolic_discretize(
+        pdesys, MOLFiniteDifference([x => 0.05], t; grid_align = edge_align)
+    )
+    @test narrayeqs_interior(sys_e) == 1
+    @test !any(has_time_literal_leftover, get_eqs(sys_e))
+
+    # Time last: `u(x, 0)` is a time-literal, not `u(t, 0)`.
+    eq_tl = Dt(u(x, t)) ~ Dxx(u(x, t)) + u(x, 0)
+    bcs_tl = [u(x, 0) ~ sinpi(x), u(0, t) ~ 0.0, u(1, t) ~ 0.0]
+    @named pdesys_tl = PDESystem(eq_tl, bcs_tl, domains, [x, t], [u(x, t)])
+    sys_tl, _ = symbolic_discretize(pdesys_tl, MOLFiniteDifference([x => 0.05], t))
+    @test narrayeqs_interior(sys_tl) == 1
+    int_tl = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_tl)))
+    @test held_ic_field(int_tl) == sinpi.(interior_x(0.05))
+    @test !any(eq -> occursin(r"\bu\([^)]*,\s*(?:0|0\.0)\)", string(eq)), get_eqs(sys_tl))
+end
+
+@testset "Time-literal with nonzero IC actually drives the residual" begin
+    # Constant IC: Dxx(1) = 0, so du comes only from +u(0, x). A dropped
+    # time-literal would give du ≈ 0.
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, x)
+    bcs = [u(0, x) ~ 1.0, u(t, 0) ~ 1.0, u(t, 1) ~ 1.0]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc = MOLFiniteDifference(dxs, t)
+    sys_arr, _ = symbolic_discretize(pdesys, disc)
+    prob_arr = ode_discretize(pdesys, disc)
+
+    @test narrayeqs_interior(sys_arr) == 1
+    int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+    @test all(==(1.0), held_ic_field(int_eq))
+
+    du_arr = similar(prob_arr.u0)
+    prob_arr.f(du_arr, prob_arr.u0, prob_arr.p, 0.0)
+    @test all(x -> isapprox(x, 1; atol = 1.0e-10), du_arr)
+
+    sol_arr, _ = solve_discretized(pdesys, dxs, t)
+    @test SciMLBase.successful_retcode(sol_arr)
+end
+
+@testset "Time-literal in interior equation (2D and mixed edges)" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+
+    @named vol_sys = PDESystem(
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(0, x, y),
+        bcs, domains, [t, x, y], [u(t, x, y)]
+    )
+    sol_arr, sys_arr = solve_discretized(vol_sys, [x => 0.1, y => 0.1], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 1
+    @test !any(has_time_literal_leftover, get_eqs(sys_arr))
+
+    @named face_sys = PDESystem(
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(0, 0, y),
+        bcs, domains, [t, x, y], [u(t, x, y)]
+    )
+    sol_f, sys_f = solve_discretized(face_sys, [x => 0.1, y => 0.1], t)
+    @test SciMLBase.successful_retcode(sol_f)
+    @test narrayeqs_interior(sys_f) == 1
+    face_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_f)))
+    @test occursin("array_const_field", string(face_eq))
+    @test !any(has_time_literal_leftover, get_eqs(sys_f))
+
+    eq1d = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, 1)
+    bcs1d = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains1d = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named mix_sys = PDESystem(eq1d, bcs1d, domains1d, [t, x], [u(t, x)])
+    sys_mix, _ = symbolic_discretize(mix_sys, MOLFiniteDifference([x => 0.05], t))
+    @test narrayeqs_interior(sys_mix) == 1
+    @test !any(has_time_literal_leftover, get_eqs(sys_mix))
+end
+
+@testset "Time-literal of a coupled variable in the interior" begin
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + v(0, x),
+        Dt(v(t, x)) ~ Dxx(v(t, x)) - u(t, x),
+    ]
+    bcs = [
+        u(0, x) ~ sinpi(x), v(0, x) ~ sinpi(x),
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
+
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.05], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 2
+    @test !any(has_time_literal_leftover, get_eqs(sys_arr))
+
+    # Nested IC `u(0, x) ~ v(0, x)` resolves to `v`'s formula.
+    eqs_n = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, x),
+        Dt(v(t, x)) ~ Dxx(v(t, x)),
+    ]
+    bcs_n = [
+        u(0, x) ~ v(0, x), v(0, x) ~ sinpi(x),
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    @named nested = PDESystem(eqs_n, bcs_n, domains, [t, x], [u(t, x), v(t, x)])
+    sys_n, _ = symbolic_discretize(nested, MOLFiniteDifference([x => 0.1], t))
+    @test narrayeqs_interior(sys_n) == 2
+    @test !any(has_time_literal_leftover, get_eqs(sys_n))
+    u_n = only(
+        filter(get_eqs(sys_n)) do eq
+            isinterioreq(eq) && isarrayeq(eq) && occursin("array_const_field", string(eq))
+        end
+    )
+    @test held_ic_field(u_n) == sinpi.(interior_x(0.1))
+
+    # `u(0, x) ~ v(0, 1)` binds x => 1, it does not copy v's whole field.
+    bcs_pt = [
+        u(0, x) ~ v(0, 1), v(0, x) ~ sinpi(x),
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    @named nested_pt = PDESystem(eqs_n, bcs_pt, domains, [t, x], [u(t, x), v(t, x)])
+    sys_pt, _ = symbolic_discretize(nested_pt, MOLFiniteDifference([x => 0.1], t))
+    @test narrayeqs_interior(sys_pt) == 2
+    @test !any(has_time_literal_leftover, get_eqs(sys_pt))
+    u_pt = only(
+        filter(get_eqs(sys_pt)) do eq
+            isinterioreq(eq) && isarrayeq(eq) && occursin("array_const_field", string(eq))
+        end
+    )
+    @test all(iszero, held_ic_field(u_pt))
+
+    # `v(0, x) + v(0, 1)` binds the point; without the bind this is 2 sinpi(x).
+    bcs_sum = [
+        u(0, x) ~ v(0, x) + v(0, 1), v(0, x) ~ sinpi(x),
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    @named nested_sum = PDESystem(eqs_n, bcs_sum, domains, [t, x], [u(t, x), v(t, x)])
+    sys_sum, _ = symbolic_discretize(nested_sum, MOLFiniteDifference([x => 0.1], t))
+    @test narrayeqs_interior(sys_sum) == 2
+    @test !any(has_time_literal_leftover, get_eqs(sys_sum))
+    u_sum = only(
+        filter(get_eqs(sys_sum)) do eq
+            isinterioreq(eq) && isarrayeq(eq) && occursin("array_const_field", string(eq))
+        end
+    )
+    @test held_ic_field(u_sum) == sinpi.(interior_x(0.1))
+end
+
+@testset "Time-literal in interior on a nonuniform grid" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, x)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
+    sol_arr, sys_arr = solve_discretized(pdesys, [x => gridvec], t)
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 1
+    @test !any(has_time_literal_leftover, get_eqs(sys_arr))
+end
+
+@testset "Time-literal as upwind coefficient stays in array form" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+
+    eq = Dt(u(t, x)) ~ -u(0, x) * Dx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ exp(-t)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc = MOLFiniteDifference(dxs, t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+    @test !any(has_time_literal_leftover, get_eqs(sys))
+
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    @test maximum(abs.(du)) > 0
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Time-literal in a periodic direction stays in array form" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(0, x)
+    bcs = [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc = MOLFiniteDifference(dxs, t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+    @test !any(has_time_literal_leftover, get_eqs(sys))
+
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    @test maximum(abs.(du)) > 0
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
 
 # Staggered grids: each variable's alignment fixes its interior stencil taps, so the
 # interior collapses to one array equation per PDE. Staggered problems build

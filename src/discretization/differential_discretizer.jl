@@ -9,6 +9,7 @@ struct DifferentialDiscretizer{T, D1, S} <: AbstractDifferentialDiscretizer
     orders::Dict{Num, Vector{Int}}
     boundary::Dict{Num, DerivativeOperator}
     callbacks::Any
+    icformulas::Any
 end
 
 function PDEBase.construct_differential_discretizer(
@@ -104,6 +105,29 @@ function PDEBase.construct_differential_discretizer(
     }(
         approx_order, advection_scheme, Dict(differentialmap),
         (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)),
-        Dict(interp), Dict(orders), Dict(boundary), callbacks
+        Dict(interp), Dict(orders), Dict(boundary), callbacks,
+        array_ic_formulas(pdesys, s)
     )
+end
+
+"""
+Canonical dependent variable => order-0 IC formula after `symbolic_linear_solve`.
+Time-literals evaluate this field; the discrete unknown is `U(t)`, not `U(t0)`.
+"""
+function array_ic_formulas(pdesys, s)
+    s.time === nothing && return Dict()
+    bcs = get_bcs(pdesys)
+    bcs = bcs isa Vector ? bcs : [bcs]
+    v = s.vars
+    bcorders = Dict(x => d_orders(x, bcs) for x in all_ivs(v))
+    boundarymap = PDEBase.parse_bcs(bcs, v, bcorders)
+    formulas = Dict()
+    for uop in operation.(v.ū)
+        for ic in get(get(boundarymap, uop, Dict()), s.time, [])
+            isupper(ic) && continue
+            ic.order == 0 || continue
+            formulas[safe_unwrap(depvar(ic.u, s))] = symbolic_linear_solve(ic.eq, ic.u)
+        end
+    end
+    return formulas
 end
