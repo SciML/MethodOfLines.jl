@@ -60,7 +60,6 @@ function throws_incompatible_layout(pdesys, dxs, t)
         occursin("incompatible layout", sprint(showerror, thrown))
 end
 
-
 function _interior_treesize(sys)
     treesize(x) = let u = Symbolics.unwrap(x)
         SymbolicUtils.iscall(u) ? 1 + sum(treesize, SymbolicUtils.arguments(u); init = 0) : 1
@@ -70,6 +69,23 @@ function _interior_treesize(sys)
             for eq in get_eqs(sys) if isinterioreq(eq) && isarrayeq(eq);
         init = 0
     )
+end
+
+function treesize(x)
+    x = Symbolics.unwrap(x)
+    SymbolicUtils.iscall(x) || return 1
+    return 1 + sum(treesize, SymbolicUtils.arguments(x); init = 0)
+end
+interior_treesize(sys) = sum(
+    treesize(eq.lhs) + treesize(eq.rhs)
+        for eq in get_eqs(sys) if isinterioreq(eq);
+    init = 0
+)
+function leftover_bval(sys, pats)
+    return any(get_eqs(sys)) do e
+        s = string(e)
+        any(p -> occursin(p, s), pats)
+    end
 end
 
 @testset "1D linear diffusion, Dirichlet BCs" begin
@@ -1874,6 +1890,443 @@ end
     sol = solve(prob, Rodas4())
     @test SciMLBase.successful_retcode(sol)
 end
+
+@testset "Edge-aligned interpolant matches half_offset_centered_difference" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    disc = MOLFiniteDifference([x => 0.05], t; grid_align = edge_align)
+    vmap = MethodOfLines.VariableMap(pdesys, disc)
+    s = MethodOfLines.construct_discrete_space(vmap, disc)
+    orders = Dict(map(xx -> xx => [1, 2], vmap.x̄))
+    derivweights = MethodOfLines.construct_differential_discretizer(
+        pdesys, s, disc, orders
+    )
+    ud = MethodOfLines.depvar(MethodOfLines.safe_unwrap(u(t, x)), s)
+    args = MethodOfLines.ivs(ud, s)
+    indexmap = Dict(args[i] => i for i in 1:length(args))
+    n = length(s, args[1])
+    ranges = Dict(1 => 2:(n - 1))
+    ufunc(v, I, _) = s.discvars[v][I]
+    for (u_, IIj) in ((u(t, 1), n - 1), (u(t, 0), 1))
+        u_uw = MethodOfLines.safe_unwrap(u_)
+        got = MethodOfLines.array_edge_aligned_boundary_value(
+            u_uw, s, ranges, indexmap, derivweights
+        )
+        want = MethodOfLines.half_offset_centered_difference(
+            derivweights.interpmap[args[1]], CartesianIndex(IIj),
+            s, [], (1, args[1]), ud, ufunc
+        )
+        @test isequal(got, want)
+    end
+
+    # Singleton-y wrap/frame: scalar_out && pin_dims == 1 with N = 2, so the
+    # interpolant is still half_offset_centered_difference at CartesianIndex(1, k).
+    @parameters y
+    Dyy = Differential(y)^2
+    eq2 = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(t, 0, y)
+    bcs2 = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains2 = [
+        t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys2 = PDESystem(eq2, bcs2, domains2, [t, x, y], [u(t, x, y)])
+    disc2 = MOLFiniteDifference([x => 0.1, y => 0.1], t; grid_align = edge_align)
+    vmap2 = MethodOfLines.VariableMap(pdesys2, disc2)
+    s2 = MethodOfLines.construct_discrete_space(vmap2, disc2)
+    orders2 = Dict(map(xx -> xx => [1, 2], vmap2.x̄))
+    derivweights2 = MethodOfLines.construct_differential_discretizer(
+        pdesys2, s2, disc2, orders2
+    )
+    ud2 = MethodOfLines.depvar(MethodOfLines.safe_unwrap(u(t, x, y)), s2)
+    args2 = MethodOfLines.ivs(ud2, s2)
+    indexmap2 = Dict(args2[i] => i for i in 1:length(args2))
+    nx = length(s2, args2[1])
+    k = cld(length(s2, args2[2]), 2)
+    ranges2 = Dict(1 => 2:(nx - 1), 2 => k:k)
+    ufunc2(v, I, _) = s2.discvars[v][I]
+    u_uw2 = MethodOfLines.safe_unwrap(u(t, 0, y))
+    got2 = MethodOfLines.array_edge_aligned_boundary_value(
+        u_uw2, s2, ranges2, indexmap2, derivweights2
+    )
+    want2 = MethodOfLines.half_offset_centered_difference(
+        derivweights2.interpmap[args2[1]], CartesianIndex(1, k),
+        s2, [], (1, args2[1]), ud2, ufunc2
+    )
+    @test isequal(got2, want2)
+
+    # Fully pinned corner is the tensor product of the two axis interpolants.
+    u_c = MethodOfLines.safe_unwrap(u(t, 0, 0))
+    got_c = MethodOfLines.array_edge_aligned_boundary_value(
+        u_c, s2, ranges2, indexmap2, derivweights2
+    )
+    ws_x, taps_x = MethodOfLines.array_interp_weights_and_taps(
+        ud2, args2[1], 1, s2, derivweights2
+    )
+    ws_y, taps_y = MethodOfLines.array_interp_weights_and_taps(
+        ud2, args2[2], 1, s2, derivweights2
+    )
+    arr2 = MethodOfLines.array_variable(ud2, s2)
+    tw = []
+    ts = []
+    for combo in Iterators.product(eachindex(taps_x), eachindex(taps_y))
+        push!(tw, ws_x[combo[1]] * ws_y[combo[2]])
+        push!(ts, arr2[taps_x[combo[1]], taps_y[combo[2]]])
+    end
+    @test isequal(got_c, MethodOfLines.sym_dot(tw, ts))
+end
+
+@testset "Boundary value in interior on an edge-aligned grid (1D both edges)" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 0) - u(t, 1)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sol_arr, sys_arr = solve_discretized(
+        pdesys, [x => 0.05], t; disc_kwargs = (; grid_align = edge_align)
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 1
+    @test !leftover_bval(sys_arr, ("u(t, 0)", "u(t,0)", "u(t, 1)", "u(t,1)"))
+
+    counts = map([10, 40]) do n
+        disc = MOLFiniteDifference([x => n], t; grid_align = edge_align)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        (narrayeqs_interior(sys), interior_treesize(sys))
+    end
+    @test counts[1][1] == counts[2][1] == 1
+    @test counts[1][2] == counts[2][2]
+end
+
+@testset "Edge-aligned nonzero Dirichlet drives the interior" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1)
+    bcs = [u(0, x) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ exp(-t)]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    dxs = [x => 0.05]
+    disc = MOLFiniteDifference(dxs, t; grid_align = edge_align)
+    sys_arr, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys_arr) == 1
+    @test !leftover_bval(sys_arr, ("u(t, 1)", "u(t,1)"))
+
+    prob_arr = ode_discretize(pdesys, disc)
+    du_arr = similar(prob_arr.u0)
+    prob_arr.f(du_arr, prob_arr.u0, prob_arr.p, 0.0)
+    @test maximum(abs.(du_arr)) > 1
+
+    sol_arr, _ = solve_discretized(
+        pdesys, dxs, t; disc_kwargs = (; grid_align = edge_align)
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test maximum(abs.(sol_arr[u(t, x)])) > 0.05
+end
+
+@testset "Edge-aligned interpolation order is not hardcoded" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    # interpmap uses max(4, approx_order): 2 and 4 stay leftover-free with the
+    # same interpolant; 6 widens the stencil.
+    eqstrs = Dict{Int, String}()
+    for order in (2, 4, 6)
+        disc = MOLFiniteDifference(
+            [x => 0.05], t; approx_order = order, grid_align = edge_align
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        @test narrayeqs_interior(sys) == 1
+        @test !leftover_bval(sys, ("u(t, 1)", "u(t,1)"))
+        int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+        eqstrs[order] = string(int_eq)
+    end
+    @test eqstrs[6] != eqstrs[4]
+end
+
+@testset "Edge-aligned boundary value of a coupled variable" begin
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    eqs = [
+        Dt(u(t, x)) ~ Dxx(u(t, x)) + v(t, 1),
+        Dt(v(t, x)) ~ Dxx(v(t, x)) - u(t, x),
+    ]
+    bcs = [
+        u(0, x) ~ sinpi(x), v(0, x) ~ 0.0,
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+        v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
+    sol_arr, sys_arr = solve_discretized(
+        pdesys, [x => 0.05], t; disc_kwargs = (; grid_align = edge_align)
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 2
+    @test !leftover_bval(sys_arr, ("v(t, 1)", "v(t,1)"))
+end
+
+@testset "Edge-aligned boundary value on a nonuniform grid" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 1)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    gridvec = [0.5 * (1 - cospi(i / 20)) for i in 0:20]
+    sol_arr, sys_arr = solve_discretized(
+        pdesys, [x => gridvec], t; disc_kwargs = (; grid_align = edge_align)
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test narrayeqs_interior(sys_arr) == 1
+    @test !leftover_bval(sys_arr, ("u(t, 1)", "u(t,1)"))
+end
+
+@testset "Edge-aligned boundary value as upwind coefficient" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    eq = Dt(u(t, x)) ~ -u(t, 1) * Dx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ exp(-t)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    disc = MOLFiniteDifference([x => 0.05], t; grid_align = edge_align)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+    @test !leftover_bval(sys, ("u(t, 1)", "u(t,1)"))
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    @test maximum(abs.(du)) > 0
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Edge-aligned boundary value in a periodic direction" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 0)
+    bcs = [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    disc = MOLFiniteDifference([x => 0.05], t; grid_align = edge_align)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 1
+    @test !leftover_bval(sys, ("u(t, 0)", "u(t,0)"))
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    @test maximum(abs.(du)) > 0
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Edge-aligned face boundary value (2D)" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    bcs = [
+        u(0, x, y) ~ 0.0,
+        u(t, 0, y) ~ sinpi(y), u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    @named face_sys = PDESystem(
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(t, 0, y),
+        bcs, domains, [t, x, y], [u(t, x, y)]
+    )
+    sizes = map([8, 16]) do n
+        disc = MOLFiniteDifference(
+            [x => n, y => n], t; grid_align = edge_align
+        )
+        sys, _ = symbolic_discretize(face_sys, disc)
+        (narrayeqs_interior(sys), interior_treesize(sys), leftover_bval(sys, ("u(t, 0,", "u(t,0,")))
+    end
+    @test sizes[1][1] == sizes[2][1] == 1
+    @test sizes[1][2] == sizes[2][2]
+    @test !sizes[1][3] && !sizes[2][3]
+
+    dxs = [x => 0.1, y => 0.1]
+    disc = MOLFiniteDifference(dxs, t; grid_align = edge_align)
+    sys_arr, _ = symbolic_discretize(face_sys, disc)
+    @test narrayeqs_interior(sys_arr) == 1
+    @test !leftover_bval(sys_arr, ("u(t, 0,", "u(t,0,"))
+    face_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+    @test occursin("1:1", string(face_eq))
+
+    prob_arr = ode_discretize(face_sys, disc)
+    du_arr = similar(prob_arr.u0)
+    prob_arr.f(du_arr, prob_arr.u0, prob_arr.p, 0.0)
+    @test maximum(abs.(du_arr)) > 1
+
+    sol_arr, _ = solve_discretized(
+        face_sys, dxs, t; disc_kwargs = (; grid_align = edge_align)
+    )
+    @test SciMLBase.successful_retcode(sol_arr)
+    @test maximum(abs.(sol_arr[u(t, x, y)])) > 0.05
+end
+
+@testset "Edge-aligned face boundary value in a doubly periodic domain" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(t, 0, y)
+    bcs = [
+        u(0, x, y) ~ sinpi(2x) * sinpi(2y),
+        u(t, 0, y) ~ u(t, 1, y),
+        u(t, x, 0) ~ u(t, x, 1),
+    ]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+    dxs = [x => 0.2, y => 0.2]
+
+    disc = MOLFiniteDifference(dxs, t; grid_align = edge_align)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) >= 1
+    @test !leftover_bval(sys, ("u(t, 0,", "u(t,0,"))
+    wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
+    @test all(
+        e -> !occursin("u(t, 0,", string(e)) && !occursin("u(t,0,", string(e)),
+        wrap_eqs
+    )
+
+    counts = map([0.2, 0.1]) do dx
+        d = MOLFiniteDifference([x => dx, y => dx], t; grid_align = edge_align)
+        sy, _ = symbolic_discretize(pdesys, d)
+        narrayeqs_interior(sy)
+    end
+    @test counts[1] == counts[2]
+    @test counts[1] >= 1
+
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    @test all(isfinite, du)
+    sol = solve(prob, Rodas4())
+    @test SciMLBase.successful_retcode(sol)
+end
+
+@testset "Edge-aligned corner boundary value" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    domains = [
+        t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    corner_bcs = [
+        u(0, x, y) ~ 0.0,
+        u(t, 0, y) ~ 1.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 1.0, u(t, x, 1) ~ 0.0,
+    ]
+    @named corner_sys = PDESystem(
+        Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)) + u(t, 0, 0),
+        corner_bcs, domains, [t, x, y], [u(t, x, y)]
+    )
+    disc = MOLFiniteDifference(
+        [x => 0.1, y => 0.1], t; grid_align = edge_align
+    )
+    sys_corner, _ = symbolic_discretize(corner_sys, disc)
+    @test narrayeqs_interior(sys_corner) == 1
+    @test !leftover_bval(sys_corner, ("u(t, 0, 0)", "u(t,0,0)"))
+    prob_c = ode_discretize(corner_sys, disc)
+    du_c = similar(prob_c.u0)
+    prob_c.f(du_c, prob_c.u0, prob_c.p, 0.0)
+    @test maximum(abs.(du_c)) > 1
+    sol_c = solve(prob_c, Rodas4())
+    @test SciMLBase.successful_retcode(sol_c)
+end
+
+@testset "Edge-aligned and staggered boundary-value fallbacks" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    cases = [
+        (
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + Dx(u(t, 1)),
+            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        ),
+        (
+            Dt(u(t, x)) ~ Dxx(u(t, x)) + u(t, 0.5),
+            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        ),
+    ]
+    for (eq, bcs) in cases
+        @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+        sys, _ = symbolic_discretize(
+            pdesys, MOLFiniteDifference([x => 0.1], t; grid_align = edge_align)
+        )
+        @test narrayeqs_interior(sys) == 0
+    end
+
+    @parameters t x
+    @variables ρ(..) ϕ(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    L = 2.0
+    eq = [
+        Dt(ρ(t, x)) + Dx(ϕ(t, x)) + ρ(t, L) ~ 0,
+        Dt(ϕ(t, x)) + 25.0 * Dx(ρ(t, x)) ~ 0,
+    ]
+    bcs = [
+        ρ(0, x) ~ exp(-x^2), ϕ(0.0, x) ~ 0.0,
+        Dx(ρ(t, L)) ~ 0.0, ϕ(t, -L) ~ 0.0,
+    ]
+    domains_s = [t ∈ Interval(0.0, 0.1), x ∈ Interval(-L, L)]
+    @named stag = PDESystem(eq, bcs, domains_s, [t, x], [ρ(t, x), ϕ(t, x)])
+    disc = MOLFiniteDifference(
+        [x => 0.125], t; grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = ϕ(t, x)
+    )
+    sys, _ = symbolic_discretize(stag, disc)
+    # ρ carries the interior boundary value and falls back; ϕ stays in array form
+    @test narrayeqs_interior(sys) == 1
+end
+
+# Staggered grids: each variable's alignment fixes its interior stencil taps, so the
+# interior collapses to one array equation per PDE. Staggered problems build
+# SplitODEProblems without symbolic indexing, so solutions are compared positionally.
 
 @testset "Derivative of a boundary value in the interior (1D both edges)" begin
     @parameters t x
