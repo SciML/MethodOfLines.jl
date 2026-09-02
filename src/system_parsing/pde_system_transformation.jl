@@ -17,8 +17,16 @@ function PDEBase.transform_pde_system!(
             term, badterm, shouldexpand = descend_to_incompatible(eq.lhs, v)
             # Expand derivatives where possible
             if shouldexpand
+                expanded = expand_derivatives(term)
+                if isequal(expanded, term)
+                    throw(
+                        ArgumentError(
+                            "Could not expand derivatives in $term. If $badterm is a PDE unknown, add it to the PDESystem dependent-variable list."
+                        )
+                    )
+                end
                 @warn "Expanding derivatives in term $term."
-                rule = term => expand_derivatives(term)
+                rule = term => expanded
                 subs_alleqs!(eqs, bcs, rule)
                 done = false
                 break
