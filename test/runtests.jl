@@ -70,6 +70,9 @@ run_tests(;
             @safetestset "MTK Metadata" begin
                 include(joinpath(@__DIR__, "Components", "metadata.jl"))
             end
+            @safetestset "Missing dependent variable" begin
+                include(joinpath(@__DIR__, "Components", "missing_dependent_variable.jl"))
+            end
             return @safetestset "Discrete Callbacks" begin
                 include(joinpath(@__DIR__, "Components", "callbacks.jl"))
             end
