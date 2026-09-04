@@ -111,6 +111,125 @@ end
     @test maximum(abs.(sol_arr[u(t, x)] .- exact)) < 1.0e-2
 end
 
+# Parameterized calls keep `θ` whole.
+vecfn_scalar(u, θ) = θ[1] * u
+@register_symbolic vecfn_scalar(u, θ::AbstractVector)
+
+vecfn_array(u, θ) = [θ[1] * u]
+@register_array_symbolic vecfn_array(u::Real, θ::AbstractVector) begin
+    size = (1,)
+    eltype = Real
+end
+struct VectorFunctionWrapper end
+(::VectorFunctionWrapper)(u::Number, θ::AbstractVector) = [θ[1] * u]
+(::VectorFunctionWrapper)(u::AbstractVector, θ::AbstractVector) = [θ[1] * u[1]]
+const vecfn_wrapper = VectorFunctionWrapper()
+@parameters (vecfn_parameter::typeof(vecfn_wrapper))(..)[1:1] =
+    vecfn_wrapper [tunable = false]
+
+vecfn_rev(θ, u) = θ[1] * u
+@register_symbolic vecfn_rev(θ::AbstractVector, u)
+
+function test_parameterized_heat(source; parameters = Any[], map_name = nothing)
+    @parameters t x
+    @parameters θ[1:2] = [1.0, 0.0]
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + source(u(t, x), θ)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    ps = Any[parameters..., θ]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], ps)
+
+    disc = MOLFiniteDifference([x => 0.05], t)
+    sys_arr, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys_arr) == 1
+    if map_name !== nothing
+        int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
+        @test occursin(map_name, string(int_eq))
+    end
+    prob = discretize(pdesys, disc)
+    @test prob isa SciMLBase.DAEProblem
+    sol_arr = solve(prob)
+    @test successful_retcode(sol_arr)
+    xdisc = sol_arr[x]
+    tdisc = sol_arr[t]
+    exact = [exp((1 - pi^2) * ti) * sinpi(xi) for ti in tdisc, xi in xdisc]
+    @test maximum(abs.(sol_arr[u(t, x)] .- exact)) < 1.0e-2
+    return nothing
+end
+
+@testset "1D diffusion, array parameter as scalar coefficient" begin
+    test_parameterized_heat((u, θ) -> θ[1] * u)
+end
+
+@testset "1D diffusion with parameterized registered function" begin
+    test_parameterized_heat(
+        (u, θ) -> vecfn_scalar(u, θ); map_name = "array_map_callable("
+    )
+end
+
+@testset "1D diffusion with vector-valued registered function" begin
+    test_parameterized_heat(
+        (u, θ) -> vecfn_array(u, θ)[1];
+        map_name = "array_map_callable_getindex("
+    )
+end
+
+@testset "1D diffusion with callable vector parameter" begin
+    @test ModelingToolkitBase.isparameter(Symbolics.unwrap(vecfn_parameter))
+    test_parameterized_heat(
+        (u, θ) -> vecfn_parameter(u, θ)[1];
+        parameters = [vecfn_parameter],
+        map_name = "array_map_callable_getindex("
+    )
+end
+
+@testset "Unsupported vector-parameter call falls back" begin
+    @parameters t x
+    @parameters θ[1:2] = [1.0, 0.0]
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + vecfn_rev(θ, u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [θ])
+
+    disc = MOLFiniteDifference([x => 0.05], t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 0
+end
+
+@testset "Vector-input callable parameter falls back and solves" begin
+    @parameters t x
+    @parameters θ[1:2] = [1.0, 0.0]
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + vecfn_parameter([u(t, x)], θ)[1]
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(
+        eq, bcs, domains, [t, x], [u(t, x)], [vecfn_parameter, θ]
+    )
+
+    disc = MOLFiniteDifference([x => 0.05], t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 0
+    prob = discretize(pdesys, disc)
+    sol = solve(prob)
+    @test successful_retcode(sol)
+    xdisc = sol[x]
+    tdisc = sol[t]
+    exact = [exp((1 - pi^2) * ti) * sinpi(xi) for ti in tdisc, xi in xdisc]
+    @test maximum(abs.(sol[u(t, x)] .- exact)) < 1.0e-2
+end
+
 @testset "1D diffusion, Neumann and Robin BCs" begin
     @parameters t x
     @variables u(..)
