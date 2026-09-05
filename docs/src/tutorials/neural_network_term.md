@@ -103,3 +103,5 @@ plot!(us, [nn(ui, res.u)[1] for ui in us]; label = "NN(u)", lw = 3, linestyle = 
 ```
 
 The network matches the true term where the data covers `u` and drifts near `u = 0` and `u = 1`, where there is little data. Training takes a few minutes.
+
+The [Brusselator tutorial](@ref brusselator_ude) does the same with two fields as network input.
