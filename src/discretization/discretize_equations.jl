@@ -57,6 +57,9 @@
 # permuted and reshaped with singleton dimensions, matching `Idx`. A whole-domain
 # integrand with extra axes is a reduction (`array_integral_rules`), not a slice.
 #
+# Calls `f(u, θ)` map over the field slice without broadcasting `θ`.
+# `(f(u, θ))[i]` selects each point's output.
+#
 # Unsupported patterns fall back to pointwise equations: callbacks,
 # a higher-dimensional field whose extra axes are free (not a boundary
 # value and not an integral rank drop), derivatives of time-literals,
@@ -2805,6 +2808,49 @@ end
 # symbolic arrays and scalars of either kind.
 is_array_valued(x) = SymbolicUtils.symtype(safe_unwrap(x)) <: AbstractArray
 
+# Parameter arrays are not grid slices and are excluded from grid broadcasts.
+is_symbolic_parameter(x) = ModelingToolkitBase.isparameter(safe_unwrap(x))
+is_array_parameter(x) = is_array_valued(x) && is_symbolic_parameter(x)
+
+function is_field_parameter_call(args)
+    return length(args) == 2 && is_array_valued(args[1]) &&
+        !is_array_parameter(args[1]) && is_array_parameter(args[2])
+end
+
+array_map_callable(op, U::AbstractArray, θ) = map(ui -> op(ui, θ), U)
+Symbolics.@register_array_symbolic array_map_callable(
+    op::Any, U::AbstractArray, θ::AbstractArray
+) begin
+    size = size(U)
+    eltype = Real
+end
+
+array_map_callable_getindex(op, idx, U::AbstractArray, θ) =
+    map(ui -> getindex(op(ui, θ), idx), U)
+Symbolics.@register_array_symbolic array_map_callable_getindex(
+    op::Any, idx, U::AbstractArray, θ::AbstractArray
+) begin
+    size = size(U)
+    eltype = Real
+end
+
+function array_broadcast_call(op, newargs)
+    is_field_parameter_call(newargs) &&
+        return array_map_callable(op, newargs[1], newargs[2])
+    if any(is_array_parameter, newargs)
+        if op === getindex && length(newargs) == 2 &&
+                is_array_parameter(newargs[1]) && !is_array_valued(newargs[2])
+            return getindex(newargs[1], newargs[2])
+        end
+        throw(ArrayFormFallback("unhandled vector parameter in $op"))
+    end
+    any(is_array_valued, newargs) || return op(newargs...)
+    # `[u]` has no slice form; broadcasting the literal would wrap each point.
+    op isa Function && parentmodule(op) === SymbolicUtils && nameof(op) === :array_literal &&
+        throw(ArrayFormFallback("unhandled array literal of a field"))
+    return broadcast(op, newargs...)
+end
+
 function array_shape_donor(rules)
     for r in rules
         is_array_valued(r.second) && return r.second
@@ -2854,6 +2900,8 @@ matches a rule in `ctx.rules` (first match wins) and broadcasting any operation 
 receives an array-valued argument. Time differentials are applied directly to their
 (array-valued) arguments; any spatial differential that survives the rules means the
 expression contains a scheme this path does not support, so fall back.
+
+Calls `f(u, θ)` map over the field slice. Indexed calls select each point's output.
 """
 function arrayify(expr, ctx)
     expr = safe_unwrap(expr)
@@ -2872,16 +2920,29 @@ function arrayify(expr, ctx)
             throw(ArrayFormFallback("unhandled spatial derivative in $expr"))
         arg = arrayify(only(arguments(expr)), ctx)
         return op(arg)
-    elseif !(op isa Function)
+    end
+    # Index each point's callable output, not the mapped grid.
+    if op === getindex
+        args = arguments(expr)
+        if length(args) == 2
+            inner = safe_unwrap(args[1])
+            if iscall(inner)
+                iop = operation(inner)
+                if iop isa Function || is_symbolic_parameter(iop)
+                    iargs = [arrayify(a, ctx) for a in arguments(inner)]
+                    idx = arrayify(args[2], ctx)
+                    is_field_parameter_call(iargs) ||
+                        throw(ArrayFormFallback("unhandled callable getindex in $expr"))
+                    return array_map_callable_getindex(iop, idx, iargs[1], iargs[2])
+                end
+            end
+        end
+    end
+    if !(op isa Function) && !is_symbolic_parameter(op)
         # Symbolic operators (`Integral`, ...) cannot be broadcast over slices.
         throw(ArrayFormFallback("unhandled operation $op in $expr"))
     end
-    newargs = [arrayify(a, ctx) for a in arguments(expr)]
-    if any(is_array_valued, newargs)
-        return broadcast(op, newargs...)
-    else
-        return op(newargs...)
-    end
+    return array_broadcast_call(op, [arrayify(a, ctx) for a in arguments(expr)])
 end
 
 ####
