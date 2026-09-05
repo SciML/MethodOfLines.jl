@@ -123,6 +123,11 @@ run_tests(;
                 include(joinpath(@__DIR__, "Discretization", "problem_construction.jl"))
             end
         end,
+        # Own environment: ModelingToolkitNeuralNets pulls in Lux. Not part of "All".
+        "NeuralNets" => (;
+            env = joinpath(@__DIR__, "NeuralNets"),
+            body = joinpath(@__DIR__, "NeuralNets", "neural_network_terms.jl"),
+        ),
     ),
     qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),
     all = FUNCTIONAL_GROUPS,
