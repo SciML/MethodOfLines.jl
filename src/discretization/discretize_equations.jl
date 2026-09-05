@@ -2817,11 +2817,14 @@ function is_field_parameter_call(args)
         !is_array_parameter(args[1]) && is_array_parameter(args[2])
 end
 
+# Without ndims, promote_symtype returns Array{Real} and mtkcompile cannot
+# scalarize the term.
 array_map_callable(op, U::AbstractArray, θ) = map(ui -> op(ui, θ), U)
 Symbolics.@register_array_symbolic array_map_callable(
     op::Any, U::AbstractArray, θ::AbstractArray
 ) begin
     size = size(U)
+    ndims = ndims(U)
     eltype = Real
 end
 
@@ -2831,6 +2834,7 @@ Symbolics.@register_array_symbolic array_map_callable_getindex(
     op::Any, idx, U::AbstractArray, θ::AbstractArray
 ) begin
     size = size(U)
+    ndims = ndims(U)
     eltype = Real
 end
 

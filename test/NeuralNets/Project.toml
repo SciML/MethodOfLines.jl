@@ -1,0 +1,21 @@
+[deps]
+DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
+MethodOfLines = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
+ModelingToolkit = "961ee093-0014-501f-94e3-6117800e7a78"
+ModelingToolkitNeuralNets = "f162e290-f571-43a6-83d9-22ecc16da15f"
+OrdinaryDiffEq = "1dea7af3-3e70-54e6-95c3-0bf5283fa5ed"
+SciMLBase = "0bca4576-84f4-4d90-8ffe-ffa030f20462"
+SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+DomainSets = "0.7, 0.8"
+ModelingToolkit = "11.39.1"
+ModelingToolkitNeuralNets = "2.8"
+OrdinaryDiffEq = "7"
+SciMLBase = "3.48"
+SymbolicUtils = "4.34.3"
+Symbolics = "7.38"
+Test = "1"
+julia = "1.10"

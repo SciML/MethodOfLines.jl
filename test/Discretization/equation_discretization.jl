@@ -150,14 +150,20 @@ function test_parameterized_heat(source; parameters = Any[], map_name = nothing)
         int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys_arr)))
         @test occursin(map_name, string(int_eq))
     end
+    function matches_exact(sol)
+        exact = [exp((1 - pi^2) * ti) * sinpi(xi) for ti in sol[t], xi in sol[x]]
+        return maximum(abs.(sol[u(t, x)] .- exact)) < 1.0e-2
+    end
     prob = discretize(pdesys, disc)
     @test prob isa SciMLBase.DAEProblem
     sol_arr = solve(prob)
     @test successful_retcode(sol_arr)
-    xdisc = sol_arr[x]
-    tdisc = sol_arr[t]
-    exact = [exp((1 - pi^2) * ti) * sinpi(xi) for ti in tdisc, xi in xdisc]
-    @test maximum(abs.(sol_arr[u(t, x)] .- exact)) < 1.0e-2
+    @test matches_exact(sol_arr)
+    # Compiled ODE path: mtkcompile scalarizes the registered calls.
+    prob_ode = ode_discretize(pdesys, disc)
+    sol_ode = solve(prob_ode, Rodas4(); reltol = 1.0e-10, abstol = 1.0e-10)
+    @test successful_retcode(sol_ode)
+    @test matches_exact(sol_ode)
     return nothing
 end
 
