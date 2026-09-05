@@ -119,3 +119,5 @@ end
     @test (sol[x] == sol[y])
     @test (sol[y] isa StepRangeLen)
 end
+
+include("array_observables.jl")
