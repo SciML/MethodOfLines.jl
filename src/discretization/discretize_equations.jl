@@ -57,8 +57,10 @@
 # permuted and reshaped with singleton dimensions, matching `Idx`. A whole-domain
 # integrand with extra axes is a reduction (`array_integral_rules`), not a slice.
 #
-# Calls `f(u, θ)` map over the field slice without broadcasting `θ`.
-# `(f(u, θ))[i]` selects each point's output.
+# Calls `f(u, θ)` map over the field slice without broadcasting `θ`; `f([u, v], θ)`
+# stacks the slices along a leading axis (`array_stack`). `(f(...))[i]` selects each
+# point's output. Callables flagged by `batched_callable` receive the whole slice in
+# one call (Lux networks, through the ModelingToolkitNeuralNets extension).
 #
 # Unsupported patterns fall back to pointwise equations: callbacks,
 # a higher-dimensional field whose extra axes are free (not a boundary
@@ -2812,13 +2814,67 @@ is_array_valued(x) = SymbolicUtils.symtype(safe_unwrap(x)) <: AbstractArray
 is_symbolic_parameter(x) = ModelingToolkitBase.isparameter(safe_unwrap(x))
 is_array_parameter(x) = is_array_valued(x) && is_symbolic_parameter(x)
 
+is_field_slice(x) = is_array_valued(x) && !is_array_parameter(x)
+
 function is_field_parameter_call(args)
-    return length(args) == 2 && is_array_valued(args[1]) &&
-        !is_array_parameter(args[1]) && is_array_parameter(args[2])
+    return length(args) == 2 && is_field_slice(args[1]) && is_array_parameter(args[2])
 end
 
-# Without ndims, promote_symtype returns Array{Real} and mtkcompile cannot
-# scalarize the term.
+"""
+    batched_callable(f)
+
+Whether the symbolic callable parameter `f` evaluates all grid points in one call, one
+column per point, as Lux networks do. The default applies `f` point by point; the
+ModelingToolkitNeuralNets extension enables batching for its networks.
+"""
+batched_callable(@nospecialize(f)) = false
+
+# `[u, v]` inside a call arrives as `array_literal(shape, u, v)`.
+function is_array_literal_op(op)
+    return op isa Function && parentmodule(op) === SymbolicUtils &&
+        nameof(op) === :array_literal
+end
+is_array_literal(x) = (x = safe_unwrap(x); iscall(x) && is_array_literal_op(operation(x)))
+array_literal_elements(x) = arguments(safe_unwrap(x))[2:end]
+
+# The inputs of a call `f(input, θ)`: `θ` an array parameter kept whole, `input` a field
+# slice or `[u, v, ...]` stacked into a `(k, n...)` array. `nothing` for any other shape.
+function callable_inputs(args, ctx)
+    length(args) == 2 || return nothing
+    θ = arrayify(args[2], ctx)
+    is_array_parameter(θ) || return nothing
+    if is_array_literal(args[1])
+        slices = [arrayify(a, ctx) for a in array_literal_elements(args[1])]
+        isempty(slices) && return nothing
+        all(is_field_slice, slices) || return nothing
+        allequal(size(Symbolics.wrap(s)) for s in slices) || return nothing
+        X = foldl(array_stack, slices[2:end]; init = array_stack(slices[1]))
+        return X, θ, true
+    end
+    U = arrayify(args[1], ctx)
+    is_field_slice(U) || return nothing
+    return U, θ, false
+end
+
+# Registrations: `ndims` fixes the rank for `promote_symtype` (without it `mtkcompile`
+# cannot scalarize a rebuilt term), and the size rules must also hold for the shapes
+# `promote_shape` passes in.
+
+# Field slices stacked along a new leading axis: `(k, n...)` for `k` fields.
+array_stack(U::AbstractArray) = reshape(U, 1, size(U)...)
+Symbolics.@register_array_symbolic array_stack(U::AbstractArray) begin
+    size = (1, size(U)...)
+    ndims = ndims(U) + 1
+    eltype = Real
+end
+array_stack(X::AbstractArray, U::AbstractArray) = vcat(X, reshape(U, 1, size(U)...))
+Symbolics.@register_array_symbolic array_stack(X::AbstractArray, U::AbstractArray) begin
+    size = (last(size(X)[1]) + 1, size(U)...)
+    ndims = ndims(U) + 1
+    eltype = Real
+end
+
+# Point-by-point application.
 array_map_callable(op, U::AbstractArray, θ) = map(ui -> op(ui, θ), U)
 Symbolics.@register_array_symbolic array_map_callable(
     op::Any, U::AbstractArray, θ::AbstractArray
@@ -2838,6 +2894,48 @@ Symbolics.@register_array_symbolic array_map_callable_getindex(
     eltype = Real
 end
 
+# `X[:, I]` is one point's stacked inputs.
+stacked_points(X) = CartesianIndices(Base.tail(size(X)))
+array_map_callable_stacked(op, X::AbstractArray, θ) =
+    map(I -> op(X[:, I], θ), stacked_points(X))
+Symbolics.@register_array_symbolic array_map_callable_stacked(
+    op::Any, X::AbstractArray, θ::AbstractArray
+) begin
+    size = size(X)[2:end]
+    ndims = ndims(X) - 1
+    eltype = Real
+end
+array_map_callable_stacked_getindex(op, idx, X::AbstractArray, θ) =
+    map(I -> getindex(op(X[:, I], θ), idx), stacked_points(X))
+Symbolics.@register_array_symbolic array_map_callable_stacked_getindex(
+    op::Any, idx, X::AbstractArray, θ::AbstractArray
+) begin
+    size = size(X)[2:end]
+    ndims = ndims(X) - 1
+    eltype = Real
+end
+
+# Batched application: the callable sees every point at once and returns
+# `(outputs, n...)`.
+array_batch_callable_getindex(op, idx, U::AbstractArray, θ) =
+    collect(selectdim(op(reshape(U, 1, size(U)...), θ), 1, idx))
+Symbolics.@register_array_symbolic array_batch_callable_getindex(
+    op::Any, idx, U::AbstractArray, θ::AbstractArray
+) begin
+    size = size(U)
+    ndims = ndims(U)
+    eltype = Real
+end
+array_batch_callable_stacked_getindex(op, idx, X::AbstractArray, θ) =
+    collect(selectdim(op(X, θ), 1, idx))
+Symbolics.@register_array_symbolic array_batch_callable_stacked_getindex(
+    op::Any, idx, X::AbstractArray, θ::AbstractArray
+) begin
+    size = size(X)[2:end]
+    ndims = ndims(X) - 1
+    eltype = Real
+end
+
 function array_broadcast_call(op, newargs)
     is_field_parameter_call(newargs) &&
         return array_map_callable(op, newargs[1], newargs[2])
@@ -2850,8 +2948,7 @@ function array_broadcast_call(op, newargs)
     end
     any(is_array_valued, newargs) || return op(newargs...)
     # `[u]` has no slice form; broadcasting the literal would wrap each point.
-    op isa Function && parentmodule(op) === SymbolicUtils && nameof(op) === :array_literal &&
-        throw(ArrayFormFallback("unhandled array literal of a field"))
+    is_array_literal_op(op) && throw(ArrayFormFallback("unhandled array literal of a field"))
     return broadcast(op, newargs...)
 end
 
@@ -2905,7 +3002,9 @@ receives an array-valued argument. Time differentials are applied directly to th
 (array-valued) arguments; any spatial differential that survives the rules means the
 expression contains a scheme this path does not support, so fall back.
 
-Calls `f(u, θ)` map over the field slice. Indexed calls select each point's output.
+Calls `f(u, θ)` map over the field slice and `f([u, v], θ)` over the stacked slices;
+indexed calls select each point's output. Networks flagged by `batched_callable` are
+evaluated in one batched call.
 """
 function arrayify(expr, ctx)
     expr = safe_unwrap(expr)
@@ -2933,11 +3032,17 @@ function arrayify(expr, ctx)
             if iscall(inner)
                 iop = operation(inner)
                 if iop isa Function || is_symbolic_parameter(iop)
-                    iargs = [arrayify(a, ctx) for a in arguments(inner)]
-                    idx = arrayify(args[2], ctx)
-                    is_field_parameter_call(iargs) ||
+                    inputs = callable_inputs(arguments(inner), ctx)
+                    inputs === nothing &&
                         throw(ArrayFormFallback("unhandled callable getindex in $expr"))
-                    return array_map_callable_getindex(iop, idx, iargs[1], iargs[2])
+                    X, θ, stacked = inputs
+                    idx = arrayify(args[2], ctx)
+                    batched = batched_callable(iop)
+                    stacked && batched &&
+                        return array_batch_callable_stacked_getindex(iop, idx, X, θ)
+                    stacked && return array_map_callable_stacked_getindex(iop, idx, X, θ)
+                    batched && return array_batch_callable_getindex(iop, idx, X, θ)
+                    return array_map_callable_getindex(iop, idx, X, θ)
                 end
             end
         end
@@ -2945,6 +3050,12 @@ function arrayify(expr, ctx)
     if !(op isa Function) && !is_symbolic_parameter(op)
         # Symbolic operators (`Integral`, ...) cannot be broadcast over slices.
         throw(ArrayFormFallback("unhandled operation $op in $expr"))
+    end
+    if length(arguments(expr)) == 2 && is_array_literal(arguments(expr)[1])
+        inputs = callable_inputs(arguments(expr), ctx)
+        inputs === nothing && throw(ArrayFormFallback("unhandled array literal in $expr"))
+        X, θ, _ = inputs
+        return array_map_callable_stacked(op, X, θ)
     end
     return array_broadcast_call(op, [arrayify(a, ctx) for a in arguments(expr)])
 end
