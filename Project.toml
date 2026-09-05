@@ -21,6 +21,12 @@ SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 
+[weakdeps]
+ModelingToolkitNeuralNets = "f162e290-f571-43a6-83d9-22ecc16da15f"
+
+[extensions]
+MethodOfLinesModelingToolkitNeuralNetsExt = "ModelingToolkitNeuralNets"
+
 [compat]
 Combinatorics = "1"
 DiffEqBase = "7.18.1"
@@ -31,6 +37,7 @@ Latexify = "0.16"
 LinearAlgebra = "1"
 ModelingToolkit = "11.39.1"
 ModelingToolkitBase = "1.67"
+ModelingToolkitNeuralNets = "2.8"
 NonlinearSolve = "4"
 OrdinaryDiffEq = "7"
 OrdinaryDiffEqLowOrderRK = "2"

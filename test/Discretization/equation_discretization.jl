@@ -210,7 +210,7 @@ end
     @test narrayeqs_interior(sys) == 0
 end
 
-@testset "Vector-input callable parameter falls back and solves" begin
+@testset "Vector-input callable parameter maps over the stacked field" begin
     @parameters t x
     @parameters θ[1:2] = [1.0, 0.0]
     @variables u(..)
@@ -226,7 +226,9 @@ end
 
     disc = MOLFiniteDifference([x => 0.05], t)
     sys, _ = symbolic_discretize(pdesys, disc)
-    @test narrayeqs_interior(sys) == 0
+    @test narrayeqs_interior(sys) == 1
+    int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+    @test occursin("array_map_callable_stacked_getindex(", string(int_eq))
     prob = discretize(pdesys, disc)
     sol = solve(prob)
     @test successful_retcode(sol)
@@ -234,6 +236,120 @@ end
     tdisc = sol[t]
     exact = [exp((1 - pi^2) * ti) * sinpi(xi) for ti in tdisc, xi in xdisc]
     @test maximum(abs.(sol[u(t, x)] .- exact)) < 1.0e-2
+end
+
+# Vector-input calls stack the field slices; the callable sees one point's values.
+vecfn_prod(x, θ) = θ[1] * x[1] * x[2]
+@register_symbolic vecfn_prod(x::AbstractVector, θ::AbstractVector)
+struct VectorPairWrapper end
+function (::VectorPairWrapper)(x::AbstractVector, θ::AbstractVector)
+    return [θ[1] * x[1] * x[2], -θ[1] * x[1] * x[2]]
+end
+const vecfn_pair = VectorPairWrapper()
+@parameters (vecfn_pair_parameter::typeof(vecfn_pair))(..)[1:2] =
+    vecfn_pair [tunable = false]
+
+@testset "Two-field reaction terms through stacked calls" begin
+    @parameters t x
+    @parameters θ[1:2] = [1.0, 0.0]
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    bcs = [
+        u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0,
+        v(0, x) ~ 0.5 * sinpi(x), v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    disc = MOLFiniteDifference([x => 0.05], t)
+    function system(ru, rv, ps, name)
+        eqs = [Dt(u(t, x)) ~ Dxx(u(t, x)) + ru, Dt(v(t, x)) ~ Dxx(v(t, x)) + rv]
+        return PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)], ps; name)
+    end
+    solve_tight(prob) = solve(prob; abstol = 1.0e-10, reltol = 1.0e-10, saveat = 0.05)
+
+    uv = θ[1] * u(t, x) * v(t, x)
+    sol_ref = solve_tight(discretize(system(uv, -uv, [θ], :ref), disc))
+    scalar_uv = vecfn_prod([u(t, x), v(t, x)], θ)
+    pair_uv = vecfn_pair_parameter([u(t, x), v(t, x)], θ)
+    cases = (
+        (system(scalar_uv, -scalar_uv, [θ], :scalar), "array_map_callable_stacked("),
+        (
+            system(pair_uv[1], pair_uv[2], [vecfn_pair_parameter, θ], :pair),
+            "array_map_callable_stacked_getindex(",
+        ),
+    )
+    for (pdesys, fname) in cases
+        sys, _ = symbolic_discretize(pdesys, disc)
+        interior = filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys))
+        @test length(interior) == 2
+        @test all(eq -> occursin(fname, string(eq)), interior)
+        sol = solve_tight(discretize(pdesys, disc))
+        @test successful_retcode(sol)
+        @test maximum(abs.(sol[u(t, x)] .- sol_ref[u(t, x)])) < 1.0e-8
+        @test maximum(abs.(sol[v(t, x)] .- sol_ref[v(t, x)])) < 1.0e-8
+        sol_ode = solve(
+            ode_discretize(pdesys, disc), Rodas4();
+            abstol = 1.0e-10, reltol = 1.0e-10, saveat = 0.05
+        )
+        @test successful_retcode(sol_ode)
+        @test maximum(abs.(sol_ode[u(t, x)] .- sol_ref[u(t, x)])) < 1.0e-6
+    end
+end
+
+@testset "Stacked inputs need field slices of one shape" begin
+    @parameters t x
+    @parameters θ[1:2] = [1.0, 0.0]
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + vecfn_prod([u(t, x), 1.0], θ)
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [θ])
+
+    disc = MOLFiniteDifference([x => 0.05], t)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 0
+    sol = solve(discretize(pdesys, disc))
+    @test successful_retcode(sol)
+    exact = [exp((1 - pi^2) * ti) * sinpi(xi) for ti in sol[t], xi in sol[x]]
+    @test maximum(abs.(sol[u(t, x)] .- exact)) < 1.0e-2
+end
+
+@testset "Stacked call on a 2D grid" begin
+    @parameters t x y
+    @parameters θ[1:2] = [1.0, 0.0]
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    lap(w) = Dxx(w) + Dyy(w)
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * sinpi(y), v(0, x, y) ~ 0.5 * sinpi(x) * sinpi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0, u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        v(t, 0, y) ~ 0.0, v(t, 1, y) ~ 0.0, v(t, x, 0) ~ 0.0, v(t, x, 1) ~ 0.0,
+    ]
+    disc = MOLFiniteDifference([x => 0.2, y => 0.2], t)
+    function system(ru, rv, ps, name)
+        eqs = [
+            Dt(u(t, x, y)) ~ lap(u(t, x, y)) + ru, Dt(v(t, x, y)) ~ lap(v(t, x, y)) + rv,
+        ]
+        return PDESystem(eqs, bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)], ps; name)
+    end
+    solve_tight(prob) = solve(prob; abstol = 1.0e-10, reltol = 1.0e-10, saveat = 0.05)
+
+    uv = θ[1] * u(t, x, y) * v(t, x, y)
+    sol_ref = solve_tight(discretize(system(uv, -uv, [θ], :ref2d), disc))
+    pair_uv = vecfn_pair_parameter([u(t, x, y), v(t, x, y)], θ)
+    pdesys = system(pair_uv[1], pair_uv[2], [vecfn_pair_parameter, θ], :pair2d)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 2
+    sol = solve_tight(discretize(pdesys, disc))
+    @test successful_retcode(sol)
+    @test maximum(abs.(sol[u(t, x, y)] .- sol_ref[u(t, x, y)])) < 1.0e-8
+    @test maximum(abs.(sol[v(t, x, y)] .- sol_ref[v(t, x, y)])) < 1.0e-8
 end
 
 @testset "1D diffusion, Neumann and Robin BCs" begin
