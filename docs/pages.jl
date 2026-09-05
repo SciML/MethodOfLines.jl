@@ -6,6 +6,7 @@ pages = [
         "tutorials/nonuniform_weno.md",
         "tutorials/weno_showcase.md",
         "tutorials/params.md",
+        "tutorials/neural_network_term.md",
         "tutorials/heatss.md",
         "tutorials/sispde.md",
         "tutorials/icbc_sampled.md",
