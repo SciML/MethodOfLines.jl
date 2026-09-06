@@ -159,6 +159,24 @@ end
     @test maximum(abs.(sol_ode[u(t, x)] .- sol[u(t, x)])) < 1.0e-6
 end
 
+@testset "Scalar inputs stack with the field" begin
+    for extra in (x, t)
+        function one_field(net, ps, name)
+            eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + net([u(t, x), extra], ps[end])[1]
+            return PDESystem(eq, heat_bcs(u), domains, [t, x], [u(t, x)], ps; name)
+        end
+        pdesys = one_field(NN2, [NN2, θ2], :nn_scalar)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        @test narrayeqs_interior(sys) == 1
+        interior = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+        @test occursin("array_batch_callable_stacked_getindex(", string(interior))
+        sol = solve_tight(discretize(pdesys, disc))
+        @test successful_retcode(sol)
+        sol_pp = solve_tight(discretize(one_field(NN2pp, [NN2pp, θ2], :nn_scalar_pp), disc))
+        @test maximum(abs.(sol[u(t, x)] .- sol_pp[u(t, x)])) < 1.0e-8
+    end
+end
+
 @testset "Brusselator with a network term" begin
     α = 0.1
     uv = NN2([u(t, x), v(t, x)], θ2)

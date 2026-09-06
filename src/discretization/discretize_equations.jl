@@ -58,7 +58,8 @@
 # integrand with extra axes is a reduction (`array_integral_rules`), not a slice.
 #
 # Calls `f(u, θ)` map over the field slice without broadcasting `θ`; `f([u, v], θ)`
-# stacks the slices along a leading axis (`array_stack`). `(f(...))[i]` selects each
+# stacks the slices along a leading axis (`array_stack`), scalars and lower-dimensional
+# arrays in the literal broadcast onto the slice first. `(f(...))[i]` selects each
 # point's output. Callables flagged by `batched_callable` receive the whole slice in
 # one call (Lux networks, through the ModelingToolkitNeuralNets extension).
 #
@@ -2837,18 +2838,36 @@ end
 is_array_literal(x) = (x = safe_unwrap(x); iscall(x) && is_array_literal_op(operation(x)))
 array_literal_elements(x) = arguments(safe_unwrap(x))[2:end]
 
+# Whether `x` broadcasts onto an array of size `shape`: a scalar, or an array whose
+# dimensions are 1 or equal to the target's.
+function array_broadcasts_onto(x, shape)
+    is_array_valued(x) || return true
+    sz = size(Symbolics.wrap(x))
+    return length(sz) <= length(shape) &&
+        all(i -> sz[i] == 1 || sz[i] == shape[i], eachindex(sz))
+end
+
 # The inputs of a call `f(input, θ)`: `θ` an array parameter kept whole, `input` a field
-# slice or `[u, v, ...]` stacked into a `(k, n...)` array. `nothing` for any other shape.
+# slice or `[u, v, ...]` stacked into a `(k, n...)` array. Scalars (`t`, parameters,
+# time-only dependents, numbers) and lower-dimensional arrays in the literal are
+# broadcast onto the core slice; array parameters are not. `nothing` for any other shape.
 function callable_inputs(args, ctx)
     length(args) == 2 || return nothing
     θ = arrayify(args[2], ctx)
     is_array_parameter(θ) || return nothing
     if is_array_literal(args[1])
-        slices = [arrayify(a, ctx) for a in array_literal_elements(args[1])]
+        elements = [arrayify(a, ctx) for a in array_literal_elements(args[1])]
+        any(is_array_parameter, elements) && return nothing
+        slices = filter(is_field_slice, elements)
         isempty(slices) && return nothing
-        all(is_field_slice, slices) || return nothing
-        allequal(size(Symbolics.wrap(s)) for s in slices) || return nothing
-        X = foldl(array_stack, slices[2:end]; init = array_stack(slices[1]))
+        donor = argmax(e -> length(Symbolics.wrap(e)), slices)
+        shape = size(Symbolics.wrap(donor))
+        all(e -> array_broadcasts_onto(e, shape), elements) || return nothing
+        stacked = map(elements) do e
+            is_field_slice(e) && size(Symbolics.wrap(e)) == shape && return e
+            return array_broadcast_onto(e, donor)
+        end
+        X = foldl(array_stack, stacked[2:end]; init = array_stack(stacked[1]))
         return X, θ, true
     end
     U = arrayify(args[1], ctx)
@@ -3002,9 +3021,9 @@ receives an array-valued argument. Time differentials are applied directly to th
 (array-valued) arguments; any spatial differential that survives the rules means the
 expression contains a scheme this path does not support, so fall back.
 
-Calls `f(u, θ)` map over the field slice and `f([u, v], θ)` over the stacked slices;
-indexed calls select each point's output. Networks flagged by `batched_callable` are
-evaluated in one batched call.
+Calls `f(u, θ)` map over the field slice and `f([u, v], θ)` over the stacked slices,
+scalars in the literal broadcast onto the slice; indexed calls select each point's
+output. Networks flagged by `batched_callable` are evaluated in one batched call.
 """
 function arrayify(expr, ctx)
     expr = safe_unwrap(expr)

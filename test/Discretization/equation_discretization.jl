@@ -241,6 +241,8 @@ end
 # Vector-input calls stack the field slices; the callable sees one point's values.
 vecfn_prod(x, θ) = θ[1] * x[1] * x[2]
 @register_symbolic vecfn_prod(x::AbstractVector, θ::AbstractVector)
+vecfn_nested(x, θ) = θ[1] * x[1] * x[2][1]
+@register_symbolic vecfn_nested(x::AbstractVector, θ::AbstractVector)
 struct VectorPairWrapper end
 function (::VectorPairWrapper)(x::AbstractVector, θ::AbstractVector)
     return [θ[1] * x[1] * x[2], -θ[1] * x[1] * x[2]]
@@ -296,14 +298,73 @@ const vecfn_pair = VectorPairWrapper()
     end
 end
 
-@testset "Stacked inputs need field slices of one shape" begin
+@testset "Scalars stack with the field slice" begin
+    @parameters t x
+    @parameters θ[1:2] = [1.0, 0.0]
+    @parameters k = 0.5
+    @variables u(..) S(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    disc = MOLFiniteDifference([x => 0.05], t)
+    solve_tight(prob) = solve(prob; abstol = 1.0e-10, reltol = 1.0e-10, saveat = 0.05)
+    function system(reaction, ps, name; eqs = Equation[], bcs = bcs, dvs = [u(t, x)])
+        eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + reaction
+        return PDESystem(vcat(eq, eqs), bcs, domains, [t, x], dvs, ps; name)
+    end
+    # (stacked input, its symbolic form, parameters)
+    cases = (
+        (x, x, [θ]), (t, t, [θ]), (k, k, [k, θ]), (1.0, 1.0, [θ]),
+    )
+    for (input, factor, ps) in cases
+        ref = system(θ[1] * u(t, x) * factor, ps, :ref)
+        stacked = system(vecfn_prod([u(t, x), input], θ), ps, :stacked)
+        sys, _ = symbolic_discretize(stacked, disc)
+        @test narrayeqs_interior(sys) == 1
+        int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+        @test occursin("array_map_callable_stacked(", string(int_eq))
+        sol_ref = solve_tight(discretize(ref, disc))
+        sol = solve_tight(discretize(stacked, disc))
+        @test successful_retcode(sol)
+        @test maximum(abs.(sol[u(t, x)] .- sol_ref[u(t, x)])) < 1.0e-8
+    end
+    # compiled ODE path
+    stacked = system(vecfn_prod([u(t, x), t], θ), [θ], :stacked_ode)
+    ref = system(θ[1] * u(t, x) * t, [θ], :ref_ode)
+    sol_ode = solve(
+        ode_discretize(stacked, disc), Rodas4();
+        abstol = 1.0e-10, reltol = 1.0e-10, saveat = 0.05
+    )
+    sol_ref = solve_tight(discretize(ref, disc))
+    @test successful_retcode(sol_ode)
+    @test maximum(abs.(sol_ode[u(t, x)] .- sol_ref[u(t, x)])) < 1.0e-6
+    # a time-only dependent is a scalar too
+    ode = [Dt(S(t)) ~ -S(t)]
+    bcs_S = vcat(bcs, S(0) ~ 1.0)
+    ref = system(
+        θ[1] * u(t, x) * S(t), [θ], :ref_S; eqs = ode, bcs = bcs_S, dvs = [u(t, x), S(t)]
+    )
+    stacked = system(
+        vecfn_prod([u(t, x), S(t)], θ), [θ], :stacked_S; eqs = ode, bcs = bcs_S,
+        dvs = [u(t, x), S(t)]
+    )
+    sys, _ = symbolic_discretize(stacked, disc)
+    @test narrayeqs_interior(sys) == 1
+    sol_ref = solve_tight(discretize(ref, disc))
+    sol = solve_tight(discretize(stacked, disc))
+    @test successful_retcode(sol)
+    @test maximum(abs.(sol[u(t, x)] .- sol_ref[u(t, x)])) < 1.0e-8
+end
+
+@testset "Array parameters do not stack" begin
     @parameters t x
     @parameters θ[1:2] = [1.0, 0.0]
     @variables u(..)
     Dt = Differential(t)
     Dxx = Differential(x)^2
 
-    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + vecfn_prod([u(t, x), 1.0], θ)
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x)) + vecfn_nested([u(t, x), θ], θ)
     bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
     domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [θ])
@@ -350,6 +411,32 @@ end
     @test successful_retcode(sol)
     @test maximum(abs.(sol[u(t, x, y)] .- sol_ref[u(t, x, y)])) < 1.0e-8
     @test maximum(abs.(sol[v(t, x, y)] .- sol_ref[v(t, x, y)])) < 1.0e-8
+
+    # The coordinate arrays broadcast onto the 2D slice.
+    ux = θ[1] * u(t, x, y) * x
+    sol_ref = solve_tight(discretize(system(ux, -ux, [θ], :ref2d_x), disc))
+    stacked_x = vecfn_prod([u(t, x, y), x], θ)
+    pdesys = system(stacked_x, -stacked_x, [θ], :stacked2d_x)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 2
+    sol = solve_tight(discretize(pdesys, disc))
+    @test successful_retcode(sol)
+    @test maximum(abs.(sol[u(t, x, y)] .- sol_ref[u(t, x, y)])) < 1.0e-8
+
+    # So does a lower-dimensional field.
+    @variables w(..)
+    bcs_w = vcat(bcs[1:1], bcs[3:6], w(0, x) ~ sinpi(x), w(t, 0) ~ 0.0, w(t, 1) ~ 0.0)
+    function system_w(reaction, name)
+        eqs = [Dt(u(t, x, y)) ~ lap(u(t, x, y)) + reaction, Dt(w(t, x)) ~ Dxx(w(t, x))]
+        return PDESystem(eqs, bcs_w, domains, [t, x, y], [u(t, x, y), w(t, x)], [θ]; name)
+    end
+    sol_ref = solve_tight(discretize(system_w(θ[1] * u(t, x, y) * w(t, x), :ref2d_w), disc))
+    pdesys = system_w(vecfn_prod([u(t, x, y), w(t, x)], θ), :stacked2d_w)
+    sys, _ = symbolic_discretize(pdesys, disc)
+    @test narrayeqs_interior(sys) == 2
+    sol = solve_tight(discretize(pdesys, disc))
+    @test successful_retcode(sol)
+    @test maximum(abs.(sol[u(t, x, y)] .- sol_ref[u(t, x, y)])) < 1.0e-8
 end
 
 @testset "1D diffusion, Neumann and Robin BCs" begin
