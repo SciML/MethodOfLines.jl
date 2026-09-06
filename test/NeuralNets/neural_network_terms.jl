@@ -223,3 +223,55 @@ end
     sol = solve(discretize(pdesys, disc2); saveat = 0.05)
     @test successful_retcode(sol)
 end
+
+@testset "Network diffusion coefficients" begin
+    Dx = Differential(x)
+    # Small outputs keep the diffusivity `1 + NN` positive.
+    NNc, θc = SymbolicNeuralNetwork(;
+        n_input = 1, n_output = 1,
+        chain = multi_layer_feed_forward(1, 1; initial_scaling_factor = 0.1),
+        nn_name = :NNc, nn_p_name = :θc
+    )
+    nnc_wrapper = ModelingToolkit.getdefault(NNc)
+    @parameters (NNcpp::typeof(nnc_wrapper))(..)[1:1] = nnc_wrapper [tunable = false]
+    NNx, θx = SymbolicNeuralNetwork(;
+        n_input = 2, n_output = 1,
+        chain = multi_layer_feed_forward(2, 1; initial_scaling_factor = 0.1),
+        nn_name = :NNx, nn_p_name = :θx
+    )
+    nnx_wrapper = ModelingToolkit.getdefault(NNx)
+    @parameters (NNxpp::typeof(nnx_wrapper))(..)[1:1] = nnx_wrapper [tunable = false]
+    function system(rhs, ps, name)
+        return PDESystem(
+            Dt(u(t, x)) ~ rhs, heat_bcs(u), domains, [t, x], [u(t, x)], ps; name
+        )
+    end
+    # (right-hand side for a network, batched network, point-by-point twin, parameters,
+    # function in the interior equation)
+    cases = (
+        (
+            net -> Dx((1 + net(u(t, x), θc)[1]) * Dx(u(t, x))), NNc, NNcpp, θc,
+            "array_batch_callable_getindex(",
+        ),
+        (
+            net -> Dx((1 + net([u(t, x), x], θx)[1]) * Dx(u(t, x))), NNx, NNxpp, θx,
+            "array_batch_callable_stacked_getindex(",
+        ),
+        (
+            net -> (1 + net([u(t, x), x], θx)[1]) * Dxx(u(t, x)), NNx, NNxpp, θx,
+            "array_batch_callable_stacked_getindex(",
+        ),
+    )
+    for (rhs, net, netpp, ps, fname) in cases
+        pdesys = system(rhs(net), [net, ps], :nn_coefficient)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        @test narrayeqs_interior(sys) == 1
+        int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+        @test occursin(fname, string(int_eq))
+        sol = solve_tight(discretize(pdesys, disc))
+        @test successful_retcode(sol)
+        pdesys_pp = system(rhs(netpp), [netpp, ps], :nn_coefficient_pp)
+        sol_pp = solve_tight(discretize(pdesys_pp, disc))
+        @test maximum(abs.(sol[u(t, x)] .- sol_pp[u(t, x)])) < 1.0e-8
+    end
+end
