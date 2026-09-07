@@ -6,6 +6,7 @@ using SciMLBase
 using DiffEqBase: BrownFullBasicInit, ShampineCollocationInit
 using OrdinaryDiffEqRosenbrock: Rodas4
 using ModelingToolkit: get_eqs
+import ModelingToolkitBase
 using SymbolicUtils: symtype
 using Test
 
@@ -307,4 +308,37 @@ end
     derivative = MethodOfLines.brown_init_offenders(build([D(a) ~ 0.0]))
     @test length(derivative) == 1
     @test occursin("time derivative", last(only(derivative)))
+end
+
+@testset "discretized system carries its own tspan" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.7), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    sys, tspan = symbolic_discretize(pdesys, mol_disc([x => 11], t))
+    # the tuple is still returned; the system now carries the span as well
+    @test tspan == (0.0, 0.7)
+    @test ModelingToolkitBase.get_tspan(sys) == (0.0, 0.7)
+    @test ODEProblem(mtkcompile(sys), nothing).tspan == (0.0, 0.7)
+end
+
+@testset "stationary discretization has no tspan" begin
+    @parameters x
+    @variables u(..)
+    Dxx = Differential(x)^2
+
+    @named pdesys = PDESystem(
+        [Dxx(u(x)) ~ 0.0], [u(0.0) ~ 0.0, u(1.0) ~ 1.0],
+        [x ∈ Interval(0.0, 1.0)], [x], [u(x)]
+    )
+
+    sys, tspan = symbolic_discretize(pdesys, MOLFiniteDifference([x => 11]))
+    @test tspan === nothing
+    @test ModelingToolkitBase.get_tspan(sys) === nothing
 end

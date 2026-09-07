@@ -96,6 +96,13 @@ prob = ODEProblem(mtkcompile(sys), nothing, tspan)
 sol = solve(prob, Tsit5())
 ```
 
+The discretized system also carries the time span itself, so `tspan` can be left out and
+the problem still spans the `PDESystem`'s time domain:
+
+```julia
+prob = ODEProblem(mtkcompile(sys), nothing)
+```
+
 Note that `mtkcompile` scalarizes the array equations, so this path gives up the scaling
 benefit of the array form. Prefer `discretize` unless you specifically need an
 `ODEProblem` or an explicit time-stepping method.
