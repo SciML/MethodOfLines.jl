@@ -988,6 +988,65 @@ end
     @test narrayeqs_interior(sys_arr) == 1
 end
 
+# A callable diffusion coefficient stays in array form: inside `Dx(a Dx(u))` it is
+# evaluated on the half-point slices, in front of `Dxx(u)` on the interior.
+coef_linear(u, θ) = 1 + θ[1] * u
+@register_symbolic coef_linear(u, θ::AbstractVector)
+
+@testset "Callable diffusion coefficients" begin
+    @parameters t x
+    @parameters θ[1:2] = [0.5, 0.0]
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    disc = MOLFiniteDifference([x => 0.05], t)
+    solve_tight(prob) = solve(prob; abstol = 1.0e-10, reltol = 1.0e-10, saveat = 0.02)
+    function system(rhs, name)
+        return PDESystem(Dt(u(t, x)) ~ rhs, bcs, domains, [t, x], [u(t, x)], [θ]; name)
+    end
+    nscalar_interior(sys) = count(!isarrayeq, filter(isinterioreq, get_eqs(sys)))
+
+    a_call = coef_linear(u(t, x), θ)
+    a_sym = 1 + θ[1] * u(t, x)
+    ax_call = 1 + vecfn_prod([u(t, x), x], θ)
+    ax_sym = 1 + θ[1] * u(t, x) * x
+    # (callable form, symbolic form, function in the interior equation)
+    cases = (
+        (Dx(a_call * Dx(u(t, x))), Dx(a_sym * Dx(u(t, x))), "array_map_callable("),
+        (a_call * Dxx(u(t, x)), a_sym * Dxx(u(t, x)), "array_map_callable("),
+        (
+            Dx(ax_call * Dx(u(t, x))), Dx(ax_sym * Dx(u(t, x))),
+            "array_map_callable_stacked(",
+        ),
+    )
+    for (rhs_call, rhs_sym, fname) in cases
+        pdesys = system(rhs_call, :callable)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        @test narrayeqs_interior(sys) == 1
+        int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+        @test occursin(fname, string(int_eq))
+        # Frame points stay pointwise; their count does not grow with the grid.
+        sys_fine, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => 0.025], t))
+        @test nscalar_interior(sys_fine) == nscalar_interior(sys)
+        sol = solve_tight(discretize(pdesys, disc))
+        sol_ref = solve_tight(discretize(system(rhs_sym, :symbolic), disc))
+        @test successful_retcode(sol)
+        @test maximum(abs.(sol[u(t, x)] .- sol_ref[u(t, x)])) < 1.0e-8
+    end
+    # compiled ODE path
+    pdesys = system(Dx(a_call * Dx(u(t, x))), :callable_ode)
+    sol_ode = solve(
+        ode_discretize(pdesys, disc), Rodas4();
+        abstol = 1.0e-10, reltol = 1.0e-10, saveat = 0.02
+    )
+    sol_ref = solve_tight(discretize(system(Dx(a_sym * Dx(u(t, x))), :symbolic_ode), disc))
+    @test successful_retcode(sol_ode)
+    @test maximum(abs.(sol_ode[u(t, x)] .- sol_ref[u(t, x)])) < 1.0e-6
+end
+
 @testset "1D spherical laplacian" begin
     # Cardinalization rewrites Dt(u) ~ Dr(r^2*Dr(u))/r^2 with a Mul numerator, the shape
     # the pointwise path discretizes through the nonlinear laplacian rules: r^2 enters at
