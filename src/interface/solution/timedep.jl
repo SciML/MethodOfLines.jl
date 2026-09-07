@@ -16,6 +16,26 @@ function SciMLBase.PDETimeSeriesSolution(
     return sol
 end
 
+function array_observed_solution(sol, discu, observed_equations)
+    for eq in observed_equations
+        lhs = Symbolics.wrap(eq.lhs)
+        lhs isa AbstractArray || continue
+        size(lhs) == size(discu) || continue
+        entries = Symbolics.scalarize(lhs)
+        all(isequal(safe_unwrap(entries[I]), safe_unwrap(discu[I])) for I in CartesianIndices(discu)) || continue
+        evaluator = SymbolicIndexingInterface.observed(sol, eq.lhs)
+        values = evaluator.(
+            SymbolicIndexingInterface.state_values(sol),
+            (SymbolicIndexingInterface.parameter_values(sol),),
+            SymbolicIndexingInterface.current_time(sol)
+        )
+        return map(CartesianIndices(discu)) do I
+            getindex.(values, (I,))
+        end
+    end
+    return nothing
+end
+
 function SciMLBase.PDETimeSeriesSolution(
         sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata
     ) where {T}
@@ -32,13 +52,15 @@ function SciMLBase.PDETimeSeriesSolution(
         # Reshape the solution to flat arrays, faster to do this eagerly.
         umap = mapreduce(vcat, dvs) do u
             let discu = discretespace.discvars[u]
-                solu = map(CartesianIndices(discu)) do I
-                    i = sym_to_index(discu[I], solved_unknowns)
-                    # Handle Observed
-                    if i !== nothing
-                        sol[i, :]
-                    else
-                        SciMLBase.observed(sol, safe_unwrap(discu[I]), :)
+                solu = array_observed_solution(sol, discu, ModelingToolkitBase.observed(odesys))
+                if solu === nothing
+                    solu = map(CartesianIndices(discu)) do I
+                        i = sym_to_index(discu[I], solved_unknowns)
+                        if i !== nothing
+                            sol[i, :]
+                        else
+                            SciMLBase.observed(sol, safe_unwrap(discu[I]), :)
+                        end
                     end
                 end
                 # Correct placement of time axis
