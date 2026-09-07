@@ -1,6 +1,12 @@
 [Components]
 versions = ["lts", "1", "pre"]
 
+["Components 32-bit"]
+group = "Components"
+versions = ["1"]
+os = ["ubuntu-latest"]
+arch = "x86"
+
 [Sol_Interface]
 versions = ["lts", "1", "pre"]
 
