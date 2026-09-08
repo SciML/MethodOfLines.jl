@@ -155,3 +155,5 @@ plot!(identity, 0, maximum(uv_true); label = "", color = :black)
 ```
 
 The learned reaction is within about one percent of `u^2 v` in relative L2 norm on the points the data visits; away from them the network is unconstrained. The fit and the refinement take a few minutes together.
+
+The [two-dimensional tutorial](@ref brusselator_ude_2d) puts the same network into the two-dimensional Brusselator.
