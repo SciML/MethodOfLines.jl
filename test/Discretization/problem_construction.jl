@@ -3,6 +3,7 @@
 
 using MethodOfLines, ModelingToolkit, OrdinaryDiffEq, DomainSets, Symbolics
 using SciMLBase
+using SymbolicUtils, LinearAlgebra
 using DiffEqBase: BrownFullBasicInit, ShampineCollocationInit
 using OrdinaryDiffEqRosenbrock: Rodas4
 using ModelingToolkit: get_eqs
@@ -279,6 +280,73 @@ end
     prob = ODEProblem(mtkcompile(sys), nothing, tspan)
     @test prob isa SciMLBase.ODEProblem
     @test SciMLBase.successful_retcode(solve(prob, Tsit5()))
+
+    prob2 = ODEProblem(pdesys, disc)
+    @test prob2 isa SciMLBase.ODEProblem
+    @test prob2.tspan == tspan
+    sol = solve(prob2, Tsit5(); reltol = 1.0e-8, abstol = 1.0e-8)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol isa SciMLBase.PDETimeSeriesSolution
+    @test sol(0.1, 0.5)[1] ≈ sinpi(0.5) * exp(-pi^2 * 0.1) rtol = 1.0e-2
+end
+
+# With a ModelingToolkit that can keep array equations through `mtkcompile`, the compiled
+# `ODEProblem` path stays O(1) in the grid resolution like the `DAEProblem` path. With an
+# older one, `ode_compile` is the plain `mtkcompile`.
+@testset "array-preserving ODE path" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+    treesize(x) = let u = Symbolics.unwrap(x)
+        SymbolicUtils.iscall(u) ? 1 + sum(treesize, SymbolicUtils.arguments(u); init = 0) : 1
+    end
+    syssize(sys) = sum(eq -> treesize(eq.lhs) + treesize(eq.rhs), get_eqs(sys))
+
+    sizes = map((11, 21, 41, 81)) do n
+        disc = mol_disc([x => n], t)
+        sys, tspan = symbolic_discretize(pdesys, disc)
+        csys = ode_compile(sys)
+        @test length(unknowns(csys)) == n - 2
+        prob = ODEProblem(pdesys, disc)
+        @test prob.f.mass_matrix === LinearAlgebra.I
+        sol = solve(prob, Tsit5(); reltol = 1.0e-8, abstol = 1.0e-8)
+        @test SciMLBase.successful_retcode(sol)
+        xs = range(0.0, 1.0, length = n)
+        # second order accurate in space
+        @test maximum(abs, sol[u(t, x)][end, :] .- @.(sinpi(xs) * exp(-pi^2 * 0.1))) <
+            1.0 / n^2
+        (length(get_eqs(csys)), syssize(csys), any(isarrayeq, get_eqs(csys)))
+    end
+    if MethodOfLines.PRESERVES_ARRAY_EQUATIONS
+        @test allequal(first.(sizes))
+        @test allequal(getindex.(sizes, 2))
+        @test all(last, sizes)
+        @test first(sizes)[1] == 1
+    else
+        @test first.(sizes) == (11, 21, 41, 81) .- 2
+        @test !any(last, sizes)
+    end
+
+    # second order in time: no array-preserving compilation, so `ode_compile` scalarizes
+    Dtt = Differential(t)^2
+    @named wave = PDESystem(
+        Dtt(u(t, x)) ~ Dxx(u(t, x)),
+        [u(0, x) ~ sinpi(x), Dt(u(0, x)) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        domains, [t, x], [u(t, x)]
+    )
+    disc = mol_disc([x => 11], t)
+    wsys = ode_compile(first(symbolic_discretize(wave, disc)))
+    @test !any(isarrayeq, get_eqs(wsys))
+    @test SciMLBase.successful_retcode(
+        solve(ODEProblem(wave, disc), Tsit5(); reltol = 1.0e-8, abstol = 1.0e-8)
+    )
 end
 
 # The predicate's algebraic-variable and coupled-unknown branches are unreachable from what

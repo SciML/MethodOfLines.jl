@@ -1,10 +1,10 @@
 # DAEProblem construction, preserving array (slice-form) equations.
 #
-# `discretize` runs `mtkcompile`, which scalarizes array equations before codegen: an
-# `ODEProblem` needs `D(x) = f(x)`, and isolating the derivative is structural
-# simplification. MethodOfLines already emits residuals `D(u) - f ~ 0`, which is exactly
-# the implicit-DAE form `DAEProblem` consumes, so this path skips `mtkcompile` and the
-# array equations survive into the generated code.
+# MethodOfLines emits residuals `D(u) - f ~ 0`, which is exactly the implicit-DAE form
+# `DAEProblem` consumes, so this path skips `mtkcompile` altogether and the array
+# equations survive into the generated code. The `ODEProblem` path (`ode_compile`) needs
+# `mtkcompile` to isolate the derivatives and eliminate the boundary equations, and keeps
+# the array equations only where ModelingToolkit can preserve them through that.
 
 """
     BrownFullBasicInitUnsafeError(offenders)

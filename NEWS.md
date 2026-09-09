@@ -1,3 +1,15 @@
+# MethodOfLines.jl 1.5
+
+`ODEProblem(pdesys, discretization)` discretizes and compiles a time-dependent system into
+an `ODEProblem` for explicit time-stepping methods such as `Tsit5()`. With ModelingToolkit
+v11.43 / ModelingToolkitBase v1.70 or later, the compilation keeps the array (slice-form)
+equations (`mtkcompile(sys; scalarize_arrays = false)`), so the compiled `ODEProblem` path
+is now O(1) in the number of grid points like the `DAEProblem` path. `ode_compile(sys)`
+exposes that compilation step for systems obtained from `symbolic_discretize`; it falls
+back to the scalarizing `mtkcompile` when the array-preserving compilation does not yield
+an explicit ODE (for instance for systems second order in time), or with an older
+ModelingToolkit.
+
 # MethodOfLines.jl 1.0
 
 ## Breaking changes

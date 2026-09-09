@@ -72,8 +72,8 @@ system's initialization equations are ones that algorithm preserves.
 
 A few systems cannot be posed as a first-order DAE: those second order in time, and those
 whose initialization equations `BrownFullBasicInit` would not honour. They fall back to
-`mtkcompile` plus an `ODEProblem`, which scalarizes the array equations. Pass
-`fallback = false` to `discretize` to make that an error instead.
+`mtkcompile` plus an `ODEProblem`, see below. Pass `fallback = false` to `discretize` to
+make that an error instead.
 
 Time-independent systems have no derivative to keep implicit, and discretize to a
 `NonlinearProblem`.
@@ -84,28 +84,34 @@ The solution is a `PDETimeSeriesSolution` in every case, indexed and interpolate
 ## Explicit Runge–Kutta methods and other problem types
 
 Explicit Runge–Kutta methods such as `Tsit5()` and `SSPRK54()` solve `ODEProblem`s, not
-the `DAEProblem` returned by `discretize`. To use one, start from `symbolic_discretize`,
-which returns the discretized system and the time span, then compile the system into an
-`ODEProblem`:
+the `DAEProblem` returned by `discretize`. To use one, build the `ODEProblem` directly:
+
+```julia
+prob = ODEProblem(pdesys, disc)
+sol = solve(prob, Tsit5())
+```
+
+An `ODEProblem` needs `D(x) = f(x)`, so the discretized system is compiled with
+`mtkcompile` first. With ModelingToolkit v11.43 / ModelingToolkitBase v1.70 or later, the
+compilation keeps the array equations (`mtkcompile(sys; scalarize_arrays = false)`), so the
+compiled system and the generated code are independent of the grid resolution exactly like
+the `DAEProblem` path. That compilation does no tearing, so it is used only when every
+boundary condition can be eliminated and the result is an explicit ODE; otherwise the
+system is compiled with the default `mtkcompile`, which scalarizes the array equations.
+See [`ode_compile`](@ref) for the compilation step on its own, for instance when starting
+from `symbolic_discretize`:
 
 ```julia
 sys, tspan = symbolic_discretize(pdesys, disc)
-
-# an ODEProblem needs `D(x) = f(x)`, so compile first
-prob = ODEProblem(mtkcompile(sys), nothing, tspan)
-sol = solve(prob, Tsit5())
+prob = ODEProblem(ode_compile(sys), nothing, tspan)
 ```
 
 The discretized system also carries the time span itself, so `tspan` can be left out and
 the problem still spans the `PDESystem`'s time domain:
 
 ```julia
-prob = ODEProblem(mtkcompile(sys), nothing)
+prob = ODEProblem(ode_compile(sys), nothing)
 ```
-
-Note that `mtkcompile` scalarizes the array equations, so this path gives up the scaling
-benefit of the array form. Prefer `discretize` unless you specifically need an
-`ODEProblem` or an explicit time-stepping method.
 
 ## [Migrating to v1](@id migrating-to-v1)
 
@@ -115,5 +121,5 @@ benefit of the array form. Prefer `discretize` unless you specifically need an
   is unchanged.
 - Discretization strategy options were removed. MethodOfLines always uses array-form
   equations with automatic pointwise fallback for unsupported patterns.
-- To construct the pre-v1 compiled `ODEProblem`, use `symbolic_discretize` plus
-  `mtkcompile` as above.
+- To construct the pre-v1 compiled `ODEProblem`, use `ODEProblem(pdesys, disc)` or
+  `symbolic_discretize` plus `ode_compile` as above.

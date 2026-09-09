@@ -51,7 +51,7 @@ function shock_prob(gridspec, scheme)
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
     disc = MOLFiniteDifference([x => gridspec], t; advection_scheme = scheme)
     sys, tspan = symbolic_discretize(pdesys, disc)
-    return ODEProblem(mtkcompile(sys), nothing, tspan)
+    return ODEProblem(ode_compile(sys), nothing, tspan)
 end
 nothing # hide
 ```
@@ -223,7 +223,7 @@ function front_prob(g1, g2)
     disc = MOLFiniteDifference([x1 => g1, x2 => g2], t;
         advection_scheme = WENOScheme())
     sys, tspan = symbolic_discretize(pdesys, disc)
-    return ODEProblem(mtkcompile(sys), nothing, tspan)
+    return ODEProblem(ode_compile(sys), nothing, tspan)
 end
 
 # ρ ∝ s: domain 2 gets ~2x the density; grids are deliberately mismatched at the seam.

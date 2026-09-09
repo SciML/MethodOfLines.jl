@@ -147,7 +147,7 @@ function ODEFunctionExpr(
         if tspan === nothing
             @assert true "Codegen for NonlinearSystems is not yet implemented."
         else
-            simpsys = mtkcompile(sys)
+            simpsys = ode_compile(sys)
             return ODEFunction(simpsys; expression = Val{true})
         end
     catch e
@@ -169,7 +169,7 @@ function SciMLBase.ODEFunction(
         if tspan === nothing
             @assert true "Codegen for NonlinearSystems is not yet implemented."
         else
-            simpsys = mtkcompile(sys)
+            simpsys = ode_compile(sys)
             f_analytic = nothing
             if analytic !== nothing
                 analytic = analytic isa Dict ? analytic : Dict(analytic)
@@ -222,7 +222,7 @@ needed and the array (slice-form) equations reach the generated code intact. Cal
 
 A few systems cannot be posed as a first-order DAE — those second order in time, and
 those whose initialization equations `BrownFullBasicInit` would not honour. Those fall
-back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations. Pass
+back to `mtkcompile` plus an `ODEProblem` (see [`ode_compile`](@ref)). Pass
 `fallback = false` to make that an error instead.
 
 Supplying `analytic` selects the compiled `ODEProblem` path because analytic solutions
@@ -232,12 +232,10 @@ Time-independent systems have no derivative to keep implicit and discretize to a
 `NonlinearProblem` as before.
 
 Explicit Runge–Kutta methods such as `Tsit5()` solve `ODEProblem`s, not the `DAEProblem`
-returned by this method. To use one, start from `symbolic_discretize` and compile the
-discretized system:
+returned by this method. To use one, build the `ODEProblem` directly:
 
 ```julia
-sys, tspan = symbolic_discretize(pdesys, discretization)
-prob = ODEProblem(mtkcompile(sys), nothing, tspan)
+prob = ODEProblem(pdesys, discretization)
 sol = solve(prob, Tsit5())
 ```
 """
@@ -271,11 +269,66 @@ function _stationary_problem(sys, discretization::MOLFiniteDifference; kwargs...
     )
 end
 
+"""
+    ODEProblem(pdesys::PDESystem, discretization::MOLFiniteDifference; kwargs...)
+
+Discretize `pdesys` and build an `ODEProblem` from the compiled system, for explicit
+time-stepping methods such as `Tsit5()` that cannot solve the `DAEProblem` returned by
+[`discretize`](@ref). See [`ode_compile`](@ref) for how the array equations are kept
+through `mtkcompile`.
+"""
+function SciMLBase.ODEProblem(
+        pdesys::PDESystem, discretization::MOLFiniteDifference; analytic = nothing, kwargs...
+    )
+    sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
+    if tspan === nothing
+        throw(
+            ArgumentError(
+                "`ODEProblem` requires a time variable; pass one to `MOLFiniteDifference`, or use `discretize` for the `NonlinearProblem` a time-independent system discretizes to."
+            )
+        )
+    end
+    return _ode_problem(sys, tspan, pdesys, discretization; analytic, kwargs...)
+end
+
+# Whether the installed ModelingToolkit can keep array equations through `mtkcompile`.
+const PRESERVES_ARRAY_EQUATIONS = isdefined(ModelingToolkitBase, :arrays_scalarized)
+
+_isdiffeq(eq) = iscall(safe_unwrap(eq.lhs)) && operation(safe_unwrap(eq.lhs)) isa Differential
+
+"""
+    ode_compile(sys)
+
+Compile a discretized system for an `ODEProblem`. When ModelingToolkit supports it,
+`mtkcompile(sys; scalarize_arrays = false)` keeps the array (slice-form) equations, so the
+compiled system and its generated code stay independent of the grid resolution like the
+`DAEProblem` path. That compilation does no tearing, so it is used only when it yields an
+explicit ODE: every remaining equation is `D(x) ~ f`. Otherwise, or with a ModelingToolkit
+that cannot preserve array equations, this falls back to the default `mtkcompile`, which
+scalarizes the array equations.
+"""
+function ode_compile(sys)
+    if PRESERVES_ARRAY_EQUATIONS
+        simpsys = try
+            mtkcompile(sys; scalarize_arrays = false)
+        catch e
+            e isa InterruptException && rethrow(e)
+            @debug "Falling back to scalarizing `mtkcompile`: $(sprint(showerror, e))"
+            nothing
+        end
+        if simpsys !== nothing
+            all(_isdiffeq, get_eqs(simpsys)) && return simpsys
+            @debug "Falling back to scalarizing `mtkcompile`: the array-preserving compilation left algebraic equations"
+        end
+    end
+    return mtkcompile(sys)
+end
+
 function _ode_problem(
         sys, tspan, pdesys, discretization::MOLFiniteDifference; analytic = nothing,
         kwargs...
     )
-    simpsys = mtkcompile(sys)
+    simpsys = ode_compile(sys)
     PDEBase.add_metadata!(
         getmetadata(simpsys, ModelingToolkit.ProblemTypeCtx, nothing), sys
     )

@@ -107,7 +107,7 @@ See more solvers in [Steady State Solvers · DifferentialEquations.jl](https://d
 
 ```@example sispde
 sys, tspan = symbolic_discretize(pdesys, discretization)
-odeprob = ODEProblem(mtkcompile(sys), nothing, tspan)
+odeprob = ODEProblem(ode_compile(sys), nothing, tspan)
 steadystateprob = SteadyStateProblem(odeprob)
 steadystate = solve(steadystateprob, DynamicSS(FBDF()))
 ```

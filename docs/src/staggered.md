@@ -40,7 +40,7 @@ domains = [t in Interval(0.0, tmax),
 
 discretization = MOLFiniteDifference([x=>dx], t, grid_align=MethodOfLines.StaggeredGrid(), edge_aligned_var=ϕ(t,x));
 sys, tspan = symbolic_discretize(pdesys, discretization)
-prob = ODEProblem(mtkcompile(sys), nothing, tspan);
+prob = ODEProblem(ode_compile(sys), nothing, tspan);
 
 sol = solve(prob, SplitEuler(), dt=dt);
 ```

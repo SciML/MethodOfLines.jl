@@ -6,10 +6,10 @@
     `DAEProblem` is therefore the new default for time-dependent systems; call
     `solve(prob)` to use the default DAE solver.
 
-    This improvement does not apply to `ODEProblem`. Explicit Runge–Kutta methods such as
-    `Tsit5()` and `SSPRK54()` require the compiled ODE path: `symbolic_discretize`, then
-    `mtkcompile`, then `ODEProblem`. See the [v1.0 migration guide](@ref migrating-to-v1)
-    for examples and compatibility details.
+    Explicit Runge–Kutta methods such as `Tsit5()` and `SSPRK54()` require the compiled
+    ODE path, `ODEProblem(pdesys, disc)`, which keeps the same O(1) compilation with a
+    recent ModelingToolkit. See the [v1.0 migration guide](@ref migrating-to-v1) for
+    examples and compatibility details.
 
 [MethodOfLines.jl](https://github.com/SciML/MethodOfLines.jl)
 is a Julia package for automated finite difference discretization

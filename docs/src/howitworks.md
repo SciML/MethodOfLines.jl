@@ -17,5 +17,6 @@ equal number of unknowns. See [the generated Brusselator system](@ref brusssys) 
 point count. Time-dependent systems are normally converted directly to a `DAEProblem`,
 which preserves symbolic array equations. Stationary systems are compiled with
 `ModelingToolkit.mtkcompile` into a `NonlinearProblem`; the optional compiled
-`ODEProblem` path also uses `mtkcompile` and scalarizes the equations. The problem
+`ODEProblem` path also uses `mtkcompile`, keeping the array equations where
+ModelingToolkit can preserve them (see [`ode_compile`](@ref)). The problem
 constructors generate executable Julia functions with `RuntimeGeneratedFunctions`.
