@@ -52,7 +52,7 @@ end
 
 function PDEBase.construct_var_equation_mapping(
         pdes::Vector{Equation}, boundarymap, s::DiscreteSpace{N, M},
-        discretization::MOLFiniteDifference
+        discretization::MOLDiscretization
     ) where {N, M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     validate_interface_orders(pdes, boundarymap, discretization)
@@ -73,7 +73,7 @@ function PDEBase.construct_var_equation_mapping(
         # Determine thec number of points to remove from each end of the domain for each dimension
         for b in boundaries
             #@show b
-            clip_interior!!(lower, upper, s, b)
+            clip_interior!!(lower, upper, s, b, discretization)
         end
         push!(vlower, pde => lower)
         push!(vupper, pde => upper)
@@ -102,7 +102,7 @@ function PDEBase.construct_var_equation_mapping(
     )
 end
 
-function generate_interior(lower, upper, u, s, disc::MOLFiniteDifference)
+function generate_interior(lower, upper, u, s, disc::MOLDiscretization)
     args = remove(arguments(u), s.time)
 
     ret = s.Igrid[u][

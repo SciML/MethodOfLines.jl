@@ -15,6 +15,7 @@ pages = [
         "tutorials/schroedinger.md",
     ],
     "MOLFiniteDifference" => "MOLFiniteDifference.md",
+    "PseudospectralDiscretization" => "pseudospectral.md",
     "Solution Interface - PDESolutions" => "solutions.md",
     "Grid and Solution Retrieval - Deprecated" => "get_grid.md",
     "Boundary Conditions" => "boundary_conditions.md",

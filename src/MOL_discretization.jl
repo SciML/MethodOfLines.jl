@@ -140,7 +140,7 @@ end
 Generate an expression for the ODE function produced by method-of-lines discretization.
 """
 function ODEFunctionExpr(
-        pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference
+        pdesys::PDESystem, discretization::MethodOfLines.MOLDiscretization
     )
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     return try
@@ -161,7 +161,7 @@ function ODEFunctionExpr(
 end
 
 function SciMLBase.ODEFunction(
-        pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference;
+        pdesys::PDESystem, discretization::MethodOfLines.MOLDiscretization;
         analytic = nothing, kwargs...
     )
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
@@ -199,7 +199,7 @@ end
 Write generated discretized ODE function code for `pdesys` to `filename`.
 """
 function generate_code(
-        pdesys::PDESystem, discretization::MethodOfLines.MOLFiniteDifference,
+        pdesys::PDESystem, discretization::MethodOfLines.MOLDiscretization,
         filename = "generated_code_of_pdesys.jl"
     )
     code = ODEFunctionExpr(pdesys, discretization)
@@ -242,7 +242,7 @@ sol = solve(prob, Tsit5())
 ```
 """
 function SciMLBase.discretize(
-        pdesys::PDESystem, discretization::MOLFiniteDifference;
+        pdesys::PDESystem, discretization::MOLDiscretization;
         analytic = nothing, checks = true, fallback = true, kwargs...
     )
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization; checks = checks)
@@ -262,7 +262,7 @@ function SciMLBase.discretize(
     return _ode_problem(sys, tspan, pdesys, discretization; analytic, kwargs...)
 end
 
-function _stationary_problem(sys, discretization::MOLFiniteDifference; kwargs...)
+function _stationary_problem(sys, discretization::MOLDiscretization; kwargs...)
     simpsys = mtkcompile(sys)
     PDEBase.add_metadata!(getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
     u0_guess = Dict(u => 1.0 for u in get_unknowns(simpsys))
@@ -272,7 +272,7 @@ function _stationary_problem(sys, discretization::MOLFiniteDifference; kwargs...
 end
 
 function _ode_problem(
-        sys, tspan, pdesys, discretization::MOLFiniteDifference; analytic = nothing,
+        sys, tspan, pdesys, discretization::MOLDiscretization; analytic = nothing,
         kwargs...
     )
     simpsys = mtkcompile(sys)

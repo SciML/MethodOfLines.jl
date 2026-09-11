@@ -83,6 +83,7 @@ include("interface/grid_types.jl")
 include("interface/scheme_types.jl")
 include("interface/callbacks.jl")
 include("interface/MOLFiniteDifference.jl")
+include("interface/PseudospectralDiscretization.jl")
 
 include("discretization/discretize_vars.jl")
 include("MOL_utils.jl")
@@ -122,6 +123,7 @@ include("discretization/schemes/spherical_laplacian/spherical_laplacian.jl")
 include("discretization/schemes/WENO/nonuniform_weno.jl")
 include("discretization/schemes/WENO/WENO.jl")
 include("discretization/schemes/integral_expansion/integral_expansion.jl")
+include("discretization/schemes/pseudospectral/pseudospectral.jl")
 
 # System Discretization
 include("discretization/generate_finite_difference_rules.jl")
@@ -131,6 +133,7 @@ include("discretization/staggered_discretize.jl")
 
 # Main
 include("discretization/discretize_equations.jl")
+include("discretization/pseudospectral_discretize.jl")
 include("dae_discretization.jl")
 include("MOL_discretization.jl")
 
@@ -138,7 +141,8 @@ include("MOL_discretization.jl")
 include("precompile.jl")
 
 # Export
-export MOLFiniteDifference, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
+export MOLFiniteDifference, PseudospectralDiscretization, ChebyshevCollocation,
+    FourierCollocation, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
     edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme, MOLDiscCallback
 
