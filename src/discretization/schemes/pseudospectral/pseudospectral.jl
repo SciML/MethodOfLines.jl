@@ -1,10 +1,12 @@
-# Pseudospectral discretization.
+# Pseudospectral discretization: grids, differentiation matrices and the pointwise
+# collocation rules.
 #
 # A spectral differentiation matrix is used in place of the finite difference
 # stencils. Each row of the matrix is the full-width stencil for one grid
 # point, so the same `central_difference`/`sym_dot` machinery as the finite
 # difference path applies: the taps of an interior point are simply all the
-# collocation points of the direction.
+# collocation points of the direction. The pointwise rules here are the fallback
+# for the slice form in `discretization/pseudospectral_discretize.jl`.
 #
 # For a periodic (Fourier) direction the grid holds `N + 1` points for `N`
 # distinct equispaced collocation points - the first and last grid points are

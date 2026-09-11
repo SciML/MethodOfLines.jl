@@ -50,11 +50,20 @@ A pseudospectral (collocation) discretization algorithm.
 
 Each spatial independent variable is discretized on a collocation grid, and
 every spatial derivative `Differential(x)^d` is replaced by the dense
-differentiation matrix of the spectral interpolant in that direction. Boundary
-conditions are enforced by replacing the equation at the boundary points with
-the boundary equation, exactly as in [`MOLFiniteDifference`](@ref). Nested
-derivative terms such as `Differential(x)(a(u) * Differential(x)(u))` are
-evaluated directly by collocation, so no PDE-system transformation is needed.
+differentiation matrix of the spectral interpolant in that direction, applied in
+physical (grid) space; no transform to spectral coefficients is taken. Boundary
+conditions replace the equation at the boundary nodes, exactly as in
+[`MOLFiniteDifference`](@ref), with derivatives in a condition taken from the
+boundary row of the differentiation matrix. Nested derivative terms such as
+`Differential(x)(a(u) * Differential(x)(u))` are evaluated directly by
+collocation, so no PDE-system transformation is needed.
+
+The interior of each PDE is emitted as one symbolic array equation over slices of
+the discretized variables, with each derivative an opaque operator holding its
+differentiation matrix, so the number of symbolic equations and the size of the
+generated code are independent of the resolution in one and two spatial
+dimensions. See the [pseudospectral](@ref pseudospectral) documentation page for
+the boundary conditions each grid type accepts and the scaling.
 
 # Arguments
 
@@ -102,6 +111,8 @@ discretization = PseudospectralDiscretization([x => FourierCollocation(64)], t)
 - Unlike `MOLFiniteDifference`, there is no upwinding or special scheme
   selection: all derivative orders in a direction share the same spectral
   differentiation matrix.
+- Derivatives are dense matrix products, `O(n^2)` per application in one
+  dimension, and the Jacobian is dense.
 """
 struct PseudospectralDiscretization <: AbstractEquationSystemDiscretization
     dxs::Any
