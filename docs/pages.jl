@@ -8,6 +8,7 @@ pages = [
         "tutorials/params.md",
         "tutorials/neural_network_term.md",
         "tutorials/brusselator_ude.md",
+        "tutorials/brusselator_ude_2d.md",
         "tutorials/heatss.md",
         "tutorials/sispde.md",
         "tutorials/icbc_sampled.md",
