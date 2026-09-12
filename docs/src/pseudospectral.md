@@ -1,41 +1,16 @@
 # [Pseudospectral Discretization](@id pseudospectral)
 
-```julia
-struct PseudospectralDiscretization <: AbstractEquationSystemDiscretization
-    dxs::Any
-    time::Any
-    kwargs::Any
-end
-```
-
 `PseudospectralDiscretization` discretizes a `PDESystem` by collocation on spectral
 grids. The unknowns are the values of each dependent variable at the collocation
 nodes, exactly as for [`MOLFiniteDifference`](@ref molfd); the difference is the
-derivative approximation. Every spatial derivative `Differential(x)^d` is replaced by
-the dense differentiation matrix of the spectral interpolant through the nodes in
-that direction, so a derivative at one node involves the values at all nodes of the
-direction rather than a fixed stencil. Nonlinear terms are evaluated pointwise on
-the grid. The discretization works entirely in physical (grid) space: the unknowns
-are never transformed to spectral coefficients. For a periodic direction the
-derivative is `irfft((ik)^d .* rfft(u))` when an `AbstractFFTs` backend such as
-`FFTW` is loaded, and the equivalent dense trigonometric differentiation matrix
-otherwise; see [FFT derivatives](@ref pseudospectral-fft).
-
-This is the collocation family used by the SciMLBenchmarks
-`SimpleHandwrittenPDE` spectral work-precision benchmarks
-([Allen–Cahn](https://docs.sciml.ai/SciMLBenchmarksOutput/stable/SimpleHandwrittenPDE/allen_cahn_spectral_wpd/),
-[Burgers](https://docs.sciml.ai/SciMLBenchmarksOutput/stable/SimpleHandwrittenPDE/burgers_spectral_wpd/),
-[KdV](https://docs.sciml.ai/SciMLBenchmarksOutput/stable/SimpleHandwrittenPDE/kdv_spectral_wpd/) and
-[Kuramoto–Sivashinsky](https://docs.sciml.ai/SciMLBenchmarksOutput/stable/SimpleHandwrittenPDE/ks_spectral_wpd/)),
-which also apply dense differentiation matrices in grid space. The periodic
-benchmarks convert the `SummationByPartsOperators` Fourier operator to the same
-dense matrix `FourierCollocation` builds. The non-periodic benchmarks use
-rectangular collocation from `ClassicalOrthogonalPolynomials` (the equation is
-imposed on `n - 2` first-kind Chebyshev points and mapped back through a
-resampling mass matrix), whereas `ChebyshevCollocation` uses square
-Chebyshev–Lobatto collocation with the boundary rows replaced by the boundary
-conditions, as in Trefethen's *Spectral Methods in MATLAB*. Both are spectrally
-accurate; the discrete operators are not identical.
+derivative approximation. Every spatial derivative `Differential(x)^d` is the
+derivative of the spectral interpolant through the nodes in that direction, so a
+derivative at one node involves the values at all nodes of the direction rather
+than a fixed stencil. Nonlinear terms are evaluated pointwise on the grid, and the
+unknowns stay in physical (grid) space. With an `AbstractFFTs` backend such as
+`FFTW` loaded, derivatives are applied with FFTs in both Fourier and Chebyshev
+directions; otherwise the equivalent dense differentiation matrix is used. See
+[FFT derivatives](@ref pseudospectral-fft).
 
 ```julia
 eq = [your system of equations, see examples for possibilities]
@@ -56,6 +31,8 @@ collocation specification:
   Chebyshev–Lobatto points `x_k = a + (b - a)/2 * (1 - cos(π(k - 1)/(n - 1)))`,
   which include both endpoints. Derivatives are those of the degree `n - 1`
   polynomial interpolant. Use for non-periodic directions.
+  `ChebyshevCollocation(n; fft = false)` keeps the dense matrix even when an FFT
+  backend is loaded.
 - `x => FourierCollocation(n)`: discretize `x` on `n` distinct equispaced points
   of the periodic interval `[a, b)`. Derivatives are those of the trigonometric
   interpolant. A periodic boundary condition `u(t, a) ~ u(t, b)` is required for
@@ -191,10 +168,9 @@ generated code evaluates once per call; the compile time therefore still grows
 with the resolution, as it does for `MOLFiniteDifference` (see
 [MethodOfLines.jl#691](https://github.com/SciML/MethodOfLines.jl/issues/691)).
 
-At run time each Chebyshev derivative costs a dense matrix product: `O(n^2)` per
+Without an FFT backend each derivative costs a dense matrix product: `O(n^2)` per
 application in one dimension and `O(n^2 m)` along the first axis of an `n × m`
-grid. This is the same cost as the handwritten benchmark implementations. The
-Jacobian is dense.
+grid. The Jacobian is dense either way.
 
 ## [FFT derivatives](@id pseudospectral-fft)
 
@@ -204,15 +180,27 @@ Loading an `AbstractFFTs` backend, in practice
 using FFTW
 ```
 
-activates the `MethodOfLinesAbstractFFTsExt` extension. From then on every
-`FourierCollocation` direction applies whole-direction derivatives in the array
-form as `irfft((ik)^d .* rfft(u))` along that axis, with the Nyquist mode zeroed
-so that the result equals the dense matrix `D1^d` to roundoff, at `O(n log n)`
-instead of `O(n^2)` per application. FFT plans are created on first use and cached
-per array size. Jacobian evaluations through dual numbers, boundary rows and
-pinned single rows still use the dense matrix, which is kept alongside the FFT
-operator. `FourierCollocation(n; fft = false)` opts a direction out. Chebyshev
-directions always use the dense matrix.
+activates the `MethodOfLinesAbstractFFTsExt` extension. From then on the
+whole-direction derivatives of the array form are applied with FFTs along their
+axis, at `O(n log n)` instead of `O(n^2)` per application:
+
+- `FourierCollocation`: `irfft((ik)^d .* rfft(u))`, with the Nyquist mode zeroed so
+  that the result equals the dense matrix `D1^d` to roundoff.
+- `ChebyshevCollocation`: the Chebyshev transform. The DCT-I of each line is the
+  real FFT of its even extension, the derivative's Chebyshev coefficients follow
+  from the backward recurrence `b[k-1] = b[k+1] + 2k a[k]` applied `d` times, and
+  the same transform maps the coefficients back to the nodes. This equals the
+  polynomial-interpolant differentiation matrix to roundoff. The derivative is
+  computed on every node, and the interior equation keeps the interior rows by
+  slicing; the boundary rows are what the boundary conditions replace.
+
+The Chebyshev transform of `n` nodes is a real FFT of length `2(n - 1)`, so
+`n = 2^k + 1` gives the fastest transforms. FFT plans are created on first use and
+cached per array size. Jacobian evaluations
+through dual numbers, boundary rows in boundary conditions and pinned single rows
+use the dense matrix, which is kept alongside the FFT operator.
+`ChebyshevCollocation(n; fft = false)` and `FourierCollocation(n; fft = false)` opt
+a direction out; custom node vectors always use the dense matrix.
 
 ## Limitations
 
@@ -222,6 +210,5 @@ directions always use the dense matrix.
 - There is no upwinding or scheme selection: all derivative orders in a direction
   share the same spectral differentiation matrix. Discontinuous solutions produce
   Gibbs oscillations, as with any global spectral method.
-- Chebyshev derivatives are dense matrix products, so the number of Chebyshev nodes
-  per direction should stay in the hundreds. Fourier directions with an FFT backend
-  scale to much larger `n`, but the Jacobian remains dense.
+- The Jacobian is dense, so implicit time stepping costs `O(n^3)` per factorization
+  in one dimension regardless of how the derivatives are applied.

@@ -1,6 +1,6 @@
 module MethodOfLines
 import LinearAlgebra
-using LinearAlgebra: I, cond, dot
+using LinearAlgebra: I, cond, dot, diag, diagind
 import SciMLBase
 using SciMLBase: DAEProblem, NonlinearProblem, ODEFunction, ODEProblem, SplitODEProblem
 import DiffEqBase

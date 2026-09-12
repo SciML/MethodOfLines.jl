@@ -1,22 +1,28 @@
 abstract type AbstractSpectralScheme end
 
 """
-    ChebyshevCollocation(n)
+    ChebyshevCollocation(n; fft = true)
 
 Chebyshev–Lobatto pseudospectral collocation with `n` grid points on the domain
 `[a, b]`, including both endpoints. Spatial derivatives of order `d` are
 discretized with the differentiation matrix of the degree `n - 1` polynomial
 interpolant through the grid values (equivalently, the maximal-stencil Fornberg
-weights on the Lobatto nodes).
+weights on the Lobatto nodes). When an `AbstractFFTs` backend such as `FFTW` is
+loaded and `fft = true`, whole-direction derivatives in the array form are
+computed through the Chebyshev transform (a DCT-I via the FFT of the even
+extension) and the coefficient recurrence instead of the dense matrix, at
+`O(n log n)` per application; the two agree to roundoff. Pass `fft = false` to
+always use the dense matrix.
 
 Use this scheme for directions with non-periodic (truncating) boundary
 conditions such as Dirichlet or Neumann conditions.
 """
 struct ChebyshevCollocation <: AbstractSpectralScheme
     n::Int
-    function ChebyshevCollocation(n)
+    fft::Bool
+    function ChebyshevCollocation(n; fft = true)
         n >= 2 || throw(ArgumentError("ChebyshevCollocation requires at least 2 collocation points, got $n"))
-        return new(n)
+        return new(n, fft)
     end
 end
 
@@ -66,8 +72,9 @@ collocation, so no PDE-system transformation is needed.
 The interior of each PDE is emitted as one symbolic array equation over slices of
 the discretized variables, with each derivative an opaque operator holding its
 differentiation matrix, so the number of symbolic equations and the size of the
-generated code are independent of the resolution. Fourier directions use FFTs for
-the derivative when an `AbstractFFTs` backend such as `FFTW` is loaded. See the
+generated code are independent of the resolution. Derivatives are applied with
+FFTs in both Fourier and Chebyshev directions when an `AbstractFFTs` backend such
+as `FFTW` is loaded. See the
 [pseudospectral](@ref pseudospectral) documentation page for the boundary
 conditions each grid type accepts and the scaling.
 

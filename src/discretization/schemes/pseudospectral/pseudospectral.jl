@@ -22,8 +22,7 @@ Dense differentiation matrix acting along one independent variable. `mat[i, :]`
 is the differentiation row for matrix-index `i`; `rowmap[g]` maps grid index
 `g` to its matrix row; `taps` lists the grid indices the columns act on. `fast`
 is an operator equivalent to `mat` over the whole direction that the array form
-prefers when every row is needed (an FFT operator for Fourier directions, see
-[`fast_fourier_operator`](@ref)), or `nothing`.
+prefers (an FFT operator, see [`fast_spectral_operator`](@ref)), or `nothing`.
 """
 struct SpectralDerivativeOperator{T <: Real, M <: AbstractMatrix{T}, F}
     derivative_order::Int
@@ -34,13 +33,14 @@ struct SpectralDerivativeOperator{T <: Real, M <: AbstractMatrix{T}, F}
 end
 
 """
-    fast_fourier_operator(spec::FourierCollocation, grid, d, mat)
+    fast_spectral_operator(spec, grid, d, mat)
 
-An operator applying the order-`d` Fourier derivative over the whole direction
-with FFTs, equivalent to the dense matrix `mat`, or `nothing` when no FFT backend
-is available. Defined by the `AbstractFFTs` extension; the default is `nothing`.
+An operator applying the order-`d` derivative over the whole direction with FFTs,
+equivalent to the dense matrix `mat`, or `nothing` when no FFT backend is
+available. Defined by the `AbstractFFTs` extension for `FourierCollocation` and
+`ChebyshevCollocation`; the default is `nothing`.
 """
-fast_fourier_operator(spec, grid, d, mat) = nothing
+fast_spectral_operator(spec, grid, d, mat) = nothing
 
 """
     apply_along(op, X, ::Val{J})
@@ -105,9 +105,12 @@ end
 
 Differentiation matrix of order `order` for the collocation scheme `spec` on
 `grid`. Fourier directions use the explicit trigonometric-interpolant first
-derivative matrix (Trefethen, *Spectral Methods in MATLAB*) raised to `order`;
-everything else uses the maximal-stencil Fornberg weights, i.e. the
-polynomial-interpolant differentiation matrix.
+derivative matrix (Trefethen, *Spectral Methods in MATLAB*) raised to `order`.
+Chebyshev–Lobatto directions use the Weideman–Reddy `chebdif` recursion, which
+builds every order directly with the negative-sum trick and stays finite for
+thousands of nodes. Custom grids use the maximal-stencil Fornberg weights, i.e.
+the polynomial-interpolant differentiation matrix, which overflow beyond roughly a
+thousand nodes.
 """
 function spectral_diff_matrix(spec, grid, order)
     n = length(grid)
@@ -118,6 +121,38 @@ function spectral_diff_matrix(spec, grid, order)
         D[i, :] = calculate_weights(order, grid[i], grid)
     end
     return D
+end
+
+function spectral_diff_matrix(spec::ChebyshevCollocation, grid, order)
+    n = spec.n
+    order < n ||
+        throw(ArgumentError("Cannot take derivative order $order on $n collocation points."))
+    T = float(eltype(grid))
+    # Weideman & Reddy, "A MATLAB differentiation matrix suite" (2000), `chebdif`, on the
+    # descending nodes cos(πk/(n-1)); the grid here is the affine image with the same index
+    # order, x = a + (b - a)/2 (1 - cos(πk/(n-1))), so the result scales by (-2/(b - a))^order.
+    N = n - 1
+    k = 0:N
+    th = k .* (T(π) / N)
+    n1 = N ÷ 2
+    n2 = (N + 1) ÷ 2   # ceil(n/2) rows, flipped, complete the differences without cancellation
+    Tm = repeat(th ./ 2, 1, n)
+    DX = 2 .* sin.(permutedims(Tm) .+ Tm) .* sin.(permutedims(Tm) .- Tm)
+    DX = vcat(DX[1:(n1 + 1), :], -reverse(reverse(DX[1:n2, :]; dims = 1); dims = 2))
+    DX[diagind(DX)] .= one(T)
+    C = T[(-1)^(i + j) for i in k, j in k]
+    C[1, :] .*= 2
+    C[end, :] .*= 2
+    C[:, 1] ./= 2
+    C[:, end] ./= 2
+    Z = 1 ./ DX
+    Z[diagind(Z)] .= zero(T)
+    D = Matrix{T}(I, n, n)
+    for ell in 1:order
+        D = ell .* Z .* (C .* repeat(diag(D), 1, n) .- D)
+        D[diagind(D)] .= .-vec(sum(D; dims = 2))
+    end
+    return D .* (-2 / T(grid[end] - grid[1]))^order
 end
 
 function spectral_diff_matrix(spec::FourierCollocation, grid, order)
@@ -160,8 +195,8 @@ function PDEBase.construct_differential_discretizer(
         taps, rowmap = spectral_taps_rowmap(spec, n)
         for d in union(orders[x], [1])
             D = spectral_diff_matrix(spec, grid, d)
-            fast = spec isa FourierCollocation && spec.fft ?
-                fast_fourier_operator(spec, grid, d, D) : nothing
+            fast = spec isa AbstractSpectralScheme && spec.fft ?
+                fast_spectral_operator(spec, grid, d, D) : nothing
             differentialmap[Differential(x)^d] = SpectralDerivativeOperator(
                 d, D, taps, rowmap, fast
             )

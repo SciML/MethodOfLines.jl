@@ -8,28 +8,59 @@ using ModelingToolkit: get_eqs
 
 const MOL = MethodOfLines
 
-@testset "FFT operator matches the dense matrix" begin
-    for N in (16, 15), d in 1:4
-        spec = FourierCollocation(N)
+@testset "FFT operators match the dense matrices" begin
+    for spec in (
+                FourierCollocation(16), FourierCollocation(15), ChebyshevCollocation(17),
+                ChebyshevCollocation(16),
+            ), d in 1:4
+        N = spec.n
         grid = MOL.spectral_grid(spec, -3.0, 5.0)
         D = MOL.spectral_diff_matrix(spec, grid, d)
-        op = MOL.fast_fourier_operator(spec, grid, d, D)
+        op = MOL.fast_spectral_operator(spec, grid, d, D)
         @test op !== nothing
+        tol = 1.0e-9 * norm(D, Inf)
         v = randn(N)
-        @test MOL.apply_along(op, v, Val(1)) ≈ D * v atol = 1.0e-10
+        @test norm(MOL.apply_along(op, v, Val(1)) - D * v, Inf) < tol
         X = randn(N, 5)
-        @test MOL.apply_along(op, X, Val(1)) ≈ D * X atol = 1.0e-10
+        @test norm(MOL.apply_along(op, X, Val(1)) - D * X, Inf) < tol
         Y = randn(5, N)
-        @test MOL.apply_along(op, Y, Val(2)) ≈ Y * transpose(D) atol = 1.0e-10
+        @test norm(MOL.apply_along(op, Y, Val(2)) - Y * transpose(D), Inf) < tol
         Z = randn(3, N, 4)
         ref = MOL.apply_along(D, Z, Val(2))
-        @test MOL.apply_along(op, Z, Val(2)) ≈ ref atol = 1.0e-10
+        @test norm(MOL.apply_along(op, Z, Val(2)) - ref, Inf) < tol
         for k in 1:4
             @test ref[:, :, k] ≈ Z[:, :, k] * transpose(D)
         end
         # element types without a plan (dual numbers) go through the matrix
-        @test MOL.apply_along(op, big.(v), Val(1)) ≈ D * v atol = 1.0e-10
+        @test norm(MOL.apply_along(op, big.(v), Val(1)) - D * v, Inf) < tol
     end
+    # exact for a polynomial of the interpolant's degree
+    spec = ChebyshevCollocation(12)
+    grid = MOL.spectral_grid(spec, -1.0, 1.0)
+    D = MOL.spectral_diff_matrix(spec, grid, 2)
+    op = MOL.fast_spectral_operator(spec, grid, 2, D)
+    @test MOL.apply_along(op, grid .^ 11, Val(1)) ≈ 110 .* grid .^ 9 atol = 1.0e-9
+end
+
+@testset "Chebyshev heat equation with FFT derivatives" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ cospi(x / 2), u(t, -1) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 0.5), x ∈ Interval(-1.0, 1.0)]
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x], [u(t, x)])
+    n = 20
+    sys, _ = symbolic_discretize(pdesys, PseudospectralDiscretization([x => n], t))
+    @test occursin("ChebyshevFFTDerivative", string(get_eqs(sys)[1]))
+    sys_dense, _ = symbolic_discretize(pdesys, PseudospectralDiscretization([x => ChebyshevCollocation(n; fft = false)], t))
+    @test !occursin("ChebyshevFFTDerivative", string(get_eqs(sys_dense)[1]))
+    prob = discretize(pdesys, PseudospectralDiscretization([x => n], t))
+    sol = solve(prob; abstol = 1.0e-10, reltol = 1.0e-10)
+    @test successful_retcode(sol)
+    exact = [exp(-π^2 * ti / 4) * cospi(xi / 2) for ti in sol.t, xi in sol[x]]
+    @test norm(sol[u(t, x)] - exact, Inf) < 1.0e-6
 end
 
 @testset "Kuramoto-Sivashinsky with FFT derivatives" begin
