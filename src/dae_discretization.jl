@@ -190,7 +190,7 @@ produces, so it is indexed and interpolated by the `PDESystem`'s own variables:
 `sol[u(t, x)]`, `sol(t, x)`.
 """
 function SciMLBase.DAEProblem(
-        pdesys::PDESystem, discretization::MOLFiniteDifference;
+        pdesys::PDESystem, discretization::MOLDiscretization;
         initializealg = nothing, build_initializeprob = false, kwargs...
     )
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
@@ -214,7 +214,7 @@ Build the `DAEProblem` from an already discretized system. Shared by
 system is discretized once.
 """
 function _dae_problem(
-        sys, tspan, discretization::MOLFiniteDifference;
+        sys, tspan, discretization::MOLDiscretization;
         initializealg = nothing, build_initializeprob = false, kwargs...
     )
     sys = complete(sys)

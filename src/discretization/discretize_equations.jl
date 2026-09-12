@@ -3166,21 +3166,9 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     for d in derivweights.orders[x_]
         Dop = get(derivweights.map, Differential(x_)^d, nothing)
         Dop === nothing && continue
-        ws, Itap = try
-            central_difference_weights_and_stencil(
-                Dop, II0, s, filter_interfaces(bcmap[operation(u)][x_]), (j, x_), u
-            )
-        catch e
-            e isa InterruptException && rethrow(e)
-            throw(ArrayFormFallback("could not build boundary stencil for order $d"))
-        end
-        offsets = [I[j] - II0[j] for I in Itap]
-        all(I -> all(k -> k == j || I[k] == II0[k], 1:N), Itap) ||
-            throw(ArrayFormFallback("boundary stencil is not axis aligned"))
-        slices = [
-            array_slice(u, s, ranges, indexmap; shiftx = x_, offset = o) for o in offsets
-        ]
-        expr = array_stencil(collect(ws), slices)
+        expr = array_boundary_derivative_expr(
+            Dop, II0, s, u, x_, j, N, ranges, indexmap, bcmap
+        )
         for v in bcdepvars
             isequal(depvar(v, s), u) || continue
             push!(derivrules, safe_unwrap((Differential(x_)^d)(v)) => expr)
@@ -3228,6 +3216,35 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         throw(ArrayFormFallback("boundary condition has no discretizable terms"))
     end
     return [lhs ~ rhs]
+end
+
+"""
+The slice form of `Dop` applied to `u` on the face at `II0`, for the boundary
+direction `x_` (equation axis `j` of `N`): the weights and taps the pointwise path
+would use at a representative point on the face, with the taps as shifted slices.
+"""
+function array_boundary_derivative_expr(
+        Dop, II0, s, u, x_, j, N, ranges, indexmap, bcmap
+    )
+    ws, Itap = try
+        central_difference_weights_and_stencil(
+            Dop, II0, s, filter_interfaces(bcmap[operation(u)][x_]), (j, x_), u
+        )
+    catch e
+        e isa InterruptException && rethrow(e)
+        throw(
+            ArrayFormFallback(
+                "could not build boundary stencil for order $(Dop.derivative_order)"
+            )
+        )
+    end
+    offsets = [I[j] - II0[j] for I in Itap]
+    all(I -> all(k -> k == j || I[k] == II0[k], 1:N), Itap) ||
+        throw(ArrayFormFallback("boundary stencil is not axis aligned"))
+    slices = [
+        array_slice(u, s, ranges, indexmap; shiftx = x_, offset = o) for o in offsets
+    ]
+    return array_stencil(collect(ws), slices)
 end
 
 """

@@ -5,7 +5,7 @@ Modified copilot explanation:
 
 """
 function PDEBase.transform_pde_system!(
-        v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLFiniteDifference
+        v::PDEBase.VariableMap, boundarymap, sys::PDESystem, disc::MOLDiscretization
     )
     eqs = copy(get_eqs(sys))
     bcs = copy(get_bcs(sys))

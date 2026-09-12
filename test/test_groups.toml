@@ -61,6 +61,9 @@ versions = ["lts", "1", "pre"]
 [Discretization]
 versions = ["lts", "1", "pre"]
 
+[Pseudospectral]
+versions = ["lts", "1", "pre"]
+
 [Complex]
 versions = ["lts", "1", "pre"]
 

@@ -25,6 +25,7 @@ const FUNCTIONAL_GROUPS = [
     "Convection_NU",
     "Wave_Eq_Staggered",
     "Discretization",
+    "Pseudospectral",
 ]
 
 run_tests(;
@@ -115,6 +116,14 @@ run_tests(;
             end
         end,
         "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
+        "Pseudospectral" => function ()
+            @safetestset "Pseudospectral discretization" begin
+                include(joinpath(@__DIR__, "Pseudospectral", "pseudospectral.jl"))
+            end
+            return @safetestset "Pseudospectral FFT extension and 3D" begin
+                include(joinpath(@__DIR__, "Pseudospectral", "fft.jl"))
+            end
+        end,
         "Discretization" => function ()
             @safetestset "Equation discretization" begin
                 include(joinpath(@__DIR__, "Discretization", "equation_discretization.jl"))

@@ -39,7 +39,7 @@ struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C} <:
 end
 
 function PDEBase.generate_metadata(
-        s::DiscreteSpace, disc::MOLFiniteDifference, pdesys::PDESystem,
+        s::DiscreteSpace, disc::MOLDiscretization, pdesys::PDESystem,
         boundarymap, complexmap, u0 = []
     )
     return MOLMetadata(s, disc, pdesys, boundarymap, complexmap, nothing, u0)

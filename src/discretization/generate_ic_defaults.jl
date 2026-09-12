@@ -1,5 +1,5 @@
 function PDEBase.generate_ic_defaults(
-        tconds, s::DiscreteSpace, ::MOLFiniteDifference
+        tconds, s::DiscreteSpace, ::MOLDiscretization
     )
     t = s.time
     if s.time !== nothing
