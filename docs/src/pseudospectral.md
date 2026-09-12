@@ -15,11 +15,11 @@ derivative approximation. Every spatial derivative `Differential(x)^d` is replac
 the dense differentiation matrix of the spectral interpolant through the nodes in
 that direction, so a derivative at one node involves the values at all nodes of the
 direction rather than a fixed stencil. Nonlinear terms are evaluated pointwise on
-the grid. The discretization works entirely in physical (grid) space: no transform to
-spectral coefficients is taken, and no FFT is used. For a periodic direction the
-dense trigonometric differentiation matrix computes the same result the
-`ifft(ik .* fft(u))` route would, at `O(n^2)` rather than `O(n log n)` cost per
-application.
+the grid. The discretization works entirely in physical (grid) space: the unknowns
+are never transformed to spectral coefficients. For a periodic direction the
+derivative is `irfft((ik)^d .* rfft(u))` when an `AbstractFFTs` backend such as
+`FFTW` is loaded, and the equivalent dense trigonometric differentiation matrix
+otherwise; see [FFT derivatives](@ref pseudospectral-fft).
 
 This is the collocation family used by the SciMLBenchmarks
 `SimpleHandwrittenPDE` spectral work-precision benchmarks
@@ -59,7 +59,8 @@ collocation specification:
 - `x => FourierCollocation(n)`: discretize `x` on `n` distinct equispaced points
   of the periodic interval `[a, b)`. Derivatives are those of the trigonometric
   interpolant. A periodic boundary condition `u(t, a) ~ u(t, b)` is required for
-  every dependent variable in that direction.
+  every dependent variable in that direction. `FourierCollocation(n; fft = false)`
+  keeps the dense matrix even when an FFT backend is loaded.
 - `x => grid::AbstractVector`: a custom set of `n` nodes spanning the domain;
   derivatives are those of the polynomial interpolant through the nodes (Fornberg
   weights over the whole grid). Clustered nodes such as Chebyshev points are needed
@@ -154,7 +155,7 @@ for readability but add no equations. A matching condition with a jump, such as
 and raises an error. Truncating conditions such as Dirichlet values are rejected on
 a Fourier direction.
 
-In two dimensions, the corner grid points at the duplicated index of a periodic
+In more than one dimension, the corner grid points at the duplicated index of a periodic
 direction are not connected to the interior and are pinned to zero by the corner
 equations, as on the finite difference path. They are visible only as those corner
 entries of `sol[u(t, x, y)]`.
@@ -174,25 +175,44 @@ Differential(t)(u[2:n-1]) ~ SpectralApply(D2[2:n-1, :])(u[1:n]) - u[2:n-1] .^ 3
 Nonlinear terms broadcast over the slices, and nested derivative terms evaluate
 their argument on the whole direction before applying the outer operator, so
 `Differential(x)(a(u) * Differential(x)(u))` becomes
-`D1 * (a.(u) .* (D1 * u))` on slices. Boundary conditions on the faces of a 2D
-domain are array equations as well, so the number of symbolic equations is
-independent of the resolution in one and two dimensions. The differentiation
-matrices are held inside the operators rather than written into the expression
-tree, so the size of the generated code is independent of the resolution too.
-Systems with three or more spatial dimensions, stationary systems, and equations
-containing patterns without a slice form fall back to one scalar equation per grid
-point, each carrying a full differentiation row.
+`D1 * (a.(u) .* (D1 * u))` on slices. Boundary conditions on the faces of a
+multi-dimensional domain are array equations as well, so the number of symbolic
+equations is independent of the resolution in any number of spatial dimensions.
+The differentiation operators are held inside the `SpectralApply` terms rather than
+written into the expression tree, so the size of the symbolic expressions is
+independent of the resolution too. Stationary systems and equations containing
+patterns without a slice form fall back to one scalar equation per grid point,
+each carrying a full differentiation row.
 
-The `DAEProblem` returned by [`discretize`](@ref) keeps this array form.
-`mtkcompile` scalarizes it into one equation per unknown, each referencing the
-shared matrix products, which the generated code evaluates once per call.
+The `DAEProblem` returned by [`discretize`](@ref) keeps this array form at the
+`System` level. ModelingToolkit's code generation then scalarizes the residual into
+one entry per unknown, each referencing the shared derivative terms, which the
+generated code evaluates once per call; the compile time therefore still grows
+with the resolution, as it does for `MOLFiniteDifference` (see
+[MethodOfLines.jl#691](https://github.com/SciML/MethodOfLines.jl/issues/691)).
 
-At run time each derivative costs a dense matrix product: `O(n^2)` per
-application in one dimension and `O(n^2 m + n m^2)` on an `n × m` grid. This is
-the same cost as the handwritten benchmark implementations. The Jacobian is dense.
-For a few hundred nodes per direction this is fast; for larger periodic problems an
-FFT-based operator would be `O(n log n)`, which this discretization does not
-provide.
+At run time each Chebyshev derivative costs a dense matrix product: `O(n^2)` per
+application in one dimension and `O(n^2 m)` along the first axis of an `n × m`
+grid. This is the same cost as the handwritten benchmark implementations. The
+Jacobian is dense.
+
+## [FFT derivatives](@id pseudospectral-fft)
+
+Loading an `AbstractFFTs` backend, in practice
+
+```julia
+using FFTW
+```
+
+activates the `MethodOfLinesAbstractFFTsExt` extension. From then on every
+`FourierCollocation` direction applies whole-direction derivatives in the array
+form as `irfft((ik)^d .* rfft(u))` along that axis, with the Nyquist mode zeroed
+so that the result equals the dense matrix `D1^d` to roundoff, at `O(n log n)`
+instead of `O(n^2)` per application. FFT plans are created on first use and cached
+per array size. Jacobian evaluations through dual numbers, boundary rows and
+pinned single rows still use the dense matrix, which is kept alongside the FFT
+operator. `FourierCollocation(n; fft = false)` opts a direction out. Chebyshev
+directions always use the dense matrix.
 
 ## Limitations
 
@@ -202,5 +222,6 @@ provide.
 - There is no upwinding or scheme selection: all derivative orders in a direction
   share the same spectral differentiation matrix. Discontinuous solutions produce
   Gibbs oscillations, as with any global spectral method.
-- Derivatives are dense, so the number of nodes per direction should stay in the
-  hundreds.
+- Chebyshev derivatives are dense matrix products, so the number of Chebyshev nodes
+  per direction should stay in the hundreds. Fourier directions with an FFT backend
+  scale to much larger `n`, but the Jacobian remains dense.

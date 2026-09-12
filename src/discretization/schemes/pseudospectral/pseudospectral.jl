@@ -20,13 +20,53 @@
 
 Dense differentiation matrix acting along one independent variable. `mat[i, :]`
 is the differentiation row for matrix-index `i`; `rowmap[g]` maps grid index
-`g` to its matrix row; `taps` lists the grid indices the columns act on.
+`g` to its matrix row; `taps` lists the grid indices the columns act on. `fast`
+is an operator equivalent to `mat` over the whole direction that the array form
+prefers when every row is needed (an FFT operator for Fourier directions, see
+[`fast_fourier_operator`](@ref)), or `nothing`.
 """
-struct SpectralDerivativeOperator{T <: Real, M <: AbstractMatrix{T}}
+struct SpectralDerivativeOperator{T <: Real, M <: AbstractMatrix{T}, F}
     derivative_order::Int
     mat::M
     taps::Vector{Int}
     rowmap::Vector{Int}
+    fast::F
+end
+
+"""
+    fast_fourier_operator(spec::FourierCollocation, grid, d, mat)
+
+An operator applying the order-`d` Fourier derivative over the whole direction
+with FFTs, equivalent to the dense matrix `mat`, or `nothing` when no FFT backend
+is available. Defined by the `AbstractFFTs` extension; the default is `nothing`.
+"""
+fast_fourier_operator(spec, grid, d, mat) = nothing
+
+"""
+    apply_along(op, X, ::Val{J})
+
+Apply the whole-direction derivative operator `op` along axis `J` of `X`. For a
+matrix `op` this is `op * X` contracted over axis `J`; the `AbstractFFTs`
+extension adds FFT operators.
+"""
+function apply_along(mat::AbstractMatrix, X::AbstractVector, ::Val{1})
+    return mat * X
+end
+
+function apply_along(mat::AbstractMatrix, X::AbstractArray{T, N}, ::Val{J}) where {T, N, J}
+    sz = size(X)
+    m = size(mat, 1)
+    J == 1 && return reshape(mat * reshape(X, sz[1], :), m, sz[2:end]...)
+    J == N && return reshape(reshape(X, :, sz[N]) * transpose(mat), sz[1:(N - 1)]..., m)
+    nb = prod(sz[1:(J - 1)])
+    na = prod(sz[(J + 1):end])
+    Xr = reshape(X, nb, sz[J], na)
+    Y = similar(X, promote_type(eltype(mat), T), (sz[1:(J - 1)]..., m, sz[(J + 1):end]...))
+    Yr = reshape(Y, nb, m, na)
+    for a in 1:na
+        LinearAlgebra.mul!(view(Yr, :, :, a), view(Xr, :, :, a), transpose(mat))
+    end
+    return Y
 end
 
 """
@@ -120,8 +160,10 @@ function PDEBase.construct_differential_discretizer(
         taps, rowmap = spectral_taps_rowmap(spec, n)
         for d in union(orders[x], [1])
             D = spectral_diff_matrix(spec, grid, d)
+            fast = spec isa FourierCollocation && spec.fft ?
+                fast_fourier_operator(spec, grid, d, D) : nothing
             differentialmap[Differential(x)^d] = SpectralDerivativeOperator(
-                d, D, taps, rowmap
+                d, D, taps, rowmap, fast
             )
         end
     end

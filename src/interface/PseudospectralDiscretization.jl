@@ -21,7 +21,7 @@ struct ChebyshevCollocation <: AbstractSpectralScheme
 end
 
 """
-    FourierCollocation(n)
+    FourierCollocation(n; fft = true)
 
 Fourier pseudospectral collocation with `n` distinct equispaced grid points on
 the periodic domain `[a, b)`. The grid stores `n + 1` points, with the upper
@@ -30,16 +30,21 @@ condition `u(t, a) ~ u(t, b)`.
 
 Spatial derivatives of order `d` are discretized with the differentiation
 matrix of the trigonometric interpolant, computed as the `d`th power of the
-first-derivative matrix.
+first-derivative matrix. When an `AbstractFFTs` backend such as `FFTW` is loaded
+and `fft = true`, whole-direction derivatives in the array form are applied with
+real FFTs instead of the dense matrix, `O(n log n)` per application rather than
+`O(n^2)`; the two agree to roundoff. Pass `fft = false` to always use the dense
+matrix.
 
 This scheme requires a periodic boundary condition in the associated
 direction; conversely, periodic directions must use `FourierCollocation`.
 """
 struct FourierCollocation <: AbstractSpectralScheme
     n::Int
-    function FourierCollocation(n)
+    fft::Bool
+    function FourierCollocation(n; fft = true)
         n >= 4 || throw(ArgumentError("FourierCollocation requires at least 4 collocation points, got $n"))
-        return new(n)
+        return new(n, fft)
     end
 end
 
@@ -61,9 +66,10 @@ collocation, so no PDE-system transformation is needed.
 The interior of each PDE is emitted as one symbolic array equation over slices of
 the discretized variables, with each derivative an opaque operator holding its
 differentiation matrix, so the number of symbolic equations and the size of the
-generated code are independent of the resolution in one and two spatial
-dimensions. See the [pseudospectral](@ref pseudospectral) documentation page for
-the boundary conditions each grid type accepts and the scaling.
+generated code are independent of the resolution. Fourier directions use FFTs for
+the derivative when an `AbstractFFTs` backend such as `FFTW` is loaded. See the
+[pseudospectral](@ref pseudospectral) documentation page for the boundary
+conditions each grid type accepts and the scaling.
 
 # Arguments
 

@@ -145,18 +145,18 @@ end
 """
     SpectralApply{J, S}
 
-Symbolic array operator applying a differentiation block along axis `J` of its
-argument, producing an array of size `S`. The block is a field rather than a literal
-in the expression tree, so generated code references it as a constant instead of
-spelling out every entry.
+Symbolic array operator applying a differentiation operator (a dense block, or a
+whole-direction FFT operator) along axis `J` of its argument through
+[`apply_along`](@ref), producing an array of size `S`. The operator is a field
+rather than a literal in the expression tree, so generated code references it as a
+constant instead of spelling out every entry.
 """
-struct SpectralApply{J, S, M <: AbstractMatrix} <: Function
+struct SpectralApply{J, S, M} <: Function
     mat::M
 end
-SpectralApply{J, S}(mat::M) where {J, S, M <: AbstractMatrix} = SpectralApply{J, S, M}(mat)
+SpectralApply{J, S}(mat::M) where {J, S, M} = SpectralApply{J, S, M}(mat)
 
-(op::SpectralApply{1})(X) = op.mat * X
-(op::SpectralApply{2})(X) = X * transpose(op.mat)
+(op::SpectralApply{J})(X) where {J} = apply_along(op.mat, X, Val(J))
 
 function SymbolicUtils.promote_symtype(::SpectralApply{J, S}, ::Type) where {J, S}
     return Array{Real, length(S)}
@@ -174,7 +174,7 @@ end
 function spectral_apply_along(mat, j, X)
     Xu = safe_unwrap(X)
     sz = collect(size(Symbolics.wrap(Xu)))
-    sz[j] = size(mat, 1)
+    sz[j] = mat isa AbstractMatrix ? size(mat, 1) : sz[j]
     S = Tuple(sz)
     sh = SymbolicUtils.ShapeVecT(map(Base.UnitRange{Int} ∘ Base.OneTo, S))
     tm = SymbolicUtils.term(
@@ -284,6 +284,9 @@ function spectral_array_derivative(term, ranges, c::SpectralArrayContext)
         spectral_arrayify(inner, innerranges, c)
     end
     is_array_valued(val) || return 0
+    if D.fast !== nothing && rows == 1:size(D.mat, 1)
+        return spectral_apply_along(D.fast, j, val)
+    end
     return spectral_apply_along(D.mat[rows, :], j, val)
 end
 
@@ -292,8 +295,8 @@ end
 
 The interior of `pde` as a single symbolic array equation over the interior box, with
 each spatial derivative a dense differentiation block applied along its axis. Throws
-`ArrayFormFallback` for patterns without a slice form here: stationary systems, more
-than two spatial dimensions, and whatever `arrayify` declines.
+`ArrayFormFallback` for patterns without a slice form here: stationary systems and
+whatever `arrayify` declines.
 """
 function discretize_spectral_array_form(
         pde, interior, s, depvars, derivweights, eqvar, indexmap
@@ -305,9 +308,6 @@ function discretize_spectral_array_form(
     )
     args = ivs(eqvar, s)
     N = length(args)
-    N <= 2 || throw(
-        ArrayFormFallback("spectral slice form is limited to two spatial dimensions")
-    )
     array_validate_depvar_axes(pde, s, args)
     slicevars = array_sliceable_depvars(
         s, array_unique_depvars(array_pde_occurrences(pde, s), s), args
