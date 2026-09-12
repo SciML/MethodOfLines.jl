@@ -52,7 +52,7 @@ The network parameters are `prob.ps[θ]`. The default initialization keeps the n
 
 ## Training
 
-The loss simulates the UDE for a candidate `θ` and compares it with the data. `setp_oop` returns a function that builds a new parameter object from a vector, and `remake` puts it into the problem. Gradients come from ForwardDiff through the solve, which is cheap for a few dozen network parameters; reverse-mode adjoints through the PDE solution interface are not supported yet.
+The loss simulates the UDE for a candidate `θ` and compares it with the data. `setp_oop` returns a function that builds a new parameter object from a vector, and `remake` puts it into the problem. Gradients come from ForwardDiff through the solve, which is cheap for a few dozen network parameters; the last section shows the reverse-mode alternative.
 
 ```@example ude
 using Optimization, OptimizationOptimisers
@@ -103,5 +103,26 @@ plot!(us, [nn(ui, res.u)[1] for ui in us]; label = "NN(u)", lw = 3, linestyle = 
 ```
 
 The network matches the true term where the data covers `u` and drifts near `u = 0` and `u = 1`, where there is little data. Training takes a few minutes.
+
+## Adjoints
+
+The same loss can be differentiated in reverse mode through SciMLSensitivity. Two things change: the solve gets `wrap = Val(false)`, so the loss sees the solver's solution rather than the PDE wrapper, and the data enters as an array, since indexing a solution by `u(t, x)` has no reverse rule. `Array(sol)` holds the grid values with time along the second axis, the transpose of `sol[u(t, x)]`.
+
+```@example ude
+using SciMLSensitivity, Zygote, ForwardDiff
+
+function adjoint_loss(ps)
+    newprob = remake(prob; p = set_θ(prob, ps))
+    sol = solve(newprob; saveat = 0.1, wrap = Val(false),
+        sensealg = InterpolatingAdjoint(autojacvec = ReverseDiffVJP(true)),
+        abstol = 1.0e-8, reltol = 1.0e-8, verbose = DEVerbosity(SciMLLogging.None()))
+    return sum(abs2, Array(sol) .- data')
+end
+g_adjoint = Zygote.gradient(adjoint_loss, res.u)[1]
+g_forward = ForwardDiff.gradient(adjoint_loss, res.u)
+maximum(abs.(g_adjoint .- g_forward)) / maximum(abs.(g_forward))
+```
+
+`AutoZygote()` in place of `AutoForwardDiff()` trains with it. On this problem it is the slower tool: the adjoint solves a second DAE backwards in time for every gradient and takes two orders of magnitude longer than ForwardDiff, whose cost grows with the number of parameters instead. The balance tips only for much larger networks.
 
 The [Brusselator tutorial](@ref brusselator_ude) does the same with two fields as network input.

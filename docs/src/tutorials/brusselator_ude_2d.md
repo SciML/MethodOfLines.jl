@@ -145,11 +145,12 @@ plot(
     xlabel = "x", ylabel = "y", size = (800, 340))
 ```
 
-The learned reaction against `u^2 v` on the points the data visits:
+The learned reaction against `u^2 v` on every fifth point the data visits:
 
 ```@example bruss_ude_2d
-uv_true = vec(data_u .^ 2 .* data_v)
-uv_nn = nn(vcat(vec(data_u)', vec(data_v)'), res.u)[1, :]
+idx = 1:5:length(data_u)
+uv_true = vec(data_u .^ 2 .* data_v)[idx]
+uv_nn = nn(vcat(vec(data_u)[idx]', vec(data_v)[idx]'), res.u)[1, :]
 scatter(uv_true, uv_nn; markersize = 2, label = "NN(u, v)[1]",
     xlabel = "u^2 v", ylabel = "learned")
 plot!(identity, 0, maximum(uv_true); label = "", color = :black)
