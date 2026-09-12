@@ -28,7 +28,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [sources]
-MethodOfLines = {path = "/home/runner/work/MethodOfLines.jl/MethodOfLines.jl"}
+MethodOfLines = {path = "/home/runner/_work/MethodOfLines.jl/MethodOfLines.jl"}
 
 [compat]
 Combinatorics = "1"

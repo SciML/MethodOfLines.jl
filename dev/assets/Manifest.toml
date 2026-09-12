@@ -1744,12 +1744,13 @@ version = "0.3.3"
 
 [[deps.MethodOfLines]]
 deps = ["Combinatorics", "DiffEqBase", "DomainSets", "Interpolations", "Latexify", "LinearAlgebra", "ModelingToolkit", "ModelingToolkitBase", "PDEBase", "PrecompileTools", "RuntimeGeneratedFunctions", "SciMLBase", "StaticArrays", "SymbolicIndexingInterface", "SymbolicUtils", "Symbolics"]
-path = "/home/runner/work/MethodOfLines.jl/MethodOfLines.jl"
+path = "/home/runner/_work/MethodOfLines.jl/MethodOfLines.jl"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
-version = "1.4.0"
-weakdeps = ["ModelingToolkitNeuralNets"]
+version = "1.5.0"
+weakdeps = ["AbstractFFTs", "ModelingToolkitNeuralNets"]
 
     [deps.MethodOfLines.extensions]
+    MethodOfLinesAbstractFFTsExt = "AbstractFFTs"
     MethodOfLinesModelingToolkitNeuralNetsExt = "ModelingToolkitNeuralNets"
 
 [[deps.Missings]]
