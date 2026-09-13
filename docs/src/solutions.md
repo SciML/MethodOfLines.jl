@@ -73,3 +73,19 @@ DAESolution
 ```
 
 This is useful where speed is important, but the shape of the solution is not.
+
+## Differentiation
+
+For time-dependent solutions, `sol[u(t, x)]` and `sol(t, x)` differentiate in reverse mode with Zygote through `solve`, with SciMLSensitivity 7.119.9 or later loaded. The symbol is built outside the differentiated function, since symbolic expressions cannot be built inside it. For a system with parameters `α` and `β`, a target array `data` and a starting vector `p0`:
+
+```julia
+using SciMLSensitivity, Zygote
+using SymbolicIndexingInterface: setp_oop
+
+set_p = setp_oop(prob, [α, β])
+U = u(t, x)
+loss(p) = sum(abs2, solve(remake(prob; p = set_p(prob, p)); saveat = 0.1)[U] .- data)
+Zygote.gradient(loss, p0)
+```
+
+`setp_oop` builds the parameter object outside `remake`; a symbolic map passed to `remake` has no rule. `sol.u`, complex-valued variables and stationary solutions have no rule. On the `DAEProblem` path of `discretize` the initial condition is evaluated when the problem is built, so a parameter in it is not carried by `remake`. The [neural network tutorial](@ref neural_network_term) ends with an example.

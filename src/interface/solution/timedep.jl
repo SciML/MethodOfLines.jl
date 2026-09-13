@@ -16,24 +16,31 @@ function SciMLBase.PDETimeSeriesSolution(
     return sol
 end
 
-function array_observed_solution(sol, discu, observed_equations)
+# The left-hand side of the observed equation that is the array of `discu`, if there is one.
+function array_observed_lhs(discu, observed_equations)
     for eq in observed_equations
         lhs = Symbolics.wrap(eq.lhs)
         lhs isa AbstractArray || continue
         size(lhs) == size(discu) || continue
         entries = Symbolics.scalarize(lhs)
         all(isequal(safe_unwrap(entries[I]), safe_unwrap(discu[I])) for I in CartesianIndices(discu)) || continue
-        evaluator = SymbolicIndexingInterface.observed(sol, eq.lhs)
-        values = evaluator.(
-            SymbolicIndexingInterface.state_values(sol),
-            (SymbolicIndexingInterface.parameter_values(sol),),
-            SymbolicIndexingInterface.current_time(sol)
-        )
-        return map(CartesianIndices(discu)) do I
-            getindex.(values, (I,))
-        end
+        return eq.lhs
     end
     return nothing
+end
+
+function array_observed_solution(sol, discu, observed_equations)
+    lhs = array_observed_lhs(discu, observed_equations)
+    lhs === nothing && return nothing
+    evaluator = SymbolicIndexingInterface.observed(sol, lhs)
+    values = evaluator.(
+        SymbolicIndexingInterface.state_values(sol),
+        (SymbolicIndexingInterface.parameter_values(sol),),
+        SymbolicIndexingInterface.current_time(sol)
+    )
+    return map(CartesianIndices(discu)) do I
+        getindex.(values, (I,))
+    end
 end
 
 function SciMLBase.PDETimeSeriesSolution(
