@@ -1,34 +1,55 @@
-function _pde_call(sol, args...; dv = nothing)
-    # Colon reconstructs on gridpoints
-    args = map(enumerate(args)) do (i, arg)
+# Colon reconstructs on gridpoints. The arguments follow `sol.ivs`, or the arguments of `dv`
+# when it is given.
+function _grid_args(sol, args, dv = nothing)
+    is = dv === nothing ? eachindex(sol.ivs) : _iv_indices(sol, dv)
+    return map(enumerate(args)) do (i, arg)
         if arg isa Colon
-            sol.ivdomain[i]
+            sol.ivdomain[is[i]]
         else
             arg
         end
     end
+end
+
+# The positions in `sol.ivs` of the arguments of `dv`
+function _iv_indices(sol, dv)
+    return map(arguments(safe_unwrap(dv))) do arg_iv
+        i = findfirst(isequal(arg_iv), sol.ivs)
+        @assert i !== nothing "Independent variable $(arg_iv) in dependent variable $(dv) not found in the solution."
+        i
+    end
+end
+
+# The arguments of `dv` among `args`, which are given in the order of `sol.ivs`
+function _dv_args(sol, dv, args)
+    @assert length(args) == length(sol.ivs) "Not enough arguments for the number of independent variables  including time where appropriate, got $(length(args)) expected $(length(sol.ivs))."
+    return args[_iv_indices(sol, dv)]
+end
+
+function _pde_call(sol, args...; dv = nothing)
+    args = _grid_args(sol, args, dv)
     # If no dv is given, return interpolations for every dv
     if dv === nothing
-        @assert length(args) == length(sol.ivs) "Not enough arguments for the number of independent variables  including time where appropriate, got $(length(args)) expected $(length(sol.ivs))."
-        return map(sol.dvs) do dv
-            arg_ivs = arguments(safe_unwrap(dv))
-            is = map(arg_ivs) do arg_iv
-                i = findfirst(isequal(arg_iv), sol.ivs)
-                @assert i !== nothing "Independent variable $(arg_iv) in dependent variable $(dv) not found in the solution."
-                i
-            end
-
-            sol.interp[dv](args[is]...)
-        end
+        return map(dv -> sol.interp[dv](_dv_args(sol, dv, args)...), sol.dvs)
     end
-    if iscomplex(sol) && !any(isequal(safe_unwrap(dv)), sol.dvs)
-        symargs = arguments(safe_unwrap(dv))
-        redv, imdv = sol.disc_data_complexmap[dv]
-        return sol.interp[Num(redv(symargs...))](args...) .+
-            im * sol.interp[Num(imdv(symargs...))](args...)
-    else
+    parts = _complex_parts(sol, dv)
+    if parts === nothing
         return sol.interp[dv](args...)
+    else
+        return sol.interp[parts[1]](args...) .+ im * sol.interp[parts[2]](args...)
     end
+end
+
+# The real and imaginary parts a complex-valued dependent variable is stored as, or nothing.
+function _complex_parts(sol, dv)
+    iscomplex(sol) || return nothing
+    any(isequal(safe_unwrap(dv)), safe_unwrap.(sol.dvs)) && return nothing
+    s = safe_unwrap(dv)
+    iscall(s) || return nothing
+    parts = get(sol.disc_data.complexmap, operation(s), nothing)
+    parts === nothing && return nothing
+    redv, imdv = parts
+    return Num(redv(arguments(s)...)), Num(imdv(arguments(s)...))
 end
 
 function (sol::SciMLBase.PDETimeSeriesSolution{T, N, S, D})(
@@ -95,12 +116,11 @@ function _pde_getindex(A, sym, args...)
     if idv !== nothing
         dv = A.dvs[idv]
     end
-    if symbolic_type(sym) != NotSymbolic() && iv !== nothing && isequal(sym, iv)
-        A.ivdomains[iiv][args...]
+    return if symbolic_type(sym) != NotSymbolic() && iv !== nothing && isequal(sym, iv)
+        A.ivdomain[iiv][args...]
     elseif symbolic_type(sym) != NotSymbolic() && dv !== nothing && isequal(sym, dv)
         A.u[sym][args...]
-    end
-    return if iscomplex(A) && symbolic_type(sym) != NotSymbolic() && iscall(safe_unwrap(sym))
+    elseif iscomplex(A) && symbolic_type(sym) != NotSymbolic() && iscall(safe_unwrap(sym))
         symargs = arguments(safe_unwrap(sym))
         redv, imdv = A.disc_data.complexmap[operation(safe_unwrap(sym))]
         A.u[Num(redv(symargs...))][args...] .+ im * A.u[Num(imdv(symargs...))][args...]
@@ -150,6 +170,17 @@ Base.firstindex(
 Base.lastindex(
     A::SciMLBase.PDETimeSeriesSolution{T, N, S, D}
 ) where {T, N, S, D <: MOLMetadata} = length(A.t)
+
+# `end` in `sol[u(t, x), inds...]` asks the solution, not the field, for its axes.
+function Base.lastindex(
+        ::SciMLBase.PDETimeSeriesSolution{T, N, S, D}, d::Integer
+    ) where {T, N, S, D <: MOLMetadata}
+    throw(
+        ArgumentError(
+            "`end` cannot be resolved in `sol[u(t, x), inds...]`; index the field instead: `sol[u(t, x)][end, :]`."
+        )
+    )
+end
 
 function Base.display(
         pdesol::SciMLBase.PDESolution{

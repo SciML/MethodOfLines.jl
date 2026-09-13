@@ -65,6 +65,10 @@ include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
     traditional_sol[:, 1, 1] .= 0.0 #corners pinned to zero
 
     @test sol[u(t, x, y)] == traditional_sol
+    @test sol[u(t, x, y), 2, :, :] == traditional_sol[2, :, :]
+    @test sol[x, 2:3] == sol[x][2:3]
+    # `end` would ask the solution for the field's axes.
+    @test_throws ArgumentError sol[u(t, x, y), end, :, :]
 
     @test sol(pi / 2, pi / 2, pi / 2; dv = u(t, x, y)) isa Float64
     @test sol(pi / 2, pi / 2, :) isa Vector{Vector{Float64}}
@@ -118,6 +122,23 @@ end
 
     @test (sol[x] == sol[y])
     @test (sol[y] isa StepRangeLen)
+end
+
+@testset "Test 00c: Colon arguments follow the variable's argument order" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    # Time last, and a time domain longer than the space domain.
+    eq = Dt(u(x, t)) ~ Dxx(u(x, t))
+    bcs = [u(x, 0) ~ cos(x), u(0, t) ~ exp(-t), u(1, t) ~ exp(-t) * cos(1)]
+    domains = [t ∈ Interval(0.0, 2.0), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(x, t)])
+    sol = solve(discretize(pdesys, MOLFiniteDifference([x => 0.1], t)); saveat = 0.1)
+
+    @test sol(:, :; dv = u(x, t)) == sol[u(x, t)]
+    @test sol(:, 0.5; dv = u(x, t)) == sol(sol[x], 0.5; dv = u(x, t))
+    @test sol(0.5, :)[1] == sol(sol[x], 0.5; dv = u(x, t))
 end
 
 include("array_observables.jl")

@@ -70,5 +70,8 @@ versions = ["lts", "1", "pre"]
 [NeuralNets]
 versions = ["lts", "1", "pre"]
 
+[SolutionAD]
+versions = ["lts", "1", "pre"]
+
 [QA]
 versions = ["lts", "1"]
