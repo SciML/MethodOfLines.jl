@@ -288,7 +288,8 @@ function spectral_array_derivative(term, ranges, c::SpectralArrayContext)
         full = spectral_apply_along(D.fast, j, val)
         length(rows) == size(D.mat, 1) && return full
         # differentiate on every node, then keep the rows asked for
-        rs = ntuple(k -> k == j ? (first(rows):last(rows)) : (1:size(full, k)), ndims(full))
+        rowrange = first(rows):last(rows)
+        rs = ntuple(k -> k == j ? rowrange : (1:size(full, k)), ndims(full))
         return full[rs...]
     end
     return spectral_apply_along(D.mat[rows, :], j, val)
