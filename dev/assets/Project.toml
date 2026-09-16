@@ -30,7 +30,7 @@ Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [sources]
-MethodOfLines = {path = "/home/runner/_work/MethodOfLines.jl/MethodOfLines.jl"}
+MethodOfLines = {path = "/home/runner/work/MethodOfLines.jl/MethodOfLines.jl"}
 
 [compat]
 Combinatorics = "1"
@@ -40,6 +40,7 @@ DomainSets = "0.7, 0.8"
 ForwardDiff = "1"
 Interpolations = "0.14, 0.15, 0.16"
 Latexify = "0.15, 0.16"
+LinearAlgebra = "< 0.0.1, 1.9"
 MethodOfLines = "0.11, 0.12, 1"
 ModelingToolkit = "11"
 ModelingToolkitNeuralNets = "2.8"
