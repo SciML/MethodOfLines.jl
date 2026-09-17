@@ -39,6 +39,10 @@ using DiffEqBase: BrownFullBasicInit
 
     discψ = sol[ψ(t, x)]
 
+    # The interpolation of a complex-valued variable, on a grid point and off the grid.
+    @test sol(disct[5], discx[7]; dv = ψ(t, x)) ≈ discψ[5, 7]
+    @test sol(disct[5], (discx[7] + discx[8]) / 2; dv = ψ(t, x)) ≈ (discψ[5, 7] + discψ[5, 8]) / 2
+
     analytic(t, x) = sqrt(2) * sin(2 * pi * x) * exp(-im * 4 * pi^2 * t) *
         ((1 + im) / sqrt(2))
 
