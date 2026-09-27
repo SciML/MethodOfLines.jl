@@ -1,7 +1,7 @@
 # FFT-based Fourier derivatives through the AbstractFFTs extension (FFTW backend),
 # and the array form in three spatial dimensions.
 
-using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
+using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets, Symbolics
 using FFTW
 using SciMLBase: successful_retcode
 using ModelingToolkit: get_eqs
@@ -117,7 +117,7 @@ end
     neqs = map(((8, 8), (12, 10))) do (n, m)
         disc = PseudospectralDiscretization([x => n, y => n, z => FourierCollocation(m)], t)
         sys, _ = symbolic_discretize(pdesys, disc)
-        @test length(ModelingToolkit.get_unknowns(sys)) == n * n * (m + 1)
+        @test size(Symbolics.wrap(only(ModelingToolkit.get_unknowns(sys)))) == (n, n, m + 1)
         length(get_eqs(sys))
     end
     # the equation count does not grow with the resolution

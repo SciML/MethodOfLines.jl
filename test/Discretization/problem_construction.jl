@@ -49,6 +49,9 @@ end
 
     disc = mol_disc([x => n], t)
     sys, _ = symbolic_discretize(pdesys, disc)
+    # one array-valued unknown whose elements are the discrete grid values
+    @test length(unknowns(sys)) == 1
+    @test isequal(collect(Symbolics.wrap(only(unknowns(sys)))), get_discrete(pdesys, disc)[u(t, x)])
     @test isempty(MethodOfLines.brown_init_offenders(complete(sys)))
     # the guard is not vacuous: this system does carry initialization equations
     @test !isempty(ModelingToolkit.initialization_equations(complete(sys)))

@@ -96,8 +96,26 @@ function differential_unknowns(sys, unks)
     return out
 end
 
-# `unknowns` of a system built from array equations are the scalar elements, but an
-# expression may mention the parent array or a slice of it, so check both.
+# The scalar unknowns of `sys` and the arrays they are elements of. An array unknown
+# `u(t)[1:n]` contributes its elements to the first set and itself to the second; a
+# scalarized system contributes its elements' parents to the second.
+function _scalar_unknowns(sys)
+    unks = Set{Any}()
+    arrays = Set{Any}()
+    for u in get_unknowns(sys)
+        u = safe_unwrap(u)
+        if is_array_valued(u)
+            push!(arrays, u)
+        elseif iscall(u) && operation(u) === getindex
+            push!(arrays, safe_unwrap(first(arguments(u))))
+        end
+        union!(unks, _scalar_elements(u))
+    end
+    return unks, arrays
+end
+
+# An expression may mention a scalar unknown, the parent array or a slice of it, so check
+# both.
 function _mentions_unknown(ex, unks, arrays)
     for v in Symbolics.get_variables(ex)
         v = safe_unwrap(v)
@@ -125,12 +143,8 @@ function brown_init_offenders(sys)
     ieqs = initialization_equations(sys)
     offenders = Pair{Equation, String}[]
     isempty(ieqs) && return offenders
-    unks = Set{Any}(safe_unwrap.(get_unknowns(sys)))
+    unks, arrays = _scalar_unknowns(sys)
     diffvars = differential_unknowns(sys, unks)
-    arrays = Set{Any}(
-        safe_unwrap(first(arguments(u)))
-            for u in unks if iscall(u) && operation(u) === getindex
-    )
     for eq in ieqs
         reason = _brown_init_offence(eq, diffvars, unks, arrays)
         reason === nothing || push!(offenders, eq => reason)
@@ -161,10 +175,9 @@ end
 function _dae_operating_point(sys, u0, t)
     D = Differential(t)
     op = Dict{Any, Any}()
-    for x in get_unknowns(sys)
-        x = safe_unwrap(x)
-        op[x] = 0.0
-        op[D(x)] = 0.0
+    for x in get_unknowns(sys), el in _scalar_elements(x)
+        op[el] = 0.0
+        op[D(el)] = 0.0
     end
     for (k, v) in u0
         op[safe_unwrap(k)] = v

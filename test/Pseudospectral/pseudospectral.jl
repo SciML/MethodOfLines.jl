@@ -21,6 +21,9 @@ function cheb_matrix_ref(N)
     return D - Diagonal(vec(sum(D, dims = 2)))
 end
 
+# The discretized system has one array unknown per dependent variable.
+grid_unknown_size(sys) = size(Symbolics.wrap(only(get_unknowns(sys))))
+
 # Map compiled unknowns `u(t)[k]` back to their grid indices.
 function unknown_perm(simpsys)
     return map(get_unknowns(simpsys)) do uk
@@ -81,7 +84,7 @@ end
     for n in (8, 40)
         sys, _ = symbolic_discretize(pdesys, PseudospectralDiscretization([x => n], t))
         @test length(get_eqs(sys)) == 3
-        @test length(get_unknowns(sys)) == n
+        @test grid_unknown_size(sys) == (n,)
     end
 
     eq2 = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
@@ -99,7 +102,7 @@ end
         disc = PseudospectralDiscretization([x => n, y => FourierCollocation(m)], t)
         sys, _ = symbolic_discretize(pdesys2, disc)
         @test length(get_eqs(sys)) == 6
-        @test length(get_unknowns(sys)) == n * (m + 1)
+        @test grid_unknown_size(sys) == (n, m + 1)
     end
 end
 
@@ -209,7 +212,7 @@ end
     # the interior array equation plus the periodic alias condition; the
     # derivative matching BCs are satisfied identically and skipped
     @test length(get_eqs(sys)) == 2
-    @test length(get_unknowns(sys)) == N + 1
+    @test grid_unknown_size(sys) == (N + 1,)
 
     prob = discretize(pdesys, disc)
     grid = discmap[x]

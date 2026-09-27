@@ -10,7 +10,7 @@ using ModelingToolkit: get_unknowns,
     get_ivs
 import ModelingToolkitBase
 using ModelingToolkitBase: @named, @parameters, PDESystem, complete, initialization_equations,
-    mtkcompile, unknowns
+    mtkcompile
 import SymbolicIndexingInterface
 using SymbolicIndexingInterface: NotSymbolic, symbolic_type
 import SymbolicUtils
@@ -66,6 +66,7 @@ import SciMLBase.symbolic_discretize
 import PDEBase.get_time
 import PDEBase.get_eqvar
 import PDEBase.get_discvars
+import PDEBase.get_system_unknowns
 import PDEBase.depvar
 import PDEBase.x2i
 import Base.display

@@ -47,7 +47,6 @@ function SciMLBase.PDETimeSeriesSolution(
         ivs = [discretespace.time, discretespace.x̄...]
         ivgrid = generate_ivgrid(discretespace, ivs, sol.t, metadata)
 
-        solved_unknowns = unknowns(odesys)
         dvs = discretespace.ū
         # Reshape the solution to flat arrays, faster to do this eagerly.
         umap = mapreduce(vcat, dvs) do u
@@ -55,7 +54,7 @@ function SciMLBase.PDETimeSeriesSolution(
                 solu = array_observed_solution(sol, discu, ModelingToolkitBase.observed(odesys))
                 if solu === nothing
                     solu = map(CartesianIndices(discu)) do I
-                        i = sym_to_index(discu[I], solved_unknowns)
+                        i = SymbolicIndexingInterface.variable_index(odesys, discu[I])
                         if i !== nothing
                             sol[i, :]
                         else
