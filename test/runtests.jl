@@ -4,6 +4,7 @@ using SciMLTesting
 const FUNCTIONAL_GROUPS = [
     "Components",
     "Complex",
+    "Complex_Indexing",
     "Brusselator",
     "Diffusion_NU",
     "Nonlinlap_ADV",
@@ -79,6 +80,17 @@ run_tests(;
             end
         end,
         "Complex" => joinpath(@__DIR__, "Complex", "schroedinger.jl"),
+        "Complex_Indexing" => function ()
+            @safetestset "Complex-typed cubic NLS plane wave" begin
+                include(joinpath(@__DIR__, "Complex", "typed_nls.jl"))
+            end
+            @safetestset "Complex-typed stationary solution indexing" begin
+                include(joinpath(@__DIR__, "Complex", "typed_stationary_indexing.jl"))
+            end
+            return @safetestset "Inferred-complex solution indexing" begin
+                include(joinpath(@__DIR__, "Complex", "inferred_complex_indexing.jl"))
+            end
+        end,
         "Brusselator" => joinpath(@__DIR__, "Brusselator", "brusselator_eq.jl"),
         "Diffusion_NU" => joinpath(@__DIR__, "Diffusion_NU", "MOL_1D_Linear_Diffusion_NonUniform.jl"),
         "Nonlinlap_ADV" => joinpath(@__DIR__, "Nonlinlap_ADV", "nonlinear_laplacian_advanced.jl"),

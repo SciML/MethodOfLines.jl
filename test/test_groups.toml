@@ -67,6 +67,9 @@ versions = ["lts", "1", "pre"]
 [Complex]
 versions = ["lts", "1", "pre"]
 
+[Complex_Indexing]
+versions = ["lts", "1", "pre"]
+
 [NeuralNets]
 versions = ["lts", "1", "pre"]
 
