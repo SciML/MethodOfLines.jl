@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Tutorial · MethodOfLines.jl</title><script async src="https://www.googletagmanager.com/gtag/js?id=UA-90474609-3"></script><script>  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'UA-90474609-3', {'page_path': location.pathname + location.search + location.hash});
+</script><script data-outdated-warner src="../../assets/warner.js"></script><link rel="canonical" href="https://methodoflines.sciml.ai/stable/tutorials/brusselator/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="MethodOfLines.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">MethodOfLines.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li><li><span class="tocitem">Tutorials</span><ul><li class="is-active"><a class="tocitem" href>Tutorial</a><ul class="internal"><li><a class="tocitem" href="#Using-the-Brusselator-PDE-as-an-example"><span>Using the Brusselator PDE as an example</span></a></li><li><a class="tocitem" href="#Solving-with-MethodOfLines"><span>Solving with MethodOfLines</span></a></li><li><a class="tocitem" href="#Method-of-lines-discretization"><span>Method of lines discretization</span></a></li><li><a class="tocitem" href="#Solving-the-problem"><span>Solving the problem</span></a></li><li><a class="tocitem" href="#Extracting-results"><span>Extracting results</span></a></li></ul></li><li><a class="tocitem" href="../heat/">Solving the Heat Equation</a></li><li><a class="tocitem" href="../params/">Adding parameters</a></li><li><a class="tocitem" href="../heatss/">Steady State Heat Equation - No Time Dependance - NonlinearProblem</a></li><li><a class="tocitem" href="../sispde/">Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li><li><a class="tocitem" href="../icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data</a></li></ul></li><li><a class="tocitem" href="../../MOLFiniteDifference/">MOLFiniteDifference</a></li><li><a class="tocitem" href="../../solutions/">Solution Interface - PDESolutions</a></li><li><a class="tocitem" href="../../get_grid/">Grid and Solution Retrieval - Deprecated</a></li><li><a class="tocitem" href="../../boundary_conditions/">Boundary Conditions</a></li><li><a class="tocitem" href="../../advection_schemes/">Advection Schemes</a></li><li><a class="tocitem" href="../../nonuniform/">Non-Uniform Rectilinear Grids</a></li><li><a class="tocitem" href="../../curvilinear_grids/">Curvilinear Grids</a></li><li><a class="tocitem" href="../../howitworks/">How it Works</a></li><li><a class="tocitem" href="../../devnotes/">Notes for Developers: Implement a Scheme</a></li><li><span class="tocitem">Generated Examples</span><ul><li><a class="tocitem" href="../../generated/bruss_code/">Generated Code for the Brusselator Equation</a></li><li><a class="tocitem" href="../../generated/bruss_ode_eqs/">Generated ODE system for the Brusselator Equation</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../../api/discretization/">Discretization</a></li><li><a class="tocitem" href="../../api/utils/">Utilities</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Tutorial</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Tutorial</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/MethodOfLines.jl/blob/master/docs/src/tutorials/brusselator.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="brusselator"><a class="docs-heading-anchor" href="#brusselator">Tutorial</a><a id="brusselator-1"></a><a class="docs-heading-anchor-permalink" href="#brusselator" title="Permalink"></a></h1><h2 id="Using-the-Brusselator-PDE-as-an-example"><a class="docs-heading-anchor" href="#Using-the-Brusselator-PDE-as-an-example">Using the Brusselator PDE as an example</a><a id="Using-the-Brusselator-PDE-as-an-example-1"></a><a class="docs-heading-anchor-permalink" href="#Using-the-Brusselator-PDE-as-an-example" title="Permalink"></a></h2><p>The Brusselator PDE is defined as follows:</p><p class="math-container">\[\begin{align}
+\frac{\partial u}{\partial t} &amp;= 1 + u^2v - 4.4u + \alpha(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}) + f(x, y, t)\\
+\frac{\partial v}{\partial t} &amp;= 3.4u - u^2v + \alpha(\frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2})
+\end{align}\]</p><p>where</p><p class="math-container">\[f(x, y, t) = \begin{cases}
+5 &amp; \quad \text{if } (x-0.3)^2+(y-0.6)^2 ≤ 0.1^2 \text{ and } t ≥ 1.1 \\
+0 &amp; \quad \text{else}
+\end{cases}\]</p><p>and the initial conditions are</p><p class="math-container">\[\begin{align}
+u(x, y, 0) &amp;= 22\cdot (y(1-y))^{3/2} \\
+v(x, y, 0) &amp;= 27\cdot (x(1-x))^{3/2}
+\end{align}\]</p><p>with the periodic boundary condition</p><p class="math-container">\[\begin{align}
+u(x+1,y,t) &amp;= u(x,y,t) \\
+u(x,y+1,t) &amp;= u(x,y,t)
+\end{align}\]</p><p>on a timespan of <span>$t \in [0,11.5]$</span>.</p><h2 id="Solving-with-MethodOfLines"><a class="docs-heading-anchor" href="#Solving-with-MethodOfLines">Solving with MethodOfLines</a><a id="Solving-with-MethodOfLines-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-with-MethodOfLines" title="Permalink"></a></h2><p>With <code>ModelingToolkit.jl</code>, we first symbolicaly define the system, see also the docs for <a href="https://mtk.sciml.ai/stable/systems/PDESystem/"><code>PDESystem</code></a>:</p><pre><code class="language-julia hljs">using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
+
+
+@parameters x y t
+@variables u(..) v(..)
+Dt = Differential(t)
+Dx = Differential(x)
+Dy = Differential(y)
+Dxx = Differential(x)^2
+Dyy = Differential(y)^2
+
+∇²(u) = Dxx(u) + Dyy(u)
+
+brusselator_f(x, y, t) = (((x-0.3)^2 + (y-0.6)^2) &lt;= 0.1^2) * (t &gt;= 1.1) * 5.
+
+x_min = y_min = t_min = 0.0
+x_max = y_max = 1.0
+t_max = 11.5
+
+α = 10.
+
+u0(x,y,t) = 22(y*(1-y))^(3/2)
+v0(x,y,t) = 27(x*(1-x))^(3/2)
+
+eq = [Dt(u(x,y,t)) ~ 1. + v(x,y,t)*u(x,y,t)^2 - 4.4*u(x,y,t) + α*∇²(u(x,y,t)) + brusselator_f(x, y, t),
+       Dt(v(x,y,t)) ~ 3.4*u(x,y,t) - v(x,y,t)*u(x,y,t)^2 + α*∇²(v(x,y,t))]
+
+domains = [x ∈ Interval(x_min, x_max),
+              y ∈ Interval(y_min, y_max),
+              t ∈ Interval(t_min, t_max)]
+
+# Periodic BCs
+bcs = [u(x,y,0) ~ u0(x,y,0),
+       u(0,y,t) ~ u(1,y,t),
+       u(x,0,t) ~ u(x,1,t),
+
+       v(x,y,0) ~ v0(x,y,0),
+       v(0,y,t) ~ v(1,y,t),
+       v(x,0,t) ~ v(x,1,t)] 
+
+@named pdesys = PDESystem(eq,bcs,domains,[x,y,t],[u(x,y,t),v(x,y,t)])</code></pre><p>For a list of limitations constraining which systems will work, see <a href="../../#limitations">here</a></p><h2 id="Method-of-lines-discretization"><a class="docs-heading-anchor" href="#Method-of-lines-discretization">Method of lines discretization</a><a id="Method-of-lines-discretization-1"></a><a class="docs-heading-anchor-permalink" href="#Method-of-lines-discretization" title="Permalink"></a></h2><p>Then, we create the discretization, leaving the time dimension undiscretized by supplying <code>t</code> as an argument. Optionally, all dimensions can be discretized in this step, just remove the argument <code>t</code> and supply <code>t=&gt;dt</code> in the <code>dxs</code>. See <a href="../../MOLFiniteDifference/#molfd">here</a> for more information on the <code>MOLFiniteDifference</code> constructor arguments and options.</p><pre><code class="language-julia hljs">N = 32
+
+dx = (x_max-x_min)/N
+dy = (y_max-y_min)/N
+
+order = 2
+
+discretization = MOLFiniteDifference([x=&gt;dx, y=&gt;dy], t, approx_order=order, grid_align=center_align)</code></pre><p>Next, we discretize the system, converting the <code>PDESystem</code> in to an <code>ODEProblem</code> or <code>NonlinearProblem</code>.</p><pre><code class="language-julia hljs"># Convert the PDE problem into an ODE problem
+println(&quot;Discretization:&quot;)
+@time prob = discretize(pdesys,discretization)</code></pre><h2 id="Solving-the-problem"><a class="docs-heading-anchor" href="#Solving-the-problem">Solving the problem</a><a id="Solving-the-problem-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-the-problem" title="Permalink"></a></h2><p>Now your problem can be solved with an appropriate ODE solver, or Nonlinear solver if you have not supplied a time dimension in the <code>MOLFiniteDifference</code> constructor. Include these solvers with <code>using OrdinaryDiffEq</code> or <code>using NonlinearSolve</code>, then call <code>sol = solve(prob, AppropriateSolver())</code> or <code>sol = NonlinearSolve.solve(prob, AppropriateSolver())</code>. For more information on the available solvers, see the docs for <a href="https://diffeq.sciml.ai/stable/solvers/ode_solve/"><code>DifferentialEquations.jl</code></a>, <a href="http://nonlinearsolve.sciml.ai/dev/solvers/NonlinearSystemSolvers/"><code>NonlinearSolve.jl</code></a> and <a href="https://diffeq.sciml.ai/stable/solvers/steady_state_solve/#SteadyStateDiffEq.jl">SteadyStateDiffEq.jl</a>. <code>Tsit5()</code> is a good first choice of solver for many problems.</p><pre><code class="language-julia hljs">println(&quot;Solve:&quot;)
+@time sol = solve(prob, TRBDF2(), saveat=0.1)</code></pre><h2 id="Extracting-results"><a class="docs-heading-anchor" href="#Extracting-results">Extracting results</a><a id="Extracting-results-1"></a><a class="docs-heading-anchor-permalink" href="#Extracting-results" title="Permalink"></a></h2><p>To retrieve your solution, for example for <code>u</code>, use <code>sol[u(x, y, t)]</code>. To get the independent variable axes, use for example <code>sol[t]</code>. For more information on the solution interface, <a href="../../solutions/#sol">see this page</a></p><pre><code class="language-julia hljs">discrete_x = sol[x]
+discrete_y = sol[y]
+discrete_t = sol[t]
+
+solu = sol[u(x, y, t)]
+solv = sol[v(x, y, t)]</code></pre><p>The result after plotting an animation:</p><p>For <code>u</code>:</p><pre><code class="language-julia hljs">using Plots
+anim = @animate for k in 1:length(discrete_t)
+    heatmap(solu[k, 2:end, 2:end], title=&quot;$(discrete_t[k])&quot;) # 2:end since end = 1, periodic condition
+end
+gif(anim, &quot;plots/Brusselator2Dsol_u.gif&quot;, fps = 8)</code></pre><p><img src="https://user-images.githubusercontent.com/9698054/159934498-e5c21b13-c63b-4cd2-9149-49e521765141.gif" alt="Brusselator2Dsol_u"/></p><p>For <code>v</code>:</p><pre><code class="language-julia hljs">anim = @animate for k in 1:length(discrete_t)
+    heatmap(solv[k, 2:end, 2:end], title=&quot;$(discrete_t[k])&quot;)
+end
+gif(anim, &quot;plots/Brusselator2Dsol_v.gif&quot;, fps = 8)</code></pre><p><img src="https://i.imgur.com/3kQNMI3.gif" alt="Brusselator2Dsol_v"/></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../../">« MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a><a class="docs-footer-nextpage" href="../heat/">Solving the Heat Equation »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Tuesday 11 October 2022 15:54">Tuesday 11 October 2022</span>. Using Julia version 1.8.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

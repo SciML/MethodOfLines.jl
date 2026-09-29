@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Learning the Brusselator reaction in two dimensions · MethodOfLines.jl</title><meta name="title" content="Learning the Brusselator reaction in two dimensions · MethodOfLines.jl"/><meta property="og:title" content="Learning the Brusselator reaction in two dimensions · MethodOfLines.jl"/><meta property="twitter:title" content="Learning the Brusselator reaction in two dimensions · MethodOfLines.jl"/><meta name="description" content="Documentation for MethodOfLines.jl."/><meta property="og:description" content="Documentation for MethodOfLines.jl."/><meta property="twitter:description" content="Documentation for MethodOfLines.jl."/><meta property="og:url" content="https://docs.sciml.ai/MethodOfLines/stable/tutorials/brusselator_ude_2d/"/><meta property="twitter:url" content="https://docs.sciml.ai/MethodOfLines/stable/tutorials/brusselator_ude_2d/"/><link rel="canonical" href="https://docs.sciml.ai/MethodOfLines/stable/tutorials/brusselator_ude_2d/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="MethodOfLines.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">MethodOfLines.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../brusselator/">Getting Started</a></li><li><a class="tocitem" href="../heat/">Solving the Heat Equation</a></li><li><a class="tocitem" href="../nonuniform_weno/">Resolving Steep Gradients: WENO on Non-Uniform Grids</a></li><li><a class="tocitem" href="../weno_showcase/">Showcase: Resolving Interfacial Gradients with Non-Uniform WENO</a></li><li><a class="tocitem" href="../params/">Adding parameters</a></li><li><a class="tocitem" href="../neural_network_term/">Learning a missing term with a neural network</a></li><li><a class="tocitem" href="../brusselator_ude/">Learning the Brusselator reaction with a neural network</a></li><li class="is-active"><a class="tocitem" href>Learning the Brusselator reaction in two dimensions</a><ul class="internal"><li><a class="tocitem" href="#Data-from-the-two-dimensional-Brusselator"><span>Data from the two-dimensional Brusselator</span></a></li><li><a class="tocitem" href="#The-UDE"><span>The UDE</span></a></li><li><a class="tocitem" href="#Training"><span>Training</span></a></li><li><a class="tocitem" href="#Result"><span>Result</span></a></li></ul></li><li><a class="tocitem" href="../heatss/">Steady State Heat Equation - No Time Dependence - NonlinearProblem</a></li><li><a class="tocitem" href="../sispde/">Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li><li><a class="tocitem" href="../icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data</a></li><li><a class="tocitem" href="../PIDE/">Solving PIDEs (Integrals)</a></li><li><a class="tocitem" href="../schroedinger/">Schrödinger Equation</a></li></ul></li><li><a class="tocitem" href="../../MOLFiniteDifference/">MOLFiniteDifference</a></li><li><a class="tocitem" href="../../pseudospectral/">PseudospectralDiscretization</a></li><li><a class="tocitem" href="../../solutions/">Solution Interface - PDESolutions</a></li><li><a class="tocitem" href="../../get_grid/">Grid and Solution Retrieval - Deprecated</a></li><li><a class="tocitem" href="../../boundary_conditions/">Boundary Conditions</a></li><li><a class="tocitem" href="../../advection_schemes/">Advection Schemes</a></li><li><a class="tocitem" href="../../nonuniform/">Non-Uniform Rectilinear Grids</a></li><li><a class="tocitem" href="../../curvilinear_grids/">Curvilinear Grids</a></li><li><a class="tocitem" href="../../faq/">FAQs</a></li><li><a class="tocitem" href="../../howitworks/">How it Works</a></li><li><a class="tocitem" href="../../devnotes/">Notes for Developers: Implement a Scheme</a></li><li><span class="tocitem">Generated Examples</span><ul><li><a class="tocitem" href="../../generated/bruss_code/">Generated Code for the Brusselator Equation</a></li><li><a class="tocitem" href="../../generated/bruss_ode_eqs/">Generated ODE system for the Brusselator Equation</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../../api/discretization/">Discretization</a></li><li><a class="tocitem" href="../../api/utils/">Utilities</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Learning the Brusselator reaction in two dimensions</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Learning the Brusselator reaction in two dimensions</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/MethodOfLines.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/MethodOfLines.jl/blob/master/docs/src/tutorials/brusselator_ude_2d.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="brusselator_ude_2d"><a class="docs-heading-anchor" href="#brusselator_ude_2d">Learning the Brusselator reaction in two dimensions</a><a id="brusselator_ude_2d-1"></a><a class="docs-heading-anchor-permalink" href="#brusselator_ude_2d" title="Permalink"></a></h1><p>The <a href="../brusselator_ude/#brusselator_ude">one-dimensional tutorial</a> replaced the reaction of the Brusselator with a network of two inputs and two outputs. Here the same network sits in the two-dimensional Brusselator of the <a href="../brusselator/#brusselator">getting-started example</a>, on a grid in <code>x</code> and <code>y</code>. Nothing in the setup depends on the dimension: the interior of each equation is still one array equation, and the network is evaluated in one call over the grid. What changes is the data, which now has three axes, and the cost of gradients through the solver.</p><h2 id="Data-from-the-two-dimensional-Brusselator"><a class="docs-heading-anchor" href="#Data-from-the-two-dimensional-Brusselator">Data from the two-dimensional Brusselator</a><a id="Data-from-the-two-dimensional-Brusselator-1"></a><a class="docs-heading-anchor-permalink" href="#Data-from-the-two-dimensional-Brusselator" title="Permalink"></a></h2><p>The two-dimensional Brusselator with periodic boundaries, without the forcing term of the getting-started example and with a smaller diffusion coefficient:</p><p class="math-container">\[\begin{align}
+\frac{\partial u}{\partial t} &amp;= 1 + u^2 v - 4.4u + \alpha \left(\frac{\partial^2 u}{\partial x^2} + \frac{\partial^2 u}{\partial y^2}\right) \\
+\frac{\partial v}{\partial t} &amp;= 3.4u - u^2 v + \alpha \left(\frac{\partial^2 v}{\partial x^2} + \frac{\partial^2 v}{\partial y^2}\right)
+\end{align}\]</p><p>Again the reaction <code>u^2 v</code> is taken as unknown and the simulated data is kept. The first point along <code>x</code> and along <code>y</code> duplicates the last one under the periodic conditions and is dropped from the data, as in the getting-started example.</p><pre><code class="language-julia hljs">using ModelingToolkit, MethodOfLines, OrdinaryDiffEq, DomainSets
+
+@parameters t x y
+@variables u(..) v(..)
+Dt = Differential(t)
+Dxx = Differential(x)^2
+Dyy = Differential(y)^2
+α = 0.1
+dx = 0.1
+saveat = 0.02
+tol = (abstol = 1.0e-8, reltol = 1.0e-8)
+
+domains = [t ∈ Interval(0.0, 5.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+bcs = [
+    u(0, x, y) ~ 22 * (y * (1 - y))^(3 / 2), v(0, x, y) ~ 27 * (x * (1 - x))^(3 / 2),
+    u(t, 0, y) ~ u(t, 1, y), u(t, x, 0) ~ u(t, x, 1),
+    v(t, 0, y) ~ v(t, 1, y), v(t, x, 0) ~ v(t, x, 1),
+]
+disc = MOLFiniteDifference([x =&gt; dx, y =&gt; dx], t)
+
+@named bruss = PDESystem(
+    [
+        Dt(u(t, x, y)) ~ 1 + u(t, x, y)^2 * v(t, x, y) - 4.4 * u(t, x, y) +
+            α * (Dxx(u(t, x, y)) + Dyy(u(t, x, y))),
+        Dt(v(t, x, y)) ~ 3.4 * u(t, x, y) - u(t, x, y)^2 * v(t, x, y) +
+            α * (Dxx(v(t, x, y)) + Dyy(v(t, x, y))),
+    ],
+    bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)])
+
+sol_true = solve(discretize(bruss, disc); saveat, tol...)
+data_u = sol_true[u(t, x, y)][:, 2:end, 2:end]
+data_v = sol_true[v(t, x, y)][:, 2:end, 2:end]
+size(data_u)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(251, 10, 10)</code></pre><h2 id="The-UDE"><a class="docs-heading-anchor" href="#The-UDE">The UDE</a><a id="The-UDE-1"></a><a class="docs-heading-anchor-permalink" href="#The-UDE" title="Permalink"></a></h2><p>The network and the system are those of the one-dimensional tutorial with <code>y</code> added:</p><pre><code class="language-julia hljs">using ModelingToolkitNeuralNets
+
+NN, θ = SymbolicNeuralNetwork(; n_input = 2, n_output = 2,
+    chain = multi_layer_feed_forward(2, 2; width = 6), nn_p_name = :θ)
+reaction = NN([u(t, x, y), v(t, x, y)], θ)
+
+@named ude = PDESystem(
+    [
+        Dt(u(t, x, y)) ~ 1 - 4.4 * u(t, x, y) + α * (Dxx(u(t, x, y)) + Dyy(u(t, x, y))) +
+            reaction[1],
+        Dt(v(t, x, y)) ~ 3.4 * u(t, x, y) + α * (Dxx(v(t, x, y)) + Dyy(v(t, x, y))) +
+            reaction[2],
+    ],
+    bcs, domains, [t, x, y], [u(t, x, y), v(t, x, y)], [NN, θ])
+
+prob = discretize(ude, disc)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">DAEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+timespan: (0.0, 5.0)
+u0: 242-element Vector{Float64}:
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ ⋮
+ 1.7280000000000006
+ 2.5983204190399607
+ 3.174538706646999
+ 3.3750000000000004
+ 3.174538706646999
+ 2.5983204190399616
+ 1.7279999999999998
+ 0.7289999999999999
+ 0.0
+du0: 242-element Vector{Float64}:
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ ⋮
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0</code></pre><p>As in one dimension, the symbolic system does not grow with the grid; the periodic seams are now lines instead of points:</p><pre><code class="language-julia hljs">sys, _ = symbolic_discretize(ude, disc)
+length(equations(sys))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">24</code></pre><h2 id="Training"><a class="docs-heading-anchor" href="#Training">Training</a><a id="Training-1"></a><a class="docs-heading-anchor-permalink" href="#Training" title="Permalink"></a></h2><p>The missing term is estimated from the data first and the network is fitted to the estimate, as in one dimension. The time derivative comes from central differences, the Laplacian from the periodic five-point stencil of the discretization, both on the interior of the data (the first and last saved times are dropped). The last line checks the estimate against the true term:</p><pre><code class="language-julia hljs">ddt(w) = (w[3:end, :, :] .- w[1:(end - 2), :, :]) ./ (2 * saveat)
+function lap(w)
+    return (circshift(w, (0, 1, 0)) .+ circshift(w, (0, -1, 0)) .+
+        circshift(w, (0, 0, 1)) .+ circshift(w, (0, 0, -1)) .- 4 .* w) ./ dx^2
+end
+U = data_u[2:(end - 1), :, :]
+V = data_v[2:(end - 1), :, :]
+R1 = ddt(data_u) .- (1 .- 4.4 .* U .+ α .* lap(U))
+R2 = ddt(data_v) .- (3.4 .* U .+ α .* lap(V))
+X = vcat(vec(U)&#39;, vec(V)&#39;)
+Y = vcat(vec(R1)&#39;, vec(R2)&#39;)
+maximum(abs.(R1 .- U .^ 2 .* V)) / maximum(abs.(U .^ 2 .* V))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.015808738719538532</code></pre><p>The data set has about 25000 points, and the fit loss is one network evaluation over all of them. Reverse mode is the right tool for its gradient: with Zygote the fit below takes under a minute, with ForwardDiff more than ten times as long.</p><pre><code class="language-julia hljs">using Optimization, OptimizationOptimisers, Zygote
+using SymbolicIndexingInterface: setp_oop
+
+nn = prob.ps[NN]
+set_θ = setp_oop(prob, θ)
+
+fit_loss(ps, _) = sum(abs2, nn(X, ps) .- Y) / size(X, 2)
+optf = OptimizationFunction(fit_loss, AutoZygote())
+res = solve(OptimizationProblem(optf, collect(prob.ps[θ])), Adam(0.05); maxiters = 2000)
+res.objective</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.0018546805069968911</code></pre><p>The fitted network reproduces the data to a fraction of a percent, as the next section shows, so the refinement through the solver of the one-dimensional tutorial is left out. It works the same way; on this grid one ForwardDiff gradient of the trajectory loss takes about half a minute.</p><h2 id="Result"><a class="docs-heading-anchor" href="#Result">Result</a><a id="Result-1"></a><a class="docs-heading-anchor-permalink" href="#Result" title="Permalink"></a></h2><p>The UDE with the fitted network against the data, in relative L2 norm:</p><pre><code class="language-julia hljs">using LinearAlgebra
+
+sol_fit = solve(remake(prob; p = set_θ(prob, res.u)); saveat, tol...)
+fit_u = sol_fit[u(t, x, y)][:, 2:end, 2:end]
+fit_v = sol_fit[v(t, x, y)][:, 2:end, 2:end]
+norm(fit_u .- data_u) / norm(data_u), norm(fit_v .- data_v) / norm(data_v)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(0.0027761404492393817, 0.0009011072722749378)</code></pre><p>The fields flatten under diffusion by <code>t ≈ 2</code>; from then on the data is the homogeneous oscillation of the Brusselator. <code>u</code> while it still has structure, at <code>t = 0.5</code>:</p><pre><code class="language-julia hljs">using Plots
+
+k = argmin(abs.(sol_true[t] .- 0.5))
+xs = sol_true[x][2:end]
+ys = sol_true[y][2:end]
+clims = extrema(data_u[k, :, :])
+plot(
+    heatmap(xs, ys, permutedims(data_u[k, :, :]); title = &quot;u data, t = 0.5&quot;, clims),
+    heatmap(xs, ys, permutedims(fit_u[k, :, :]); title = &quot;u UDE, t = 0.5&quot;, clims);
+    xlabel = &quot;x&quot;, ylabel = &quot;y&quot;, size = (800, 340))</code></pre><img src="92c216a6.svg" alt="Example block output"/><p>The learned reaction against <code>u^2 v</code> on the points the data visits:</p><pre><code class="language-julia hljs">uv_true = vec(data_u .^ 2 .* data_v)
+uv_nn = nn(vcat(vec(data_u)&#39;, vec(data_v)&#39;), res.u)[1, :]
+scatter(uv_true, uv_nn; markersize = 2, label = &quot;NN(u, v)[1]&quot;,
+    xlabel = &quot;u^2 v&quot;, ylabel = &quot;learned&quot;)
+plot!(identity, 0, maximum(uv_true); label = &quot;&quot;, color = :black)</code></pre><img src="88500ffc.svg" alt="Example block output"/><p>The learned reaction follows <code>u^2 v</code> where the data is dense; the deviations are at the largest values, which only the first few saved times reach. The data solve, the fit and the UDE solve take a few minutes together, most of it compilation.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../brusselator_ude/">« Learning the Brusselator reaction with a neural network</a><a class="docs-footer-nextpage" href="../heatss/">Steady State Heat Equation - No Time Dependence - NonlinearProblem »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Saturday 12 September 2026 07:59">Saturday 12 September 2026</span>. Using Julia version 1.13.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
