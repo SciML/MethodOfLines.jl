@@ -218,7 +218,7 @@ Discretize `pdesys` and return a problem ready to `solve`.
 For a time-dependent system this builds a `DAEProblem`. MethodOfLines emits residuals of
 the form `D(u) - f ~ 0`, which are already implicit-DAE form, so no `mtkcompile` is
 needed and the array (slice-form) equations survive at the `System` level. Residual
-code generation still expands one entry per unknown, so `discretize` time and the
+code generation expands one entry per unknown, so `discretize` time and the
 first-call compile of `prob.f` grow with resolution (see MethodOfLines.jl#691;
 ModelingToolkit.jl#5139). Calling `solve(prob)` selects the default DAE algorithm.
 

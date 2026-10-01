@@ -3,9 +3,9 @@
 !!! warning "MethodOfLines v1.0 changes"
     With a `DAEProblem`, MethodOfLines v1.0 keeps a fixed number of symbolic array
     equations independent of the grid resolution, so symbolic processing of the
-    `System` can be orders of magnitude faster than the old per-point path.
-    Residual code generation still expands one entry per unknown, so `discretize`
-    time and the first-call compile of `prob.f` still grow with resolution
+    `System` can be orders of magnitude faster than generating one equation per
+    grid point. Residual code generation expands one entry per unknown, so
+    `discretize` time and the first-call compile of `prob.f` grow with resolution
     ([MethodOfLines.jl#691](https://github.com/SciML/MethodOfLines.jl/issues/691);
     [ModelingToolkit.jl#5139](https://github.com/SciML/ModelingToolkit.jl/issues/5139)).
     `DAEProblem` is the default for time-dependent systems; call `solve(prob)` to

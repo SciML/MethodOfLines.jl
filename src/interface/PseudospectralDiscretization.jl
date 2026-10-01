@@ -73,7 +73,7 @@ The interior of each PDE is emitted as one symbolic array equation over slices o
 the discretized variables, with each derivative an opaque operator holding its
 differentiation matrix, so the number of symbolic equations and the size of the
 symbolic expressions are independent of the resolution. Residual code generation
-still expands one entry per unknown (see MethodOfLines.jl#691;
+expands one entry per unknown (see MethodOfLines.jl#691;
 ModelingToolkit.jl#5139). Derivatives are applied with FFTs in both Fourier and
 Chebyshev directions when an `AbstractFFTs` backend such as `FFTW` is loaded. See
 the [pseudospectral](@ref pseudospectral) documentation page for the boundary

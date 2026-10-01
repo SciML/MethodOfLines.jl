@@ -5,10 +5,11 @@
 With a `DAEProblem`, MethodOfLines v1.0 keeps a fixed number of symbolic array equations
 independent of the grid resolution. Instead of one symbolic equation per grid point, it
 generates operations over whole array slices at the `System` level. Symbolic processing
-of that system can therefore be orders of magnitude faster than before, so `DAEProblem`
-is now the default for time-dependent systems. Residual code generation still expands
-one entry per unknown, so `discretize` time and the first-call compile of `prob.f` still
-grow with resolution (see MethodOfLines.jl#691; ModelingToolkit.jl#5139).
+of that system can therefore be orders of magnitude faster than generating one equation
+per grid point, so `DAEProblem` is now the default for time-dependent systems. Residual
+code generation expands one entry per unknown, so `discretize` time and the first-call
+compile of `prob.f` grow with resolution (see MethodOfLines.jl#691;
+ModelingToolkit.jl#5139).
 
 The system returned by `symbolic_discretize` now contains these symbolic array equations.
 Code that directly inspects or transforms that system must handle them.
@@ -31,7 +32,7 @@ sol = solve(prob)
 ```
 
 The `ODEProblem` path additionally scalarizes the array equations at the `System` level
-via `mtkcompile` (both paths still pay per-element residual codegen until
+via `mtkcompile` (both paths expand the residual one entry per unknown; see
 ModelingToolkit.jl#5139). Explicit Runge–Kutta methods such as `Tsit5()` and
 `SSPRK54()` require an `ODEProblem`, so construct one explicitly:
 

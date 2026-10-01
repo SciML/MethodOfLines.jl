@@ -65,10 +65,9 @@ MethodOfLines emits residuals of the form `D(u) - f ~ 0`, which are already in
 implicit-DAE form. Building a `DAEProblem` therefore needs no `mtkcompile`, and the array
 equations survive at the `System` level — isolating the derivative for an `ODEProblem`
 is structural simplification, and it scalarizes them. ModelingToolkit's residual code
-generation still expands one entry per unknown, so `discretize` time and the first-call
+generation expands one entry per unknown, so `discretize` time and the first-call
 compile of `prob.f` grow with the resolution
 ([MethodOfLines.jl#691](https://github.com/SciML/MethodOfLines.jl/issues/691);
-upstream tracking:
 [ModelingToolkit.jl#5139](https://github.com/SciML/ModelingToolkit.jl/issues/5139)).
 Calling `solve(prob)` lets OrdinaryDiffEq select its default DAE algorithm.
 
@@ -109,8 +108,8 @@ prob = ODEProblem(mtkcompile(sys), nothing)
 ```
 
 Note that `mtkcompile` scalarizes the array equations at the `System` level, so this path
-gives up the symbolic-equation-count benefit of the array form (both paths still pay
-per-element residual codegen until
+gives up the symbolic-equation-count benefit of the array form (both paths expand the
+residual one entry per unknown; see
 [ModelingToolkit.jl#5139](https://github.com/SciML/ModelingToolkit.jl/issues/5139)).
 Prefer `discretize` unless you specifically need an `ODEProblem` or an explicit
 time-stepping method.
