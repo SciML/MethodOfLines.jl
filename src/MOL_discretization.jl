@@ -217,13 +217,15 @@ Discretize `pdesys` and return a problem ready to `solve`.
 
 For a time-dependent system this builds a `DAEProblem`. MethodOfLines emits residuals of
 the form `D(u) - f ~ 0`, which are already implicit-DAE form, so no `mtkcompile` is
-needed and the array (slice-form) equations reach the generated code intact. Calling
-`solve(prob)` selects the default DAE algorithm.
+needed and the array (slice-form) equations survive at the `System` level. Residual
+code generation still expands one entry per unknown, so `discretize` time and the
+first-call compile of `prob.f` grow with resolution (see MethodOfLines.jl#691;
+ModelingToolkit.jl#5139). Calling `solve(prob)` selects the default DAE algorithm.
 
 A few systems cannot be posed as a first-order DAE — those second order in time, and
 those whose initialization equations `BrownFullBasicInit` would not honour. Those fall
-back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations. Pass
-`fallback = false` to make that an error instead.
+back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations at the
+`System` level. Pass `fallback = false` to make that an error instead.
 
 Supplying `analytic` selects the compiled `ODEProblem` path because analytic solutions
 are attached through the compiled `ODEFunction`.
