@@ -1,4 +1,6 @@
 module MethodOfLines
+import ChainRulesCore
+using ChainRulesCore: AbstractZero, NoTangent, Tangent, rrule_via_ad, unthunk
 import LinearAlgebra
 using LinearAlgebra: I, cond, dot, diag, diagind
 import SciMLBase
@@ -94,6 +96,7 @@ include("interface/solution/MOLMetadata.jl")
 include("interface/solution/solution_utils.jl")
 include("interface/solution/common.jl")
 include("interface/solution/timedep.jl")
+include("interface/solution/chainrules.jl")
 include("interface/solution/timeindep.jl")
 
 # Weight calculation
