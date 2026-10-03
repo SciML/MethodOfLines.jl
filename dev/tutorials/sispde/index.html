@@ -118,26 +118,26 @@ odeprob = ODEProblem(mtkcompile(sys), nothing, tspan)
 steadystateprob = SteadyStateProblem(odeprob)
 steadystate = solve(steadystateprob, DynamicSS(FBDF()))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">retcode: Success
 u: 198-element Vector{Float64}:
- 0.335734292899292
- 0.3357393550440772
- 0.3357472340386631
- 0.33575738686955614
- 0.3357692864347294
- 0.33578242253412544
- 0.3357963028327151
- 0.33581045378998425
- 0.3358244215499938
- 0.33583777278644905
+ 0.33573429289930035
+ 0.3357393550440854
+ 0.3357472340386713
+ 0.3357573868695643
+ 0.33576928643473747
+ 0.3357824225341335
+ 0.335796302832723
+ 0.33581045378999214
+ 0.33582442155000164
+ 0.3358377727864569
  ⋮
- 0.6764808507312554
- 0.6764571776245131
- 0.6764313104635398
- 0.6764045765715538
- 0.6763783176156283
- 0.6763538845216588
- 0.6763326324180716
- 0.6763159156304349
- 0.6763050827486817</code></pre><h3 id="The-effect-of-human-mobility-on-endemic-size"><a class="docs-heading-anchor" href="#The-effect-of-human-mobility-on-endemic-size">The effect of human mobility on endemic size</a><a id="The-effect-of-human-mobility-on-endemic-size-1"></a><a class="docs-heading-anchor-permalink" href="#The-effect-of-human-mobility-on-endemic-size" title="Permalink"></a></h3><p>Set the endemic size <span>$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$</span></p><pre><code class="language-julia hljs"># Get the discretized I variables from the system
+ 0.6764808507313231
+ 0.6764571776245812
+ 0.676431310463608
+ 0.6764045765716223
+ 0.6763783176156971
+ 0.6763538845217277
+ 0.6763326324181405
+ 0.6763159156305036
+ 0.6763050827487503</code></pre><h3 id="The-effect-of-human-mobility-on-endemic-size"><a class="docs-heading-anchor" href="#The-effect-of-human-mobility-on-endemic-size">The effect of human mobility on endemic size</a><a id="The-effect-of-human-mobility-on-endemic-size-1"></a><a class="docs-heading-anchor-permalink" href="#The-effect-of-human-mobility-on-endemic-size" title="Permalink"></a></h3><p>Set the endemic size <span>$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$</span></p><pre><code class="language-julia hljs"># Get the discretized I variables from the system
 I_vars = filter(s -&gt; contains(string(s), &quot;I(&quot;), unknowns(odeprob.f.sys))
 
 function episize!(dS_val, dI_val)
@@ -147,4 +147,4 @@ function episize!(dS_val, dI_val)
     y = sum(steadystate[v] for v in I_vars) * dx
     return y
 end
-episize!(exp(1.0), exp(0.5))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.6589652754333207</code></pre><p>References:</p><ul><li>Allen L J S, Bolker B M, Lou Y, et al. Asymptotic profiles of the steady states for an SIS epidemic reaction-diffusion model[J]. Discrete &amp; Continuous Dynamical Systems, 2008, 21(1): 1.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../heatss/">« Steady State Heat Equation - No Time Dependence - NonlinearProblem</a><a class="docs-footer-nextpage" href="../icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Tuesday 29 September 2026 13:50">Tuesday 29 September 2026</span>. Using Julia version 1.13.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+episize!(exp(1.0), exp(0.5))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.6589652754621023</code></pre><p>References:</p><ul><li>Allen L J S, Bolker B M, Lou Y, et al. Asymptotic profiles of the steady states for an SIS epidemic reaction-diffusion model[J]. Discrete &amp; Continuous Dynamical Systems, 2008, 21(1): 1.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../heatss/">« Steady State Heat Equation - No Time Dependence - NonlinearProblem</a><a class="docs-footer-nextpage" href="../icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Saturday 3 October 2026 06:53">Saturday 3 October 2026</span>. Using Julia version 1.13.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
