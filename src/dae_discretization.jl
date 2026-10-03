@@ -1,10 +1,11 @@
-# DAEProblem construction, preserving array (slice-form) equations.
+# DAEProblem construction, preserving array (slice-form) equations at the System level.
 #
-# `discretize` runs `mtkcompile`, which scalarizes array equations before codegen: an
-# `ODEProblem` needs `D(x) = f(x)`, and isolating the derivative is structural
-# simplification. MethodOfLines already emits residuals `D(u) - f ~ 0`, which is exactly
-# the implicit-DAE form `DAEProblem` consumes, so this path skips `mtkcompile` and the
-# array equations survive into the generated code.
+# `mtkcompile` scalarizes array equations before codegen: an `ODEProblem` needs
+# `D(x) = f(x)`, and isolating the derivative is structural simplification.
+# MethodOfLines already emits residuals `D(u) - f ~ 0`, which is exactly the
+# implicit-DAE form `DAEProblem` consumes, so this path skips `mtkcompile` and the
+# array equations survive on the `System`. Residual codegen expands one entry per
+# unknown (MethodOfLines.jl#691; ModelingToolkit.jl#5139).
 
 """
     BrownFullBasicInitUnsafeError(offenders)
@@ -176,8 +177,10 @@ end
     DAEProblem(pdesys::PDESystem, discretization::MOLFiniteDifference; kwargs...)
 
 Discretize `pdesys` and build a `DAEProblem` from the residuals MethodOfLines emits,
-without running `mtkcompile`. The array equations reach the generated code intact,
-which `mtkcompile` would undo.
+without running `mtkcompile`. The array equations survive at the `System` level, which
+`mtkcompile` would scalarize. Residual code generation expands one entry per unknown,
+so compile cost grows with resolution (see MethodOfLines.jl#691;
+ModelingToolkit.jl#5139).
 
 `initializealg` defaults to `BrownFullBasicInit()`, which is the only algorithm that
 reproduces the [`discretize`](@ref) result here, and is chosen only when the discretized

@@ -46,7 +46,7 @@ Currently supported options are `grid_align`: `center_align` and `edge_align`. E
 
 `should_transform`: Whether to automatically transform the system to make it compatible with MethodOfLines where possible, defaults to true. If your system has no mixed derivatives, all derivatives are purely of a dependent variable i.e. `Dx(u_aux(t,x))` not `Dx(v(t,x)*u(t,x))`, excepting nonlinear and spherical Laplacians for which this holds for the innermost derivative argument, and no expandable derivatives, this can be set to false for better discretization performance at the cost of generality, if you perform these transformations yourself.
 
-MethodOfLines generates the interior of each PDE as a single symbolic array equation over slices of the discretized variables, e.g. `D(u[2:n-1]) - (u[1:n-2] .- 2u[2:n-1] .+ u[3:n]) ./ dx^2 ~ 0`. This keeps the number of symbolic equations independent of the grid resolution and scales much better during symbolic processing. Patterns without a slice representation automatically fall back to pointwise scalar equations for the affected equation.
+MethodOfLines generates the interior of each PDE as a single symbolic array equation over slices of the discretized variables, e.g. `D(u[2:n-1]) - (u[1:n-2] .- 2u[2:n-1] .+ u[3:n]) ./ dx^2 ~ 0`. This keeps the number of symbolic equations independent of the grid resolution and therefore scales better during symbolic processing of the `System`. Patterns without a slice representation automatically fall back to pointwise scalar equations for the affected equation.
 
 Any unrecognized keyword arguments are passed to the generated problem constructor; see the [ModelingToolkit problem documentation](https://docs.sciml.ai/ModelingToolkit/stable/API/problems/#Dynamical-systems) for available options.
 
@@ -63,17 +63,21 @@ sol = solve(prob)
 
 MethodOfLines emits residuals of the form `D(u) - f ~ 0`, which are already in
 implicit-DAE form. Building a `DAEProblem` therefore needs no `mtkcompile`, and the array
-equations reach the generated code intact — isolating the derivative for an `ODEProblem`
-is structural simplification, and it scalarizes them. Calling `solve(prob)` lets
-OrdinaryDiffEq select its default DAE algorithm.
+equations survive at the `System` level — isolating the derivative for an `ODEProblem`
+is structural simplification, and it scalarizes them. ModelingToolkit's residual code
+generation expands one entry per unknown, so `discretize` time and the first-call
+compile of `prob.f` grow with the resolution
+([MethodOfLines.jl#691](https://github.com/SciML/MethodOfLines.jl/issues/691);
+[ModelingToolkit.jl#5139](https://github.com/SciML/ModelingToolkit.jl/issues/5139)).
+Calling `solve(prob)` lets OrdinaryDiffEq select its default DAE algorithm.
 
 `initializealg` defaults to `BrownFullBasicInit()`, chosen only when the discretized
 system's initialization equations are ones that algorithm preserves.
 
 A few systems cannot be posed as a first-order DAE: those second order in time, and those
 whose initialization equations `BrownFullBasicInit` would not honour. They fall back to
-`mtkcompile` plus an `ODEProblem`, which scalarizes the array equations. Pass
-`fallback = false` to `discretize` to make that an error instead.
+`mtkcompile` plus an `ODEProblem`, which scalarizes the array equations at the `System`
+level. Pass `fallback = false` to `discretize` to make that an error instead.
 
 Time-independent systems have no derivative to keep implicit, and discretize to a
 `NonlinearProblem`.
@@ -103,9 +107,12 @@ the problem still spans the `PDESystem`'s time domain:
 prob = ODEProblem(mtkcompile(sys), nothing)
 ```
 
-Note that `mtkcompile` scalarizes the array equations, so this path gives up the scaling
-benefit of the array form. Prefer `discretize` unless you specifically need an
-`ODEProblem` or an explicit time-stepping method.
+Note that `mtkcompile` scalarizes the array equations at the `System` level, so this path
+gives up the symbolic-equation-count benefit of the array form (both paths expand the
+residual one entry per unknown; see
+[ModelingToolkit.jl#5139](https://github.com/SciML/ModelingToolkit.jl/issues/5139)).
+Prefer `discretize` unless you specifically need an `ODEProblem` or an explicit
+time-stepping method.
 
 ## [Migrating to v1](@id migrating-to-v1)
 
