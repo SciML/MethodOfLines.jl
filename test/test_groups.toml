@@ -13,6 +13,9 @@ versions = ["lts", "1", "pre"]
 [MOL_Interface1]
 versions = ["lts", "1", "pre"]
 
+[MOL_Interface2]
+versions = ["lts", "1", "pre"]
+
 [Diffusion]
 versions = ["lts", "1", "pre"]
 
@@ -23,6 +26,9 @@ versions = ["lts", "1", "pre"]
 versions = ["lts", "1", "pre"]
 
 [Nonlinear_Diffusion_NU]
+versions = ["lts", "1", "pre"]
+
+[Nonlinlap_ADV]
 versions = ["lts", "1", "pre"]
 
 [2D_Diffusion]
@@ -50,6 +56,9 @@ versions = ["lts", "1", "pre"]
 versions = ["lts", "1", "pre"]
 
 [Burgers]
+versions = ["lts", "1", "pre"]
+
+[Brusselator]
 versions = ["lts", "1", "pre"]
 
 [Mixed_Derivatives]
