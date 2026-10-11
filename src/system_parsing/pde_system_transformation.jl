@@ -9,6 +9,13 @@ function PDEBase.transform_pde_system!(
     )
     eqs = copy(get_eqs(sys))
     bcs = copy(get_bcs(sys))
+
+    # When HermiteScheme is active, automatically introduce auxiliary derivative
+    # variables (v = Dx(u), etc.) so the user does not need to reformulate the PDE.
+    if disc isa MOLFiniteDifference && disc.advection_scheme isa HermiteScheme
+        hermite_transform!(eqs, bcs, boundarymap, v, disc)
+    end
+
     done = false
     # Replace bad terms with a greedy strategy until the system comes up clean.
     while !done
@@ -51,7 +58,7 @@ function PDEBase.should_transform(pdesys::PDESystem, disc::MOLFiniteDifference, 
     if !disc.should_transform
         return false
     end
-    if has_interfaces(boundarymap)
+    if has_interfaces(boundarymap) && !(disc.advection_scheme isa HermiteScheme)
         @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
         return false
     end
@@ -196,6 +203,249 @@ function descend_to_incompatible(term, v)
         end
     end
     return (nothing, nothing, false)
+end
+
+"""
+    hermite_transform!(eqs, bcs, boundarymap, v, disc)
+
+Automatically introduce auxiliary derivative variables for `HermiteScheme`.
+
+For each dependent variable `u` and each spatial independent variable `x`:
+  1. Create a new variable `v` representing `Dx(u)` via `diff2term`.
+  2. Replace every occurrence of `Dx(u)` in the existing equations and BCs with `v`.
+  3. Add a new time-evolution equation for `v` obtained by applying `Dx` to the
+     original PDE for `u` and expanding.
+  4. Derive initial conditions and spatial boundary conditions for `v`. Explicit
+     first-derivative conditions are solved directly. Dirichlet traces provide
+     tangential derivatives by differentiation and normal derivatives when the
+     transformed evolution equation can be solved for them.
+
+The mapping is recorded in `disc.advection_scheme.deriv_var`.  If the user already
+supplied explicit mappings, this step is skipped.
+"""
+function hermite_transform!(eqs, bcs, boundarymap, v, disc)
+    scheme = disc.advection_scheme
+    scheme.automatic || return
+    empty!(scheme.deriv_var)
+
+    t = v.time
+    original_depvar_ops = copy(v.depvar_ops)
+
+    for uop in original_depvar_ops
+        uargs = v.args[uop]
+        u_applied = uop(uargs...)
+        spatial_ivs = filter(!isequal(t), uargs)
+
+        for x in spatial_ivs
+            Dx = Differential(x)
+            dx_u = Dx(u_applied)
+
+            # Create the new symbolic variable vˍx(t, x, ...) from Dx(u(t, x, ...)).
+            newvar = diff2term(Symbolics.value(dx_u))
+            newop = operation(newvar)
+
+            # Register the new variable in the VariableMap.
+            update_varmap!(v, newvar)
+
+            # Find the original PDE for u: the equation whose LHS contains Dt(u).
+            Dt = Differential(t)
+            u_eq_idx = findfirst(eqs) do eq
+                dv = get_depvars(eq.lhs, v.depvar_ops)
+                any(d -> isequal(operation(d), uop), dv)
+            end
+            u_eq_idx === nothing && error(
+                "HermiteScheme: could not find a time-evolution equation for $uop."
+            )
+            # PDEBase cardinalizes equations before this transformation, so the
+            # equation is `lhs - rhs ~ 0` and its stored RHS is zero. Recover
+            # the actual evolution RHS by solving for the time derivative.
+            dt_u = Dt(u_applied)
+            original_rhs = symbolic_linear_solve(eqs[u_eq_idx], dt_u)
+
+            # Replacement rule: Dx(u(t,x,...)) => v(t,x,...) throughout the system.
+            rule = Symbolics.value(dx_u) => newvar
+            subs_alleqs!(eqs, bcs, rule)
+
+            # Keep the primary equation in explicit evolution form. Besides
+            # making the coupled system clear, this RHS is used below to infer
+            # the derivative partner's Dirichlet boundary values.
+            transformed_rhs = substitute(original_rhs, rule)
+            eqs[u_eq_idx] = dt_u ~ transformed_rhs
+
+            # New evolution equation for v: v_t = Dx(original_rhs), expanded.
+            v_rhs = expand_derivatives(Dx(original_rhs))
+            v_rhs = pde_substitute(v_rhs, Dict(rule))
+            push!(eqs, Dt(newvar) ~ v_rhs)
+
+            # Derive ICs and spatial BCs for the derivative partner. Initial
+            # conditions and tangential Dirichlet data are differentiated;
+            # normal Dirichlet data are inferred from the evolution equation.
+            bcivmap = reduce(
+                (d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap))
+            )
+
+            function rulesforeachboundary(iv, upper)
+                cond(b) = upper ? b isa UpperBoundary : b isa LowerBoundary
+                return generate_bc_rules(filter(cond, get(bcivmap, iv, [])), v)
+            end
+
+            newbcs = []
+            for iv in all_ivs(v)
+                boundaries = get(get(boundarymap, uop, Dict()), iv, [])
+                isempty(boundaries) && continue
+
+                if isequal(iv, t)
+                    # The time boundary is the initial condition. Existing
+                    # auxiliary-BC machinery differentiates it with respect
+                    # to the spatial variable correctly.
+                    generate_aux_bcs!(
+                        newbcs, newvar, Symbolics.value(dx_u),
+                        filter(isupper, boundaries), v,
+                        rulesforeachboundary(iv, true)
+                    )
+                    generate_aux_bcs!(
+                        newbcs, newvar, Symbolics.value(dx_u),
+                        filter(!isupper, boundaries), v,
+                        rulesforeachboundary(iv, false)
+                    )
+                else
+                    for bc in boundaries
+                        xval = isupper(bc) ? v.intervals[iv][2] : v.intervals[iv][1]
+                        newargs_sub = substitute.(arguments(newvar), (iv => xval,))
+                        bcdv = newop(newargs_sub...)
+
+                        if bc isa InterfaceBoundary
+                            # Periodic: if u(t,a) ~ u(t,b), register both
+                            # orientations of the corresponding partner seam.
+                            other_bcdv = newop(arguments(bc.u2)...)
+                            eq = bcdv ~ other_bcdv
+                            push!(
+                                newbcs,
+                                typeof(bc)(bcdv, other_bcdv, bc.x, bc.x2, eq)
+                            )
+                            continue
+                        end
+
+                        # Boundary-evaluated derivatives do not match the
+                        # global Dx(u(t,x)) rule. Classify Neumann/Robin data by
+                        # whether the original equation can be solved for the
+                        # boundary-normal first derivative.
+                        v_at_boundary = bcdv
+                        bclhs = bcdv
+                        new_order = 0
+
+                        normal_derivative = Differential(iv)(bc.u)
+                        normal_rhs = symbolic_linear_solve(bc.eq, normal_derivative)
+                        constrains_normal_derivative =
+                            !isequal(Symbolics.value(normal_rhs), NaN)
+
+                        if constrains_normal_derivative
+                            if isequal(iv, x)
+                                # Normal partner: Neumann and Robin conditions
+                                # directly determine the normal derivative.
+                                rhs = normal_rhs
+                            else
+                                # Tangential partner: commute derivatives and
+                                # differentiate the solved normal relation along
+                                # this partner's direction.
+                                bclhs = Differential(iv)(bcdv)
+                                tangential_derivative = Dx(bc.u)
+                                rhs = expand_derivatives(Dx(normal_rhs))
+                                rhs = pde_substitute(
+                                    rhs, Dict(tangential_derivative => bcdv)
+                                )
+                                new_order = 1
+                            end
+                        else
+                            # Dirichlet: tangential derivatives are obtained by
+                            # differentiating the known boundary trace directly.
+                            # For the normal derivative, use the transformed PDE
+                            # and solve after substituting the trace beneath any
+                            # remaining differential operators.
+                            bc_val = symbolic_linear_solve(bc.eq, bc.u)
+                            if !isequal(iv, x)
+                                rhs = expand_derivatives(Dx(bc_val))
+                            else
+                                Dt_local = Differential(t)
+                                u_t_boundary = expand_derivatives(Dt_local(bc_val))
+
+                                directional_orders = d_orders(
+                                    x, [dt_u ~ original_rhs]
+                                )
+                                isempty(directional_orders) && throw(ArgumentError(
+                                    "HermiteScheme cannot infer a normal derivative " *
+                                        "condition for $newvar from $(bc.eq): the " *
+                                        "evolution equation contains no $x derivative of $u_applied."
+                                ))
+                                partner_term(order) = order == 1 ? newvar :
+                                    (Dx^(order - 1))(newvar)
+                                boundary_partner_term(order) = order == 1 ?
+                                    v_at_boundary : (Dx^(order - 1))(v_at_boundary)
+                                partner_rules = Dict(
+                                    (Dx^order)(u_applied) => partner_term(order)
+                                        for order in directional_orders
+                                )
+                                rhs_at_boundary = pde_substitute(
+                                    original_rhs, partner_rules
+                                )
+                                rhs_at_boundary = expand_derivatives(pde_substitute(
+                                    rhs_at_boundary, Dict(u_applied => bc_val)
+                                ))
+                                boundary_partner_rules = Dict(
+                                    partner_term(order) => boundary_partner_term(order)
+                                        for order in directional_orders
+                                )
+                                rhs_at_boundary = pde_substitute(
+                                    rhs_at_boundary, boundary_partner_rules
+                                )
+                                rhs_at_boundary = substitute(
+                                    rhs_at_boundary, iv => xval
+                                )
+                                boundary_eq = u_t_boundary ~ rhs_at_boundary
+
+                                solved = false
+                                for order in reverse(0:(maximum(directional_orders) - 1))
+                                    target = order == 0 ? v_at_boundary :
+                                        (Dx^order)(v_at_boundary)
+                                    candidate = symbolic_linear_solve(boundary_eq, target)
+                                    isequal(Symbolics.value(candidate), NaN) && continue
+                                    bclhs = target
+                                    rhs = candidate
+                                    new_order = order
+                                    solved = true
+                                    break
+                                end
+                                solved || throw(ArgumentError(
+                                    "HermiteScheme could not infer a normal derivative " *
+                                        "condition for $newvar from $(bc.eq) and " *
+                                        "evolution equation $(eqs[u_eq_idx])."
+                                ))
+                            end
+                        end
+
+                        eq = bclhs ~ rhs
+                        newbc = isupper(bc) ?
+                            UpperBoundary(bcdv, t, iv, new_order, eq, v) :
+                            LowerBoundary(bcdv, t, iv, new_order, eq, v)
+                        push!(newbcs, newbc)
+                    end
+                end
+            end
+            newbcs = unique(newbcs)
+            independent_bcs = filter(newbcs) do bc
+                !(bc isa InterfaceBoundary) || !isupper(bc)
+            end
+            append!(bcs, map(bc -> bc.eq, independent_bcs))
+            update_boundarymap!(boundarymap, newbcs, newop, v)
+
+            # Record the mapping for the Hermite discretization path.
+            if length(spatial_ivs) == 1
+                scheme.deriv_var[uop] = newop
+            else
+                scheme.deriv_var[(uop, x)] = newop
+            end
+        end
+    end
 end
 
 """

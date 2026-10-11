@@ -1,5 +1,11 @@
 # Use DiffEqOperators to generate weights and calculate derivative orders
-struct DifferentialDiscretizer{T, D1, S} <: AbstractDifferentialDiscretizer
+struct HermiteWeightData
+    d_weights::Union{Nothing, Vector{Float64}}
+    e_weights::Union{Nothing, Vector{Float64}}
+    stencil_length::Int
+end
+
+struct DifferentialDiscretizer{T, D1, S, H} <: AbstractDifferentialDiscretizer
     approx_order::Int
     advection_scheme::S
     map::D1
@@ -10,6 +16,7 @@ struct DifferentialDiscretizer{T, D1, S} <: AbstractDifferentialDiscretizer
     boundary::Dict{Num, DerivativeOperator}
     callbacks::Any
     icformulas::Any
+    hermitemap::H  # HFD weights by derivative operator
 end
 
 function PDEBase.construct_differential_discretizer(
@@ -100,13 +107,42 @@ function PDEBase.construct_differential_discretizer(
         push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), dx))
     end
 
+    # Compute Hermite FD weights if HermiteScheme is active
+    hermitemap = Dict{Differential, HermiteWeightData}()
+    if advection_scheme isa HermiteScheme
+        for x in s.x̄
+            orders_ = orders[x]
+            _orders = Set(vcat(orders_, [1, 2]))
+            dx = s.dxs[x]
+            for d in _orders
+                if s.grid[x] isa StepRangeLen
+                    # Uniform grid: single set of weights
+                    stencil_length = d + approx_order - 1 + (d + approx_order) % 2
+                    half = div(stencil_length, 2)
+                    stencil_nodes = [Float64(k * dx) for k in -half:half]
+                    d_w, e_w = calculate_weights(d, 0.0, stencil_nodes; dfdx = true)
+                    hermitemap[Differential(x)^d] =
+                        HermiteWeightData(d_w, e_w, stencil_length)
+                else
+                    # Nonuniform stencils depend on the evaluation point and are
+                    # generated from the selected taps below. Do not precompute
+                    # per-point matrices here; that would duplicate work and
+                    # allocate O(N) weight vectors for every derivative order.
+                    hermitemap[Differential(x)^d] =
+                        HermiteWeightData(nothing, nothing, 0)
+                end
+            end
+        end
+    end
+
     return DifferentialDiscretizer{
         eltype(orders), typeof(Dict(differentialmap)), typeof(advection_scheme),
+        typeof(hermitemap),
     }(
         approx_order, advection_scheme, Dict(differentialmap),
         (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)),
         Dict(interp), Dict(orders), Dict(boundary), callbacks,
-        array_ic_formulas(pdesys, s)
+        array_ic_formulas(pdesys, s), hermitemap
     )
 end
 
