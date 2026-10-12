@@ -41,8 +41,8 @@ function symbolic_trace(prob, sys)
     tracevec_2 = [i in u1inds ? unknowns[i] : Num(0.0) for i in 1:length(unknowns)]
     du1 = prob.f(tracevec_1, prob.p, 0.0)
     du2 = prob.f(tracevec_2, prob.p, 0.0)
-    gen_du1 = eval(Symbolics.build_function(du1, unknowns)[2])
-    gen_du2 = eval(Symbolics.build_function(du2, unknowns)[2])
+    gen_du1 = Symbolics.build_function(du1, unknowns; expression = Val{false})[2]
+    gen_du2 = Symbolics.build_function(du2, unknowns; expression = Val{false})[2]
     dynamical_f1(_du1, u, p, t) = gen_du1(_du1, u)
     dynamical_f2(_du2, u, p, t) = gen_du2(_du2, u)
     u0 = prob.u0 #[prob.u0[u1inds]; prob.u0[u2inds]];
