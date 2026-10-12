@@ -136,6 +136,18 @@ function PDEBase.construct_discrete_space(
     )
 end
 
+"""
+    edge_aligned_ops(discretization)
+
+The operations of the dependent variables named by the `edge_aligned_var` keyword of a
+`StaggeredGrid` discretization, which takes one variable or a collection of them.
+"""
+function edge_aligned_ops(discretization)
+    v = discretization.kwargs[:edge_aligned_var]
+    vs = v isa Union{AbstractVector, Tuple, AbstractSet} ? v : (v,)
+    return Set(operation(unwrap(u)) for u in vs)
+end
+
 function PDEBase.construct_discrete_space(
         vars::PDEBase.VariableMap,
         discretization::MOLFiniteDifference{G}
@@ -184,19 +196,19 @@ function PDEBase.construct_discrete_space(
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars)
 
-    # determine which variables are grid/stagger aligned
-    edge_aligned_var = operation(unwrap(discretization.kwargs[:edge_aligned_var]))
-    center_aligned_var = operation(
-        unwrap(
-            depvars[
-                findfirst(
-                    u -> operation(unwrap(u)) !== edge_aligned_var, depvars
-                ),
-            ]
+    # determine which variables are grid/stagger aligned: every variable not named by
+    # `edge_aligned_var` is center aligned
+    edge_ops = edge_aligned_ops(discretization)
+    depvar_ops = [operation(unwrap(u)) for u in depvars]
+    for op in edge_ops
+        any(isequal(op), depvar_ops) || throw(
+            ArgumentError(
+                "`edge_aligned_var` names $op, which is not a dependent variable of the system ($(join(depvar_ops, ", ")))."
+            )
         )
-    )
+    end
     staggered_dict = Dict(
-        edge_aligned_var => EdgeAlignedVar, center_aligned_var => CenterAlignedVar
+        op => (op in edge_ops ? EdgeAlignedVar : CenterAlignedVar) for op in depvar_ops
     )
 
     return DiscreteSpace{nspace, length(depvars), G}(

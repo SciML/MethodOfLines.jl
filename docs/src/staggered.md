@@ -6,6 +6,10 @@ Hyperbolic PDEs are often most written as a system of first-order equations. Whe
 
 To utilize this functionality, only two differences are needed to the user-interface. `grid_align=MethodOfLines.StaggeredGrid()` and defining which variable is edge aligned (vs center aligned), `edge_aligned_var=ϕ(t,x)`
 
+`edge_aligned_var` also accepts a collection, such as `edge_aligned_var=[ϕ(t,x), ψ(t,x)]`, to edge align several variables. Every dependent variable it does not name is center aligned. A variable without a spatial derivative, such as the current `J` in Maxwell's equations with a Drude medium (`Dt(J(t,x)) ~ ωp^2 * E(t,x)`), should share the alignment of the variable it couples to pointwise, here the center aligned `E`.
+
+`discretize` returns a `SplitODEProblem` whose `f1` holds the time derivatives of the edge aligned variables and whose `f2` holds those of every other variable; `f1 + f2` is the full right hand side.
+
 Solvers should be chosen carefully, the only officially supported solver is `SplitEuler`, but in theory any SSP solver could be used.
 
 Staggered grid functionality is still in its infancy. Please open issues if unexpected results occur or needed functionality is not present.

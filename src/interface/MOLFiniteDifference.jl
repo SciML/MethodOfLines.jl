@@ -22,6 +22,9 @@ A discretization algorithm.
   stable and accurate at the cost of complexity.
 - `grid_align`: The grid alignment value. Use [`center_align`](@ref),
   [`edge_align`](@ref), or `StaggeredGrid()` as appropriate for the discretization.
+- `edge_aligned_var`: Required with `StaggeredGrid()`. The dependent variable, or a
+  collection of dependent variables, that is edge aligned. Every other dependent
+  variable is center aligned.
 - `kwargs`: Additional keyword arguments passed to the generated problem.
 
 # Fields
