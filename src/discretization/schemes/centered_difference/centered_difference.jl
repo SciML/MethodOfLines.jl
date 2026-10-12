@@ -174,12 +174,15 @@ function generate_cartesian_rules(
     return reduce(safe_vcat, placeholder, init = [])
 end
 
-function central_difference(
+"""
+The weights and tap indices of the staggered odd-order stencil for `u` at `II`:
+one-sided half-offset weights near a boundary the alignment cannot reach, the two-point
+`windmap` stencil otherwise.
+"""
+function staggered_weights_and_stencil(
         derivweights::DifferentialDiscretizer, II, s::DiscreteSpace{W, M, G},
-        bs, jx, u, ufunc, d
+        bs, jx, u, d
     ) where {W, M, G <: StaggeredGrid}
-    placeholder = []
-    ndims(u, s) == 0 && return 0
     j, x = jx
     # unit index in direction of the derivative
     I1 = unitindex(ndims(u, s), j)
@@ -221,6 +224,17 @@ function central_difference(
             Itap = [bwrap(II + i * I1, bs, s, jx) for i in -1:0]
         end
     end
+    return weights, Itap
+end
+
+function central_difference(
+        derivweights::DifferentialDiscretizer, II, s::DiscreteSpace{W, M, G},
+        bs, jx, u, ufunc, d
+    ) where {W, M, G <: StaggeredGrid}
+    placeholder = []
+    ndims(u, s) == 0 && return 0
+    j, x = jx
+    weights, Itap = staggered_weights_and_stencil(derivweights, II, s, bs, jx, u, d)
     append!(placeholder, [sym_dot(weights, ufunc(u, Itap, x))])
     # Tap points of the stencil, this uses boundary_point_count as this is equal to half the stencil size, which is what we want.
     return reduce(safe_vcat, placeholder, init = [])

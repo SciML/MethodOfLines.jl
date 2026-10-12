@@ -12,6 +12,7 @@ using NonlinearSolve: NewtonRaphson
 using ModelingToolkit: get_eqs
 using SymbolicUtils
 using SymbolicUtils: symtype
+import RuntimeGeneratedFunctions
 using Test
 include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
@@ -40,6 +41,17 @@ function isarrayeq(eq)
     end
     return isarr(eq.lhs) || isarr(eq.rhs)
 end
+
+# Single points (size-1 wrap boxes, frame points, 1D boundaries) are one-element slice
+# equations; the core is the interior array equation over the largest box.
+function arrayeq_length(eq)
+    side = symtype(Symbolics.unwrap(eq.lhs)) <: AbstractArray ? eq.lhs : eq.rhs
+    return prod(size(Symbolics.unwrap(side)))
+end
+issinglepointeq(eq) = isarrayeq(eq) && arrayeq_length(eq) == 1
+core_interior_eq(sys) = argmax(
+    arrayeq_length, filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys))
+)
 
 # Interior equations carry the time derivative; boundary equations do not. Boundary
 # conditions on a face are emitted in array form too, so counting only the interior
@@ -608,8 +620,8 @@ end
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # The stencil is translation invariant across the whole periodic direction, so the
     # interior is one array equation plus the points whose stencils wrap over the seam,
-    # which in 1D are single points and stay scalar.
-    @test narrayeqs_interior(sys_arr) == 1
+    # which in 1D are single points: one-element slice equations, one per end.
+    @test narrayeqs_interior(sys_arr) == 3
 
     # The periodic solution is a decaying sine wave
     xdisc = sol_arr[x]
@@ -634,7 +646,7 @@ end
 
     sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.02], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 3
 end
 
 @testset "2D periodic BCs in both directions" begin
@@ -658,9 +670,9 @@ end
     sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
     # One equation for the points whose stencils do not wrap, one for each of the four
-    # slabs along the seams, and a scalar one for each of the four points where two seams
-    # meet: the slabs are the array equations that make this scale.
-    @test narrayeqs_interior(sys_arr) == 5
+    # slabs along the seams, and a one-element one for each of the four points where two
+    # seams meet: the slabs are the array equations that make this scale.
+    @test narrayeqs_interior(sys_arr) == 9
 
     # and the equation count does not grow with the grid
     counts = map([8, 16]) do n
@@ -737,7 +749,7 @@ end
         sys, _ = symbolic_discretize(pdesys, disc)
         (; narr = narrayeqs_interior(sys), n = length(get_eqs(sys)))
     end
-    @test counts[1].narr == 10
+    @test counts[1].narr == 18
     @test counts[1].n == counts[2].n
 
     disc = MOLFiniteDifference([x => 1 / 8, y => 1 / 8], t)
@@ -776,7 +788,7 @@ end
 
     sol_arr, sys_arr = solve_discretized(pdesys, [x1 => 0.05, x2 => 0.05], t)
     @test SciMLBase.successful_retcode(sol_arr)
-    @test narrayeqs_interior(sys_arr) == 2
+    @test narrayeqs_interior(sys_arr) == 3
 
     counts = map([0.05, 0.025]) do dx
         disc = MOLFiniteDifference([x1 => dx, x2 => dx], t)
@@ -942,7 +954,7 @@ end
 
     sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.05], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sys_arr) == 1
+    @test narrayeqs_interior(sys_arr) == 5
 end
 
 @testset "1D nonlinear laplacian on a nonuniform grid" begin
@@ -1303,8 +1315,8 @@ end
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    # one array equation for the points whose taps do not wrap, the rest pointwise
-    @test narrayeqs_interior(sys_arr) == 1
+    # one array equation for the points whose taps do not wrap, one per wrap point
+    @test narrayeqs_interior(sys_arr) == 5
 
     # the number of wrap points is fixed by the stencil, so the equation count is
     # resolution independent
@@ -1327,7 +1339,7 @@ end
         kwsolve = (; dt = 1.0e-3)
     )
     @test solp_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sysp_arr) == 1
+    @test narrayeqs_interior(sysp_arr) == 5
 
     # resolution independence holds on the periodic nonuniform path too
     pcounts = map([40, 80]) do n
@@ -1555,7 +1567,7 @@ end
         kwsolve = (; dt = 1.0e-4)
     )
     @test sol7_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sys7_arr) == 1
+    @test narrayeqs_interior(sys7_arr) == 5
 
     # linear stencils still have no seam form on a nonuniform grid
     @named advdiffp = PDESystem(
@@ -2219,8 +2231,8 @@ end
         dxs, t
     )
     sys, _ = symbolic_discretize(pdesys, disc)
-    @test narrayeqs_interior(sys) == 1
-    per_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+    @test narrayeqs_interior(sys) == 3
+    per_eq = core_interior_eq(sys)
     @test occursin("[1]", string(per_eq))
     for e in get_eqs(sys)
         s = string(e)
@@ -2258,17 +2270,17 @@ end
 
     disc = MOLFiniteDifference(dxs, t)
     sys, _ = symbolic_discretize(pdesys, disc)
-    # 3 bands per periodic direction: 5 multi-point boxes in array form, 4
-    # all-singleton wrap boxes as scalar equations.
-    @test narrayeqs_interior(sys) == 5
+    # 3 bands per periodic direction: 5 multi-point boxes and 4 all-singleton wrap
+    # boxes, the latter as one-element slice equations.
+    @test narrayeqs_interior(sys) == 9
     for e in get_eqs(sys)
         s = string(e)
         @test !occursin("u(t, 0,", s) && !occursin("u(t,0,", s)
     end
-    # Each wrap-point equation references the substituted seam element u[1, j].
-    wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
+    # Each wrap-point equation references the substituted seam element u[1:1, j:j].
+    wrap_eqs = filter(e -> isinterioreq(e) && issinglepointeq(e), get_eqs(sys))
     @test length(wrap_eqs) == 4
-    @test all(e -> occursin("[1, ", string(e)) || occursin("[1,", string(e)), wrap_eqs)
+    @test all(e -> occursin("[1:1, ", string(e)), wrap_eqs)
 
     prob = ode_discretize(pdesys, disc)
     du = similar(prob.u0)
@@ -2527,7 +2539,7 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
     disc = MOLFiniteDifference([x => 0.05], t; grid_align = edge_align)
     sys, _ = symbolic_discretize(pdesys, disc)
-    @test narrayeqs_interior(sys) == 1
+    @test narrayeqs_interior(sys) == 3
     @test !leftover_bval(sys, ("u(t, 0)", "u(t,0)"))
     prob = ode_discretize(pdesys, disc)
     du = similar(prob.u0)
@@ -2608,7 +2620,7 @@ end
     sys, _ = symbolic_discretize(pdesys, disc)
     @test narrayeqs_interior(sys) >= 1
     @test !leftover_bval(sys, ("u(t, 0,", "u(t,0,"))
-    wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
+    wrap_eqs = filter(e -> isinterioreq(e) && issinglepointeq(e), get_eqs(sys))
     @test all(
         e -> !occursin("u(t, 0,", string(e)) && !occursin("u(t,0,", string(e)),
         wrap_eqs
@@ -2707,8 +2719,9 @@ end
         edge_aligned_var = ϕ(t, x)
     )
     sys, _ = symbolic_discretize(stag, disc)
-    # ρ carries the interior boundary value and falls back; ϕ stays in array form
-    @test narrayeqs_interior(sys) == 1
+    # ρ carries the interior boundary value and falls back; ϕ stays in array form,
+    # its core plus its upper frame point
+    @test narrayeqs_interior(sys) == 2
 end
 
 # Staggered grids: each variable's alignment fixes its interior stencil taps, so the
@@ -2980,12 +2993,12 @@ end
     dxs = [x => 0.05]
     disc = MOLFiniteDifference(dxs, t)
     sys, _ = symbolic_discretize(pdesys, disc)
-    @test narrayeqs_interior(sys) == 1
-    per_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+    @test narrayeqs_interior(sys) == 3
+    per_eq = core_interior_eq(sys)
     # Periodic seam derivative wraps to the two neighbors (n = 21 → [2], [20]).
     per_str = string(per_eq)
     @test occursin("(u(t))[2]", per_str) && occursin("(u(t))[20]", per_str)
-    wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
+    wrap_eqs = filter(e -> isinterioreq(e) && issinglepointeq(e), get_eqs(sys))
     @test !isempty(wrap_eqs)
     @test all(
         e -> occursin("(u(t))[2]", string(e)) && occursin("(u(t))[20]", string(e)),
@@ -3024,16 +3037,16 @@ end
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
     disc = MOLFiniteDifference([x => 0.2, y => 0.2], t)
     sys, _ = symbolic_discretize(pdesys, disc)
-    @test narrayeqs_interior(sys) == 5
+    @test narrayeqs_interior(sys) == 9
     for e in get_eqs(sys)
         s = string(e)
         @test !occursin("u(t, 0,", s) && !occursin("u(t,0,", s)
     end
-    wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
+    wrap_eqs = filter(e -> isinterioreq(e) && issinglepointeq(e), get_eqs(sys))
     @test length(wrap_eqs) == 4
-    # Periodic seam derivative wraps to the two neighbors (n = 6 → [2, …], [5, …]).
+    # Periodic seam derivative wraps to the two neighbors (n = 6 → [2:2, …], [5:5, …]).
     @test all(
-        e -> occursin("(u(t))[2,", string(e)) && occursin("(u(t))[5,", string(e)),
+        e -> occursin("(u(t))[2:2,", string(e)) && occursin("(u(t))[5:5,", string(e)),
         wrap_eqs
     )
     array_eqs = filter(e -> isinterioreq(e) && isarrayeq(e), get_eqs(sys))
@@ -3381,7 +3394,7 @@ end
     dxs = [x => 0.05]
     disc = MOLFiniteDifference(dxs, t)
     sys, _ = symbolic_discretize(pdesys, disc)
-    @test narrayeqs_interior(sys) == 1
+    @test narrayeqs_interior(sys) == 3
     @test !any(has_time_literal_leftover, get_eqs(sys))
 
     prob = ode_discretize(pdesys, disc)
@@ -3431,8 +3444,9 @@ end
 @testset "Staggered 1D wave equation, mixed BCs" begin
     pdesys, disc = staggered_wave(0.125)
     sys, _ = symbolic_discretize(pdesys, disc)
-    # one array equation per PDE
-    @test narrayeqs_interior(sys) == 2
+    # one array equation per PDE, plus one-element ones for the frame points at the
+    # ends without a boundary condition (ρ's lower, ϕ's upper)
+    @test narrayeqs_interior(sys) == 4
 
     # equation count is independent of resolution
     pdesys2, disc2 = staggered_wave(0.0625)
@@ -3448,7 +3462,8 @@ end
 @testset "Staggered 1D wave equation, periodic BCs" begin
     pdesys, disc = staggered_wave(0.125; periodic = true)
     sys, _ = symbolic_discretize(pdesys, disc)
-    @test narrayeqs_interior(sys) == 2
+    # one array equation per PDE, plus a one-element one per wrap point
+    @test narrayeqs_interior(sys) == 6
 
     pdesys2, disc2 = staggered_wave(0.0625; periodic = true)
     sys2, _ = symbolic_discretize(pdesys2, disc2)
@@ -3458,6 +3473,90 @@ end
     dt = (0.125 / 5.0)^2
     sol_arr = solve(prob_arr, SplitEuler(), dt = dt)
     @test successful_retcode(sol_arr)
+end
+
+# Single points (1D boundaries and interfaces, staggered frame points, size-1 wrap boxes,
+# corners) are one-element slice equations, so the generated residual reads no state
+# entry as a scalar; GPU arrays with `allowscalar(false)` reject such reads. Only reads
+# of `u` are counted, which is what MethodOfLines controls: ModelingToolkit's DAE codegen
+# reads every `du` entry as a scalar, and SymbolicUtils writes one-element output regions
+# elementwise, even for slice equations.
+function scalar_state_reads(pdesys, disc)
+    prob = DAEProblem(pdesys, disc; initializealg = SciMLBase.NoInit())
+    ex = string(RuntimeGeneratedFunctions.get_expression(prob.f.f.f_iip))
+    return count(r"___mtkunknowns___\[\d+\]", ex)
+end
+
+@testset "Single points are one-element slice equations" begin
+    @testset "staggered 1D wave, $bcname, approx_order $ao" for (bcname, flip) in
+            [("mixed BCs", false), ("swapped BCs", true)], ao in (2, 4)
+        @parameters t x
+        @variables ρ(..) ϕ(..)
+        Dt = Differential(t)
+        Dx = Differential(x)
+        L = 2.0
+        eq = [
+            Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+            Dt(ϕ(t, x)) + 25.0 * Dx(ρ(t, x)) ~ 0,
+        ]
+        # Swapping the ends puts the frame points and the Neumann face where the
+        # center-aligned stencil is one-sided (`halfoffsetmap`).
+        bcs = [
+            ρ(0, x) ~ exp(-x^2), ϕ(0.0, x) ~ 0.0,
+            Dx(ρ(t, flip ? -L : L)) ~ 0.0, ϕ(t, flip ? L : -L) ~ 0.0,
+        ]
+        domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(-L, L)]
+        @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
+        disc = MOLFiniteDifference(
+            [x => 0.2], t; approx_order = ao,
+            grid_align = MethodOfLines.StaggeredGrid(), edge_aligned_var = ϕ(t, x)
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        # boundary and frame rows included: no scalar equation remains
+        @test narrayeqs(sys) == length(get_eqs(sys))
+        @test scalar_state_reads(pdesys, disc) == 0
+
+        # the slice-form residual itself, unscalarized
+        @test successful_retcode(solve(DAEProblem(pdesys, disc)))
+    end
+
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    tx = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    cases = [
+        # Dirichlet and Neumann 1D boundaries
+        "1D boundaries" => PDESystem(
+            Dt(u(t, x)) ~ Dxx(u(t, x)),
+            [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, Dx(u(t, 1)) ~ 0.0],
+            tx, [t, x], [u(t, x)]; name = :heat1
+        ),
+        # size-1 wrap boxes and the single-point interface
+        "1D periodic" => PDESystem(
+            Dt(u(t, x)) ~ Dxx(u(t, x)), [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
+            tx, [t, x], [u(t, x)]; name = :heatp
+        ),
+        # corners
+        "2D corners" => PDESystem(
+            Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)),
+            [
+                u(0, x, y) ~ 0.0, u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+                u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+            ],
+            [tx; y ∈ Interval(0.0, 1.0)], [t, x, y], [u(t, x, y)]; name = :heat2
+        ),
+    ]
+    @testset "$name" for (name, pdesys) in cases
+        # more than 16 points: smaller outputs are scalarized by codegen anyway
+        dxs = name == "2D corners" ? [x => 0.2, y => 0.2] : [x => 0.05]
+        disc = MOLFiniteDifference(dxs, t)
+        sys, _ = symbolic_discretize(pdesys, disc)
+        @test narrayeqs(sys) == length(get_eqs(sys))
+        @test scalar_state_reads(pdesys, disc) == 0
+    end
 end
 
 @testset "2D mixed derivative" begin
@@ -4162,7 +4261,8 @@ end
         [x ∈ Interval(0.0, 1.0)], [x], [u(x), I(x)]
     )
     sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => 8]))
-    @test narrayeqs(sys) == 0
+    # only the single-point boundary condition `I(0) ~ 0`, as a one-element slice
+    @test narrayeqs(sys) == 1
 end
 
 @testset "Higher mixed derivative and integral stay in slice form" begin
@@ -4240,7 +4340,7 @@ end
 
     sol_arr, sys_arr = solve_discretized(pdesys, [x1 => 0.05, x2 => 0.05], t)
     @test SciMLBase.successful_retcode(sol_arr)
-    @test narrayeqs_interior(sys_arr) == 2
+    @test narrayeqs_interior(sys_arr) == 5
 end
 
 @testset "Three-domain interface chain" begin
@@ -4279,7 +4379,7 @@ end
         pdesys, [x1 => 1 / 12, x2 => 1 / 12, x3 => 1 / 12], t
     )
     @test SciMLBase.successful_retcode(sol_arr)
-    @test narrayeqs_interior(sys_arr) == 3
+    @test narrayeqs_interior(sys_arr) == 7
 end
 
 @testset "2D two-domain interface" begin
@@ -4405,7 +4505,7 @@ end
         kwsolve = (; dt = 1.0e-3)
     )
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sys_arr) == 2
+    @test narrayeqs_interior(sys_arr) == 6
 end
 
 @testset "Fallback: linear operators on a nonuniform two-domain interface" begin
