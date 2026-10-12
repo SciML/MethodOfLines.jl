@@ -36,13 +36,15 @@ function symbolic_trace(prob, sys, edge_ops)
     unknowns = get_unknowns(sys)
     edge_names = Set(nameof(op) for op in edge_ops)
     isedge = [nameof(get_var_from_state(u)) in edge_names for u in unknowns]
-    du = prob.f(unknowns, prob.p, 0.0)
+    # traced at a symbolic time so time dependent boundary values and sources stay live
+    iv = ModelingToolkit.get_iv(sys)
+    du = prob.f(unknowns, prob.p, iv)
     du1 = [isedge[i] ? du[i] : Num(0.0) for i in eachindex(du)]
     du2 = [isedge[i] ? Num(0.0) : du[i] for i in eachindex(du)]
-    gen_du1 = Symbolics.build_function(du1, unknowns; expression = Val{false})[2]
-    gen_du2 = Symbolics.build_function(du2, unknowns; expression = Val{false})[2]
-    dynamical_f1(_du1, u, p, t) = gen_du1(_du1, u)
-    dynamical_f2(_du2, u, p, t) = gen_du2(_du2, u)
+    gen_du1 = Symbolics.build_function(du1, unknowns, iv; expression = Val{false})[2]
+    gen_du2 = Symbolics.build_function(du2, unknowns, iv; expression = Val{false})[2]
+    dynamical_f1(_du1, u, p, t) = gen_du1(_du1, u, t)
+    dynamical_f2(_du2, u, p, t) = gen_du2(_du2, u, t)
     u0 = prob.u0
     return SplitODEProblem(dynamical_f1, dynamical_f2, u0, prob.tspan)
     #return DynamicalODEProblem{false}(dynamical_f1, dynamical_f2, u0[1:length(u1)], u0[length(u1)+1:end], prob.tspan)

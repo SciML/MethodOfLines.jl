@@ -327,3 +327,33 @@ end
         @test both[other => i] ≈ 2v atol = 1.0e-8
     end
 end
+
+@testset "Time dependent boundary values reach the SplitODEProblem" begin
+    @parameters t x
+    @variables ρ(..) ϕ(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    a, L, dx = 5.0, 8.0, 0.5
+    eq = [Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0, Dt(ϕ(t, x)) + a^2 * Dx(ρ(t, x)) ~ 0]
+    bcs = [
+        ρ(0, x) ~ exp(-x^2), ϕ(0.0, x) ~ 0.0,
+        Dx(ρ(t, L)) ~ 0.0, ϕ(t, -L) ~ sin(t),
+    ]
+    domains = [t in Interval(0.0, 1.0), x in Interval(-L, L)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
+    disc = MOLFiniteDifference(
+        [x => dx], t, grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = ϕ(t, x)
+    )
+    prob = discretize(pdesys, disc)
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    full = ODEProblem(mtkcompile(sys), nothing, tspan)
+
+    u = cos.(1:length(prob.u0))
+    du1, du2 = similar(u), similar(u)
+    for τ in (0.0, 0.5, 1.0)
+        prob.f.f1(du1, u, prob.p, τ)
+        prob.f.f2(du2, u, prob.p, τ)
+        @test maximum(abs, du1 .+ du2 .- full.f(u, full.p, τ)) < 1.0e-12
+    end
+end
