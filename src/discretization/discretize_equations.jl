@@ -347,8 +347,8 @@ function array_core_equation(
     )
     gridrules = [
         safe_unwrap(x) => array_grid_vals(
-                x, s, ranges, indexmap, N; shift = staggered_shift(s, eqvar, x)
-            ) for x in args
+            x, s, ranges, indexmap, N; shift = staggered_shift(s, eqvar, x)
+        ) for x in args
     ]
     if isstag
         derivrules = array_staggered_rules(
