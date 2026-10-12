@@ -89,7 +89,8 @@ function SciMLBase.PDETimeSeriesSolution(
         end |> Dict
         # Build Interpolations
         interp = build_interpolation(
-            umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars
+            umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars,
+            discretespace
         )
 
         return SciMLBase.PDETimeSeriesSolution{

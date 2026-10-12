@@ -44,7 +44,8 @@ function SciMLBase.PDENoTimeSolution(
     end |> Dict
     # Build Interpolations
     interp = build_interpolation(
-        umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars
+        umap, dvs, ivs, ivgrid, sol, pdesys, discretespace.vars.replaced_vars,
+        discretespace
     )
     pdedvs = get_dvs(pdesys)
     return SciMLBase.PDENoTimeSolution{

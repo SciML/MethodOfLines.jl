@@ -136,16 +136,31 @@ function PDEBase.construct_discrete_space(
     )
 end
 
-"""
-    edge_aligned_ops(discretization)
+iscollection(v) = v isa Union{AbstractVector, Tuple, AbstractSet}
 
-The operations of the dependent variables named by the `edge_aligned_var` keyword of a
-`StaggeredGrid` discretization, which takes one variable or a collection of them.
 """
-function edge_aligned_ops(discretization)
+    edge_aligned_dims(discretization)
+
+Map the operation of each dependent variable named by the `edge_aligned_var` keyword of a
+`StaggeredGrid` discretization to the spatial directions in which it is edge aligned.
+The keyword takes one entry or a collection of them. An entry is either a variable, edge
+aligned in every spatial direction, or a pair `u => x` or `u => (x, y)` naming the
+directions in which `u` is edge aligned.
+"""
+function edge_aligned_dims(discretization)
     v = discretization.kwargs[:edge_aligned_var]
-    vs = v isa Union{AbstractVector, Tuple, AbstractSet} ? v : (v,)
-    return Set(operation(unwrap(u)) for u in vs)
+    t = safe_unwrap(discretization.time)
+    return Dict(
+        map(iscollection(v) ? v : (v,)) do entry
+            u = unwrap(entry isa Pair ? entry.first : entry)
+            dims = if entry isa Pair
+                [unwrap(x) for x in (iscollection(entry.second) ? entry.second : (entry.second,))]
+            else
+                filter(x -> !isequal(x, t), arguments(u))
+            end
+            operation(u) => dims
+        end
+    )
 end
 
 function PDEBase.construct_discrete_space(
@@ -196,19 +211,35 @@ function PDEBase.construct_discrete_space(
 
     depvarsdisc = discretize_dep_vars(depvars, grid, vars)
 
-    # determine which variables are grid/stagger aligned: every variable not named by
-    # `edge_aligned_var` is center aligned
-    edge_ops = edge_aligned_ops(discretization)
+    # the alignment of each variable in each of its spatial directions: center aligned
+    # unless `edge_aligned_var` names that direction
+    edge = edge_aligned_dims(discretization)
     depvar_ops = [operation(unwrap(u)) for u in depvars]
-    for op in edge_ops
-        any(isequal(op), depvar_ops) || throw(
+    for (op, dims) in edge
+        u = findfirst(isequal(op), depvar_ops)
+        u === nothing && throw(
             ArgumentError(
                 "`edge_aligned_var` names $op, which is not a dependent variable of the system ($(join(depvar_ops, ", ")))."
             )
         )
+        uivs = remove(arguments(unwrap(depvars[u])), t)
+        for x in dims
+            any(isequal(x), uivs) || throw(
+                ArgumentError(
+                    "`edge_aligned_var` edge aligns $op in $x, which is not one of its spatial variables ($(join(uivs, ", ")))."
+                )
+            )
+        end
     end
     staggered_dict = Dict(
-        op => (op in edge_ops ? EdgeAlignedVar : CenterAlignedVar) for op in depvar_ops
+        map(depvars) do u
+            op = operation(unwrap(u))
+            dims = get(edge, op, [])
+            op => Dict(
+                x => (any(isequal(x), dims) ? EdgeAlignedVar : CenterAlignedVar)
+                    for x in remove(arguments(unwrap(u)), t)
+            )
+        end
     )
 
     return DiscreteSpace{nspace, length(depvars), G}(
@@ -368,17 +399,41 @@ A function that returns what to replace independent variables with in boundary e
         if isequal(x, x_)
             x => (I[x2i(s, u, x)] == 1 ? first(s.axies[x]) : last(s.axies[x]))
         else
-            x => s.grid[x][I[x2i(s, u, x)]]
+            x => s.grid[x][I[x2i(s, u, x)]] + staggered_shift(s, u, x)
         end
     end
 end
 
 function gridvals(s::DiscreteSpace{N}, u) where {N}
     return ndims(u, s) == 0 ? [] :
-        map(y -> [x => s.grid[x][y.I[x2i(s, u, x)]] for x in ivs(u, s)], s.Igrid[u])
+        map(y -> gridvals(s, u, y), s.Igrid[u])
 end
 function gridvals(s::DiscreteSpace{N}, u, I::CartesianIndex) where {N}
-    return ndims(u, s) == 0 ? [] : [x => s.grid[x][I[x2i(s, u, x)]] for x in ivs(u, s)]
+    return ndims(u, s) == 0 ? [] :
+        [x => s.grid[x][I[x2i(s, u, x)]] + staggered_shift(s, u, x) for x in ivs(u, s)]
+end
+
+"""
+    staggered_alignment(s, u, x)
+
+`EdgeAlignedVar` or `CenterAlignedVar`: the alignment of the variable `u` in the direction
+`x` of a `StaggeredGrid` discrete space.
+"""
+staggered_alignment(s::DiscreteSpace, u, x) = s.staggeredvars[operation(u)][x]
+
+"""
+    staggered_shift(s, u, x)
+
+The offset of the points of `u` in direction `x` from the grid points: half a step where
+`u` is edge aligned on a `StaggeredGrid`, matching the taps of its staggered stencils,
+and zero otherwise.
+"""
+staggered_shift(s::DiscreteSpace, u, x) = 0
+function staggered_shift(s::DiscreteSpace{N, M, G}, u, x) where {N, M, G <: StaggeredGrid}
+    staggered_alignment(s, u, x) == EdgeAlignedVar || return 0
+    s.dxs[x] isa Number ||
+        throw(ArgumentError("StaggeredGrid requires a uniform grid in $x."))
+    return s.dxs[x] / 2
 end
 
 function varmaps(s::DiscreteSpace, depvars, II, indexmap)

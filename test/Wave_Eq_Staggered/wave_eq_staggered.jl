@@ -357,3 +357,143 @@ end
         @test maximum(abs, du1 .+ du2 .- full.f(u, full.p, τ)) < 1.0e-12
     end
 end
+
+@testset "Edge aligned points sit half a step past the grid points" begin
+    pdesys, disc, vars = maxwell_drude(
+        (E, H, J, t, x, L) -> [
+            E(0, x) ~ sin(π * x), H(0, x) ~ x, J(0, x) ~ 0,
+            E(t, 0) ~ 0, E(t, L) ~ 0,
+        ], 0.1; tmax = 0.1
+    )
+    sol = solve(DAEProblem(pdesys, disc))
+    @test successful_retcode(sol)
+    grid = collect(0.0:0.1:1.0)
+    # initial conditions are evaluated at each variable's own points
+    @test sol[vars.H][1, :] ≈ grid .+ 0.05
+    @test sol[vars.E][1, :] ≈ sin.(π .* grid) atol = 1.0e-12
+    # and the interpolation knows them: halfway between grid points is an H point
+    for i in (1, 5, 10)
+        @test sol(sol.t[end], grid[i] + 0.05; dv = vars.H) ≈ sol[vars.H][end, i]
+        @test sol(sol.t[end], grid[i]; dv = vars.E) ≈ sol[vars.E][end, i]
+    end
+    # evaluating on the grid reaches half a step outside the first H point
+    @test length(sol(sol.t[end], :; dv = vars.H)) == length(grid)
+end
+
+# Cavity modes of Maxwell's equations (ε = μ = 1) in the unit square or cube with
+# perfectly conducting walls, on the Yee layout: each E component is staggered along
+# itself, each H component across itself, so tangential E sits on the walls.
+function cavity_mode_frequency(prob, states, field, k̃, ndims)
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    sel = findall(s -> first(s) == field, states)
+    i = sel[argmax(abs.(prob.u0[sel]))]
+    # a single mode keeps its shape: every point stays in proportion to point i
+    drift = maximum(abs, sol.u[end][sel] ./ sol.u[end][i] .- prob.u0[sel] ./ prob.u0[i])
+    return measured_frequency(sol, i), drift, sqrt(ndims) * k̃
+end
+
+@testset "2D Maxwell cavity on a Yee layout converges at second order" begin
+    @parameters t x y
+    @variables Hz(..) Ex(..) Ey(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+    X = (t, x, y)
+    eqs = [
+        Dt(Hz(X...)) ~ Dy(Ex(X...)) - Dx(Ey(X...)),
+        Dt(Ex(X...)) ~ Dy(Hz(X...)),
+        Dt(Ey(X...)) ~ -Dx(Hz(X...)),
+    ]
+    walls = [Ex(t, x, 0) ~ 0, Ex(t, x, 1) ~ 0, Ey(t, 0, y) ~ 0, Ey(t, 1, y) ~ 0]
+    # the (1, 1) mode, started from its H field or from its E field
+    starts = Dict(
+        :Hz => [
+            Hz(0, x, y) ~ cos(π * x) * cos(π * y), Ex(0, x, y) ~ 0.0, Ey(0, x, y) ~ 0.0,
+        ],
+        :Ex => [
+            Hz(0, x, y) ~ 0.0, Ex(0, x, y) ~ -cos(π * x) * sin(π * y),
+            Ey(0, x, y) ~ sin(π * x) * cos(π * y),
+        ],
+    )
+    domains = [t ∈ Interval(0.0, 3.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    for (field, ics) in starts
+        errs = map([1 / 10, 1 / 20]) do dx
+            @named pdesys = PDESystem(
+                eqs, [ics; walls], domains, [t, x, y], [Hz(X...), Ex(X...), Ey(X...)]
+            )
+            disc = MOLFiniteDifference(
+                [x => dx, y => dx], t; grid_align = MethodOfLines.StaggeredGrid(),
+                edge_aligned_var = [Hz(X...), Ex(X...) => x, Ey(X...) => y]
+            )
+            prob = discretize(pdesys, disc)
+            states = split_states(pdesys, disc)
+
+            # Ex and Ey are staggered in one direction, Hz in two: the split separates E
+            # (f1) from H (f2)
+            u = sin.(1:length(prob.u0))
+            du1, du2 = similar(u), similar(u)
+            prob.f.f1(du1, u, prob.p, 0.0)
+            prob.f.f2(du2, u, prob.p, 0.0)
+            isH = first.(states) .== :Hz
+            @test all(iszero, du1[isH]) && all(iszero, du2[.!isH])
+
+            ω, drift, ω̃ = cavity_mode_frequency(prob, states, field, 2 / dx * sin(π * dx / 2), 2)
+            @test ω ≈ ω̃ rtol = 1.0e-8
+            @test drift < 1.0e-10
+            abs(ω - sqrt(2) * π)
+        end
+        @test 1.9 < log2(errs[1] / errs[2]) < 2.1
+    end
+end
+
+@testset "3D Maxwell cavity on a Yee layout" begin
+    @parameters t x y z
+    @variables Ex(..) Ey(..) Ez(..) Hx(..) Hy(..) Hz(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+    Dz = Differential(z)
+    X = (t, x, y, z)
+    eqs = [
+        Dt(Ex(X...)) ~ Dy(Hz(X...)) - Dz(Hy(X...)),
+        Dt(Ey(X...)) ~ Dz(Hx(X...)) - Dx(Hz(X...)),
+        Dt(Ez(X...)) ~ Dx(Hy(X...)) - Dy(Hx(X...)),
+        Dt(Hx(X...)) ~ Dz(Ey(X...)) - Dy(Ez(X...)),
+        Dt(Hy(X...)) ~ Dx(Ez(X...)) - Dz(Ex(X...)),
+        Dt(Hz(X...)) ~ Dy(Ex(X...)) - Dx(Ey(X...)),
+    ]
+    # the (1, 1, 1) mode, started from a divergence free E field
+    ics = [
+        Ex(0, x, y, z) ~ cos(π * x) * sin(π * y) * sin(π * z),
+        Ey(0, x, y, z) ~ -sin(π * x) * cos(π * y) * sin(π * z),
+        Ez(0, x, y, z) ~ 0.0, Hx(0, x, y, z) ~ 0.0, Hy(0, x, y, z) ~ 0.0,
+        Hz(0, x, y, z) ~ 0.0,
+    ]
+    # tangential E vanishes on every wall
+    walls = [
+        Ex(t, x, 0, z) ~ 0, Ex(t, x, 1, z) ~ 0, Ex(t, x, y, 0) ~ 0, Ex(t, x, y, 1) ~ 0,
+        Ey(t, 0, y, z) ~ 0, Ey(t, 1, y, z) ~ 0, Ey(t, x, y, 0) ~ 0, Ey(t, x, y, 1) ~ 0,
+        Ez(t, 0, y, z) ~ 0, Ez(t, 1, y, z) ~ 0, Ez(t, x, 0, z) ~ 0, Ez(t, x, 1, z) ~ 0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 2.0), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+        z ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem(
+        eqs, [ics; walls], domains, [t, x, y, z],
+        [Ex(X...), Ey(X...), Ez(X...), Hx(X...), Hy(X...), Hz(X...)]
+    )
+    dx = 1 / 5
+    disc = MOLFiniteDifference(
+        [x => dx, y => dx, z => dx], t; grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = [
+            Ex(X...) => x, Ey(X...) => y, Ez(X...) => z,
+            Hx(X...) => (y, z), Hy(X...) => (x, z), Hz(X...) => (x, y),
+        ]
+    )
+    prob = discretize(pdesys, disc)
+    states = split_states(pdesys, disc)
+    ω, drift, ω̃ = cavity_mode_frequency(prob, states, :Ex, 2 / dx * sin(π * dx / 2), 3)
+    @test ω ≈ ω̃ rtol = 1.0e-8
+    @test drift < 1.0e-10
+end

@@ -24,7 +24,8 @@ A discretization algorithm.
   [`edge_align`](@ref), or `StaggeredGrid()` as appropriate for the discretization.
 - `edge_aligned_var`: Required with `StaggeredGrid()`. The dependent variable, or a
   collection of dependent variables, that is edge aligned. Every other dependent
-  variable is center aligned.
+  variable is center aligned. An entry `u => x` or `u => (x, y)` edge aligns `u` in
+  those directions only, as a Yee grid needs (`Ex(t, x, y) => x`).
 - `kwargs`: Additional keyword arguments passed to the generated problem.
 
 # Fields

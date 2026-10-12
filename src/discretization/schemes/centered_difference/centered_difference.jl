@@ -125,7 +125,7 @@ function generate_cartesian_rules(
                 boundary_point_count = derivweights.map[Differential(x)^d].boundary_point_count
 
                 if (II[j] <= boundary_point_count) & !haslower
-                    if (s.staggeredvars[operation(u)] == EdgeAlignedVar) # can use centered diff
+                    if (staggered_alignment(s, u, x) == EdgeAlignedVar) # can use centered diff
                         D = derivweights.windmap[1][Differential(x)^d]
                         weights = derivweights.windmap[1][Differential(x)^d].stencil_coefs
                         Itap = [II + (i * I1) for i in 0:1]
@@ -139,7 +139,7 @@ function generate_cartesian_rules(
                         ]
                     end
                 elseif (II[j] > (length(s, x) - boundary_point_count)) & !hasupper
-                    if (s.staggeredvars[operation(u)] == CenterAlignedVar) # can use centered diff
+                    if (staggered_alignment(s, u, x) == CenterAlignedVar) # can use centered diff
                         D = derivweights.windmap[1][Differential(x)^d]
                         weights = derivweights.windmap[1][Differential(x)^d].stencil_coefs
                         Itap = [II + (i * I1) for i in -1:0]
@@ -153,7 +153,7 @@ function generate_cartesian_rules(
                         ]
                     end
                 else
-                    if (s.staggeredvars[operation(u)] == CenterAlignedVar)
+                    if (staggered_alignment(s, u, x) == CenterAlignedVar)
                         D = derivweights.windmap[1][Differential(x)^d]
                         weights = D.stencil_coefs
                         Itap = [bwrap(II + i * I1, bs, s, jx) for i in 0:1]
@@ -189,7 +189,7 @@ function central_difference(
     boundary_point_count = derivweights.map[Differential(x)^d].boundary_point_count
 
     if (II[j] <= boundary_point_count) & !haslower
-        if (s.staggeredvars[operation(u)] == EdgeAlignedVar) # can use centered diff
+        if (staggered_alignment(s, u, x) == EdgeAlignedVar) # can use centered diff
             D = derivweights.windmap[1][Differential(x)^d]
             weights = derivweights.windmap[1][Differential(x)^d].stencil_coefs
             Itap = [II + (i * I1) for i in 0:1]
@@ -200,7 +200,7 @@ function central_difference(
             Itap = [II + (i + offset) * I1 for i in 0:(D.boundary_stencil_length - 1)]
         end
     elseif (II[j] > (length(s, x) - boundary_point_count)) & !hasupper
-        if (s.staggeredvars[operation(u)] == CenterAlignedVar) # can use centered diff
+        if (staggered_alignment(s, u, x) == CenterAlignedVar) # can use centered diff
             D = derivweights.windmap[1][Differential(x)^d]
             weights = derivweights.windmap[1][Differential(x)^d].stencil_coefs
             Itap = [II + (i * I1) for i in -1:0]
@@ -211,7 +211,7 @@ function central_difference(
             Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):1:0]
         end
     else
-        if (s.staggeredvars[operation(u)] == CenterAlignedVar)
+        if (staggered_alignment(s, u, x) == CenterAlignedVar)
             D = derivweights.windmap[1][Differential(x)^d]
             weights = D.stencil_coefs
             Itap = [bwrap(II + i * I1, bs, s, jx) for i in 0:1]

@@ -21,21 +21,24 @@ function SciMLBase.discretize(
                 discretization.kwargs...,
                 kwargs...
             )
-            return symbolic_trace(prob, simpsys, edge_aligned_ops(discretization))
+            return symbolic_trace(prob, simpsys, edge_aligned_dims(discretization))
         end
     catch e
         error_analysis(sys, e)
     end
 end
 
-# `f1` holds the time derivatives of the edge aligned variables and `f2` those of every
-# other variable. Splitting the rows of `du`, rather than the states `du` is evaluated
-# at, keeps `f1 + f2` equal to the full right hand side for any number of variables.
-function symbolic_trace(prob, sys, edge_ops)
+# `f1` holds the time derivatives of the variables edge aligned in an odd number of
+# directions and `f2` those of every other variable. A staggered derivative moves its
+# variable half a step in one direction, so it always couples the two groups, while
+# pointwise terms stay within one: for Maxwell's equations the groups are E and H.
+# Splitting the rows of `du`, rather than the states `du` is evaluated at, keeps
+# `f1 + f2` equal to the full right hand side for any number of variables.
+function symbolic_trace(prob, sys, edge_dims)
     get_var_from_state(state) = operation(arguments(state)[1])
     unknowns = get_unknowns(sys)
-    edge_names = Set(nameof(op) for op in edge_ops)
-    isedge = [nameof(get_var_from_state(u)) in edge_names for u in unknowns]
+    nedge = Dict(nameof(op) => length(dims) for (op, dims) in edge_dims)
+    isedge = [isodd(get(nedge, nameof(get_var_from_state(u)), 0)) for u in unknowns]
     # traced at a symbolic time so time dependent boundary values and sources stay live
     iv = ModelingToolkit.get_iv(sys)
     du = prob.f(unknowns, prob.p, iv)

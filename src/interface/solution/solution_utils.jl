@@ -1,13 +1,16 @@
 # TODO: Check if the grid is uniform and use the supported higher order interpolations
 
-function build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, replaced_vars)
+function build_interpolation(
+        umap, dvs, ivs, ivgrid, sol, pdesys, replaced_vars, discretespace
+    )
     return mapreduce(vcat, Num.(dvs)) do k
         args = arguments(k.val)
         nodes = (
             map(args) do arg
                 i = findfirst(isequal(arg), ivs)
                 @assert i !== nothing "Independent variable $arg not found in ivs $ivs."
-                collect(ivgrid[i])
+                isequal(arg, discretespace.time) ? collect(ivgrid[i]) :
+                    collect(ivgrid[i]) .+ staggered_shift(discretespace, k.val, arg)
             end...,
         )
         @assert all(
@@ -18,6 +21,12 @@ function build_interpolation(umap, dvs, ivs, ivgrid, sol, pdesys, replaced_vars)
         kreplaced = get(replaced_vars, k, nothing)
         if all(length.(nodes) .> 1)
             interp = interpolate(nodes, umap[k], Gridded(Linear()))
+            # staggered points start half a step inside the domain edge, so evaluating on
+            # the grid (`sol(t, :)`) reaches half a step past the first point
+            shifted = arg -> !isequal(arg, discretespace.time) &&
+                !iszero(staggered_shift(discretespace, k.val, arg))
+            any(shifted, args) &&
+                (interp = Interpolations.extrapolate(interp, Interpolations.Line()))
         else
             i = findfirst(a -> a <= 1, length.(nodes))
             @warn "Solution has length 1 in dimension $(ivs[i]). Interpolation will not be possible for variable $k. Solution return code is $(sol.retcode)."
