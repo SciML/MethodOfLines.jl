@@ -40,6 +40,7 @@ function SciMLBase.PDETimeSeriesSolution(
         sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata
     ) where {T}
     try
+        hostsol = host_solution(sol)
         odesys = sol.prob.f.sys
         pdesys = metadata.pdesys
         discretespace = metadata.discretespace
@@ -51,14 +52,16 @@ function SciMLBase.PDETimeSeriesSolution(
         # Reshape the solution to flat arrays, faster to do this eagerly.
         umap = mapreduce(vcat, dvs) do u
             let discu = discretespace.discvars[u]
-                solu = array_observed_solution(sol, discu, ModelingToolkitBase.observed(odesys))
+                solu = array_observed_solution(
+                    hostsol, discu, ModelingToolkitBase.observed(odesys)
+                )
                 if solu === nothing
                     solu = map(CartesianIndices(discu)) do I
                         i = SymbolicIndexingInterface.variable_index(odesys, discu[I])
                         if i !== nothing
-                            sol[i, :]
+                            hostsol[i, :]
                         else
-                            SciMLBase.observed(sol, safe_unwrap(discu[I]), :)
+                            SciMLBase.observed(hostsol, safe_unwrap(discu[I]), :)
                         end
                     end
                 end

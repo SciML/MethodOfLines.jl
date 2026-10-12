@@ -9,6 +9,7 @@ end
 function SciMLBase.PDENoTimeSolution(
         sol::SciMLBase.NonlinearSolution{T}, metadata::MOLMetadata
     ) where {T}
+    hostsol = host_solution(sol)
     odesys = sol.prob.f.sys
 
     pdesys = metadata.pdesys
@@ -24,9 +25,9 @@ function SciMLBase.PDENoTimeSolution(
                 i = SymbolicIndexingInterface.variable_index(odesys, discu[I])
                 # Handle Observed
                 if i !== nothing
-                    sol.u[i]
+                    hostsol.u[i]
                 else
-                    SciMLBase.observed(sol, discu[I])
+                    SciMLBase.observed(hostsol, discu[I])
                 end
             end
             out = zeros(T, size(discu)...)
