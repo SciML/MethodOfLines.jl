@@ -21,7 +21,7 @@ function SciMLBase.discretize(
                 discretization.kwargs...,
                 kwargs...
             )
-            return symbolic_trace(prob, simpsys, edge_aligned_dims(discretization))
+            return staggered_split(prob, simpsys, edge_aligned_dims(discretization))
         end
     catch e
         error_analysis(sys, e)
@@ -32,23 +32,17 @@ end
 # directions and `f2` those of every other variable. A staggered derivative moves its
 # variable half a step in one direction, so it always couples the two groups, while
 # pointwise terms stay within one: for Maxwell's equations the groups are E and H.
-# Splitting the rows of `du`, rather than the states `du` is evaluated at, keeps
-# `f1 + f2` equal to the full right hand side for any number of variables.
-function symbolic_trace(prob, sys, edge_dims)
+# Each half evaluates the full right hand side and zeroes the other group's rows, so
+# `f1 + f2` is exactly `f` for any number of variables, with time, parameters and
+# boundary values live, at the price of a second evaluation of `f` per step.
+function staggered_split(prob, sys, edge_dims)
     get_var_from_state(state) = operation(arguments(state)[1])
-    unknowns = get_unknowns(sys)
     nedge = Dict(nameof(op) => length(dims) for (op, dims) in edge_dims)
-    isedge = [isodd(get(nedge, nameof(get_var_from_state(u)), 0)) for u in unknowns]
-    # traced at a symbolic time so time dependent boundary values and sources stay live
-    iv = ModelingToolkit.get_iv(sys)
-    du = prob.f(unknowns, prob.p, iv)
-    du1 = [isedge[i] ? du[i] : Num(0.0) for i in eachindex(du)]
-    du2 = [isedge[i] ? Num(0.0) : du[i] for i in eachindex(du)]
-    gen_du1 = Symbolics.build_function(du1, unknowns, iv; expression = Val{false})[2]
-    gen_du2 = Symbolics.build_function(du2, unknowns, iv; expression = Val{false})[2]
-    dynamical_f1(_du1, u, p, t) = gen_du1(_du1, u, t)
-    dynamical_f2(_du2, u, p, t) = gen_du2(_du2, u, t)
-    u0 = prob.u0
-    return SplitODEProblem(dynamical_f1, dynamical_f2, u0, prob.tspan)
-    #return DynamicalODEProblem{false}(dynamical_f1, dynamical_f2, u0[1:length(u1)], u0[length(u1)+1:end], prob.tspan)
+    isedge = [
+        isodd(get(nedge, nameof(get_var_from_state(u)), 0)) for u in get_unknowns(sys)
+    ]
+    rows1, rows2 = findall(isedge), findall(!, isedge)
+    f1(du, u, p, t) = (prob.f(du, u, p, t); du[rows2] .= 0; nothing)
+    f2(du, u, p, t) = (prob.f(du, u, p, t); du[rows1] .= 0; nothing)
+    return SplitODEProblem(f1, f2, prob.u0, prob.tspan, prob.p)
 end
