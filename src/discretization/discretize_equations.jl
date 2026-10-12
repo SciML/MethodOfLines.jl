@@ -38,12 +38,13 @@
 # for what falls back.
 #
 # Staggered grids collapse the same way: each variable's alignment fixes its two stencil
-# taps across the interior, so the interior is one array equation per PDE. Frame points
-# and the (1D) boundaries take the staggered boundary stencils at their single point.
+# taps across the interior, so the interior is one array equation per PDE.
 #
-# Single points — 1D boundaries and interfaces, size-1 wrap boxes, corners, staggered
-# frame points — are one-element slice equations rather than scalar ones, so they add
-# no elementwise reads of the state to the generated code (GPU arrays reject those).
+# Single points — 1D boundaries and interfaces, size-1 wrap boxes, frame points, corners
+# and extrapolation rows — are one-element slice equations rather than scalar ones, so
+# they add no elementwise reads of the state to the generated code (GPU arrays reject
+# those). Apart from the corners, these are the pointwise equation respelled over slices
+# (`array_lift_point_equation`), as is any boundary equation the face slice form declines.
 #
 # Mixed derivatives `(Differential(x)^m * Differential(y)^n)(u)` are the tensor product
 # of the two centered stencils of those orders; see `array_mixed_difference`. The first-
@@ -124,10 +125,16 @@ function PDEBase.discretize_equation!(
             e isa InterruptException && rethrow(e)
             reason = e isa ArrayFormFallback ? e.msg : sprint(showerror, e)
             @debug "Array form falling back to pointwise boundary equations for $(boundary.eq): $reason"
+            # Each pointwise equation (every 1D boundary, for one) is still respelled as
+            # a one-element slice equation.
+            nbceqs = length(disc_state.bceqs)
             generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+            array_lift_bceqs!(disc_state, nbceqs, s)
         end
     end
+    nbceqs = length(disc_state.bceqs)
     generate_extrap_eqs!(disc_state, pde, eqvar, s, derivweights, interiormap, bcmap)
+    array_lift_bceqs!(disc_state, nbceqs, s)
     try
         vcat!(
             disc_state.bceqs,
@@ -186,9 +193,9 @@ end
 Discretize the interior of `pde` as symbolic array equations over slices of the
 discretized dependent variables — one per box of the decomposition built by
 `array_bands`, which is a single box unless the equation has periodic directions — plus
-pointwise scalar equations for any interior points whose stencils differ from the
-translation-invariant interior stencil. Throws `ArrayFormFallback` when `pde`
-contains a pattern that cannot be represented this way.
+the pointwise equations, respelled as one-element slices, for any interior points whose
+stencils differ from the translation-invariant interior stencil. Throws
+`ArrayFormFallback` when `pde` contains a pattern that cannot be represented this way.
 """
 function discretize_equation_array_form(
         pde, interior, s, depvars, derivweights, bcmap,
@@ -276,51 +283,126 @@ function discretize_equation_array_form(
     end
     array_validate_boundary_values(pde, s, derivweights)
 
-    core_equation(ranges) = array_core_equation(
-        pde, ranges, s, slicevars, derivweights,
-        args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches,
-        mixedterms, bcmap, depvars; eqvar
-    )
-    function point_equation(II)
+    core_eqs = map(Iterators.product(map(eachindex, bands)...)) do combo
+        rs = ntuple(j -> bands[j][combo[j]], N)
+        ranges = Dict(j => rs[j] for j in 1:N)
+        if prod(map(length, rs)) == 1
+            # a single point is the pointwise equation, respelled as a one-element slice
+            # equation; still apply array bval rules (periodic faces have empty
+            # boundaryvalfuncs)
+            eq = discretize_equation_at_point(
+                CartesianIndex(map(first, rs)), s, depvars, pde, derivweights,
+                bcmap, eqvar, indexmap, boundaryvalfuncs;
+                extra_rules = array_point_boundary_derivative_rules(
+                    pde, s, ranges, indexmap, derivweights, periodic, bcmap
+                )
+            )
+            eq = array_substitute_boundary_values(
+                eq, pde, s, ranges, indexmap, derivweights, periodic, bcmap
+            )
+            return array_lift_or_keep(eq, s)
+        end
+        return array_core_equation(
+            pde, ranges, s, slicevars, derivweights,
+            args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches,
+            mixedterms, bcmap, depvars; eqvar
+        )
+    end
+
+    # Frame points take the pointwise boundary stencils, respelled the same way.
+    frame = setdiff(vec(collect(interior)), vec(collect(core)))
+    frame_eqs = map(frame) do II
         ranges = Dict(j => II[j]:II[j] for j in 1:N)
-        # still apply array bval rules (periodic faces have empty boundaryvalfuncs)
         eq = discretize_equation_at_point(
             II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs;
             extra_rules = array_point_boundary_derivative_rules(
                 pde, s, ranges, indexmap, derivweights, periodic, bcmap
             )
         )
-        return array_substitute_boundary_values(
+        eq = array_substitute_boundary_values(
             eq, pde, s, ranges, indexmap, derivweights, periodic, bcmap
         )
+        return array_lift_or_keep(eq, s)
     end
-    # A single point is still a one-element slice equation: a scalar equation reads the
-    # state elementwise, which GPU arrays reject. The pointwise equation remains the
-    # fallback for a point the slice form cannot express.
-    function single_point_equation(II)
-        try
-            return core_equation(Dict(j => II[j]:II[j] for j in 1:N))
-        catch e
-            e isa InterruptException && rethrow(e)
-            reason = e isa ArrayFormFallback ? e.msg : sprint(showerror, e)
-            @debug "Array form falling back to a pointwise equation at $II for $pde: $reason"
-            return point_equation(II)
-        end
-    end
-
-    core_eqs = map(Iterators.product(map(eachindex, bands)...)) do combo
-        rs = ntuple(j -> bands[j][combo[j]], N)
-        prod(map(length, rs)) == 1 &&
-            return single_point_equation(CartesianIndex(map(first, rs)))
-        return core_equation(Dict(j => rs[j] for j in 1:N))
-    end
-
-    # Frame points take boundary stencils. Only the staggered rules select those per
-    # point (`array_staggered_rules`); the other schemes' slice forms assume the
-    # interior stencil, so their frame stays pointwise.
-    frame = setdiff(vec(collect(interior)), vec(collect(core)))
-    frame_eqs = map(isstag ? single_point_equation : point_equation, frame)
     return vcat(vec(core_eqs), frame_eqs)
+end
+
+"""
+    array_lift_point_equation(eq, s)
+
+The slice spelling of an equation the pointwise path built at a single point: every
+element `u[i, j]` of a discrete array variable becomes the one-element slice
+`u[i:i, j:j]`, and the operations over them broadcast. The stencils, boundary branches
+and schemes are exactly those of the pointwise equation; only the spelling changes, so
+the generated code reads the state through slices rather than elementwise (GPU arrays
+reject the latter). Throws `ArrayFormFallback` for anything `arrayify` cannot broadcast.
+"""
+function array_lift_point_equation(eq, s)
+    arrays = Dict{Any, Any}()
+    for u in s.ū
+        ndims(u, s) == 0 && continue
+        arr = try
+            array_variable(u, s)
+        catch e
+            e isa ArrayFormFallback || rethrow(e)
+            continue
+        end
+        arrays[safe_unwrap(arr)] = arr
+    end
+    rules = Pair[]
+    function lift_elements!(ex)
+        ex = safe_unwrap(ex)
+        iscall(ex) || return
+        args = arguments(ex)
+        if operation(ex) === getindex && haskey(arrays, safe_unwrap(args[1]))
+            idxs = map(a -> unwrap_const(safe_unwrap(a)), args[2:end])
+            all(i -> i isa Integer, idxs) ||
+                throw(ArrayFormFallback("non-literal index in $ex"))
+            push!(rules, ex => arrays[safe_unwrap(args[1])][(i:i for i in idxs)...])
+            return
+        end
+        foreach(lift_elements!, args)
+        return
+    end
+    lift_elements!(eq.lhs)
+    lift_elements!(eq.rhs)
+    isempty(rules) && throw(ArrayFormFallback("no state element to lift"))
+    ctx = ArrayifyContext(rules, s.time)
+    lhs = arrayify(eq.lhs, ctx)
+    rhs = arrayify(eq.rhs, ctx)
+    # Shapes may differ by trailing singletons (a lower-dimensional field); broadcast
+    # each side onto the other so both carry the full one-element shape.
+    if !is_array_valued(lhs) || !is_array_valued(rhs) ||
+            size(Symbolics.wrap(lhs)) != size(Symbolics.wrap(rhs))
+        is_array_valued(rhs) && (lhs = array_broadcast_onto(lhs, rhs))
+        is_array_valued(lhs) && (rhs = array_broadcast_onto(rhs, lhs))
+    end
+    return lhs ~ rhs
+end
+
+"""
+`array_lift_point_equation`, or `eq` unchanged where the slice spelling has no form.
+"""
+function array_lift_or_keep(eq, s)
+    try
+        return array_lift_point_equation(eq, s)
+    catch e
+        e isa InterruptException && rethrow(e)
+        reason = e isa ArrayFormFallback ? e.msg : sprint(showerror, e)
+        @debug "Keeping the scalar equation $eq: $reason"
+        return eq
+    end
+end
+
+"""
+Respell the boundary equations the pointwise path appended after index `n` (boundary
+conditions, extrapolation rows) as one-element slice equations.
+"""
+function array_lift_bceqs!(disc_state, n, s)
+    for i in (n + 1):length(disc_state.bceqs)
+        disc_state.bceqs[i] = array_lift_or_keep(disc_state.bceqs[i], s)
+    end
+    return disc_state
 end
 
 """
@@ -363,7 +445,7 @@ function array_core_equation(
     ]
     if isstag
         derivrules = array_staggered_rules(
-            s, depvars, pdeorders, derivweights, ranges, indexmap, periodic, bcmap
+            s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
         )
         mixedrules = Pair[]
         windrules = Pair[]
@@ -2014,17 +2096,14 @@ function validate_staggered_array_form(s, depvars, pdeorders, args)
 end
 
 """
-Array form of the staggered `generate_cartesian_rules`. Across the core this is the
-interior branch: the same `windmap` weights, with the two taps fixed by each variable's
-alignment — `(0, +1)` for a center-aligned variable, `(-1, 0)` for an edge-aligned one.
-A frame point (a single-point `ranges`) may instead take a boundary branch, whose weights
-and taps come from `staggered_weights_and_stencil` at that point.
+Array form of the interior branch of the staggered `generate_cartesian_rules`: the same
+`windmap` weights, with the two taps fixed by each variable's alignment — `(0, +1)` for a
+center-aligned variable, `(-1, 0)` for an edge-aligned one — constant across the core.
 """
 function array_staggered_rules(
-        s, depvars, pdeorders, derivweights, ranges, indexmap, periodic, bcmap
+        s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
     )
     rules = Pair[]
-    N = length(ranges)
     for u in depvars, x in ivs(depvar(u, s), s)
         haskey(pdeorders, x) || continue
         for d in filter(isodd, pdeorders[x])
@@ -2034,59 +2113,22 @@ function array_staggered_rules(
                     "no upwind operator for order $d in $x on a staggered grid"
                 )
             )
-            # the boundary branch conditions of `staggered_weights_and_stencil`
-            rng = ranges[indexmap[x]]
-            bs = filter_interfaces(bcmap[operation(depvar(u, s))][x])
-            haslower, hasupper = haslowerupper(bs, x)
-            bpc = derivweights.map[Differential(x)^d].boundary_point_count
-            if (!haslower && first(rng) <= bpc) ||
-                    (!hasupper && last(rng) > length(s, x) - bpc)
-                length(rng) == 1 && ndims(depvar(u, s), s) == N || throw(
-                    ArrayFormFallback("staggered boundary stencil on a multi-point range")
-                )
-                II0 = CartesianIndex(ntuple(k -> first(ranges[k]), N))
-                expr = array_staggered_derivative_expr(
-                    derivweights, d, II0, s, u, x, ranges, indexmap, bs, periodic
-                )
-            else
-                taps = staggered_alignment(s, depvar(u, s), x) == CenterAlignedVar ?
-                    (0:1) : (-1:0)
-                slices = [
-                    array_slice(
-                        u, s, ranges, indexmap;
-                        shiftx = x, offset = k, periodic = periodic
-                    ) for k in taps
-                ]
-                expr = array_stencil(collect(Dop.stencil_coefs), slices)
-            end
-            push!(rules, safe_unwrap((Differential(x)^d)(u)) => expr)
+            taps = staggered_alignment(s, depvar(u, s), x) == CenterAlignedVar ?
+                (0:1) : (-1:0)
+            slices = [
+                array_slice(
+                    u, s, ranges, indexmap;
+                    shiftx = x, offset = k, periodic = periodic
+                ) for k in taps
+            ]
+            push!(
+                rules,
+                safe_unwrap((Differential(x)^d)(u)) =>
+                    array_stencil(collect(Dop.stencil_coefs), slices)
+            )
         end
     end
     return rules
-end
-
-"""
-The slice form of the staggered stencil `staggered_weights_and_stencil` selects for the
-derivative of order `d` of `u` in `x` at the point `II0`, with the taps as shifted slices
-of `ranges`. `bs` are the interfaces the pointwise caller passes.
-"""
-function array_staggered_derivative_expr(
-        derivweights, d, II0, s, u, x, ranges, indexmap, bs, periodic = nothing
-    )
-    ud = depvar(u, s)
-    ju = x2i(s, ud, x)
-    weights, offsets = try
-        ws, Itap = staggered_weights_and_stencil(derivweights, II0, s, bs, (ju, x), ud, d)
-        ws, [I[ju] - II0[ju] for I in Itap]
-    catch e
-        e isa InterruptException && rethrow(e)
-        throw(ArrayFormFallback("could not build staggered stencil for order $d in $x"))
-    end
-    slices = [
-        array_slice(u, s, ranges, indexmap; shiftx = x, offset = o, periodic = periodic)
-            for o in offsets
-    ]
-    return array_stencil(collect(weights), slices)
 end
 
 """
@@ -3180,11 +3222,13 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         throw(ArrayFormFallback("boundary edge spans its own direction"))
     ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
     N = length(args)
-    # A single-point face (every 1D boundary) is still emitted as a one-element slice
-    # equation: the scalar one reads the state elementwise, which GPU arrays reject.
-    # Multi-point staggered faces are untested on the pointwise path; decline.
-    isstag = get_grid_type(s) <: StaggeredGrid
-    isstag && prod(length(ranges[i]) for i in 1:N) > 1 &&
+    # A single-point face (every 1D boundary) has nothing to collapse; the caller
+    # respells the pointwise equation as a one-element slice instead.
+    prod(length(ranges[i]) for i in 1:N) == 1 &&
+        throw(ArrayFormFallback("single-point boundary"))
+    # A staggered 1D boundary is always the single point above; multi-point staggered
+    # faces would need the staggered stencil selection, which has no slice form here yet.
+    get_grid_type(s) <: StaggeredGrid &&
         throw(ArrayFormFallback("staggered boundary face"))
 
     # Every dependent variable in the condition must be one this path can slice: either
@@ -3218,22 +3262,13 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     # would use at a representative point on the face, then express the taps as shifted
     # slices. The branch that selects them depends only on the index along `x_`, which is
     # constant across the face, so this is exact.
-    # On a staggered grid that is the staggered `central_difference` of
-    # `boundary_value_maps`, which passes no interfaces.
     derivrules = Pair[]
     for d in derivweights.orders[x_]
-        if isstag
-            isodd(d) || continue
-            expr = array_staggered_derivative_expr(
-                derivweights, d, II0, s, u, x_, ranges, indexmap, []
-            )
-        else
-            Dop = get(derivweights.map, Differential(x_)^d, nothing)
-            Dop === nothing && continue
-            expr = array_boundary_derivative_expr(
-                Dop, II0, s, u, x_, j, N, ranges, indexmap, bcmap
-            )
-        end
+        Dop = get(derivweights.map, Differential(x_)^d, nothing)
+        Dop === nothing && continue
+        expr = array_boundary_derivative_expr(
+            Dop, II0, s, u, x_, j, N, ranges, indexmap, bcmap
+        )
         for v in bcdepvars
             isequal(depvar(v, s), u) || continue
             push!(derivrules, safe_unwrap((Differential(x_)^d)(v)) => expr)
@@ -3342,10 +3377,11 @@ function array_bc_eqs(s, boundary::InterfaceBoundary, interiormap, derivweights,
     lo[j] == hi[j] ||
         throw(ArrayFormFallback("boundary edge spans its own direction"))
     ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
-    # A single point (every 1D interface) is a one-element slice equation, as for the
-    # truncating faces. Its pointwise form is the same index shift on any grid, but
-    # multi-point staggered faces are untested on the pointwise path, so decline those.
-    get_grid_type(s) <: StaggeredGrid && length(E) > 1 &&
+    length(E) == 1 &&
+        throw(ArrayFormFallback("single-point interface boundary"))
+    # 1D staggered interfaces are the single point above; multi-point staggered faces
+    # are untested on the pointwise path, so decline rather than guess.
+    get_grid_type(s) <: StaggeredGrid &&
         throw(ArrayFormFallback("staggered interface face"))
 
     arr2 = array_variable(u2, s)
@@ -3370,7 +3406,7 @@ end
 Flux (or other higher-order) interface condition as one array equation over the face.
 `boundary.u` is discretized on this edge; `boundary.u2` on the partner face at index 1.
 A self-periodic flux reuses one discrete variable on both ends; each call is bound to
-its own face. A 1D (single-point) face is a one-element slice equation.
+its own face. A 1D (single-point) face falls back.
 """
 function array_bc_eqs(
         s, boundary::HigherOrderInterfaceBoundary, interiormap, derivweights, bcmap
@@ -3405,8 +3441,8 @@ function array_bc_eqs(
     lo[j] == hi[j] ||
         throw(ArrayFormFallback("boundary edge spans its own direction"))
     ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
-    # A single-point face is a one-element slice equation. On a staggered grid the
-    # pointwise flux stencils mix the staggered and the centered selection; decline.
+    length(E) == 1 &&
+        throw(ArrayFormFallback("single-point interface boundary"))
     get_grid_type(s) <: StaggeredGrid &&
         throw(ArrayFormFallback("staggered interface face"))
 
