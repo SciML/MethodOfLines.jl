@@ -21,7 +21,7 @@ function SciMLBase.PDENoTimeSolution(
     umap = mapreduce(vcat, dvs) do u
         let discu = discretespace.discvars[u]
             solu = map(CartesianIndices(discu)) do I
-                i = sym_to_index(discu[I], get_unknowns(odesys))
+                i = SymbolicIndexingInterface.variable_index(odesys, discu[I])
                 # Handle Observed
                 if i !== nothing
                     sol.u[i]

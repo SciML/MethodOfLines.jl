@@ -308,6 +308,22 @@ params(s::DiscreteSpace) = getfield(s.vars, :ps)
 get_grid_type(::DiscreteSpace{N, M, G}) where {N, M, G} = G
 PDEBase.get_discvars(s::DiscreteSpace) = s.discvars
 
+"""
+    get_system_unknowns(s::DiscreteSpace)
+
+The unknowns of the discretized system: one per dependent variable, in the order of
+`s.ū`. A variable with spatial arguments is represented by the array variable
+`u(t)[1:n, ...]` whose elements `s.discvars[u]` holds; a variable of `t` alone is the
+scalar `u(t)` itself.
+"""
+function PDEBase.get_system_unknowns(s::DiscreteSpace)
+    return map(s.ū) do u
+        disc = s.discvars[u]
+        ndims(disc) == 0 && return safe_unwrap(disc[])
+        return first(arguments(safe_unwrap(first(disc))))
+    end
+end
+
 prepare_dx(dx::Integer, xdomain, ::CenterAlignedGrid) = (xdomain[2] - xdomain[1]) / (dx - 1)
 prepare_dx(dx::Integer, xdomain, ::EdgeAlignedGrid) = (xdomain[2] - xdomain[1]) / dx
 prepare_dx(dx, xdomain, ::AbstractGrid) = dx
