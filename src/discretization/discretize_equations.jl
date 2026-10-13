@@ -283,35 +283,10 @@ function discretize_equation_array_form(
     end
     array_validate_boundary_values(pde, s, derivweights)
 
-    core_eqs = map(Iterators.product(map(eachindex, bands)...)) do combo
-        rs = ntuple(j -> bands[j][combo[j]], N)
-        ranges = Dict(j => rs[j] for j in 1:N)
-        if prod(map(length, rs)) == 1
-            # a single point is the pointwise equation, respelled as a one-element slice
-            # equation; still apply array bval rules (periodic faces have empty
-            # boundaryvalfuncs)
-            eq = discretize_equation_at_point(
-                CartesianIndex(map(first, rs)), s, depvars, pde, derivweights,
-                bcmap, eqvar, indexmap, boundaryvalfuncs;
-                extra_rules = array_point_boundary_derivative_rules(
-                    pde, s, ranges, indexmap, derivweights, periodic, bcmap
-                )
-            )
-            eq = array_substitute_boundary_values(
-                eq, pde, s, ranges, indexmap, derivweights, periodic, bcmap
-            )
-            return array_lift_or_keep(eq, s)
-        end
-        return array_core_equation(
-            pde, ranges, s, slicevars, derivweights,
-            args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches,
-            mixedterms, bcmap, depvars; eqvar
-        )
-    end
-
-    # Frame points take the pointwise boundary stencils, respelled the same way.
-    frame = setdiff(vec(collect(interior)), vec(collect(core)))
-    frame_eqs = map(frame) do II
+    # Single-point boxes and the frame points take the pointwise equation, respelled as
+    # slice equations; still apply array bval rules (periodic faces have empty
+    # boundaryvalfuncs).
+    function point_equation(II)
         ranges = Dict(j => II[j]:II[j] for j in 1:N)
         eq = discretize_equation_at_point(
             II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs;
@@ -319,25 +294,33 @@ function discretize_equation_array_form(
                 pde, s, ranges, indexmap, derivweights, periodic, bcmap
             )
         )
-        eq = array_substitute_boundary_values(
+        return array_substitute_boundary_values(
             eq, pde, s, ranges, indexmap, derivweights, periodic, bcmap
         )
-        return array_lift_or_keep(eq, s)
     end
-    return vcat(vec(core_eqs), frame_eqs)
+    boxes = vec(
+        map(Iterators.product(map(eachindex, bands)...)) do combo
+            ntuple(j -> bands[j][combo[j]], N)
+        end
+    )
+    single = filter(rs -> prod(map(length, rs)) == 1, boxes)
+    core_eqs = map(setdiff(boxes, single)) do rs
+        array_core_equation(
+            pde, Dict(j => rs[j] for j in 1:N), s, slicevars, derivweights,
+            args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches,
+            mixedterms, bcmap, depvars; eqvar
+        )
+    end
+    frame = setdiff(vec(collect(interior)), vec(collect(core)))
+    points = vcat(map(rs -> CartesianIndex(map(first, rs)), single), frame)
+    return vcat(core_eqs, array_lift_equations(map(point_equation, points), s))
 end
 
 """
-    array_lift_point_equation(eq, s)
-
-The slice spelling of an equation the pointwise path built at a single point: every
-element `u[i, j]` of a discrete array variable becomes the one-element slice
-`u[i:i, j:j]`, and the operations over them broadcast. The stencils, boundary branches
-and schemes are exactly those of the pointwise equation; only the spelling changes, so
-the generated code reads the state through slices rather than elementwise (GPU arrays
-reject the latter). Throws `ArrayFormFallback` for anything `arrayify` cannot broadcast.
+The discrete array variables a pointwise equation can be respelled over, keyed by their
+unwrapped symbol, with the directions of their indices.
 """
-function array_lift_point_equation(eq, s)
+function array_state_arrays(s)
     arrays = Dict{Any, Any}()
     for u in s.ū
         ndims(u, s) == 0 && continue
@@ -347,10 +330,15 @@ function array_lift_point_equation(eq, s)
             e isa ArrayFormFallback || rethrow(e)
             continue
         end
-        arrays[safe_unwrap(arr)] = arr
+        arrays[safe_unwrap(arr)] = (arr, map(safe_unwrap, ivs(u, s)))
     end
-    rules = Pair[]
-    function lift_elements!(ex)
+    return arrays
+end
+
+# The state elements `u[i, j]` in `eq`, as (term, array key, literal indices).
+function array_point_elements(eq, arrays)
+    elements = []
+    function walk(ex)
         ex = safe_unwrap(ex)
         iscall(ex) || return
         args = arguments(ex)
@@ -358,20 +346,42 @@ function array_lift_point_equation(eq, s)
             idxs = map(a -> unwrap_const(safe_unwrap(a)), args[2:end])
             all(i -> i isa Integer, idxs) ||
                 throw(ArrayFormFallback("non-literal index in $ex"))
-            push!(rules, ex => arrays[safe_unwrap(args[1])][(i:i for i in idxs)...])
+            push!(elements, (ex, safe_unwrap(args[1]), Tuple(idxs)))
             return
         end
-        foreach(lift_elements!, args)
+        foreach(walk, args)
         return
     end
-    lift_elements!(eq.lhs)
-    lift_elements!(eq.rhs)
+    walk(eq.lhs)
+    walk(eq.rhs)
+    return elements
+end
+
+"""
+    array_lift_point_equation(eq, s; spans = Dict())
+
+The slice spelling of an equation the pointwise path built at a single point: every
+element `u[i, j]` of a discrete array variable becomes the one-element slice
+`u[i:i, j:j]`, and the operations over them broadcast. The stencils, boundary branches
+and schemes are exactly those of the pointwise equation; only the spelling changes, so
+the generated code reads the state through slices rather than elementwise (GPU arrays
+reject the latter). `spans` (direction => length) widens each slice along those
+directions, which spells a run of translates of `eq` as one equation
+(`array_lift_equations`). Throws `ArrayFormFallback` for anything `arrayify` cannot
+broadcast.
+"""
+function array_lift_point_equation(eq, s; spans = Dict())
+    arrays = array_state_arrays(s)
+    rules = map(array_point_elements(eq, arrays)) do (ex, key, idxs)
+        arr, dirs = arrays[key]
+        ex => arr[(i:(i + get(spans, d, 1) - 1) for (i, d) in zip(idxs, dirs))...]
+    end
     isempty(rules) && throw(ArrayFormFallback("no state element to lift"))
     ctx = ArrayifyContext(rules, s.time)
     lhs = arrayify(eq.lhs, ctx)
     rhs = arrayify(eq.rhs, ctx)
     # Shapes may differ by trailing singletons (a lower-dimensional field); broadcast
-    # each side onto the other so both carry the full one-element shape.
+    # each side onto the other so both carry the full shape.
     if !is_array_valued(lhs) || !is_array_valued(rhs) ||
             size(Symbolics.wrap(lhs)) != size(Symbolics.wrap(rhs))
         is_array_valued(rhs) && (lhs = array_broadcast_onto(lhs, rhs))
@@ -383,9 +393,9 @@ end
 """
 `array_lift_point_equation`, or `eq` unchanged where the slice spelling has no form.
 """
-function array_lift_or_keep(eq, s)
+function array_lift_or_keep(eq, s; spans = Dict())
     try
-        return array_lift_point_equation(eq, s)
+        return array_lift_point_equation(eq, s; spans)
     catch e
         e isa InterruptException && rethrow(e)
         reason = e isa ArrayFormFallback ? e.msg : sprint(showerror, e)
@@ -395,14 +405,109 @@ function array_lift_or_keep(eq, s)
 end
 
 """
+    array_lift_equations(eqs, s)
+
+Respell pointwise equations as slice equations. Equations that are translates of each
+other along a direction (along a face, a frame edge, a run of extrapolation rows) become
+one equation over range slices: a separate equation per point would generate a separate
+broadcast per point. Merging is repeated direction by direction, so runs merge into
+rectangles and boxes. A run whose merged form has no slice spelling falls back to one
+equation per point, and an equation without one stays scalar.
+"""
+function array_lift_equations(eqs, s)
+    arrays = array_state_arrays(s)
+    runs = map(eq -> (; eqs = [eq], spans = Dict{Any, Int}()), eqs)
+    for x in s.x̄
+        runs = array_merge_translates(runs, safe_unwrap(x), arrays)
+    end
+    return mapreduce(vcat, runs; init = Equation[]) do run
+        length(run.eqs) == 1 && return [array_lift_or_keep(only(run.eqs), s)]
+        try
+            return [array_lift_point_equation(first(run.eqs), s; spans = run.spans)]
+        catch e
+            e isa InterruptException && rethrow(e)
+            return map(eq -> array_lift_or_keep(eq, s), run.eqs)
+        end
+    end
+end
+
+# Merge runs that are consecutive translates along `x`.
+function array_merge_translates(runs, x, arrays)
+    out = []
+    bykey = Dict{Any, Vector{Any}}()
+    for run in runs
+        kb = array_translate_key(first(run.eqs), x, arrays)
+        kb === nothing && (push!(out, run); continue)
+        key, base = kb
+        push!(get!(bykey, (key, sort!(collect(run.spans); by = string)), []), (base, run))
+    end
+    for members in values(bykey)
+        sort!(members; by = first)
+        base, cur = first(members)
+        for (b, run) in members[2:end]
+            if b == base + get(cur.spans, x, 1)
+                spans = copy(cur.spans)
+                spans[x] = get(cur.spans, x, 1) + 1
+                cur = (; eqs = vcat(cur.eqs, run.eqs), spans)
+            else
+                push!(out, cur)
+                base, cur = b, run
+            end
+        end
+        push!(out, cur)
+    end
+    return out
+end
+
+# The structure of `eq` with its indices along `x` taken relative to the lowest one, and
+# that lowest index; `nothing` when `eq` has no state element along `x`, or when the
+# arrays it reads hold `x` at different index positions (their slices would not
+# broadcast together). `+` and `*` arguments are compared as sets, since their order
+# depends on the absolute indices.
+function array_translate_key(eq, x, arrays)
+    elements = try
+        array_point_elements(eq, arrays)
+    catch e
+        e isa ArrayFormFallback || rethrow(e)
+        return nothing
+    end
+    positions = Set{Int}()
+    base = typemax(Int)
+    for (_, key, idxs) in elements
+        p = findfirst(isequal(x), last(arrays[key]))
+        p === nothing && continue
+        push!(positions, p)
+        base = min(base, idxs[p])
+    end
+    length(positions) == 1 || return nothing
+    p = only(positions)
+    function structure(ex)
+        ex = safe_unwrap(ex)
+        iscall(ex) || return unwrap_const(ex)
+        args = arguments(ex)
+        if operation(ex) === getindex && haskey(arrays, safe_unwrap(args[1]))
+            idxs = map(a -> unwrap_const(safe_unwrap(a)), args[2:end])
+            if findfirst(isequal(x), last(arrays[safe_unwrap(args[1])])) == p
+                idxs[p] -= base
+            end
+            return (getindex, safe_unwrap(args[1]), idxs...)
+        end
+        op = operation(ex)
+        parts = map(structure, args)
+        (op === (+) || op === (*)) && sort!(parts; by = hash)
+        return (op isa Function ? op : string(op), parts...)
+    end
+    return (structure(eq.lhs), structure(eq.rhs)), base
+end
+
+"""
 Respell the boundary equations the pointwise path appended after index `n` (boundary
-conditions, extrapolation rows) as one-element slice equations.
+conditions, extrapolation rows) as slice equations.
 """
 function array_lift_bceqs!(disc_state, n, s)
-    for i in (n + 1):length(disc_state.bceqs)
-        disc_state.bceqs[i] = array_lift_or_keep(disc_state.bceqs[i], s)
-    end
-    return disc_state
+    lifted = array_lift_equations(disc_state.bceqs[(n + 1):end], s)
+    resize!(disc_state.bceqs, n)
+    return append!(disc_state.bceqs, lifted)
 end
 
 """
