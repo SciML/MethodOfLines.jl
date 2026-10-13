@@ -2,6 +2,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, NonlinearSolve,
     DomainSets
 using ModelingToolkit: Differential
+using SciMLBase
 include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 @testset "Test 00a: Test solution interface, time dependent" begin
@@ -142,3 +143,76 @@ end
 end
 
 include("array_observables.jl")
+
+# Every stored grid value of the wrapper, and the interpolant at the grid points, equal the
+# raw solution's value for that discrete variable, whether it is an unknown or observed.
+function wrapper_matches_raw(prob; solve_kwargs...)
+    raw = solve(prob; wrap = Val(false), solve_kwargs...)
+    sol = SciMLBase.wrap_sol(raw)
+    s = sol.disc_data.discretespace
+    for u in s.ū
+        discu = s.discvars[u]
+        stored = sol[Num(u)]
+        for I in CartesianIndices(discu)
+            expected = raw[discu[I]]
+            ndims(discu) == 0 || @test stored[:, I] ≈ expected atol = 1.0e-12
+        end
+    end
+    return sol
+end
+
+@testset "Test 10: wrapped values equal the raw solution" begin
+    @parameters t x y
+    @variables u(..) Ez(..) Hx(..) Hy(..)
+    Dt, Dx, Dy = Differential(t), Differential(x), Differential(y)
+    heat_eqs = [Dt(u(t, x, y)) ~ Dx(Dx(u(t, x, y))) + Dy(Dy(u(t, x, y)))]
+    heat_bcs = [
+        u(0, x, y) ~ sin(pi * x) * sin(pi * y), u(t, 0, y) ~ 0, u(t, 1, y) ~ 0,
+        u(t, x, 0) ~ 0, u(t, x, 1) ~ y * t,
+    ]
+    domains = [t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named heat = PDESystem(heat_eqs, heat_bcs, domains, [t, x, y], [u(t, x, y)])
+    disc = MOLFiniteDifference([x => 0.125, y => 0.125], t)
+
+    # every grid point an unknown
+    sol = wrapper_matches_raw(DAEProblem(heat, disc); saveat = 0.002)
+    xs, ys = sol[x], sol[y]
+    @test sol(sol.t[end], xs, ys; dv = u(t, x, y)) ≈ sol[u(t, x, y)][end, :, :]
+    # boundary points eliminated into observed equations
+    sys, tspan = symbolic_discretize(heat, disc)
+    wrapper_matches_raw(ODEProblem(mtkcompile(sys), nothing, tspan), saveat = 0.002)
+
+    # staggered, per-direction alignment
+    X = (t, x, y)
+    tm_eqs = [
+        Dt(Ez(X...)) ~ Dx(Hy(X...)) - Dy(Hx(X...)), Dt(Hx(X...)) ~ -Dy(Ez(X...)),
+        Dt(Hy(X...)) ~ Dx(Ez(X...)),
+    ]
+    tm_bcs = [
+        Ez(0, x, y) ~ sin(pi * x) * sin(pi * y), Hx(0, x, y) ~ 0, Hy(0, x, y) ~ 0,
+        Ez(t, 0, y) ~ 0, Ez(t, 1, y) ~ 0, Ez(t, x, 0) ~ 0, Ez(t, x, 1) ~ 0,
+    ]
+    @named tm = PDESystem(tm_eqs, tm_bcs, domains, [t, x, y], [Ez(X...), Hx(X...), Hy(X...)])
+    tmdisc = MOLFiniteDifference(
+        [x => 0.125, y => 0.125], t; grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = [Hx(X...) => y, Hy(X...) => x]
+    )
+    wrapper_matches_raw(DAEProblem(tm, tmdisc); saveat = 0.002)
+end
+
+@testset "Test 11: wrapped steady state values equal the raw solution" begin
+    @parameters x y
+    @variables u(..)
+    Dx, Dy = Differential(x), Differential(y)
+    eqs = [Dx(Dx(u(x, y))) + Dy(Dy(u(x, y))) ~ -sin(pi * x) * sin(pi * y)]
+    bcs = [u(0, y) ~ 0, u(1, y) ~ 0, u(x, 0) ~ 0, u(x, 1) ~ x]
+    @named pdesys = PDESystem(
+        eqs, bcs, [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [x, y], [u(x, y)]
+    )
+    sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => 0.125, y => 0.125]))
+    prob = NonlinearProblem(mtkcompile(sys), nothing)
+    raw = solve(prob, NewtonRaphson(); wrap = Val(false))
+    sol = SciMLBase.wrap_sol(raw)
+    discu = sol.disc_data.discretespace.discvars[sol.disc_data.discretespace.ū[1]]
+    @test [raw[discu[I]] for I in CartesianIndices(discu)] ≈ sol[u(x, y)] atol = 1.0e-12
+end
