@@ -45,17 +45,15 @@ end
 
 sym_to_index(sym, syms) = findfirst(isequal(sym), syms)
 
-# The state index of each element of `discu`, or `nothing` where it is observed, and the
-# values of the observed elements from a single observed function. Building one observed
-# function per element costs time proportional to the system size each time.
-function grid_indices_and_observed(sol, odesys, discu)
-    idxs = map(CartesianIndices(discu)) do I
-        SymbolicIndexingInterface.variable_index(odesys, discu[I])
-    end
-    obs = findall(isnothing, idxs)
-    isempty(obs) && return idxs, obs, nothing
-    syms = [safe_unwrap(discu[I]) for I in obs]
-    return idxs, obs, SymbolicIndexingInterface.getsym(sol, syms)(sol)
+# The state index of each element of `discu`, or `nothing` where it is observed.
+function grid_indices(odesys, discu)
+    return map(I -> SymbolicIndexingInterface.variable_index(odesys, discu[I]), CartesianIndices(discu))
+end
+
+# The values of the observed elements `obs` of `discu`, from a single observed function
+# rather than one generated and compiled per element.
+function grid_observed_values(sol, discu, obs)
+    return SymbolicIndexingInterface.getsym(sol, [safe_unwrap(discu[I]) for I in obs])(sol)
 end
 
 iscomplex(A::SciMLBase.AbstractPDESolution) = !isnothing(A.disc_data.complexmap)
