@@ -292,7 +292,7 @@ function discretize_equation_array_form(
         return array_core_equation(
             pde, ranges, s, slicevars, derivweights,
             args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches,
-            mixedterms, bcmap, depvars
+            mixedterms, bcmap, depvars; eqvar
         )
     end
 
@@ -319,7 +319,8 @@ range). `depvars` are the sliceable fields; `allvars` includes rank-dropping int
 """
 function array_core_equation(
         pde, ranges, s, depvars, derivweights, args, pdeorders, indexmap, terms,
-        periodic, nllap_matches, sph_matches, mixedterms, bcmap, allvars = depvars
+        periodic, nllap_matches, sph_matches, mixedterms, bcmap, allvars = depvars;
+        eqvar
     )
     N = length(args)
     # Deriv rules before bare bvals and time-literals, both before field rules.
@@ -345,7 +346,9 @@ function array_core_equation(
         s, allvars, ranges, indexmap; staggered = isstag
     )
     gridrules = [
-        safe_unwrap(x) => array_grid_vals(x, s, ranges, indexmap, N) for x in args
+        safe_unwrap(x) => array_grid_vals(
+            x, s, ranges, indexmap, N; shift = staggered_shift(s, eqvar, x)
+        ) for x in args
     ]
     if isstag
         derivrules = array_staggered_rules(
@@ -1199,6 +1202,10 @@ function array_validate_boundary_values(pde, s, derivweights)
     isempty(bvals) && isempty(tlits) && return bvals
     G = get_grid_type(s)
     has_mixed_tlit = any(u_ -> array_time_literal_has_spatial_edge(u_, s), tlits)
+    # the slice views below read the unshifted grid; `valmaps` on the pointwise path
+    # evaluates at the equation variable's staggered points
+    G <: StaggeredGrid && !isempty(tlits) &&
+        throw(ArrayFormFallback("time literals on a staggered grid"))
     if !isempty(bvals) || has_mixed_tlit
         G <: StaggeredGrid && throw(
             ArrayFormFallback("boundary values on a staggered grid")
@@ -1786,12 +1793,12 @@ function array_substitute_boundary_values(
 end
 
 """
-The numeric grid values of `x` over the core region, shaped to broadcast along the
-dimension of `x` in an `N`-dimensional array expression.
+The numeric grid values of `x` over the core region, offset by `shift`, shaped to
+broadcast along the dimension of `x` in an `N`-dimensional array expression.
 """
-function array_grid_vals(x, s, ranges, indexmap, N)
+function array_grid_vals(x, s, ranges, indexmap, N; shift = 0)
     j = indexmap[x]
-    vals = collect(s.grid[x][ranges[j]])
+    vals = collect(s.grid[x][ranges[j]]) .+ shift
     N == 1 && return vals
     return reshape(vals, ntuple(i -> i == j ? length(vals) : 1, N))
 end
@@ -2013,7 +2020,7 @@ function array_staggered_rules(
                     "no upwind operator for order $d in $x on a staggered grid"
                 )
             )
-            taps = s.staggeredvars[operation(depvar(u, s))] == CenterAlignedVar ?
+            taps = staggered_alignment(s, depvar(u, s), x) == CenterAlignedVar ?
                 (0:1) : (-1:0)
             slices = [
                 array_slice(
