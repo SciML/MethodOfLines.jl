@@ -209,8 +209,7 @@ end
     @named pdesys = PDESystem(
         eqs, bcs, [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)], [x, y], [u(x, y)]
     )
-    sys, _ = symbolic_discretize(pdesys, MOLFiniteDifference([x => 0.125, y => 0.125]))
-    prob = NonlinearProblem(mtkcompile(sys), nothing)
+    prob = discretize(pdesys, MOLFiniteDifference([x => 0.125, y => 0.125]))
     raw = solve(prob, NewtonRaphson(); wrap = Val(false))
     sol = SciMLBase.wrap_sol(raw)
     discu = sol.disc_data.discretespace.discvars[sol.disc_data.discretespace.ū[1]]

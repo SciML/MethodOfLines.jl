@@ -53,13 +53,10 @@ function SciMLBase.PDETimeSeriesSolution(
             let discu = discretespace.discvars[u]
                 solu = array_observed_solution(sol, discu, ModelingToolkitBase.observed(odesys))
                 if solu === nothing
-                    solu = map(CartesianIndices(discu)) do I
-                        i = SymbolicIndexingInterface.variable_index(odesys, discu[I])
-                        if i !== nothing
-                            sol[i, :]
-                        else
-                            SciMLBase.observed(sol, safe_unwrap(discu[I]), :)
-                        end
+                    idxs, obs, obsvals = grid_indices_and_observed(sol, odesys, discu)
+                    solu = map(i -> i === nothing ? T[] : sol[i, :], idxs)
+                    for (k, I) in enumerate(obs)
+                        solu[I] = getindex.(obsvals, k)
                     end
                 end
                 # Correct placement of time axis

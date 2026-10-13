@@ -20,18 +20,13 @@ function SciMLBase.PDENoTimeSolution(
     # Reshape the solution to flat arrays
     umap = mapreduce(vcat, dvs) do u
         let discu = discretespace.discvars[u]
-            solu = map(CartesianIndices(discu)) do I
-                i = SymbolicIndexingInterface.variable_index(odesys, discu[I])
-                # Handle Observed
-                if i !== nothing
-                    sol.u[i]
-                else
-                    SciMLBase.observed(sol, discu[I])
-                end
-            end
+            idxs, obs, obsvals = grid_indices_and_observed(sol, odesys, discu)
             out = zeros(T, size(discu)...)
             for I in CartesianIndices(discu)
-                out[I] = solu[I]
+                idxs[I] === nothing || (out[I] = sol.u[idxs[I]])
+            end
+            for (k, I) in enumerate(obs)
+                out[I] = obsvals[k]
             end
             # Deal with any replaced variables
             ureplaced = get(discretespace.vars.replaced_vars, u, nothing)
