@@ -356,7 +356,7 @@ function generate_extrap_eqs!(disc_state, pde, u, s, derivweights, interiormap, 
         I1 = unitindex(length(args), j)
         bs = bcmap[operation(u)][x]
         haslower, hasupper = haslowerupper(bs, x)
-        while ninterp >= vlower[j]
+        while lowerextents[j] > 0 && ninterp >= vlower[j]
             if haslower
                 break
             end
@@ -370,7 +370,7 @@ function generate_extrap_eqs!(disc_state, pde, u, s, derivweights, interiormap, 
             ninterp = ninterp - 1
         end
         ninterp = upperextents[j] - vupper[j]
-        while ninterp >= vupper[j]
+        while upperextents[j] > 0 && ninterp >= vupper[j]
             if hasupper
                 break
             end
