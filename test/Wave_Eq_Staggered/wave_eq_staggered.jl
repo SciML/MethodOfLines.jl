@@ -140,10 +140,12 @@ end
 end
 
 # Interior equations carry the time derivative; count those emitted in array (slice) form
-# rather than pointwise, to record which interior path a test exercises.
+# over more than one point, to record which interior path a test exercises. A one-element
+# slice equation is the slice spelling of a pointwise equation.
 function narrayeqs_interior(sys)
     isarr(x) = let u = Symbolics.unwrap(x)
-        !(u isa AbstractArray) && SymbolicUtils.symtype(u) <: AbstractArray
+        !(u isa AbstractArray) && SymbolicUtils.symtype(u) <: AbstractArray &&
+            prod(size(u)) > 1
     end
     return count(ModelingToolkit.get_eqs(sys)) do eq
         occursin("Differential(t", string(eq)) && (isarr(eq.lhs) || isarr(eq.rhs))
