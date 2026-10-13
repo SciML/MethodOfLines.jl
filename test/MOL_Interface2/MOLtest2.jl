@@ -458,6 +458,8 @@ end
     # Array variable naming changed in Symbolics v7 - solution indexing by
     # array variable components needs updating in MOL source code
     @test_broken sol[u(t, x)[1]] == sol[vars[1](t, x)]
+    # The call interface takes the array-indexed variable too, with its own arguments.
+    @test sol(0.4, :; dv = u(t, x)[1]) ≈ sol[u(t, x)[1]][3, :]
     @test_broken sol[u(t, x)[2]] == sol[vars[2](t, x)]
 
     @test_broken sol(0.1, 0.1, dv = u(t, x)[1]) == sol(0.1, 0.1, dv = vars[1](t, x))
