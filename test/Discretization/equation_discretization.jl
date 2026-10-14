@@ -993,7 +993,10 @@ end
 
     sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sys_arr) == 1
+    # core 4:9; frame layers 2, 3, 10 per direction. Layer 3's stencil is the interior one,
+    # so it joins the frame rows (3 rows over 3:9, columns 2 and 10 over 3:9, column 3
+    # over 4:9) and only the four 2/10 corners stay single points.
+    @test narrayeqs_interior(sys_arr) == 7
 end
 
 # A callable diffusion coefficient stays in array form: inside `Dx(a Dx(u))` it is
@@ -1612,7 +1615,8 @@ end
         kwsolve = (; dt = 1.0e-3)
     )
     @test solm_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sysm_arr) == 1
+    # the interior reaches y rows 2 and 20, outside the WENO core 3:19: one frame row each
+    @test narrayeqs_interior(sysm_arr) == 3
 
     # a trace and central differences in one 2D equation
     Dxx = Differential(x)^2
@@ -3476,8 +3480,14 @@ end
 # regions elementwise, even for slice equations.
 function scalar_state_reads(pdesys, disc)
     prob = DAEProblem(pdesys, disc; initializealg = SciMLBase.NoInit())
-    ex = string(RuntimeGeneratedFunctions.get_expression(prob.f.f.f_iip))
+    ex = string(rgf_body(prob.f.f.f_iip))
     return count(r"___mtkunknowns___\[\d+\]", ex)
+end
+# `RuntimeGeneratedFunctions.get_expression` is newer than the compat floor.
+function rgf_body(
+        ::RuntimeGeneratedFunctions.RuntimeGeneratedFunction{A, C, X, I}
+    ) where {A, C, X, I}
+    return RuntimeGeneratedFunctions._lookup_body(C, I)
 end
 
 @testset "Single points are one-element slice equations" begin
@@ -3613,7 +3623,8 @@ end
     sol_arr, sys_arr = solve_discretized(
         pdesys, [x => 0.1, y => 0.1], t; disc_kwargs = (; approx_order = 4)
     )
-    @test narrayeqs_interior(sys_arr) == 1
+    # one-sided layers 2 and 10 in each direction: four frame strips, single corners
+    @test narrayeqs_interior(sys_arr) == 5
 end
 
 @testset "2D mixed derivative with a variable coefficient" begin
@@ -3747,11 +3758,13 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    for order in (2, 4, 6)
+    # the core, plus one frame strip per one-sided layer (boundary_point_count - 1 per
+    # end and direction: 0, 1, 2)
+    for (order, n) in ((2, 1), (4, 5), (6, 9))
         sol_arr, sys_arr = solve_discretized(
             pdesys, [x => 0.05, y => 0.05], t; disc_kwargs = (; approx_order = order)
         )
-        @test narrayeqs_interior(sys_arr) == 1
+        @test narrayeqs_interior(sys_arr) == n
     end
 end
 
@@ -3779,12 +3792,14 @@ end
     domains = [
         t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
     ]
-    for Dmix in ops
+    # `Dx^3 Dy`: the order-3 winding stencils keep the core to x = 4:8, so x layers 2, 3,
+    # 9 and 10 are frame strips over the whole y interior
+    for (Dmix, n) in zip(ops, (1, 1, 1, 5))
         eq = Dt(u(t, x, y)) ~ Dmix(u(t, x, y))
         @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
         disc = MOLFiniteDifference([x => 0.1, y => 0.1], t)
         sys, _ = symbolic_discretize(pdesys, disc)
-        @test narrayeqs_interior(sys) == 1
+        @test narrayeqs_interior(sys) == n
     end
 
     Dxxy = (Differential(x)^2) * Differential(y)
@@ -3795,12 +3810,13 @@ end
     @test narrayeqs_interior(sys_arr) == 1
 
     # Fourth and sixth order widen both factors of `Dxxy` at once
-    for order in (4, 6)
+    # one frame strip per one-sided layer: 1 or 2 per end and direction
+    for (order, n) in ((4, 5), (6, 9))
         sol_arr, sys_arr = solve_discretized(
             pdesys, [x => 0.05, y => 0.05], t; disc_kwargs = (; approx_order = order)
         )
         @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-        @test narrayeqs_interior(sys_arr) == 1
+        @test narrayeqs_interior(sys_arr) == n
     end
 end
 
@@ -3950,12 +3966,14 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    for order in (2, 4, 6)
+    # the core plus one frame strip per layer outside it: x layers 2, 2, 3 per end (the
+    # order-3 winding stencils, then the centered boundary_point_count), y layers 0, 1, 2
+    for (order, n) in ((2, 5), (4, 7), (6, 11))
         disc = MOLFiniteDifference(
             [x => 0.05, y => 0.05], t; approx_order = order
         )
         sys_arr, _ = symbolic_discretize(pdesys, disc)
-        @test narrayeqs_interior(sys_arr) == 1
+        @test narrayeqs_interior(sys_arr) == n
     end
 end
 
