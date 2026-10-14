@@ -103,9 +103,13 @@ function PDEBase.construct_var_equation_mapping(
     )
 end
 
+validate_boundary_stencil_length(pde, u, s, pdeorders, boundarymap, discretization) = nothing
+
 # An axis end that is not periodic or an interface is closed with one-sided stencils, which
 # take derivative order + approx_order points along the axis.
-function validate_boundary_stencil_length(pde, u, s, pdeorders, boundarymap, discretization)
+function validate_boundary_stencil_length(
+        pde, u, s, pdeorders, boundarymap, discretization::MOLFiniteDifference
+    )
     p = discretization.approx_order
     for x in ivs(u, s)
         isempty(pdeorders[x]) && continue
