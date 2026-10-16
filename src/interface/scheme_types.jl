@@ -104,6 +104,58 @@ function extent(scheme::FunctionalScheme, dorder)
     return lower
 end
 
+"""
+    HermiteScheme(; deriv_var = nothing)
+
+Hermite-based finite difference scheme following Fornberg (2020).
+
+Uses both function values f(xᵢ) and first-derivative values f′(xᵢ) to achieve
+roughly double the accuracy of standard FD at the same stencil width.
+
+Users may supply an already coupled PDE through `deriv_var`, for example
+`HermiteScheme(deriv_var = u => v)` in one spatial dimension or directional
+mappings such as `HermiteScheme(deriv_var = [(u, x) => vx, (u, y) => vy])`
+in multiple dimensions. With an empty mapping, `HermiteScheme()` automatically
+introduces the directional first-derivative partners and their evolution
+equations.
+
+Hermite weights are used for every pure directional derivative order of a mapped
+variable; mixed derivatives continue to use the existing MethodOfLines mixed
+rules. Variables without a mapped partner use standard centered differences. Automatic
+transformation propagates initial conditions and same-variable periodic seams.
+It derives partner conditions from Dirichlet data and from first-order normal
+Neumann or Robin data, including tangential partner conditions on rectangular
+multidimensional domains, whenever the evolution and boundary equations provide
+a solvable relation. Cross-variable interfaces and periodic Hermite stencils on
+nonuniform grids are not supported.
+
+Selecting this scheme does not apply upwind rules; for advection-dominated
+equations, use the coupled reformulation described by Fornberg rather than
+treating it as a drop-in replacement for `UpwindScheme`.
+
+See Fornberg, IMA Journal of Numerical Analysis 41 (2021), 801–813.
+"""
+struct HermiteScheme{D} <: AbstractScheme
+    """Mapping from primary variable to its derivative partner: `u => v` where `v` represents `Dx(u)`."""
+    deriv_var::D
+    """Whether derivative partners should be generated automatically during transformation."""
+    automatic::Bool
+end
+
+function HermiteScheme(; deriv_var = nothing)
+    return if deriv_var === nothing
+        HermiteScheme(Dict{Any, Any}(), true)
+    elseif deriv_var isa Pair
+        HermiteScheme(Dict(deriv_var), false)
+    else
+        HermiteScheme(Dict(deriv_var...), false)
+    end
+end
+
+# Hermite uses the centered operator's one-sided boundary taps directly, so it
+# does not remove additional points from the equation iteration domain.
+extent(::HermiteScheme, dorder) = 0
+
 function lower_extent(scheme::FunctionalScheme, dorder)
     @assert dorder == 1 "Only first order spatial derivatives are implemented for functional schemes."
     return length(findall(isnothing, scheme.lower))
