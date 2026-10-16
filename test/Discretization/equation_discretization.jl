@@ -1796,7 +1796,7 @@ end
 end
 
 # Does any subexpression of `eq` apply the operation `f`, either directly or broadcast
-# over slices (`broadcast(f, ...)`, which is how the array form applies it)? In the
+# over slices (`mol_broadcast(f, ...)`, which is how the array form applies it)? In the
 # broadcast form the applied function is carried as a symbolic wrapper rather than the
 # function itself, so it is matched by name.
 function hasoperation(eq, f)
@@ -1807,7 +1807,8 @@ function hasoperation(eq, f)
         op = SymbolicUtils.operation(x)
         names_f(op) && return true
         args = SymbolicUtils.arguments(x)
-        op === broadcast && !isempty(args) && names_f(first(args)) && return true
+        op in (broadcast, MethodOfLines.mol_broadcast) && !isempty(args) &&
+            names_f(first(args)) && return true
         return any(walk, args)
     end
     return walk(eq.lhs) || walk(eq.rhs)

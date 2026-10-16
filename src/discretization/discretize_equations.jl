@@ -110,6 +110,7 @@ function PDEBase.discretize_equation!(
         eqvar, bcmap, depvars, s::DiscreteSpace, derivweights, indexmap,
         discretization::MOLFiniteDifference
     )
+    nbceqs0 = length(disc_state.bceqs)
     # Boundary handling is shared with the pointwise fallback.
     boundaryvalfuncs = generate_boundary_val_funcs(
         s, depvars, bcmap, indexmap, derivweights
@@ -183,7 +184,9 @@ function PDEBase.discretize_equation!(
         end
     end
 
-    return vcat!(disc_state.eqs, eqs)
+    newbceqs = (nbceqs0 + 1):length(disc_state.bceqs)
+    disc_state.bceqs[newbceqs] = map(array_noinline_broadcasts, disc_state.bceqs[newbceqs])
+    return vcat!(disc_state.eqs, map(array_noinline_broadcasts, eqs))
 end
 
 """
@@ -380,6 +383,10 @@ function array_lift_point_equation(eq, s; spans = Dict())
     ctx = ArrayifyContext(rules, s.time)
     lhs = arrayify(eq.lhs, ctx)
     rhs = arrayify(eq.rhs, ctx)
+    # A zero side is a literal; broadcasting it onto the other side would spell that
+    # side a second time.
+    is_array_valued(lhs) && array_iszero(rhs) && return lhs ~ zeros(size(Symbolics.wrap(lhs)))
+    is_array_valued(rhs) && array_iszero(lhs) && return zeros(size(Symbolics.wrap(rhs))) ~ rhs
     # Shapes may differ by trailing singletons (a lower-dimensional field); broadcast
     # each side onto the other so both carry the full shape.
     if !is_array_valued(lhs) || !is_array_valued(rhs) ||
@@ -481,23 +488,25 @@ function array_translate_key(eq, x, arrays)
     end
     length(positions) == 1 || return nothing
     p = only(positions)
-    function structure(ex)
+    # Hashed rather than nested tuples: a tuple type per expression shape would compile
+    # `hash`, `isless` and `get!` afresh for every shape.
+    function structure(ex)::UInt
         ex = safe_unwrap(ex)
-        iscall(ex) || return unwrap_const(ex)
+        iscall(ex) || return hash(unwrap_const(ex))
         args = arguments(ex)
         if operation(ex) === getindex && haskey(arrays, safe_unwrap(args[1]))
-            idxs = map(a -> unwrap_const(safe_unwrap(a)), args[2:end])
+            idxs = Int[unwrap_const(safe_unwrap(a)) for a in args[2:end]]
             if findfirst(isequal(x), last(arrays[safe_unwrap(args[1])])) == p
                 idxs[p] -= base
             end
-            return (getindex, safe_unwrap(args[1]), idxs...)
+            return hash(idxs, hash(safe_unwrap(args[1]), hash(getindex)))
         end
         op = operation(ex)
-        parts = map(structure, args)
-        (op === (+) || op === (*)) && sort!(parts; by = hash)
-        return (op isa Function ? op : string(op), parts...)
+        parts = UInt[structure(a) for a in args]
+        (op === (+) || op === (*)) && sort!(parts)
+        return hash(parts, hash(op isa Function ? op : string(op)))
     end
-    return (structure(eq.lhs), structure(eq.rhs)), base
+    return hash(structure(eq.rhs), structure(eq.lhs)), base
 end
 
 """
@@ -3159,6 +3168,59 @@ Symbolics.@register_array_symbolic array_batch_callable_stacked_getindex(
     ndims = ndims(X) - 1
     eltype = Real
 end
+
+"""
+    mol_broadcast(f, As...)
+
+`broadcast` behind a call Julia does not inline. Since 1.13 (JuliaLang/julia#61776) the
+generic `broadcast` method is `@inline`, so a residual of thousands of slice broadcasts
+inlines every loop into one function that takes hours to compile (JuliaLang/julia#63872).
+"""
+@noinline mol_broadcast(f, As...) = broadcast(f, As...)
+
+# Rebuilt (by `substitute`) and scalarized exactly as the `broadcast` it wraps.
+function SymbolicUtils.maketerm(
+        ::Type{SymbolicUtils.BasicSymbolic{SymbolicUtils.SymReal}}, ::typeof(mol_broadcast),
+        args, metadata; kw...
+    )
+    T = SymbolicUtils.BasicSymbolic{SymbolicUtils.SymReal}
+    return array_noinline_broadcasts(SymbolicUtils.maketerm(T, broadcast, args, metadata))
+end
+function SymbolicUtils.scalarization_function(::typeof(mol_broadcast))
+    return SymbolicUtils.scalarization_function(broadcast)
+end
+
+"""
+    array_noinline_broadcasts(ex)
+
+`ex` (an expression or an equation) with each symbolic `broadcast` spelled as
+[`mol_broadcast`](@ref).
+"""
+function array_noinline_broadcasts(eq::Equation)
+    return Equation(array_noinline_broadcasts(eq.lhs), array_noinline_broadcasts(eq.rhs))
+end
+function array_noinline_broadcasts(ex)
+    ex = safe_unwrap(ex)
+    ex isa SymbolicUtils.BasicSymbolic && iscall(ex) || return ex
+    args = arguments(ex)
+    newargs = map(array_noinline_broadcasts, args)
+    if operation(ex) === broadcast
+        return SymbolicUtils.Term{SymbolicUtils.SymReal}(
+            mol_broadcast, collect(Any, newargs);
+            type = SymbolicUtils.symtype(ex), shape = SymbolicUtils.shape(ex)
+        )
+    end
+    all(map(===, args, newargs)) && return ex
+    # A term keeps its own type: registered array functions can carry a `UnionAll`
+    # symtype that `maketerm` cannot re-derive.
+    SymbolicUtils.isterm(ex) && return SymbolicUtils.Term{SymbolicUtils.SymReal}(
+        operation(ex), collect(Any, newargs); type = SymbolicUtils.symtype(ex),
+        shape = SymbolicUtils.shape(ex), metadata = SymbolicUtils.metadata(ex)
+    )
+    return SymbolicUtils.maketerm(typeof(ex), operation(ex), newargs, SymbolicUtils.metadata(ex))
+end
+
+array_iszero(x) = (v = unwrap_const(safe_unwrap(x)); v isa Number && iszero(v))
 
 function array_broadcast_call(op, newargs)
     is_field_parameter_call(newargs) &&
