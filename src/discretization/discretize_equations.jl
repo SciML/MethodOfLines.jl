@@ -3189,6 +3189,10 @@ end
 function SymbolicUtils.scalarization_function(::typeof(mol_broadcast))
     return SymbolicUtils.scalarization_function(broadcast)
 end
+# Fused broadcast codegen (the `:fuse_broadcasts` rewrite) fuses it like `broadcast`.
+@static if isdefined(SymbolicUtils.Code, :is_elementwise_call)
+    SymbolicUtils.Code.is_elementwise_call(::typeof(mol_broadcast)) = true
+end
 
 """
     array_noinline_broadcasts(ex)
