@@ -28,23 +28,70 @@ function SciMLBase.discretize(
     end
 end
 
-# `f1` holds the time derivatives of the variables edge aligned in an odd number of
-# directions and `f2` those of every other variable. A staggered derivative moves its
-# variable half a step in one direction, so it always couples the two groups, while
-# pointwise terms stay within one: for Maxwell's equations the groups are E and H.
-# Each half evaluates the full right hand side and zeroes the other group's rows, so
-# `f1 + f2` is exactly `f` for any number of variables, with time, parameters and
-# boundary values live, at the price of a second evaluation of `f` per step.
+# `f1` and `f2` hold the time derivatives of two groups that 2-colour the coupling graph
+# of the variables, as `staggered_groups` does, so that every coupled pair straddles the
+# two halves. Of each connected component, `f1` takes the colour of the variables edge
+# aligned in an odd number of directions, so a pure Yee system splits into E and H as its
+# staggering sets them. Constant fields go in `f2`. Each half generates its own rows of
+# `sys` on their own and zeroes the rest, so `f1 + f2` is exactly `f`, with time,
+# parameters and boundary values live.
 function staggered_split(prob, sys, edge_dims)
-    get_var_from_state(state) = operation(arguments(state)[1])
     nedge = Dict(nameof(op) => length(dims) for (op, dims) in edge_dims)
-    isedge = [
-        isodd(get(nedge, nameof(get_var_from_state(u)), 0)) for u in get_unknowns(sys)
-    ]
-    rows1, rows2 = findall(isedge), findall(!, isedge)
-    f1(du, u, p, t) = (prob.f(du, u, p, t); du[rows2] .= 0; nothing)
-    f2(du, u, p, t) = (prob.f(du, u, p, t); du[rows1] .= 0; nothing)
+    isodd_edge(v) = isodd(get(nedge, nameof(operation(v)), 0))
+    # `mtkcompile` leaves one `D(u[i]) ~ rhs` per unknown, in the order of the unknowns
+    eqs = get_eqs(sys)
+    owner = map(eq -> _parent_array(only(arguments(eq.lhs))), eqs)
+    isconstant = map(eq -> isequal(unwrap_const(eq.rhs), 0), eqs)
+    colour = _coupling_colours(eqs[.!isconstant], owner[.!isconstant]; first = isodd_edge)
+    isf1 = [get(colour, v, 2) == 1 for v in owner]
+    rows1, rows2 = findall(isf1), findall(!, isf1)
+    rhs(rows) = ModelingToolkit.generate_rhs(
+        ModelingToolkitBase.@set(sys.eqs = eqs[rows]);
+        expression = Val{false}, wrap_gfw = Val{true}
+    )
+    g1, g2 = rhs(rows1), rhs(rows2)
+    f1(du, u, p, t) = (g1(view(du, rows1), u, p, t); du[rows2] .= 0; nothing)
+    f2(du, u, p, t) = (g2(view(du, rows2), u, p, t); du[rows1] .= 0; nothing)
     return SplitODEProblem(f1, f2, prob.u0, prob.tspan, prob.p)
+end
+
+# Colour 1 or 2 for each of `owner`, the variables whose time derivatives `derivs` give, so
+# that no variable shares a colour with one in its time derivative's right hand side. The
+# first variable of each connected component, taking the variables that satisfy `first`
+# before the others and each in order, gets colour 1.
+function _coupling_colours(derivs, owner; first = Returns(false))
+    vars = unique(owner)
+    vars = [filter(first, vars); filter(!first, vars)]
+    coupled = Dict(v => Set{Any}() for v in vars)
+    for (eq, v) in zip(derivs, owner), x in Symbolics.get_variables(eq.rhs)
+        w = _parent_array(x)
+        if haskey(coupled, w) && !isequal(w, v)
+            push!(coupled[v], w)
+            push!(coupled[w], v)
+        end
+    end
+    colour = Dict{Any, Int}()
+    for root in vars
+        haskey(colour, root) && continue
+        colour[root] = 1
+        queue = [root]
+        while !isempty(queue)
+            v = popfirst!(queue)
+            for w in coupled[v]
+                if !haskey(colour, w)
+                    colour[w] = 3 - colour[v]
+                    push!(queue, w)
+                elseif colour[w] == colour[v]
+                    throw(
+                        ArgumentError(
+                            "The coupling graph of the variables is not bipartite: $v and $w are coupled through a cycle of odd length, so no two groups separate every coupled pair."
+                        )
+                    )
+                end
+            end
+        end
+    end
+    return colour
 end
 
 """
@@ -87,37 +134,7 @@ function staggered_groups(prob::DAEProblem)
         vcat, map(eq -> _state_indices(sys, only(arguments(eq.lhs))), eqs); init = Int[]
     )
 
-    vars = unique(owner[.!isconstant])
-    coupled = Dict(v => Set{Any}() for v in vars)
-    for (eq, v) in zip(derivs[.!isconstant], owner[.!isconstant]),
-            x in Symbolics.get_variables(eq.rhs)
-        w = _parent_array(x)
-        if haskey(coupled, w) && !isequal(w, v)
-            push!(coupled[v], w)
-            push!(coupled[w], v)
-        end
-    end
-    colour = Dict{Any, Int}()
-    for root in vars
-        haskey(colour, root) && continue
-        colour[root] = 1
-        queue = [root]
-        while !isempty(queue)
-            v = popfirst!(queue)
-            for w in coupled[v]
-                if !haskey(colour, w)
-                    colour[w] = 3 - colour[v]
-                    push!(queue, w)
-                elseif colour[w] == colour[v]
-                    throw(
-                        ArgumentError(
-                            "The coupling graph of the variables is not bipartite: $v and $w are coupled through a cycle of odd length, so no two groups separate every coupled pair."
-                        )
-                    )
-                end
-            end
-        end
-    end
+    colour = _coupling_colours(derivs[.!isconstant], owner[.!isconstant])
 
     groups = map((1, 2)) do c
         eqs = [

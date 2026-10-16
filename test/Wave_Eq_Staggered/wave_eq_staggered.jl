@@ -241,17 +241,17 @@ end
     sys, tspan = symbolic_discretize(pdesys, disc)
     full = ODEProblem(mtkcompile(sys), nothing, tspan)
     states = split_states(pdesys, disc)
-    isedge = first.(states) .== :H
+    isf1 = in((:H, :J)).(first.(states))
 
-    # f1 holds the edge aligned rows, f2 every other row, and together they are the full
-    # right hand side; the two-group split zeroed every row that depends only on the
-    # variable left out of both groups
+    # f1 holds the rows of H and J, which are updated from E, f2 those of E, and together
+    # they are the full right hand side; the two-group split zeroed every row that depends
+    # only on the variable left out of both groups
     u = sin.(1:length(prob.u0)) .+ 0.5
     du1, du2 = similar(u), similar(u)
     prob.f.f1(du1, u, prob.p, 0.0)
     prob.f.f2(du2, u, prob.p, 0.0)
-    @test all(iszero, du1[.!isedge])
-    @test all(iszero, du2[isedge])
+    @test all(iszero, du1[.!isf1])
+    @test all(iszero, du2[isf1])
     @test maximum(abs, du1 .+ du2 .- full.f(u, full.p, 0.0)) < 1.0e-12
 
     # the split solution matches the DAEProblem, which never splits
@@ -263,6 +263,38 @@ end
         @test maximum(abs, dae_end) > 0.05
         @test maximum(abs, ssol.u[end][idx] .- dae_end) < 1.0e-6
     end
+end
+
+# A split integrator advances f1 and f2 in turn. Explicit Euler on each in turn is
+# symplectic Euler, Yee's scheme to first order in time, when neither half's rows read its
+# own variables. Grouping by staggering put J with E, which J is updated from and which is
+# updated from J, so that pair took a forward Euler step and the energy grew every step.
+@testset "Three variables: a split step keeps the Maxwell–Drude energy bounded" begin
+    ωp, dx = 4.0, 0.05
+    pdesys, disc, _ = maxwell_drude(pec_pulse, dx; ωp)
+    prob = discretize(pdesys, disc)
+    name = first.(split_states(pdesys, disc))
+    energy(u) = sum(abs2, u[name .!= :J]) + sum(abs2, u[name .== :J]) / ωp^2
+    function split_euler_energy(f1, f2; dt = dx / 2, nsteps = 800)
+        u, du = copy(prob.u0), similar(prob.u0)
+        return map(1:nsteps) do n
+            f1(du, u, prob.p, n * dt)
+            u .+= dt .* du
+            f2(du, u, prob.p, n * dt)
+            u .+= dt .* du
+            energy(u)
+        end
+    end
+
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    full = ODEProblem(mtkcompile(sys), nothing, tspan)
+    isH = name .== :H
+    parity1(du, u, p, t) = (full.f(du, u, full.p, t); du[.!isH] .= 0; nothing)
+    parity2(du, u, p, t) = (full.f(du, u, full.p, t); du[isH] .= 0; nothing)
+
+    W0 = energy(prob.u0)
+    @test maximum(split_euler_energy(prob.f.f1, prob.f.f2)) < 1.5 * W0
+    @test last(split_euler_energy(parity1, parity2)) > 100 * W0
 end
 
 @testset "Three variables: Maxwell–Drude dispersion converges at second order" begin
