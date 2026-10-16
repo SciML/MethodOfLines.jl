@@ -66,8 +66,9 @@ Returns `(; groups, constant, algebraic)`:
     `lossy = true` it is `update!(u, p, t, dt, a, b)`, `u[states] .= a[states] .* u[states]
     .+ b[states] .* dv`, for per-state coefficient vectors `a` and `b` laid out like `u`.
     `fuse_broadcasts` and `kwargs` are passed to the code generation of `update!`.
-    `update!` throws if an equation of the group reads a state the group writes other than
-    its own, which an in-place update would race on.
+    An equation that reads a state its group writes, other than its own, would race with
+    the in-place write: fused code generation then copies the group's inputs on entry, and
+    without it `update!` throws.
   - `constant` holds the states whose time derivative is zero (`Dt(c) ~ 0` coefficient
     fields). Neither group writes them.
   - `algebraic` holds the states `prob.differential_vars` marks algebraic, such as PEC walls
@@ -150,10 +151,14 @@ end
 # equations' `r` and whose values are `u[r] + dt * f` (or `a[r] * u[r] + b[r] * f`), called
 # on the variable's block of `u`. The `ArrayMaker` writes only its regions, so constant and
 # algebraic states keep their values.
-function _group_update(sys, eqs; lossy, codegen_kwargs...)
+function _group_update(sys, eqs; lossy, fuse_broadcasts, codegen_kwargs...)
     owner(eq) = _parent_array(only(arguments(eq.lhs)))
     race = _group_race(eqs)
-    race === nothing || return function (args...)
+    # Without a race every region reads the elements of `u` it writes only at their own
+    # index, so fused code may read `u` while writing it, with no copies. With one, fused
+    # code copies its inputs on entry; unfused code writes region by region and cannot.
+    fused = fuse_broadcasts && isdefined(SymbolicUtils.Code, :FUSE_BROADCASTS_KEY)
+    race === nothing || fused || return function (args...)
         throw(
             ArgumentError(
                 "$(race[1]) reads $(race[2]), a state of its own group other than its own, so an in-place update would race on it."
@@ -192,10 +197,11 @@ function _group_update(sys, eqs; lossy, codegen_kwargs...)
                 push!(values, value)
             end
             maker = SymbolicUtils.ArrayMaker{T}(regions, values; shape = sh)
+            inplace = race === nothing ? (; fuse_unalias = false, fuse_output_array = v) : (;)
             _, iip = ModelingToolkitBase.build_function_wrapper(
                 sys, maker, dvs, ps..., ModelingToolkit.get_iv(sys), dt, ab...; p_start = 2,
                 p_end = 1 + length(ps), u_arg = 1, n_param_buffers = length(ps),
-                codegen_kwargs...
+                fuse_broadcasts, inplace..., codegen_kwargs...
             )
             f! = ModelingToolkitBase.eval_or_rgf(iip; eval_module = @__MODULE__)
             (f!, block, size(idx))
