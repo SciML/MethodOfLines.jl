@@ -48,11 +48,13 @@ Returns the resolved key into `s.discvars`, or `nothing` if `u` is not mapped.
             _same_hermite_variable(key[1], u) && isequal(key[2], x) || continue
             return _resolve_hermite_variable(value, s)
         elseif _same_hermite_variable(key, u)
-            length(ivs(u, s)) == 1 || throw(ArgumentError(
-                "HermiteScheme mapping $(key) => $(value) is ambiguous for " *
-                "multidimensional variable $(u). Use direction-specific mappings " *
-                "such as (u, x) => vx and (u, y) => vy."
-            ))
+            length(ivs(u, s)) == 1 || throw(
+                ArgumentError(
+                    "HermiteScheme mapping $(key) => $(value) is ambiguous for " *
+                        "multidimensional variable $(u). Use direction-specific mappings " *
+                        "such as (u, x) => vx and (u, y) => vy."
+                )
+            )
             return _resolve_hermite_variable(value, s)
         end
     end
@@ -71,10 +73,12 @@ via `calculate_weights`.
 @inline function _hermite_weights_and_taps(D, H, II, s, bs, jx, u)
     j, x = jx
     if !isempty(bs) && !(s.grid[x] isa StepRangeLen)
-        throw(ArgumentError(
-            "HermiteScheme does not support periodic or interface stencils " *
-                "on a nonuniform grid in $x."
-        ))
+        throw(
+            ArgumentError(
+                "HermiteScheme does not support periodic or interface stencils " *
+                    "on a nonuniform grid in $x."
+            )
+        )
     end
     _, Itap = central_difference_weights_and_stencil(D, II, s, bs, jx, u)
 
@@ -83,9 +87,11 @@ via `calculate_weights`.
             isequal(b.x, b.x2) && _same_hermite_variable(b.u, u) &&
                 _same_hermite_variable(b.u2, u)
         end
-        self_periodic || throw(ArgumentError(
-            "HermiteScheme does not yet support cross-variable interface stencils."
-        ))
+        self_periodic || throw(
+            ArgumentError(
+                "HermiteScheme does not yet support cross-variable interface stencils."
+            )
+        )
 
         dweights = H.d_weights
         eweights = H.e_weights
@@ -157,11 +163,13 @@ function generate_hermite_rules(
                     hermite_central_difference(
                         derivweights.map[Differential(x)^d],
                         derivweights.hermitemap[Differential(x)^d],
-                        Idx(II, s, u, indexmap), s, bs, jx, u, partner)
+                        Idx(II, s, u, indexmap), s, bs, jx, u, partner
+                    )
                 else
                     central_difference(
                         derivweights.map[Differential(x)^d], Idx(II, s, u, indexmap),
-                        s, bs, jx, u, central_ufunc)
+                        s, bs, jx, u, central_ufunc
+                    )
                 end
                 push!(rules, lhs => rhs)
             end

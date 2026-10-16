@@ -133,7 +133,7 @@ Selecting this scheme does not apply upwind rules; for advection-dominated
 equations, use the coupled reformulation described by Fornberg rather than
 treating it as a drop-in replacement for `UpwindScheme`.
 
-See Fornberg, IMA J. Numer. Anal. 41 (2021), 801–813.
+See Fornberg, IMA Journal of Numerical Analysis 41 (2021), 801–813.
 """
 struct HermiteScheme{D} <: AbstractScheme
     """Mapping from primary variable to its derivative partner: `u => v` where `v` represents `Dx(u)`."""
@@ -143,7 +143,7 @@ struct HermiteScheme{D} <: AbstractScheme
 end
 
 function HermiteScheme(; deriv_var = nothing)
-    if deriv_var === nothing
+    return if deriv_var === nothing
         HermiteScheme(Dict{Any, Any}(), true)
     elseif deriv_var isa Pair
         HermiteScheme(Dict(deriv_var), false)

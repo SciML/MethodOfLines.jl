@@ -376,14 +376,18 @@ end
 
     system_u = PDESystem(
         Dt(u(t, x)) ~ -Dx(u(t, x)),
-        [u(0, x) ~ exp(-x^2), u(t, -1.0) ~ exp(-(-1.0 - t)^2),
-            u(t, 1.0) ~ exp(-(1.0 - t)^2)],
+        [
+            u(0, x) ~ exp(-x^2), u(t, -1.0) ~ exp(-(-1.0 - t)^2),
+            u(t, 1.0) ~ exp(-(1.0 - t)^2),
+        ],
         domains, [t, x], [u(t, x)]; name = :reusable_u
     )
     system_q = PDESystem(
         Dt(q(t, x)) ~ -Dx(q(t, x)),
-        [q(0, x) ~ exp(-x^2), q(t, -1.0) ~ exp(-(-1.0 - t)^2),
-            q(t, 1.0) ~ exp(-(1.0 - t)^2)],
+        [
+            q(0, x) ~ exp(-x^2), q(t, -1.0) ~ exp(-(-1.0 - t)^2),
+            q(t, 1.0) ~ exp(-(1.0 - t)^2),
+        ],
         domains, [t, x], [q(t, x)]; name = :reusable_q
     )
     scheme = HermiteScheme()

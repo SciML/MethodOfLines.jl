@@ -372,11 +372,13 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
                                 directional_orders = d_orders(
                                     x, [dt_u ~ original_rhs]
                                 )
-                                isempty(directional_orders) && throw(ArgumentError(
-                                    "HermiteScheme cannot infer a normal derivative " *
-                                        "condition for $newvar from $(bc.eq): the " *
-                                        "evolution equation contains no $x derivative of $u_applied."
-                                ))
+                                isempty(directional_orders) && throw(
+                                    ArgumentError(
+                                        "HermiteScheme cannot infer a normal derivative " *
+                                            "condition for $newvar from $(bc.eq): the " *
+                                            "evolution equation contains no $x derivative of $u_applied."
+                                    )
+                                )
                                 partner_term(order) = order == 1 ? newvar :
                                     (Dx^(order - 1))(newvar)
                                 boundary_partner_term(order) = order == 1 ?
@@ -388,9 +390,11 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
                                 rhs_at_boundary = pde_substitute(
                                     original_rhs, partner_rules
                                 )
-                                rhs_at_boundary = expand_derivatives(pde_substitute(
-                                    rhs_at_boundary, Dict(u_applied => bc_val)
-                                ))
+                                rhs_at_boundary = expand_derivatives(
+                                    pde_substitute(
+                                        rhs_at_boundary, Dict(u_applied => bc_val)
+                                    )
+                                )
                                 boundary_partner_rules = Dict(
                                     partner_term(order) => boundary_partner_term(order)
                                         for order in directional_orders
@@ -403,6 +407,9 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
                                 )
                                 boundary_eq = u_t_boundary ~ rhs_at_boundary
 
+                                # Initialised so `rhs` is defined on every path
+                                # (the throw below guarantees it is overwritten).
+                                rhs = nothing
                                 solved = false
                                 for order in reverse(0:(maximum(directional_orders) - 1))
                                     target = order == 0 ? v_at_boundary :
@@ -415,11 +422,13 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
                                     solved = true
                                     break
                                 end
-                                solved || throw(ArgumentError(
-                                    "HermiteScheme could not infer a normal derivative " *
-                                        "condition for $newvar from $(bc.eq) and " *
-                                        "evolution equation $(eqs[u_eq_idx])."
-                                ))
+                                solved || throw(
+                                    ArgumentError(
+                                        "HermiteScheme could not infer a normal derivative " *
+                                            "condition for $newvar from $(bc.eq) and " *
+                                            "evolution equation $(eqs[u_eq_idx])."
+                                    )
+                                )
                             end
                         end
 
@@ -446,6 +455,7 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
             end
         end
     end
+    return
 end
 
 """
