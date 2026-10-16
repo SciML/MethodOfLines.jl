@@ -48,7 +48,7 @@ function staggered_split(prob, sys, edge_dims)
 end
 
 """
-    staggered_groups(prob::DAEProblem)
+    staggered_groups(prob::DAEProblem; lossy = false, fuse_broadcasts = true, kwargs...)
 
 Split the differential equations of `prob`, a `DAEProblem(pdesys, disc)` on a staggered
 grid, into the two groups a leapfrog alternates between, and generate each group's right
@@ -56,10 +56,18 @@ hand side on its own, so that each half step evaluates only its own equations.
 
 Returns `(; groups, constant, algebraic)`:
 
-  - `groups` holds two `(; f, states)`. `f(dv, u, p, t)` writes the time derivatives of
-    the states `states` at the full state `u`, in that order: `dv[k]` is `du[states[k]]`.
-    Taking `v = u[states]` as a partitioned state therefore needs no gather. `f` reads all
-    of `u`, so both halves of a partitioned state are scattered into one full state first.
+  - `groups` holds two `(; f, update!, states)`. `f(dv, u, p, t)` writes the time
+    derivatives of the states `states` at the full state `u`, in that order: `dv[k]` is
+    `du[states[k]]`. Taking `v = u[states]` as a partitioned state therefore needs no
+    gather. `f` reads all of `u`, so both halves of a partitioned state are scattered into
+    one full state first.
+  - `update!(u, p, t, dt)` steps the group's states in place, `u[states] .+= dt .* dv`,
+    without `dv`: each variable's regions are written straight into its block of `u`. With
+    `lossy = true` it is `update!(u, p, t, dt, a, b)`, `u[states] .= a[states] .* u[states]
+    .+ b[states] .* dv`, for per-state coefficient vectors `a` and `b` laid out like `u`.
+    `fuse_broadcasts` and `kwargs` are passed to the code generation of `update!`.
+    `update!` throws if an equation of the group reads a state the group writes other than
+    its own, which an in-place update would race on.
   - `constant` holds the states whose time derivative is zero (`Dt(c) ~ 0` coefficient
     fields). Neither group writes them.
   - `algebraic` holds the states `prob.differential_vars` marks algebraic, such as PEC walls
@@ -78,7 +86,9 @@ nodes in `E`'s group. For Maxwell's equations with a Drude current `J` and its i
 equations, which follows the PDEs, the first of each connected component goes in the first
 group. A coupling graph that is not bipartite throws an `ArgumentError`.
 """
-function staggered_groups(prob::DAEProblem)
+function staggered_groups(
+        prob::DAEProblem; lossy = false, fuse_broadcasts = true, kwargs...
+    )
     sys = prob.f.sys
     derivs = filter(!isnothing, map(_solve_time_derivative, get_eqs(sys)))
     owner = map(eq -> _parent_array(only(arguments(eq.lhs))), derivs)
@@ -126,12 +136,98 @@ function staggered_groups(prob::DAEProblem)
         ]
         gsys = Setfield.@set sys.eqs = eqs
         f = ModelingToolkit.generate_rhs(gsys; expression = Val{false}, wrap_gfw = Val{true})
-        (; f, states = states(eqs))
+        update! = _group_update(sys, eqs; lossy, fuse_broadcasts, kwargs...)
+        (; f, update!, states = states(eqs))
     end
     return (;
         groups, constant = states(derivs[isconstant]),
         algebraic = findall(!, prob.differential_vars),
     )
+end
+
+# `update!` for the group of equations `D(u[r]) ~ f` in `eqs`: per variable one in-place
+# function over the variable's grid, compiled from an `ArrayMaker` whose regions are the
+# equations' `r` and whose values are `u[r] + dt * f` (or `a[r] * u[r] + b[r] * f`), called
+# on the variable's block of `u`. The `ArrayMaker` writes only its regions, so constant and
+# algebraic states keep their values.
+function _group_update(sys, eqs; lossy, codegen_kwargs...)
+    owner(eq) = _parent_array(only(arguments(eq.lhs)))
+    race = _group_race(eqs)
+    race === nothing || return function (args...)
+        throw(
+            ArgumentError(
+                "$(race[1]) reads $(race[2]), a state of its own group other than its own, so an in-place update would race on it."
+            )
+        )
+    end
+    dvs = ModelingToolkitBase.flat_unknowns(sys)
+    ps = ModelingToolkitBase.reorder_parameters(sys)
+    T = SymbolicUtils.SymReal
+    dt = SymbolicUtils.Sym{T}(:mol_dt; type = Real)
+    updates = Tuple(
+        map(unique(map(owner, eqs))) do v
+            idx = SymbolicIndexingInterface.variable_index(sys, v)
+            block = first(idx):last(idx)
+            vec(collect(idx)) == block || throw(
+                ArgumentError("The states of $v are not contiguous in the state vector.")
+            )
+            sh = SymbolicUtils.shape(v)
+            coef(name) = SymbolicUtils.Sym{T}(name; type = Array{Real, length(sh)}, shape = sh)
+            ab = lossy ? (coef(:mol_a), coef(:mol_b)) : ()
+            # An `ArrayMaker` this small is generated element by element, uncovered elements
+            # included, so it is given the variable itself everywhere first.
+            regions = length(v) <= 16 ? [collect(UnitRange{Int}, sh)] : Vector{UnitRange{Int}}[]
+            values = length(v) <= 16 ? Any[v] : Any[]
+            for eq in eqs
+                isequal(owner(eq), v) || continue
+                x = only(arguments(eq.lhs))
+                r = x === v ? collect(UnitRange{Int}, sh) : map(unwrap_const.(arguments(x)[2:end])) do i
+                        UnitRange{Int}(i isa Integer ? (i:i) : i)
+                end
+                ar = map(c -> Symbolics.unwrap(Symbolics.wrap(c)[r...]), ab)
+                value = lossy ?
+                    _broadcast(+, _broadcast(*, ar[1], x), _broadcast(*, ar[2], eq.rhs)) :
+                    _broadcast(+, x, _broadcast(*, dt, eq.rhs))
+                push!(regions, r)
+                push!(values, value)
+            end
+            maker = SymbolicUtils.ArrayMaker{T}(regions, values; shape = sh)
+            _, iip = ModelingToolkitBase.build_function_wrapper(
+                sys, maker, dvs, ps..., ModelingToolkit.get_iv(sys), dt, ab...; p_start = 2,
+                p_end = 1 + length(ps), u_arg = 1, n_param_buffers = length(ps),
+                codegen_kwargs...
+            )
+            f! = ModelingToolkitBase.eval_or_rgf(iip; eval_module = @__MODULE__)
+            (f!, block, size(idx))
+        end
+    )
+    blockview(x, block, dims) = reshape(view(x, block), dims)
+    return function update!(u, p, t, dt, a = nothing, b = nothing)
+        foreach(updates) do (f!, block, dims)
+            out = blockview(u, block, dims)
+            lossy ? f!(out, u, p, t, dt, blockview(a, block, dims), blockview(b, block, dims)) :
+                f!(out, u, p, t, dt)
+        end
+        return nothing
+    end
+end
+
+# The first `(eq, x)` of the equations `eqs` of one group such that `eq` reads `x`, a slice
+# of a variable the group writes other than the slice `eq` writes, compared by value; or
+# `nothing`. An in-place update without such reads reads each state it writes only in the
+# kernel that writes it, at the same element.
+function _group_race(eqs)
+    written = Set(map(eq -> _parent_array(only(arguments(eq.lhs))), eqs))
+    function slice(x)
+        v = _parent_array(x)
+        return (v, x === v ? nothing : unwrap_const.(arguments(x)[2:end]))
+    end
+    for eq in eqs, x in Symbolics.get_variables(eq.rhs)
+        _parent_array(x) in written || continue
+        xs, ys = slice(x), slice(only(arguments(eq.lhs)))
+        isequal(xs[1], ys[1]) && xs[2] == ys[2] || return (eq, x)
+    end
+    return nothing
 end
 
 # `(lhs = D(u[r]), rhs = f)`, with `f` the literal `0` for a constant, for an equation linear

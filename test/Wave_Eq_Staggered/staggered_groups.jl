@@ -1,7 +1,8 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test
 using SciMLBase: DAEProblem
 using SymbolicIndexingInterface: variable_index
-using SymbolicUtils: operation
+using SymbolicUtils: SymbolicUtils, operation
+using Symbolics: Symbolics
 using StableRNGs
 
 # The names of the variables whose states are in `states`.
@@ -36,6 +37,28 @@ function groups_residual(prob, sg; t = 0.37)
     return maximum(abs, F(du)[rows]) / maximum(abs, F0[rows])
 end
 
+# `update!` steps each group in place exactly as `u[states] .+= dt .* dv` does with the
+# group's `f` (or `.= a .* u .+ b .* dv` when `lossy`), bit for bit, and writes no other
+# state: constant and algebraic states keep their values.
+function updates_match(prob, sg; lossy = false, t = 0.37, dt = 0.013)
+    rng = StableRNG(2)
+    N = length(prob.u0)
+    u, a, b = randn(rng, N), 1 .+ 0.1 .* randn(rng, N), dt .* (1 .+ 0.1 .* randn(rng, N))
+    return all(sg.groups) do g
+        dv = zeros(length(g.states))
+        g.f(dv, u, prob.p, t)
+        expected = copy(u)
+        if lossy
+            expected[g.states] .= a[g.states] .* u[g.states] .+ b[g.states] .* dv
+        else
+            expected[g.states] .+= dt .* dv
+        end
+        stepped = copy(u)
+        lossy ? g.update!(stepped, prob.p, t, dt, a, b) : g.update!(stepped, prob.p, t, dt)
+        stepped == expected
+    end
+end
+
 @testset "1D wave equation: groups ρ | ϕ, Neumann row algebraic" begin
     @parameters t x
     @variables ρ(..) ϕ(..)
@@ -61,6 +84,7 @@ end
     @test variable_names(prob, sg.algebraic) == Set([:ρ, :ϕ])
     @test isempty(sg.constant)
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
 end
 
 @testset "1D Maxwell–Drude with ε ≠ 1: groups E | H, J" begin
@@ -93,6 +117,8 @@ end
     @test variable_names(prob, sg.groups[2].states) == Set([:H, :J])
     @test variable_names(prob, sg.algebraic) == Set([:E])
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
+    @test updates_match(prob, MethodOfLines.staggered_groups(prob; lossy = true); lossy = true)
 end
 
 @testset "Periodic Maxwell–Drude with pointwise interiors: groups E | H, J" begin
@@ -201,6 +227,7 @@ end
     @test variable_names(prob, sg.algebraic) == Set([:Ez])
     @test isempty(sg.constant)
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
 end
 
 @testset "2D TM Yee with a Drude current: groups Ez, G | Hx, Hy, J" begin
@@ -213,6 +240,8 @@ end
     @test sort(sg.constant) == sort(vec(collect(variable_index(prob.f.sys, Eps))))
     @test variable_names(prob, sg.algebraic) == Set([:Ez])
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
+    @test updates_match(prob, MethodOfLines.staggered_groups(prob; lossy = true); lossy = true)
 end
 
 # Velocity Verlet with the groups is Yee's leapfrog. Started from the (1, 1) cavity mode
@@ -291,4 +320,19 @@ end
     @test variable_names(prob, sg.groups[2].states) == Set([:Hx, :Hy, :Hz])
     @test variable_names(prob, sg.algebraic) == Set([:Ex, :Ey, :Ez])
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
+end
+
+@testset "An in-place update must not read other states of its own group" begin
+    @variables t x(t)[1:5]
+    D = Differential(t)
+    slice(r) = Symbolics.unwrap(x[r])
+    # spelled as MOL spells a discretized equation, a broadcast over slices
+    eq(r, rhs...) = (lhs = Symbolics.unwrap(D(x[r])), rhs = MethodOfLines._broadcast(rhs...))
+    @test MethodOfLines._group_race([eq(2:4, *, 2, slice(2:4))]) === nothing
+    shifted = eq(2:4, +, slice(1:3), slice(2:4))
+    race = MethodOfLines._group_race([shifted])
+    @test race !== nothing
+    # the slice read, compared by value: `isequal` tells equal ranges apart by their type
+    @test SymbolicUtils.unwrap_const.(SymbolicUtils.arguments(race[2])[2:end]) == [1:3]
 end
