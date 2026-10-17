@@ -189,10 +189,13 @@ function _group_update(sys, eqs; lossy, fuse_broadcasts, codegen_kwargs...)
                 r = x === v ? collect(UnitRange{Int}, sh) : map(unwrap_const.(arguments(x)[2:end])) do i
                         UnitRange{Int}(i isa Integer ? (i:i) : i)
                 end
-                ar = map(c -> Symbolics.unwrap(Symbolics.wrap(c)[r...]), ab)
+                slice(c) = Symbolics.unwrap(Symbolics.wrap(c)[r...])
+                ar = map(slice, ab)
+                # a pointwise equation writes `u[i]`, a scalar: its region is `u[i:i]`
+                xr = is_array_valued(x) ? x : slice(v)
                 value = lossy ?
-                    _broadcast(+, _broadcast(*, ar[1], x), _broadcast(*, ar[2], eq.rhs)) :
-                    _broadcast(+, x, _broadcast(*, dt, eq.rhs))
+                    _broadcast(+, _broadcast(*, ar[1], xr), _broadcast(*, ar[2], eq.rhs)) :
+                    _broadcast(+, xr, _broadcast(*, dt, eq.rhs))
                 push!(regions, r)
                 push!(values, value)
             end

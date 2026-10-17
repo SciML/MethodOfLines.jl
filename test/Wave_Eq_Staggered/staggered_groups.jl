@@ -152,6 +152,7 @@ end
     @test variable_names(prob, sg.groups[2].states) == Set([:H, :J])
     @test variable_names(prob, sg.algebraic) == Set([:E, :H])
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
 end
 
 @testset "A coupling graph with an odd cycle has no two groups" begin
