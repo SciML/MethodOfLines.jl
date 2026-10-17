@@ -3179,12 +3179,12 @@ inlines every loop into one function that takes hours to compile (JuliaLang/juli
 @noinline mol_broadcast(f, As...) = broadcast(f, As...)
 
 # Rebuilt (by `substitute`) and scalarized exactly as the `broadcast` it wraps.
-function SymbolicUtils.maketerm(
+function TermInterface.maketerm(
         ::Type{SymbolicUtils.BasicSymbolic{SymbolicUtils.SymReal}}, ::typeof(mol_broadcast),
         args, metadata; kw...
     )
     T = SymbolicUtils.BasicSymbolic{SymbolicUtils.SymReal}
-    return array_noinline_broadcasts(SymbolicUtils.maketerm(T, broadcast, args, metadata))
+    return array_noinline_broadcasts(TermInterface.maketerm(T, broadcast, args, metadata))
 end
 function SymbolicUtils.scalarization_function(::typeof(mol_broadcast))
     return SymbolicUtils.scalarization_function(broadcast)
@@ -3215,9 +3215,9 @@ function array_noinline_broadcasts(ex)
     # symtype that `maketerm` cannot re-derive.
     SymbolicUtils.isterm(ex) && return SymbolicUtils.Term{SymbolicUtils.SymReal}(
         operation(ex), collect(Any, newargs); type = SymbolicUtils.symtype(ex),
-        shape = SymbolicUtils.shape(ex), metadata = SymbolicUtils.metadata(ex)
+        shape = SymbolicUtils.shape(ex), metadata = TermInterface.metadata(ex)
     )
-    return SymbolicUtils.maketerm(typeof(ex), operation(ex), newargs, SymbolicUtils.metadata(ex))
+    return TermInterface.maketerm(typeof(ex), operation(ex), newargs, TermInterface.metadata(ex))
 end
 
 array_iszero(x) = (v = unwrap_const(safe_unwrap(x)); v isa Number && iszero(v))
