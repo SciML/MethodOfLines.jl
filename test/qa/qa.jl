@@ -23,6 +23,7 @@ run_qa(
                 :AbstractCartesianIndex, :EquationState, :PDESolution,
                 :cardinalize_eqs!, :observed, :parse_bcs, :scalarization_function,
                 :promote_symtype, # public since SymbolicUtils 4.46; older supported releases lack the metadata
+                :gradient, # Interpolations documents the gradient of an interpolant but does not declare it public
             ),
         ),
     ),
