@@ -51,14 +51,21 @@ function SciMLBase.PDETimeSeriesSolution(
         # Reshape the solution to flat arrays, faster to do this eagerly.
         umap = mapreduce(vcat, dvs) do u
             let discu = discretespace.discvars[u]
-                solu = array_observed_solution(sol, discu, ModelingToolkitBase.observed(odesys))
+                # Unknowns are read by index: the observed function of a whole field is one
+                # statement per grid point, and compiling it grows faster than the grid. Only a
+                # field with no unknowns, such as a reduced order reconstruction, is evaluated
+                # as an array.
+                idxs = grid_indices(odesys, discu)
+                solu = all(isnothing, idxs) ?
+                    array_observed_solution(sol, discu, ModelingToolkitBase.observed(odesys)) :
+                    nothing
                 if solu === nothing
-                    solu = map(CartesianIndices(discu)) do I
-                        i = SymbolicIndexingInterface.variable_index(odesys, discu[I])
-                        if i !== nothing
-                            sol[i, :]
-                        else
-                            SciMLBase.observed(sol, safe_unwrap(discu[I]), :)
+                    solu = map(i -> i === nothing ? T[] : sol[i, :], idxs)
+                    obs = findall(isnothing, idxs)
+                    if !isempty(obs)
+                        obsvals = grid_observed_values(sol, discu, obs)
+                        for (k, I) in enumerate(obs)
+                            solu[I] = getindex.(obsvals, k)
                         end
                     end
                 end
