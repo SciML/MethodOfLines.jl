@@ -200,7 +200,7 @@ function _group_update(sys, eqs; lossy, fuse_broadcasts, codegen_kwargs...)
                 push!(values, value)
             end
             maker = SymbolicUtils.ArrayMaker{T}(regions, values; shape = sh)
-            inplace = race === nothing ? (; fuse_unalias = false, fuse_output_array = v) : (;)
+            inplace = race === nothing ? (; fuse_unalias = false) : (;)
             _, iip = ModelingToolkitBase.build_function_wrapper(
                 sys, maker, dvs, ps..., ModelingToolkit.get_iv(sys), dt, ab...; p_start = 2,
                 p_end = 1 + length(ps), u_arg = 1, n_param_buffers = length(ps),
