@@ -95,6 +95,39 @@ end
     @test groups_residual(prob, sg) < 1.0e-14
 end
 
+@testset "Periodic Maxwell–Drude with pointwise interiors: groups E | H, J" begin
+    t = ModelingToolkit.t_nounits
+    @parameters x
+    @variables E(..) H(..) J(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    eqs = [
+        2.0 * Dt(E(t, x)) ~ -Dx(H(t, x)) - J(t, x),
+        0.5 * Dt(H(t, x)) ~ -Dx(E(t, x)),
+        Dt(J(t, x)) ~ 4.0 * E(t, x),
+    ]
+    # J has no periodic condition, so the E and J interiors are discretized point by point,
+    # as scalar equations, while H keeps its slice form
+    bcs = [
+        E(0, x) ~ cos(2π * x), H(0, x) ~ 0.0, J(0, x) ~ 0.0,
+        E(t, 0) ~ E(t, 1), H(t, 0) ~ H(t, 1),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)], [t, x],
+        [E(t, x), H(t, x), J(t, x)]
+    )
+    disc = MOLFiniteDifference(
+        [x => 0.1], t; grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = H(t, x)
+    )
+    prob = DAEProblem(pdesys, disc)
+    sg = MethodOfLines.staggered_groups(prob)
+    @test variable_names(prob, sg.groups[1].states) == Set([:E])
+    @test variable_names(prob, sg.groups[2].states) == Set([:H, :J])
+    @test variable_names(prob, sg.algebraic) == Set([:E, :H])
+    @test groups_residual(prob, sg) < 1.0e-14
+end
+
 @testset "A coupling graph with an odd cycle has no two groups" begin
     t = ModelingToolkit.t_nounits
     @parameters x

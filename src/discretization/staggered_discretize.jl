@@ -135,8 +135,9 @@ function staggered_groups(prob::DAEProblem)
 end
 
 # `(lhs = D(u[r]), rhs = f)`, with `f` the literal `0` for a constant, for an equation linear
-# in its one time derivative `D(u[r])`, which MOL writes as broadcast sums of scalar
-# multiples; `nothing` for an algebraic equation. Not an `Equation`, which needs `f` to have
+# in its one time derivative `D(u[r])`, which MOL writes as sums of scalar multiples,
+# broadcast over slices or, for a pointwise equation, of scalars; `nothing` for an
+# algebraic equation. Not an `Equation`, which needs `f` to have
 # the shape of `D(u[r])`.
 function _solve_time_derivative(eq)
     coefs = Dict{Any, Any}()
@@ -166,12 +167,11 @@ function _split_time_derivative!(coefs, ex, c)
         _iszero_broadcast(c) ||
             (coefs[ex] = haskey(coefs, ex) ? _broadcast(+, coefs[ex], c) : c)
         return nothing
-    elseif _isbroadcast(ex, +)
-        kept = [_split_time_derivative!(coefs, x, c) for x in arguments(ex)[2:end]]
+    elseif (args = _operands(ex, +)) !== nothing
+        kept = [_split_time_derivative!(coefs, x, c) for x in args]
         filter!(!isnothing, kept)
         return isempty(kept) ? nothing : length(kept) == 1 ? only(kept) : _broadcast(+, kept...)
-    elseif _isbroadcast(ex, *)
-        args = arguments(ex)[2:end]
+    elseif (args = _operands(ex, *)) !== nothing
         i = findall(_has_differential, args)
         if length(i) == 1
             factors = args[setdiff(eachindex(args), i)]
@@ -180,6 +180,12 @@ function _split_time_derivative!(coefs, ex, c)
         end
     end
     throw(ArgumentError("$ex is not linear in its time derivative."))
+end
+
+# The operands of `ex` if it applies `f`, elementwise or to scalars, else `nothing`.
+function _operands(ex, f)
+    _isbroadcast(ex, f) && return arguments(ex)[2:end]
+    return iscall(ex) && operation(ex) === f ? arguments(ex) : nothing
 end
 
 function _isbroadcast(ex, f)
