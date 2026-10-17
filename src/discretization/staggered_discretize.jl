@@ -124,7 +124,7 @@ function staggered_groups(prob::DAEProblem)
             eq.lhs ~ eq.rhs for (eq, k, v) in zip(derivs, isconstant, owner)
                 if !k && colour[v] == c
         ]
-        gsys = ModelingToolkitBase.@set sys.eqs = eqs
+        gsys = Setfield.@set sys.eqs = eqs
         f = ModelingToolkit.generate_rhs(gsys; expression = Val{false}, wrap_gfw = Val{true})
         (; f, states = states(eqs))
     end
