@@ -46,7 +46,7 @@ function staggered_split(prob, sys, edge_dims)
     isf1 = [get(colour, v, 2) == 1 for v in owner]
     rows1, rows2 = findall(isf1), findall(!, isf1)
     rhs(rows) = ModelingToolkit.generate_rhs(
-        ModelingToolkitBase.@set(sys.eqs = eqs[rows]);
+        Setfield.@set(sys.eqs = eqs[rows]);
         expression = Val{false}, wrap_gfw = Val{true}
     )
     g1, g2 = rhs(rows1), rhs(rows2)
