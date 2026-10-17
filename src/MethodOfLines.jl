@@ -20,6 +20,8 @@ using Symbolics: @variables, Differential, Equation, Integral, Num, terms
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term,
     symbolic_to_float
 using SymbolicUtils: operation, arguments, iscall, getmetadata, unwrap_const
+import TermInterface
+import Setfield
 import StaticArrays
 using StaticArrays: SVector
 import Interpolations

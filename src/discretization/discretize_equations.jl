@@ -38,8 +38,13 @@
 # for what falls back.
 #
 # Staggered grids collapse the same way: each variable's alignment fixes its two stencil
-# taps across the interior, so the interior is one array equation per PDE; the (1D,
-# single-point) boundaries stay pointwise.
+# taps across the interior, so the interior is one array equation per PDE.
+#
+# Single points — 1D boundaries and interfaces, size-1 wrap boxes, frame points, corners
+# and extrapolation rows — are one-element slice equations rather than scalar ones, so
+# they add no elementwise reads of the state to the generated code (GPU arrays reject
+# those). Apart from the corners, these are the pointwise equation respelled over slices
+# (`array_lift_point_equation`), as is any boundary equation the face slice form declines.
 #
 # Mixed derivatives `(Differential(x)^m * Differential(y)^n)(u)` are the tensor product
 # of the two centered stencils of those orders; see `array_mixed_difference`. The first-
@@ -105,6 +110,7 @@ function PDEBase.discretize_equation!(
         eqvar, bcmap, depvars, s::DiscreteSpace, derivweights, indexmap,
         discretization::MOLFiniteDifference
     )
+    nbceqs0 = length(disc_state.bceqs)
     # Boundary handling is shared with the pointwise fallback.
     boundaryvalfuncs = generate_boundary_val_funcs(
         s, depvars, bcmap, indexmap, derivweights
@@ -120,10 +126,16 @@ function PDEBase.discretize_equation!(
             e isa InterruptException && rethrow(e)
             reason = e isa ArrayFormFallback ? e.msg : sprint(showerror, e)
             @debug "Array form falling back to pointwise boundary equations for $(boundary.eq): $reason"
+            # Each pointwise equation (every 1D boundary, for one) is still respelled as
+            # a one-element slice equation.
+            nbceqs = length(disc_state.bceqs)
             generate_bc_eqs!(disc_state, s, boundaryvalfuncs, interiormap, boundary)
+            array_lift_bceqs!(disc_state, nbceqs, s)
         end
     end
+    nbceqs = length(disc_state.bceqs)
     generate_extrap_eqs!(disc_state, pde, eqvar, s, derivweights, interiormap, bcmap)
+    array_lift_bceqs!(disc_state, nbceqs, s)
     try
         vcat!(
             disc_state.bceqs,
@@ -172,7 +184,9 @@ function PDEBase.discretize_equation!(
         end
     end
 
-    return vcat!(disc_state.eqs, eqs)
+    newbceqs = (nbceqs0 + 1):length(disc_state.bceqs)
+    disc_state.bceqs[newbceqs] = map(array_noinline_broadcasts, disc_state.bceqs[newbceqs])
+    return vcat!(disc_state.eqs, map(array_noinline_broadcasts, eqs))
 end
 
 """
@@ -182,9 +196,9 @@ end
 Discretize the interior of `pde` as symbolic array equations over slices of the
 discretized dependent variables — one per box of the decomposition built by
 `array_bands`, which is a single box unless the equation has periodic directions — plus
-pointwise scalar equations for any interior points whose stencils differ from the
-translation-invariant interior stencil. Throws `ArrayFormFallback` when `pde`
-contains a pattern that cannot be represented this way.
+the pointwise equations, respelled as one-element slices, for any interior points whose
+stencils differ from the translation-invariant interior stencil. Throws
+`ArrayFormFallback` when `pde` contains a pattern that cannot be represented this way.
 """
 function discretize_equation_array_form(
         pde, interior, s, depvars, derivweights, bcmap,
@@ -272,32 +286,10 @@ function discretize_equation_array_form(
     end
     array_validate_boundary_values(pde, s, derivweights)
 
-    core_eqs = map(Iterators.product(map(eachindex, bands)...)) do combo
-        rs = ntuple(j -> bands[j][combo[j]], N)
-        ranges = Dict(j => rs[j] for j in 1:N)
-        if prod(map(length, rs)) == 1
-            # a single point is more clearly written as the scalar equation it is;
-            # still apply array bval rules (periodic faces have empty boundaryvalfuncs)
-            eq = discretize_equation_at_point(
-                CartesianIndex(map(first, rs)), s, depvars, pde, derivweights,
-                bcmap, eqvar, indexmap, boundaryvalfuncs;
-                extra_rules = array_point_boundary_derivative_rules(
-                    pde, s, ranges, indexmap, derivweights, periodic, bcmap
-                )
-            )
-            return array_substitute_boundary_values(
-                eq, pde, s, ranges, indexmap, derivweights, periodic, bcmap
-            )
-        end
-        return array_core_equation(
-            pde, ranges, s, slicevars, derivweights,
-            args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches,
-            mixedterms, bcmap, depvars; eqvar
-        )
-    end
-
-    frame = setdiff(vec(collect(interior)), vec(collect(core)))
-    frame_eqs = map(frame) do II
+    # Single-point boxes and the frame points take the pointwise equation, respelled as
+    # slice equations; still apply array bval rules (periodic faces have empty
+    # boundaryvalfuncs).
+    function point_equation(II)
         ranges = Dict(j => II[j]:II[j] for j in 1:N)
         eq = discretize_equation_at_point(
             II, s, depvars, pde, derivweights, bcmap, eqvar, indexmap, boundaryvalfuncs;
@@ -309,7 +301,222 @@ function discretize_equation_array_form(
             eq, pde, s, ranges, indexmap, derivweights, periodic, bcmap
         )
     end
-    return vcat(vec(core_eqs), frame_eqs)
+    boxes = vec(
+        map(Iterators.product(map(eachindex, bands)...)) do combo
+            ntuple(j -> bands[j][combo[j]], N)
+        end
+    )
+    single = filter(rs -> prod(map(length, rs)) == 1, boxes)
+    core_eqs = map(setdiff(boxes, single)) do rs
+        array_core_equation(
+            pde, Dict(j => rs[j] for j in 1:N), s, slicevars, derivweights,
+            args, pdeorders, indexmap, terms, periodic, nllap_matches, sph_matches,
+            mixedterms, bcmap, depvars; eqvar
+        )
+    end
+    frame = setdiff(vec(collect(interior)), vec(collect(core)))
+    points = vcat(map(rs -> CartesianIndex(map(first, rs)), single), frame)
+    return vcat(core_eqs, array_lift_equations(map(point_equation, points), s))
+end
+
+"""
+The discrete array variables a pointwise equation can be respelled over, keyed by their
+unwrapped symbol, with the directions of their indices.
+"""
+function array_state_arrays(s)
+    arrays = Dict{Any, Any}()
+    for u in s.ū
+        ndims(u, s) == 0 && continue
+        arr = try
+            array_variable(u, s)
+        catch e
+            e isa ArrayFormFallback || rethrow(e)
+            continue
+        end
+        arrays[safe_unwrap(arr)] = (arr, map(safe_unwrap, ivs(u, s)))
+    end
+    return arrays
+end
+
+# The state elements `u[i, j]` in `eq`, as (term, array key, literal indices).
+function array_point_elements(eq, arrays)
+    elements = []
+    function walk(ex)
+        ex = safe_unwrap(ex)
+        iscall(ex) || return
+        args = arguments(ex)
+        if operation(ex) === getindex && haskey(arrays, safe_unwrap(args[1]))
+            idxs = map(a -> unwrap_const(safe_unwrap(a)), args[2:end])
+            all(i -> i isa Integer, idxs) ||
+                throw(ArrayFormFallback("non-literal index in $ex"))
+            push!(elements, (ex, safe_unwrap(args[1]), Tuple(idxs)))
+            return
+        end
+        foreach(walk, args)
+        return
+    end
+    walk(eq.lhs)
+    walk(eq.rhs)
+    return elements
+end
+
+"""
+    array_lift_point_equation(eq, s; spans = Dict())
+
+The slice spelling of an equation the pointwise path built at a single point: every
+element `u[i, j]` of a discrete array variable becomes the one-element slice
+`u[i:i, j:j]`, and the operations over them broadcast. The stencils, boundary branches
+and schemes are exactly those of the pointwise equation; only the spelling changes, so
+the generated code reads the state through slices rather than elementwise (GPU arrays
+reject the latter). `spans` (direction => length) widens each slice along those
+directions, which spells a run of translates of `eq` as one equation
+(`array_lift_equations`). Throws `ArrayFormFallback` for anything `arrayify` cannot
+broadcast.
+"""
+function array_lift_point_equation(eq, s; spans = Dict())
+    arrays = array_state_arrays(s)
+    rules = map(array_point_elements(eq, arrays)) do (ex, key, idxs)
+        arr, dirs = arrays[key]
+        ex => arr[(i:(i + get(spans, d, 1) - 1) for (i, d) in zip(idxs, dirs))...]
+    end
+    isempty(rules) && throw(ArrayFormFallback("no state element to lift"))
+    ctx = ArrayifyContext(rules, s.time)
+    lhs = arrayify(eq.lhs, ctx)
+    rhs = arrayify(eq.rhs, ctx)
+    # A zero side is a literal; broadcasting it onto the other side would spell that
+    # side a second time.
+    is_array_valued(lhs) && array_iszero(rhs) && return lhs ~ zeros(size(Symbolics.wrap(lhs)))
+    is_array_valued(rhs) && array_iszero(lhs) && return zeros(size(Symbolics.wrap(rhs))) ~ rhs
+    # Shapes may differ by trailing singletons (a lower-dimensional field); broadcast
+    # each side onto the other so both carry the full shape.
+    if !is_array_valued(lhs) || !is_array_valued(rhs) ||
+            size(Symbolics.wrap(lhs)) != size(Symbolics.wrap(rhs))
+        is_array_valued(rhs) && (lhs = array_broadcast_onto(lhs, rhs))
+        is_array_valued(lhs) && (rhs = array_broadcast_onto(rhs, lhs))
+    end
+    return lhs ~ rhs
+end
+
+"""
+`array_lift_point_equation`, or `eq` unchanged where the slice spelling has no form.
+"""
+function array_lift_or_keep(eq, s; spans = Dict())
+    try
+        return array_lift_point_equation(eq, s; spans)
+    catch e
+        e isa InterruptException && rethrow(e)
+        reason = e isa ArrayFormFallback ? e.msg : sprint(showerror, e)
+        @debug "Keeping the scalar equation $eq: $reason"
+        return eq
+    end
+end
+
+"""
+    array_lift_equations(eqs, s)
+
+Respell pointwise equations as slice equations. Equations that are translates of each
+other along a direction (along a face, a frame edge, a run of extrapolation rows) become
+one equation over range slices: a separate equation per point would generate a separate
+broadcast per point. Merging is repeated direction by direction, so runs merge into
+rectangles and boxes. A run whose merged form has no slice spelling falls back to one
+equation per point, and an equation without one stays scalar.
+"""
+function array_lift_equations(eqs, s)
+    arrays = array_state_arrays(s)
+    runs = map(eq -> (; eqs = [eq], spans = Dict{Any, Int}()), eqs)
+    for x in s.x̄
+        runs = array_merge_translates(runs, safe_unwrap(x), arrays)
+    end
+    return mapreduce(vcat, runs; init = Equation[]) do run
+        length(run.eqs) == 1 && return [array_lift_or_keep(only(run.eqs), s)]
+        try
+            return [array_lift_point_equation(first(run.eqs), s; spans = run.spans)]
+        catch e
+            e isa InterruptException && rethrow(e)
+            return map(eq -> array_lift_or_keep(eq, s), run.eqs)
+        end
+    end
+end
+
+# Merge runs that are consecutive translates along `x`.
+function array_merge_translates(runs, x, arrays)
+    out = []
+    bykey = Dict{Any, Vector{Any}}()
+    for run in runs
+        kb = array_translate_key(first(run.eqs), x, arrays)
+        kb === nothing && (push!(out, run); continue)
+        key, base = kb
+        push!(get!(bykey, (key, sort!(collect(run.spans); by = string)), []), (base, run))
+    end
+    for members in values(bykey)
+        sort!(members; by = first)
+        base, cur = first(members)
+        for (b, run) in members[2:end]
+            if b == base + get(cur.spans, x, 1)
+                spans = copy(cur.spans)
+                spans[x] = get(cur.spans, x, 1) + 1
+                cur = (; eqs = vcat(cur.eqs, run.eqs), spans)
+            else
+                push!(out, cur)
+                base, cur = b, run
+            end
+        end
+        push!(out, cur)
+    end
+    return out
+end
+
+# The structure of `eq` with its indices along `x` taken relative to the lowest one, and
+# that lowest index; `nothing` when `eq` has no state element along `x`, or when the
+# arrays it reads hold `x` at different index positions (their slices would not
+# broadcast together). `+` and `*` arguments are compared as sets, since their order
+# depends on the absolute indices.
+function array_translate_key(eq, x, arrays)
+    elements = try
+        array_point_elements(eq, arrays)
+    catch e
+        e isa ArrayFormFallback || rethrow(e)
+        return nothing
+    end
+    positions = Set{Int}()
+    base = typemax(Int)
+    for (_, key, idxs) in elements
+        p = findfirst(isequal(x), last(arrays[key]))
+        p === nothing && continue
+        push!(positions, p)
+        base = min(base, idxs[p])
+    end
+    length(positions) == 1 || return nothing
+    p = only(positions)
+    # Hashed rather than nested tuples: a tuple type per expression shape would compile
+    # `hash`, `isless` and `get!` afresh for every shape.
+    function structure(ex)::UInt
+        ex = safe_unwrap(ex)
+        iscall(ex) || return hash(unwrap_const(ex))
+        args = arguments(ex)
+        if operation(ex) === getindex && haskey(arrays, safe_unwrap(args[1]))
+            idxs = Int[unwrap_const(safe_unwrap(a)) for a in args[2:end]]
+            if findfirst(isequal(x), last(arrays[safe_unwrap(args[1])])) == p
+                idxs[p] -= base
+            end
+            return hash(idxs, hash(safe_unwrap(args[1]), hash(getindex)))
+        end
+        op = operation(ex)
+        parts = UInt[structure(a) for a in args]
+        (op === (+) || op === (*)) && sort!(parts)
+        return hash(parts, hash(op isa Function ? op : string(op)))
+    end
+    return hash(structure(eq.rhs), structure(eq.lhs)), base
+end
+
+"""
+Respell the boundary equations the pointwise path appended after index `n` (boundary
+conditions, extrapolation rows) as slice equations.
+"""
+function array_lift_bceqs!(disc_state, n, s)
+    lifted = array_lift_equations(disc_state.bceqs[(n + 1):end], s)
+    resize!(disc_state.bceqs, n)
+    return append!(disc_state.bceqs, lifted)
 end
 
 """
@@ -545,7 +752,7 @@ direction `x`, mirroring the interior branches of `central_difference_weights_an
 
 On a staggered grid the interior taps are `(0, +1)` or `(-1, 0)` depending on each
 variable's alignment; the union over both alignments is taken, so at worst one extra
-point per end lands in the pointwise frame.
+point per end lands in the frame.
 
 A mixed derivative reaches along `x` with the *centered* stencil of the mixed order in
 that direction, rather than the winding one `pdeorders` would select for an odd order, so
@@ -2962,6 +3169,59 @@ Symbolics.@register_array_symbolic array_batch_callable_stacked_getindex(
     eltype = Real
 end
 
+"""
+    mol_broadcast(f, As...)
+
+`broadcast` behind a call Julia does not inline. Since 1.13 (JuliaLang/julia#61776) the
+generic `broadcast` method is `@inline`, so a residual of thousands of slice broadcasts
+inlines every loop into one function that takes hours to compile (JuliaLang/julia#63872).
+"""
+@noinline mol_broadcast(f, As...) = broadcast(f, As...)
+
+# Rebuilt (by `substitute`) and scalarized exactly as the `broadcast` it wraps.
+function TermInterface.maketerm(
+        ::Type{SymbolicUtils.BasicSymbolic{SymbolicUtils.SymReal}}, ::typeof(mol_broadcast),
+        args, metadata; kw...
+    )
+    T = SymbolicUtils.BasicSymbolic{SymbolicUtils.SymReal}
+    return array_noinline_broadcasts(TermInterface.maketerm(T, broadcast, args, metadata))
+end
+function SymbolicUtils.scalarization_function(::typeof(mol_broadcast))
+    return SymbolicUtils.scalarization_function(broadcast)
+end
+
+"""
+    array_noinline_broadcasts(ex)
+
+`ex` (an expression or an equation) with each symbolic `broadcast` spelled as
+[`mol_broadcast`](@ref).
+"""
+function array_noinline_broadcasts(eq::Equation)
+    return Equation(array_noinline_broadcasts(eq.lhs), array_noinline_broadcasts(eq.rhs))
+end
+function array_noinline_broadcasts(ex)
+    ex = safe_unwrap(ex)
+    ex isa SymbolicUtils.BasicSymbolic && iscall(ex) || return ex
+    args = arguments(ex)
+    newargs = map(array_noinline_broadcasts, args)
+    if operation(ex) === broadcast
+        return SymbolicUtils.Term{SymbolicUtils.SymReal}(
+            mol_broadcast, collect(Any, newargs);
+            type = SymbolicUtils.symtype(ex), shape = SymbolicUtils.shape(ex)
+        )
+    end
+    all(map(===, args, newargs)) && return ex
+    # A term keeps its own type: registered array functions can carry a `UnionAll`
+    # symtype that `maketerm` cannot re-derive.
+    SymbolicUtils.isterm(ex) && return SymbolicUtils.Term{SymbolicUtils.SymReal}(
+        operation(ex), collect(Any, newargs); type = SymbolicUtils.symtype(ex),
+        shape = SymbolicUtils.shape(ex), metadata = TermInterface.metadata(ex)
+    )
+    return TermInterface.maketerm(typeof(ex), operation(ex), newargs, TermInterface.metadata(ex))
+end
+
+array_iszero(x) = (v = unwrap_const(safe_unwrap(x)); v isa Number && iszero(v))
+
 function array_broadcast_call(op, newargs)
     is_field_parameter_call(newargs) &&
         return array_map_callable(op, newargs[1], newargs[2])
@@ -3129,8 +3389,8 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         throw(ArrayFormFallback("boundary edge spans its own direction"))
     ranges = Dict(i => lo[i]:hi[i] for i in eachindex(lo))
     N = length(args)
-    # A single-point face (every 1D boundary) has nothing to collapse; a one-element
-    # slice equation would just be a more convoluted spelling of the scalar one.
+    # A single-point face (every 1D boundary) has nothing to collapse; the caller
+    # respells the pointwise equation as a one-element slice instead.
     prod(length(ranges[i]) for i in 1:N) == 1 &&
         throw(ArrayFormFallback("single-point boundary"))
     # A staggered 1D boundary is always the single point above; multi-point staggered
@@ -3511,13 +3771,8 @@ function array_corner_eqs(s, interiormap, u, N)
         count(!=(2), combo) >= 2 || continue          # needs >= 2 non-interior bands
         ranges = ntuple(j -> bands[j][combo[j]], N)
         any(isempty, ranges) && continue
-        shape = map(length, ranges)
-        if prod(shape) == 1
-            # a single point is more clearly written as the scalar equation it is
-            push!(eqs, s.discvars[u][CartesianIndex(map(first, ranges))] ~ 0)
-        else
-            push!(eqs, arr[ranges...] ~ zeros(shape))
-        end
+        # a single point too: the scalar equation reads the state elementwise
+        push!(eqs, arr[ranges...] ~ zeros(map(length, ranges)))
     end
     return eqs
 end
