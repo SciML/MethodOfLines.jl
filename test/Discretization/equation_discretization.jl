@@ -12,6 +12,7 @@ using NonlinearSolve: NewtonRaphson
 using ModelingToolkit: get_eqs
 using SymbolicUtils
 using SymbolicUtils: symtype
+import RuntimeGeneratedFunctions
 using Test
 include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
@@ -28,17 +29,24 @@ end
 # The number of equations whose left/right hand side is an unscalarized symbolic array.
 # symtype falls back to typeof for non-symbolic values, and literal-array sides (like the
 # zeros rhs of a slice-form equation) only count when the other side is symbolic, so this
-# counts exactly the array-form equations.
+# counts exactly the array-form equations. One-element slice equations (single points:
+# 1D boundaries, wrap and frame points, corners, extrapolation rows) are the slice
+# spelling of a scalar equation and are not counted, so the counts measure how far the
+# discretization collapsed.
 function narrayeqs(sys)
     return count(isarrayeq, get_eqs(sys))
 end
 
-function isarrayeq(eq)
-    function isarr(x)
-        u = Symbolics.unwrap(x)
-        return !(u isa AbstractArray) && symtype(u) <: AbstractArray
-    end
-    return isarr(eq.lhs) || isarr(eq.rhs)
+function issymarray(x)
+    u = Symbolics.unwrap(x)
+    return !(u isa AbstractArray) && symtype(u) <: AbstractArray
+end
+
+isarrayeq(eq) = (issymarray(eq.lhs) || issymarray(eq.rhs)) && !issinglepointeq(eq)
+
+function issinglepointeq(eq)
+    side = issymarray(eq.lhs) ? eq.lhs : issymarray(eq.rhs) ? eq.rhs : nothing
+    return side !== nothing && prod(size(Symbolics.unwrap(side))) == 1
 end
 
 # Interior equations carry the time derivative; boundary equations do not. Boundary
@@ -985,7 +993,10 @@ end
 
     sol_arr, sys_arr = solve_discretized(pdesys, [x => 0.1, y => 0.1], t)
     @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sys_arr) == 1
+    # core 4:9; frame layers 2, 3, 10 per direction. Layer 3's stencil is the interior one,
+    # so it joins the frame rows (3 rows over 3:9, columns 2 and 10 over 3:9, column 3
+    # over 4:9) and only the four 2/10 corners stay single points.
+    @test narrayeqs_interior(sys_arr) == 7
 end
 
 # A callable diffusion coefficient stays in array form: inside `Dx(a Dx(u))` it is
@@ -1604,7 +1615,8 @@ end
         kwsolve = (; dt = 1.0e-3)
     )
     @test solm_arr.retcode == SciMLBase.ReturnCode.Success
-    @test narrayeqs_interior(sysm_arr) == 1
+    # the interior reaches y rows 2 and 20, outside the WENO core 3:19: one frame row each
+    @test narrayeqs_interior(sysm_arr) == 3
 
     # a trace and central differences in one 2D equation
     Dxx = Differential(x)^2
@@ -1784,7 +1796,7 @@ end
 end
 
 # Does any subexpression of `eq` apply the operation `f`, either directly or broadcast
-# over slices (`broadcast(f, ...)`, which is how the array form applies it)? In the
+# over slices (`mol_broadcast(f, ...)`, which is how the array form applies it)? In the
 # broadcast form the applied function is carried as a symbolic wrapper rather than the
 # function itself, so it is matched by name.
 function hasoperation(eq, f)
@@ -1795,7 +1807,8 @@ function hasoperation(eq, f)
         op = SymbolicUtils.operation(x)
         names_f(op) && return true
         args = SymbolicUtils.arguments(x)
-        op === broadcast && !isempty(args) && names_f(first(args)) && return true
+        op in (broadcast, MethodOfLines.mol_broadcast) && !isempty(args) &&
+            names_f(first(args)) && return true
         return any(walk, args)
     end
     return walk(eq.lhs) || walk(eq.rhs)
@@ -2265,10 +2278,10 @@ end
         s = string(e)
         @test !occursin("u(t, 0,", s) && !occursin("u(t,0,", s)
     end
-    # Each wrap-point equation references the substituted seam element u[1, j].
+    # Each wrap-point equation references the substituted seam element u[1:1, j:j].
     wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
     @test length(wrap_eqs) == 4
-    @test all(e -> occursin("[1, ", string(e)) || occursin("[1,", string(e)), wrap_eqs)
+    @test all(e -> occursin("[1:1, ", string(e)), wrap_eqs)
 
     prob = ode_discretize(pdesys, disc)
     du = similar(prob.u0)
@@ -2988,7 +3001,7 @@ end
     wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
     @test !isempty(wrap_eqs)
     @test all(
-        e -> occursin("(u(t))[2]", string(e)) && occursin("(u(t))[20]", string(e)),
+        e -> occursin("(u(t))[2:2]", string(e)) && occursin("(u(t))[20:20]", string(e)),
         wrap_eqs
     )
     for e in get_eqs(sys)
@@ -3031,9 +3044,9 @@ end
     end
     wrap_eqs = filter(e -> isinterioreq(e) && !isarrayeq(e), get_eqs(sys))
     @test length(wrap_eqs) == 4
-    # Periodic seam derivative wraps to the two neighbors (n = 6 → [2, …], [5, …]).
+    # Periodic seam derivative wraps to the two neighbors (n = 6 → [2:2, …], [5:5, …]).
     @test all(
-        e -> occursin("(u(t))[2,", string(e)) && occursin("(u(t))[5,", string(e)),
+        e -> occursin("(u(t))[2:2,", string(e)) && occursin("(u(t))[5:5,", string(e)),
         wrap_eqs
     )
     array_eqs = filter(e -> isinterioreq(e) && isarrayeq(e), get_eqs(sys))
@@ -3460,6 +3473,130 @@ end
     @test successful_retcode(sol_arr)
 end
 
+# Single points (1D boundaries and interfaces, size-1 wrap boxes, frame points, corners
+# and extrapolation rows) are one-element slice equations, so the generated residual reads
+# no state entry as a scalar; GPU arrays with `allowscalar(false)` reject such reads. Only
+# reads of `u` are counted, which is what MethodOfLines controls: ModelingToolkit's DAE
+# codegen reads every `du` entry as a scalar, and SymbolicUtils writes one-element output
+# regions elementwise, even for slice equations.
+function scalar_state_reads(pdesys, disc)
+    prob = DAEProblem(pdesys, disc; initializealg = SciMLBase.NoInit())
+    ex = string(rgf_body(prob.f.f.f_iip))
+    return count(r"___mtkunknowns___\[\d+\]", ex)
+end
+# `RuntimeGeneratedFunctions.get_expression` is newer than the compat floor.
+function rgf_body(
+        ::RuntimeGeneratedFunctions.RuntimeGeneratedFunction{A, C, X, I}
+    ) where {A, C, X, I}
+    return RuntimeGeneratedFunctions._lookup_body(C, I)
+end
+
+@testset "Single points are one-element slice equations" begin
+    @testset "staggered 1D wave, $bcname, approx_order $ao" for (bcname, flip) in
+            [("mixed BCs", false), ("swapped BCs", true)], ao in (2, 4)
+        @parameters t x
+        @variables ρ(..) ϕ(..)
+        Dt = Differential(t)
+        Dx = Differential(x)
+        L = 2.0
+        eq = [
+            Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0,
+            Dt(ϕ(t, x)) + 25.0 * Dx(ρ(t, x)) ~ 0,
+        ]
+        # Swapping the ends puts the frame points and the Neumann face where the
+        # center-aligned stencil is one-sided (`halfoffsetmap`).
+        bcs = [
+            ρ(0, x) ~ exp(-x^2), ϕ(0.0, x) ~ 0.0,
+            Dx(ρ(t, flip ? -L : L)) ~ 0.0, ϕ(t, flip ? L : -L) ~ 0.0,
+        ]
+        domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(-L, L)]
+        @named pdesys = PDESystem(eq, bcs, domains, [t, x], [ρ(t, x), ϕ(t, x)])
+        disc = MOLFiniteDifference(
+            [x => 0.2], t; approx_order = ao,
+            grid_align = MethodOfLines.StaggeredGrid(), edge_aligned_var = ϕ(t, x)
+        )
+        sys, _ = symbolic_discretize(pdesys, disc)
+        # boundary and frame rows included: no scalar equation remains
+        @test all(e -> isarrayeq(e) || issinglepointeq(e), get_eqs(sys))
+        @test any(issinglepointeq, get_eqs(sys))
+        @test scalar_state_reads(pdesys, disc) == 0
+
+        # the slice-form residual itself, unscalarized
+        @test successful_retcode(solve(DAEProblem(pdesys, disc)))
+    end
+
+    @parameters t x y r
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    Dr = Differential(r)
+    tx = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    heat(bcs, name) = PDESystem(Dt(u(t, x)) ~ Dxx(u(t, x)), bcs, tx, [t, x], [u(t, x)]; name)
+    adv(rhs, bcs, name) = PDESystem(Dt(u(t, x)) ~ rhs, bcs, tx, [t, x], [u(t, x)]; name)
+    inflow = [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0]
+    # more than 16 points: smaller outputs are scalarized by codegen anyway
+    dx = [x => 0.05]
+    cases = [
+        "1D Dirichlet and Neumann boundaries" => (
+            heat([u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, Dx(u(t, 1)) ~ 0.0], :heat1),
+            MOLFiniteDifference(dx, t),
+        ),
+        # one-sided centered stencils at the points next to each boundary
+        "centered frame points, approx_order 4" => (
+            heat([u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0, Dx(u(t, 1)) ~ 0.0], :heat4),
+            MOLFiniteDifference(dx, t; approx_order = 4),
+        ),
+        # the outflow end has no boundary condition
+        "upwind extrapolation row" => (
+            adv(-Dx(u(t, x)), inflow, :advup), MOLFiniteDifference(dx, t),
+        ),
+        "WENO frame points and extrapolation rows" => (
+            adv(-Dx(u(t, x)), inflow, :advweno),
+            MOLFiniteDifference(dx, t; advection_scheme = WENOScheme()),
+        ),
+        "nonlinear laplacian frame points" => (
+            adv(
+                Dx(u(t, x)^2 * Dx(u(t, x))),
+                [u(0, x) ~ 1 + sinpi(x), u(t, 0) ~ 1.0, Dx(u(t, 1)) ~ 0.0], :nllap
+            ),
+            MOLFiniteDifference(dx, t; approx_order = 4),
+        ),
+        "spherical laplacian frame points" => (
+            PDESystem(
+                Dt(u(t, r)) ~ 1 / r^2 * Dr(r^2 * Dr(u(t, r))),
+                [u(0, r) ~ sinpi(r), Dr(u(t, 0.1)) ~ 0.0, u(t, 1) ~ 0.0],
+                [t ∈ Interval(0.0, 0.1), r ∈ Interval(0.1, 1.0)], [t, r], [u(t, r)];
+                name = :sph
+            ),
+            MOLFiniteDifference([r => 0.05], t; approx_order = 4),
+        ),
+        # size-1 wrap boxes and the single-point interface
+        "1D periodic" => (
+            heat([u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)], :heatp),
+            MOLFiniteDifference(dx, t),
+        ),
+        "2D corners" => (
+            PDESystem(
+                Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y)),
+                [
+                    u(0, x, y) ~ 0.0, u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+                    u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+                ],
+                [tx; y ∈ Interval(0.0, 1.0)], [t, x, y], [u(t, x, y)]; name = :heat2
+            ),
+            MOLFiniteDifference([x => 0.2, y => 0.2], t),
+        ),
+    ]
+    @testset "$name" for (name, (pdesys, disc)) in cases
+        sys, _ = symbolic_discretize(pdesys, disc)
+        @test all(e -> isarrayeq(e) || issinglepointeq(e), get_eqs(sys))
+        @test any(issinglepointeq, get_eqs(sys))
+        @test scalar_state_reads(pdesys, disc) == 0
+    end
+end
+
 @testset "2D mixed derivative" begin
     @parameters t x y
     @variables u(..)
@@ -3487,7 +3624,8 @@ end
     sol_arr, sys_arr = solve_discretized(
         pdesys, [x => 0.1, y => 0.1], t; disc_kwargs = (; approx_order = 4)
     )
-    @test narrayeqs_interior(sys_arr) == 1
+    # one-sided layers 2 and 10 in each direction: four frame strips, single corners
+    @test narrayeqs_interior(sys_arr) == 5
 end
 
 @testset "2D mixed derivative with a variable coefficient" begin
@@ -3621,11 +3759,13 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    for order in (2, 4, 6)
+    # the core, plus one frame strip per one-sided layer (boundary_point_count - 1 per
+    # end and direction: 0, 1, 2)
+    for (order, n) in ((2, 1), (4, 5), (6, 9))
         sol_arr, sys_arr = solve_discretized(
             pdesys, [x => 0.05, y => 0.05], t; disc_kwargs = (; approx_order = order)
         )
-        @test narrayeqs_interior(sys_arr) == 1
+        @test narrayeqs_interior(sys_arr) == n
     end
 end
 
@@ -3653,12 +3793,14 @@ end
     domains = [
         t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
     ]
-    for Dmix in ops
+    # `Dx^3 Dy`: the order-3 winding stencils keep the core to x = 4:8, so x layers 2, 3,
+    # 9 and 10 are frame strips over the whole y interior
+    for (Dmix, n) in zip(ops, (1, 1, 1, 5))
         eq = Dt(u(t, x, y)) ~ Dmix(u(t, x, y))
         @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
         disc = MOLFiniteDifference([x => 0.1, y => 0.1], t)
         sys, _ = symbolic_discretize(pdesys, disc)
-        @test narrayeqs_interior(sys) == 1
+        @test narrayeqs_interior(sys) == n
     end
 
     Dxxy = (Differential(x)^2) * Differential(y)
@@ -3669,12 +3811,13 @@ end
     @test narrayeqs_interior(sys_arr) == 1
 
     # Fourth and sixth order widen both factors of `Dxxy` at once
-    for order in (4, 6)
+    # one frame strip per one-sided layer: 1 or 2 per end and direction
+    for (order, n) in ((4, 5), (6, 9))
         sol_arr, sys_arr = solve_discretized(
             pdesys, [x => 0.05, y => 0.05], t; disc_kwargs = (; approx_order = order)
         )
         @test sol_arr.retcode == SciMLBase.ReturnCode.Success
-        @test narrayeqs_interior(sys_arr) == 1
+        @test narrayeqs_interior(sys_arr) == n
     end
 end
 
@@ -3824,12 +3967,14 @@ end
     ]
     @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
 
-    for order in (2, 4, 6)
+    # the core plus one frame strip per layer outside it: x layers 2, 2, 3 per end (the
+    # order-3 winding stencils, then the centered boundary_point_count), y layers 0, 1, 2
+    for (order, n) in ((2, 5), (4, 7), (6, 11))
         disc = MOLFiniteDifference(
             [x => 0.05, y => 0.05], t; approx_order = order
         )
         sys_arr, _ = symbolic_discretize(pdesys, disc)
-        @test narrayeqs_interior(sys_arr) == 1
+        @test narrayeqs_interior(sys_arr) == n
     end
 end
 
