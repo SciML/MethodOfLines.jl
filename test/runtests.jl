@@ -130,7 +130,14 @@ run_tests(;
                 include(joinpath(@__DIR__, "Convection_NU", "MOL_1D_Interface_Upwind_NonUniform.jl"))
             end
         end,
-        "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
+        "Wave_Eq_Staggered" => function ()
+            @safetestset "Staggered grids" begin
+                include(joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"))
+            end
+            return @safetestset "Staggered groups" begin
+                include(joinpath(@__DIR__, "Wave_Eq_Staggered", "staggered_groups.jl"))
+            end
+        end,
         "Pseudospectral" => function ()
             @safetestset "Pseudospectral discretization" begin
                 include(joinpath(@__DIR__, "Pseudospectral", "pseudospectral.jl"))
