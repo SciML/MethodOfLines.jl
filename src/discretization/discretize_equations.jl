@@ -3170,8 +3170,12 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     # slices. The branch that selects them depends only on the index along `x_`, which is
     # constant across the face, so this is exact.
     derivrules = Pair[]
+    # An edge aligned face differentiates at the domain edge, with the half offset
+    # operator, as `boundary_value_maps` does.
+    dmap = get_grid_type(s) <: EdgeAlignedGrid ? derivweights.halfoffsetmap[1] :
+        derivweights.map
     for d in derivweights.orders[x_]
-        Dop = get(derivweights.map, Differential(x_)^d, nothing)
+        Dop = get(dmap, Differential(x_)^d, nothing)
         Dop === nothing && continue
         expr = array_boundary_derivative_expr(
             Dop, II0, s, u, x_, j, N, ranges, indexmap, bcmap
@@ -3191,11 +3195,19 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         push!(bc_us, vd)
         if isempty(ivs(vd, s))
             push!(varrules, safe_unwrap(v) => array_scalar_discvar(vd, s))
+        elseif any(
+                a -> unwrap_const(safe_unwrap(a)) isa Number, remove(arguments(v), s.time)
+            )
+            # a value on this boundary, interpolated to the domain edge where the grid
+            # is edge aligned
+            bval = array_boundary_value_view(v, s, ranges, indexmap, derivweights)
+            push!(varrules, safe_unwrap(v) => bval)
         else
             push!(varrules, safe_unwrap(v) => array_slice(vd, s, ranges, indexmap))
         end
     end
-    push!(varrules, safe_unwrap(u) => array_slice(u, s, ranges, indexmap))
+    faceslice = array_slice(u, s, ranges, indexmap)
+    push!(varrules, safe_unwrap(u) => faceslice)
     intrules = array_integral_rules(
         s, unique(bc_us), ranges, indexmap; bvar = x_
     )
@@ -3216,9 +3228,9 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
     lhs = arrayify(boundary.eq.lhs, ctx)
     rhs = arrayify(boundary.eq.rhs, ctx)
     if is_array_valued(lhs) && !is_array_valued(rhs)
-        rhs = array_broadcast_onto(rhs, array_shape_donor(varrules, ranges))
+        rhs = array_broadcast_onto(rhs, faceslice)
     elseif !is_array_valued(lhs) && is_array_valued(rhs)
-        lhs = array_broadcast_onto(lhs, array_shape_donor(varrules, ranges))
+        lhs = array_broadcast_onto(lhs, faceslice)
     elseif !is_array_valued(lhs) && !is_array_valued(rhs)
         throw(ArrayFormFallback("boundary condition has no discretizable terms"))
     end
@@ -3234,9 +3246,7 @@ function array_boundary_derivative_expr(
         Dop, II0, s, u, x_, j, N, ranges, indexmap, bcmap
     )
     ws, Itap = try
-        central_difference_weights_and_stencil(
-            Dop, II0, s, filter_interfaces(bcmap[operation(u)][x_]), (j, x_), u
-        )
+        array_face_weights_and_stencil(s, Dop, II0, u, x_, j, bcmap)
     catch e
         e isa InterruptException && rethrow(e)
         throw(
@@ -3252,6 +3262,21 @@ function array_boundary_derivative_expr(
         array_slice(u, s, ranges, indexmap; shiftx = x_, offset = o) for o in offsets
     ]
     return array_stencil(collect(ws), slices)
+end
+
+function array_face_weights_and_stencil(s::DiscreteSpace, Dop, II0, u, x_, j, bcmap)
+    return central_difference_weights_and_stencil(
+        Dop, II0, s, filter_interfaces(bcmap[operation(u)][x_]), (j, x_), u
+    )
+end
+
+# The half offset stencil at the midpoint between the edge node and its inward neighbour,
+# which is the domain edge: the index `newindex` gives with `shift = true`.
+function array_face_weights_and_stencil(
+        s::DiscreteSpace{N, M, G}, Dop, II0, u, x_, j, bcmap
+    ) where {N, M, G <: EdgeAlignedGrid}
+    II = II0[j] == 1 ? II0 : II0 - unitindex(ndims(u, s), j)
+    return get_half_offset_weights_and_stencil(Dop, II, s, [], u, (j, x_))
 end
 
 """

@@ -5073,3 +5073,41 @@ end
     @test SciMLBase.successful_retcode(sol_arr)
     @test narrayeqs_interior(sys_arr) == 4
 end
+
+@testset "Edge-aligned faces interpolate to the domain edge" begin
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+    tmax = 0.05
+    exact(t, x, y) = exp(-2pi^2 * t) * sinpi(x) * cospi(y)
+    eq = Dt(u(t, x, y)) ~ Dx(Dx(u(t, x, y))) + Dy(Dy(u(t, x, y)))
+    # Dirichlet faces in x, Neumann faces in y
+    bcs = [
+        u(0, x, y) ~ sinpi(x) * cospi(y),
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        Dy(u(t, x, 0)) ~ 0.0, Dy(u(t, x, 1)) ~ 0.0,
+    ]
+    domains = [
+        t ∈ Interval(0.0, tmax), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+    ]
+    @named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+    errs = map((1 / 8, 1 / 16)) do dx
+        sol, sys = solve_discretized(
+            pdesys, [x => dx, y => dx], t; disc_kwargs = (; grid_align = edge_align)
+        )
+        @test SciMLBase.successful_retcode(sol)
+        # the interior and all four faces stay array equations
+        @test narrayeqs(sys) == 5
+        # the nodes off the ends of the axes lie outside the domain
+        xs, ys = sol[x], sol[y]
+        U = sol[u(t, x, y)][end, :, :]
+        maximum(
+            abs(U[i, k] - exact(tmax, xs[i], ys[k]))
+                for i in 2:(length(xs) - 1), k in 2:(length(ys) - 1)
+        )
+    end
+    @test log2(errs[1] / errs[2]) > 1.8
+end
