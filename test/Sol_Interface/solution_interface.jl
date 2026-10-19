@@ -69,6 +69,8 @@ include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
     @test sol[x, 2:3] == sol[x][2:3]
     # `end` would ask the solution for the field's axes.
     @test_throws "cannot be resolved" sol[u(t, x, y), end, :, :]
+    # Host states are wrapped in place, without a copy.
+    @test MethodOfLines.host_solution(sol.original_sol) === sol.original_sol
 
     @test sol(pi / 2, pi / 2, pi / 2; dv = u(t, x, y)) isa Float64
     @test sol(pi / 2, pi / 2, :) isa Vector{Vector{Float64}}
@@ -116,6 +118,7 @@ end
     solu = map(d -> sol.original_sol[d], grid[u(x, y)])
 
     @test sol[u(x, y)] == solu
+    @test MethodOfLines.host_solution(sol.original_sol) === sol.original_sol
 
     @test sol(pi / 4, pi / 4, dv = u(x, y)) isa Float64
     @test sol(pi / 4, :)[1] isa Vector{Float64}
