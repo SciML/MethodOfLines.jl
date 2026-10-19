@@ -92,6 +92,7 @@ function PDEBase.construct_var_equation_mapping(
         if any(tup -> mindomsize[tup[1]] > length(s, tup[2]), enumerate(ivs(u, s)))
             error("The domain is too small to support the requested discretization, got domain size of $(size(s)).")
         end
+        validate_boundary_stencil_length(pde, u, s, pdeorders, boundarymap, discretization)
         # Don't update this x2i, it is correct.
         pde => generate_interior(lower, upper, u, s, discretization)
     end
@@ -100,6 +101,32 @@ function PDEBase.construct_var_equation_mapping(
     return InteriorMap(
         varmap, Dict(pdemap), Dict(interior), Dict(vlower), Dict(vupper), Dict(extents)
     )
+end
+
+validate_boundary_stencil_length(pde, u, s, pdeorders, boundarymap, discretization) = nothing
+
+# An axis end that is not periodic or an interface is closed with one-sided stencils, which
+# take derivative order + approx_order points along the axis.
+function validate_boundary_stencil_length(
+        pde, u, s, pdeorders, boundarymap, discretization::MOLFiniteDifference
+    )
+    p = discretization.approx_order
+    for x in ivs(u, s)
+        isempty(pdeorders[x]) && continue
+        haslower, hasupper = haslowerupper(filter_interfaces(boundarymap[operation(u)][x]), x)
+        haslower && hasupper && continue
+        d = maximum(pdeorders[x])
+        n = length(s, x)
+        n >= d + p && continue
+        throw(
+            ArgumentError(
+                "$pde has an order $d derivative in $x. At approx_order = $p its one-sided " *
+                    "boundary stencil needs at least $(d + p) grid points in $x, but there are $n. " *
+                    "Use a finer grid in $x or a lower approx_order."
+            )
+        )
+    end
+    return
 end
 
 function generate_interior(lower, upper, u, s, disc::MOLDiscretization)
