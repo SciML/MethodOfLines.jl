@@ -5246,3 +5246,85 @@ if isdefined(SymbolicUtils.Code, :is_elementwise_call)
         @test evaluate(fused) == evaluate(eager) == av .+ 2 .* bv
     end
 end
+
+if isdefined(SymbolicUtils.Code, :is_elementwise_call) &&
+        hasfield(Symbolics.CodegenFunctionOptions, :fuse_broadcasts)
+    @testset "Fused codegen matches eager residuals on non-staggered systems" begin
+        function nfused(ex)
+            ex isa Expr || return 0
+            f = Meta.isexpr(ex, :call) ? ex.args[1] : nothing
+            n = f isa Function && startswith(string(nameof(f)), "fused_materialize") ? 1 : 0
+            return n + sum(nfused, ex.args; init = 0)
+        end
+        @parameters t x y
+        @variables u(..)
+        Dt = Differential(t)
+        Dx = Differential(x)
+        Dy = Differential(y)
+        Dxx = Differential(x)^2
+        Dyy = Differential(y)^2
+        tx = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+        txy = [tx; y ∈ Interval(0.0, 1.0)]
+        ux, uxy = u(t, x), u(t, x, y)
+        pde(eq, bcs, doms, ivs, dv) = PDESystem(eq, bcs, doms, ivs, [dv]; name = :pdesys)
+        cases = [
+            "2D heat, Neumann and Dirichlet faces" => (
+                pde(
+                    Dt(uxy) ~ Dxx(uxy) + Dyy(uxy),
+                    [
+                        u(0, x, y) ~ 0.0, u(t, 0, y) ~ 0.0, Dx(u(t, 1, y)) ~ 0.0,
+                        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+                    ], txy, [t, x, y], uxy
+                ),
+                MOLFiniteDifference([x => 0.2, y => 0.2], t),
+            ),
+            "1D periodic upwind advection" => (
+                pde(
+                    Dt(ux) ~ -1.5 * Dx(ux), [u(0, x) ~ sinpi(2x), u(t, 0) ~ u(t, 1)],
+                    tx, [t, x], ux
+                ),
+                MOLFiniteDifference([x => 0.1], t),
+            ),
+            "WENO advection" => (
+                pde(Dt(ux) ~ -Dx(ux), [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.0], tx, [t, x], ux),
+                MOLFiniteDifference([x => 0.1], t; advection_scheme = WENOScheme()),
+            ),
+            "Nonlinear laplacian" => (
+                pde(
+                    Dt(ux) ~ Dx(ux^2 * Dx(ux)),
+                    [u(0, x) ~ 1 + sinpi(x), u(t, 0) ~ 1.0, Dx(u(t, 1)) ~ 0.0],
+                    tx, [t, x], ux
+                ),
+                MOLFiniteDifference([x => 0.1], t),
+            ),
+            "2D mixed derivative" => (
+                pde(
+                    Dt(uxy) ~ Dxx(uxy) + Dyy(uxy) + 0.1 * Dx(Dy(uxy)),
+                    [
+                        u(0, x, y) ~ 0.0, u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+                        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+                    ], txy, [t, x, y], uxy
+                ),
+                MOLFiniteDifference([x => 0.2, y => 0.2], t),
+            ),
+            "Boundary value in the interior equation" => (
+                pde(
+                    Dt(ux) ~ Dxx(ux) + u(t, 0) - u(t, 1),
+                    [u(0, x) ~ sinpi(x), u(t, 0) ~ 0.5, u(t, 1) ~ 0.0], tx, [t, x], ux
+                ),
+                MOLFiniteDifference([x => 0.1], t),
+            ),
+        ]
+        @testset "$name" for (name, (pdesys, disc)) in cases
+            eager = DAEProblem(pdesys, disc)
+            fused = DAEProblem(pdesys, disc; fuse_broadcasts = true)
+            @test nfused(rgf_body(eager.f.f.f_iip)) == 0
+            @test nfused(rgf_body(fused.f.f.f_iip)) > 0
+            u0, du0 = rand(length(eager.u0)), rand(length(eager.u0))
+            res_eager, res_fused = similar(u0), similar(u0)
+            eager.f(res_eager, du0, u0, eager.p, 0.05)
+            fused.f(res_fused, du0, u0, fused.p, 0.05)
+            @test res_fused == res_eager
+        end
+    end
+end
