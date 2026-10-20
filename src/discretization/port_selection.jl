@@ -11,46 +11,82 @@ function port_depvar(spec::PortSpec, s::DiscreteSpace)
     return s.ū[i]
 end
 
-# Half the distance between a node's neighbours: a full cell inside, a half cell at an end.
-port_control_width(grid, i) =
-    (grid[min(i + 1, lastindex(grid))] - grid[max(i - 1, firstindex(grid))]) / 2
+# Half the distance between a node's neighbours: a full cell inside, a half cell at a
+# boundary end. The last node of a direction joined across its upper end (periodic or
+# interface) holds a full cell; a periodic one wraps onto the first cell.
+function port_control_width(grid, i; periodic = false, upper_open = false)
+    n = lastindex(grid)
+    i == n && periodic && return (grid[2] - grid[1] + grid[n] - grid[n - 1]) / 2
+    i == n && upper_open && return grid[n] - grid[n - 1]
+    return (grid[min(i + 1, n)] - grid[max(i - 1, firstindex(grid))]) / 2
+end
 
-function select_port_nodes_1d(sel, grid, domain, x0, allowed, approx_order, x)
+function select_port_nodes_1d(
+        sel, grid, domain, x0, allowed, x; periodic = false, upper_open = false
+    )
     tol = sqrt(eps(Float64)) * (last(domain) - first(domain))
     first(domain) - tol <= x0 <= last(domain) + tol ||
         throw(ArgumentError("PointPort coordinate $x = $x0 lies outside the domain [$(first(domain)), $(last(domain))]."))
-    xs = grid[allowed]
-    first(xs) - tol <= x0 <= last(xs) + tol || throw(
-        ArgumentError(
-            "PointPort coordinate $x = $x0 carries a flow but lies outside the interior nodes " *
-                "$x ∈ [$(first(xs)), $(last(xs))] that hold the PDE; the nodes nearer the boundary " *
-                "hold boundary conditions. Put the flow in a flux boundary condition instead, " *
-                "e.g. `-k * Dx(T(t, 0)) ~ heater.Q_flow / A`."
-        )
-    )
-    n = port_npoints(sel, approx_order)
-    n <= length(xs) ||
-        throw(ArgumentError("PointPort selection $sel needs $n nodes in $x but only $(length(xs)) are available."))
-    nearest = sortperm(abs.(xs .- x0))
-    k = if abs(xs[first(nearest)] - x0) <= tol
-        nearest[1:1]
+    n = port_npoints(sel)
+    idx = collect(allowed)
+    if periodic
+        # node 1 is the copy of node n; unroll one period on each side to wrap the stencil
+        idx = filter(!=(firstindex(grid)), idx)
+        k = min(n, length(idx))
+        L = last(domain) - first(domain)
+        xs = vcat(grid[idx[(end - k + 1):end]] .- L, grid[idx], grid[idx[1:k]] .+ L)
+        idx = vcat(idx[(end - k + 1):end], idx, idx[1:k])
     else
-        sort(nearest[1:n])
+        xs = grid[idx]
+        first(xs) - tol <= x0 <= last(xs) + tol || throw(
+            ArgumentError(
+                "PointPort coordinate $x = $x0 carries a flow but lies outside the interior nodes " *
+                    "$x ∈ [$(first(xs)), $(last(xs))] that hold the PDE; the nodes nearer the boundary " *
+                    "hold boundary conditions. Put the flow in a flux boundary condition instead, " *
+                    "e.g. `-k * Dx(T(t, 0)) ~ heater.Q_flow / A`."
+            )
+        )
     end
-    w = length(k) == 1 ? [1.0] : calculate_weights(0, x0, xs[k])
-    nodes = collect(allowed)[k]
-    return nodes, w, port_control_width.(Ref(grid), nodes)
+    n <= length(unique(idx)) ||
+        throw(ArgumentError("PointPort selection $sel needs $n nodes in $x but only $(length(unique(idx))) are available."))
+    hit = findfirst(xi -> abs(xi - x0) <= tol, xs)
+    lo = clamp(searchsortedlast(xs, x0), 1, length(xs) - 1)
+    window = if hit !== nothing
+        hit:hit
+    elseif n == 1
+        inside = k -> first(domain) <= xs[k] <= last(domain)
+        dlo, dhi = x0 - xs[lo], xs[lo + 1] - x0
+        pick = abs(dlo - dhi) <= tol ? (inside(lo) || !inside(lo + 1) ? lo : lo + 1) :
+            (dlo < dhi ? lo : lo + 1)
+        pick:pick
+    else
+        # grow outward from the bracketing pair, nearer side first, so x0 stays inside
+        a, b = lo, lo + 1
+        while b - a + 1 < n
+            left = a > 1 ? x0 - xs[a - 1] : Inf
+            right = b < length(xs) ? xs[b + 1] - x0 : Inf
+            left <= right ? (a -= 1) : (b += 1)
+        end
+        a:b
+    end
+    w = length(window) == 1 ? [1.0] : calculate_weights(0, x0, xs[window])
+    nodes = idx[window]
+    return nodes, w, port_control_width.(Ref(grid), nodes; periodic, upper_open)
 end
 
 """
-    select_port_nodes(spec, s, approx_order; restrict_to = nothing)
+    select_port_nodes(spec, s; restrict_to = nothing, periodic = nothing, upper_open = nothing)
 
 Nodes, weights and control volumes of the port `spec` on the grid of `s`, as vectors
 `(nodes::Vector{CartesianIndex}, weights, volumes)` in the index space of the port
 variable. `restrict_to` gives, per spatial direction, the index range the nodes may come
-from; by default every grid node is allowed.
+from; by default every grid node is allowed. `periodic` and `upper_open` flag, per
+direction, a periodic axis and an axis joined to another domain at its upper end.
 """
-function select_port_nodes(spec::PortSpec, s::DiscreteSpace, approx_order; restrict_to = nothing)
+function select_port_nodes(
+        spec::PortSpec, s::DiscreteSpace; restrict_to = nothing,
+        periodic = nothing, upper_open = nothing
+    )
     u = port_depvar(spec, s)
     xs = ivs(u, s)
     at = spec.at
@@ -60,7 +96,9 @@ function select_port_nodes(spec::PortSpec, s::DiscreteSpace, approx_order; restr
         x0 = last(at[findfirst(p -> isequal(p.first, x), at)])
         allowed = restrict_to === nothing ? eachindex(s.grid[x]) : restrict_to[d]
         nodes, w, vol = select_port_nodes_1d(
-            spec.select, s.grid[x], s.axies[x], x0, allowed, approx_order, x
+            spec.select, s.grid[x], s.axies[x], x0, allowed, x;
+            periodic = periodic === nothing ? false : periodic[d],
+            upper_open = upper_open === nothing ? false : upper_open[d]
         )
         collect(zip(nodes, w, vol))
     end
@@ -110,22 +148,47 @@ function inject_point_source(eqs, disc, nodes, q, src, t, name)
     return eqs
 end
 
+# The coefficient `a` of `Dt(eqvar)` in `pde`, so that `a * src` adds `src` to `Dt(eqvar)`.
+function port_time_coefficient(pde, eqvar, s, name)
+    a, _, linear = Symbolics.linear_expansion(pde.lhs - pde.rhs, Differential(s.time)(eqvar))
+    av = unwrap_const(safe_unwrap(a))
+    ok = linear && !(av isa Number && iszero(av)) &&
+        all(Symbolics.get_variables(a)) do v
+        ModelingToolkitBase.isparameter(v) && !any(x -> isequal(x, v), s.x̄)
+    end
+    ok || throw(
+        ArgumentError(
+            "PointPort $name carries a flow into $eqvar, which needs a first-order time " *
+                "derivative of $eqvar entering its PDE linearly with a constant or " *
+                "parameter coefficient. Got coefficient $a in $pde."
+        )
+    )
+    return a
+end
+
 """
 Add the sources and across equations of the ports on `eqvar` to its interior equations.
 """
-function add_point_ports(eqs, interior, eqvar, s, derivweights)
+function add_point_ports(eqs, pde, interior, eqvar, s, derivweights, bcmap)
     ports = filter(p -> isequal(operation(port_spec(p).var), operation(eqvar)), derivweights.ports)
     isempty(ports) && return eqs
     disc = s.discvars[eqvar]
+    ifaces = map(x -> filter_interfaces(bcmap[operation(eqvar)][x]), ivs(eqvar, s))
+    periodic = map(
+        (x, bs) -> any(b -> isequal(operation(b.u2), operation(eqvar)) && isequal(b.x2, x), bs),
+        ivs(eqvar, s), ifaces
+    )
+    upper_open = map(bs -> any(isupper, bs), ifaces)
     across = map(ports) do port
         spec = port_spec(port)
         restrict = spec.through === nothing ? nothing : interior.indices
         nodes, w, V = select_port_nodes(
-            spec, s, derivweights.approx_order; restrict_to = restrict
+            spec, s; restrict_to = restrict, periodic, upper_open
         )
         if spec.through !== nothing
             flow, scale = spec.through
-            src = scale * getproperty(port, flow)
+            a = port_time_coefficient(pde, eqvar, s, nameof(port))
+            src = a * scale * getproperty(port, flow)
             eqs = inject_point_source(eqs, disc, nodes, w ./ V, src, s.time, nameof(port))
         end
         getproperty(port, spec.across) ~ sum(w .* [disc[I] for I in nodes])
@@ -152,27 +215,4 @@ function attach_point_ports(sys, ports; checks = true)
         ],
         name = nameof(sys), checks
     )
-end
-
-const RENAMESPACE_SLICES = Ref{Union{Nothing, Bool}}(nothing)
-
-"""
-Whether ModelingToolkitBase can namespace slice-form equations, which a discretized system
-with ports needs to sit inside another system (SciML/ModelingToolkit.jl#5133). Without it
-`mtkcompile` of the enclosing system fails with "matching non-exhaustive" in `renamespace`.
-"""
-function _renamespace_supports_slices()
-    RENAMESPACE_SLICES[] === nothing || return RENAMESPACE_SLICES[]
-    @parameters τ
-    @variables p(τ)[1:3]
-    D = Differential(τ)
-    inner = ModelingToolkitBase.System([D(p[1:2]) ~ p[2:3] .+ 1], τ; name = :inner)
-    outer = ModelingToolkitBase.System(Equation[], τ; systems = [inner], name = :outer)
-    RENAMESPACE_SLICES[] = try
-        ModelingToolkitBase.equations(outer)
-        true
-    catch
-        false
-    end
-    return RENAMESPACE_SLICES[]
 end

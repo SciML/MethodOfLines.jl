@@ -209,6 +209,7 @@ function SciMLBase.DAEProblem(
         pdesys::PDESystem, discretization::MOLDiscretization;
         initializealg = nothing, build_initializeprob = false, kwargs...
     )
+    reject_point_ports(pdesys, "DAEProblem")
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     if tspan === nothing
         throw(

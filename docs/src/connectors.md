@@ -21,7 +21,7 @@ PointPort(connector; name, var, at, across, through = nothing, select = Interpol
   - `across` names the potential variable of the connector, such as `:T`. After
     discretization it equals the selected field value.
   - `through = :Q_flow => scale` names a `connect = Flow` variable of the connector. The
-    flow enters the PDE of `var` as a source term `scale * Q_flow`. Omit `through` for a
+    flow is added to `Dt(var)` as the source `scale * Q_flow`. Omit `through` for a
     read-out port, which only observes the field.
 
 Put the ports in the `systems` of the `PDESystem`:
@@ -102,14 +102,17 @@ The `select` keyword decides which grid nodes `I` and weights `w_I` represent th
 The weights sum to one and form a tensor product across spatial directions.
 
   - `Interpolate(p)` uses Lagrange interpolation of degree `p` over `p + 1` nodes per
-    direction, centred on the point where the grid allows. It reproduces polynomials of
-    degree `p`. The default `Interpolate()` takes `p` from the `approx_order` of the
-    discretization. A point that lies on a node uses that node alone.
-  - `Nearest()` uses the single nearest node per direction. Ties go to the lower index.
+    direction. The nodes grow outward from the two that bracket the point, so it never
+    extrapolates, and it reproduces polynomials of degree `p`. The default
+    `Interpolate()` is linear, `p = 1`, whose weights are non-negative. With `p >= 2`
+    some weights are negative, so a heater also cools a few nodes slightly. A point that
+    lies on a node uses that node alone.
+  - `Nearest()` uses the single nearest node per direction. At an exact tie it prefers a
+    node inside the domain over an edge-aligned ghost node, then the lower index.
 
 The across variable is `Σ w_I u_I`. The flow is spread over the same nodes, with source
 density `scale * Q_flow * w_I / V_I` at node `I`, where `V_I` is the node's control volume
-(half a cell at the ends of a grid). One weight table serves both directions, so the
+(half a cell at a boundary end, a full cell across a periodic seam). One weight table serves both directions, so the
 coupling conserves the exchanged quantity, `Σ V_I q_I = scale * Q_flow`, and is passive:
 the power the PDE receives is `Q_flow` times the value the component sees.
 
@@ -118,10 +121,16 @@ the power the PDE receives is `Q_flow` times the value the component sees.
 `Q_flow` is positive into the PDE. This is the MTK convention for a component's own port,
 and it matches `ModelingToolkitStandardLibrary` components such as `HeatCapacitor`.
 
-`scale` converts the flow into the units of the PDE's source term. A rod with
-cross-section `A`, density `ρ` and heat capacity `c`, whose state is temperature, takes
-`1 / (ρ * c * A)`. A PDE for a conserved density per unit length takes `1`. `scale` may
-contain parameters of the `PDESystem`.
+The source is added to `Dt(var)` as if the PDE were solved for it, whichever way the
+PDE is written: `ρ * c * Dt(T) ~ k * Dxx(T)`, `Dt(T) ~ k / (ρ * c) * Dxx(T)` and
+`k / (ρ * c) * Dxx(T) ~ Dt(T)` all take the same `scale`. The PDE must contain `Dt(var)`
+linearly with a constant or parameter coefficient; a variable without a time derivative
+cannot take a flow.
+
+`scale` converts the flow into a rate of change of `var`. A rod with cross-section `A`,
+density `ρ` and heat capacity `c`, whose state is temperature, takes `1 / (ρ * c * A)`. A
+PDE for a conserved density per unit length takes `1`. `scale` may contain parameters of
+the `PDESystem`.
 
 ## Limitations
 

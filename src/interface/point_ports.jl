@@ -14,24 +14,26 @@ spatial direction. Ties go to the lower index.
 struct Nearest <: AbstractPortSelection end
 
 """
-    Interpolate(order = -1)
+    Interpolate(order = 1)
 
 Couple a [`PointPort`](@ref) to the field by Lagrange interpolation of degree `order` in
-every spatial direction: `order + 1` nodes per direction, as centred on the port as the
-grid allows. The default `order = -1` uses the `approx_order` of the discretization. A
-port that lies exactly on a node uses that node alone.
+every spatial direction: `order + 1` nodes per direction, grown outward from the two nodes
+that bracket the port, so it never extrapolates. A port that lies exactly on a node uses
+that node alone. The default linear interpolation has non-negative weights; `order >= 2`
+is more accurate on smooth fields but has negative weights, so a positive flow also
+removes a little of the quantity at some nodes (a non-monotone source).
 """
 struct Interpolate <: AbstractPortSelection
     order::Int
     function Interpolate(order::Integer)
-        order >= -1 || throw(ArgumentError("Interpolate order must be >= 0, or -1 for approx_order; got $order"))
+        order >= 0 || throw(ArgumentError("Interpolate order must be >= 0, got $order"))
         return new(order)
     end
 end
-Interpolate() = Interpolate(-1)
+Interpolate() = Interpolate(1)
 
-port_npoints(::Nearest, approx_order) = 1
-port_npoints(sel::Interpolate, approx_order) = (sel.order < 0 ? approx_order : sel.order) + 1
+port_npoints(::Nearest) = 1
+port_npoints(sel::Interpolate) = sel.order + 1
 
 struct PortSpec
     var::Any
@@ -56,11 +58,13 @@ spatial point `at`, to be placed in the `systems` of that `PDESystem`.
 `@connector`). `at` gives one `x => value` pair for every spatial argument of `var`.
 After discretization the connector's unknown `across` equals the selected field value
 `Σ w_I u_I`. If `through = :Q => scale` names a `Flow` unknown of the connector, the port
-also adds `scale * Q`, spread over the same nodes with weight `w_I / V_I` (`V_I` the
-control volume of node `I`), as a source to the PDE of `var`. `Q` is positive into the
-PDE, the MTK convention for a component's own port; `scale` converts the flow into
-source-term units, e.g. `1 / (ρ * c * A)` for a temperature rod of cross-section `A`.
-Without `through` the port only reads the field.
+adds `scale * Q * w_I / V_I` (`V_I` the control volume of node `I`) to the time derivative
+of `var` at each selected node, as if the PDE were solved for `Dt(var)`, however it is
+written: `ρ * c * Dt(T) ~ k * Dxx(T)` and `Dt(T) ~ k / (ρ * c) * Dxx(T)` take the same
+`scale`. The PDE must contain `Dt(var)` linearly, with a constant or parameter
+coefficient. `Q` is positive into the PDE, the MTK convention for a component's own port;
+`scale` converts the flow into a rate of `var`, e.g. `1 / (ρ * c * A)` for a temperature
+rod of cross-section `A`. Without `through` the port only reads the field.
 
 `select` is [`Interpolate`](@ref) or [`Nearest`](@ref). A port carrying a flow selects
 among interior nodes only, since boundary nodes hold boundary conditions; flow into a
@@ -114,8 +118,12 @@ function PointPort(
         any(y -> isequal(y, x), keys_[1:(i - 1)]) &&
             throw(ArgumentError("PointPort $name: `$x` is given more than once in `at`."))
     end
+    for p in at
+        unwrap_const(safe_unwrap(p.second)) isa Real ||
+            throw(ArgumentError("PointPort $name: coordinates in `at` must be numbers, got $(p.first) => $(p.second)."))
+    end
     spec = PortSpec(
-        u, Pair{Any, Float64}[x => Float64(p.second) for (x, p) in zip(keys_, at)],
+        u, Pair{Any, Float64}[x => Float64(unwrap_const(safe_unwrap(p.second))) for (x, p) in zip(keys_, at)],
         across, through, select
     )
     return setmetadata(sys, PortSpecKey, spec)
