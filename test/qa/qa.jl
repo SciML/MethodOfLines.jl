@@ -22,6 +22,7 @@ run_qa(
             ignore = (
                 :AbstractCartesianIndex, :EquationState, :PDESolution,
                 :cardinalize_eqs!, :observed, :parse_bcs,
+                :isconnector, # ModelingToolkitBase's connector predicate, used by PointPort
                 :promote_symtype, # public since SymbolicUtils 4.46; older supported releases lack the metadata
             ),
         ),
