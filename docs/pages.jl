@@ -20,6 +20,7 @@ pages = [
     "Solution Interface - PDESolutions" => "solutions.md",
     "Grid and Solution Retrieval - Deprecated" => "get_grid.md",
     "Boundary Conditions" => "boundary_conditions.md",
+    "Connector Ports" => "connectors.md",
     "Advection Schemes" => "advection_schemes.md",
     "Non-Uniform Rectilinear Grids" => "nonuniform.md",
     "Curvilinear Grids" => "curvilinear_grids.md",
