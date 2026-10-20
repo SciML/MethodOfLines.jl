@@ -171,6 +171,7 @@ function PDEBase.discretize_equation!(
             )
         end
     end
+    eqs = add_point_ports(eqs, interior, eqvar, s, derivweights)
 
     return vcat!(disc_state.eqs, eqs)
 end

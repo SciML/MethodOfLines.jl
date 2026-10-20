@@ -85,6 +85,7 @@ include("interface/scheme_types.jl")
 include("interface/callbacks.jl")
 include("interface/MOLFiniteDifference.jl")
 include("interface/PseudospectralDiscretization.jl")
+include("interface/point_ports.jl")
 
 include("discretization/discretize_vars.jl")
 include("MOL_utils.jl")
@@ -131,6 +132,7 @@ include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
 include("discretization/staggered_discretize.jl")
+include("discretization/port_selection.jl")
 
 # Main
 include("discretization/discretize_equations.jl")
@@ -146,5 +148,6 @@ export MOLFiniteDifference, PseudospectralDiscretization, ChebyshevCollocation,
     FourierCollocation, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
     edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme, MOLDiscCallback
+export PointPort, Nearest, Interpolate
 
 end

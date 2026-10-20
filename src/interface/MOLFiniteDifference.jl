@@ -64,6 +64,7 @@ struct MOLFiniteDifference{G} <: AbstractEquationSystemDiscretization
     useIR::Bool
     callbacks::Any
     kwargs::Any
+    ports::Vector{Any}
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
@@ -94,8 +95,14 @@ function MOLFiniteDifference(
 
     return MOLFiniteDifference{typeof(grid_align)}(
         dxs, time, approx_order, advection_scheme, grid_align, should_transform,
-        useIR, callbacks, kwargs
+        useIR, callbacks, kwargs, Any[]
     )
 end
+
+# The PointPorts of the system being discretized, set by `symbolic_discretize`.
+with_ports(d::MOLFiniteDifference{G}, ports) where {G} = MOLFiniteDifference{G}(
+    d.dxs, d.time, d.approx_order, d.advection_scheme, d.grid_align, d.should_transform,
+    d.useIR, d.callbacks, d.kwargs, collect(Any, ports)
+)
 
 PDEBase.get_time(disc::MOLFiniteDifference) = disc.time
