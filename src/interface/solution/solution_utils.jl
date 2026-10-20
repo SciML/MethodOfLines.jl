@@ -64,4 +64,15 @@ function host_solution(sol::SciMLBase.NonlinearSolution)
     )
 end
 
+# The state index of each element of `discu`, or `nothing` where it is observed.
+function grid_indices(odesys, discu)
+    return map(I -> SymbolicIndexingInterface.variable_index(odesys, discu[I]), CartesianIndices(discu))
+end
+
+# The values of the observed elements `obs` of `discu`, from a single observed function
+# rather than one generated and compiled per element.
+function grid_observed_values(sol, discu, obs)
+    return SymbolicIndexingInterface.getsym(sol, [safe_unwrap(discu[I]) for I in obs])(sol)
+end
+
 iscomplex(A::SciMLBase.AbstractPDESolution) = !isnothing(A.disc_data.complexmap)
