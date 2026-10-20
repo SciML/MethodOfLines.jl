@@ -8,8 +8,8 @@ function PDEBase.interface_errors(
     for x in indvars
         @assert haskey(discretization.dxs, Num(x))||haskey(discretization.dxs, x) "Variable $x has no step size"
     end
-    if !any(s -> discretization.advection_scheme isa s, [UpwindScheme, FunctionalScheme])
-        throw(ArgumentError("Only `UpwindScheme()` and `FunctionalScheme()` are supported advection schemes. Got $(typeof(discretization.advection_scheme))."))
+    if !any(s -> discretization.advection_scheme isa s, [UpwindScheme, FunctionalScheme, HermiteScheme])
+        throw(ArgumentError("Only `UpwindScheme()`, `FunctionalScheme()`, and `HermiteScheme()` are supported advection schemes. Got $(typeof(discretization.advection_scheme))."))
     end
     return
 end
