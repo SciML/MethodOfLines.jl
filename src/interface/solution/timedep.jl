@@ -40,6 +40,7 @@ function SciMLBase.PDETimeSeriesSolution(
         sol::SciMLBase.AbstractODESolution{T}, metadata::MOLMetadata
     ) where {T}
     try
+        hostsol = host_solution(sol)
         odesys = sol.prob.f.sys
         pdesys = metadata.pdesys
         discretespace = metadata.discretespace
@@ -57,13 +58,13 @@ function SciMLBase.PDETimeSeriesSolution(
                 # as an array.
                 idxs = grid_indices(odesys, discu)
                 solu = all(isnothing, idxs) ?
-                    array_observed_solution(sol, discu, ModelingToolkitBase.observed(odesys)) :
+                    array_observed_solution(hostsol, discu, ModelingToolkitBase.observed(odesys)) :
                     nothing
                 if solu === nothing
-                    solu = map(i -> i === nothing ? T[] : sol[i, :], idxs)
+                    solu = map(i -> i === nothing ? T[] : hostsol[i, :], idxs)
                     obs = findall(isnothing, idxs)
                     if !isempty(obs)
-                        obsvals = grid_observed_values(sol, discu, obs)
+                        obsvals = grid_observed_values(hostsol, discu, obs)
                         for (k, I) in enumerate(obs)
                             solu[I] = getindex.(obsvals, k)
                         end

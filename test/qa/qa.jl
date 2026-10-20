@@ -21,7 +21,7 @@ run_qa(
             # and they are not user-facing API.
             ignore = (
                 :AbstractCartesianIndex, :EquationState, :PDESolution,
-                :cardinalize_eqs!, :observed, :parse_bcs,
+                :cardinalize_eqs!, :observed, :parse_bcs, :scalarization_function,
                 :promote_symtype, # public since SymbolicUtils 4.46; older supported releases lack the metadata
             ),
         ),

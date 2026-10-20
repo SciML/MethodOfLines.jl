@@ -9,6 +9,7 @@ end
 function SciMLBase.PDENoTimeSolution(
         sol::SciMLBase.NonlinearSolution{T}, metadata::MOLMetadata
     ) where {T}
+    hostsol = host_solution(sol)
     odesys = sol.prob.f.sys
 
     pdesys = metadata.pdesys
@@ -23,11 +24,11 @@ function SciMLBase.PDENoTimeSolution(
             idxs = grid_indices(odesys, discu)
             out = zeros(T, size(discu)...)
             for I in CartesianIndices(discu)
-                idxs[I] === nothing || (out[I] = sol.u[idxs[I]])
+                idxs[I] === nothing || (out[I] = hostsol.u[idxs[I]])
             end
             obs = findall(isnothing, idxs)
             if !isempty(obs)
-                out[obs] .= grid_observed_values(sol, discu, obs)
+                out[obs] .= grid_observed_values(hostsol, discu, obs)
             end
             # Deal with any replaced variables
             ureplaced = get(discretespace.vars.replaced_vars, u, nothing)

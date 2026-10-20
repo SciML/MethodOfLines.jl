@@ -345,3 +345,61 @@ end
     @test tspan === nothing
     @test ModelingToolkitBase.get_tspan(sys) === nothing
 end
+
+@testset "initial conditions and initialization stay array valued" begin
+    @parameters t x y
+    @variables u(..) ϕ(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dt(u(t, x, y)) ~ Dxx(u(t, x, y)) + Dyy(u(t, x, y))
+    bcs = [
+        u(0, x, y) ~ x + 10y,
+        u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+        u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
+    sys, _ = symbolic_discretize(pdesys, mol_disc([x => 0.25, y => 0.25], t))
+    U = only(unknowns(sys))
+    # one pair per initial condition, holding the values on the whole grid
+    u0 = getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing).u0
+    @test isequal(first(only(u0)), U)
+    @test last(only(u0)) == [xv + 10yv for xv in 0:0.25:1, yv in 0:0.25:1]
+    # one equation fixing the differentiated interior, none for the walls
+    ieq = only(ModelingToolkit.initialization_equations(sys))
+    @test isequal(ieq.lhs, U[2:4, 2:4])
+    @test isempty(MethodOfLines.brown_init_offenders(complete(sys)))
+
+    # an edge-aligned variable's initial condition is sampled at its staggered points
+    eqs = [Dt(u(t, x)) + Dx(ϕ(t, x)) ~ 0, Dt(ϕ(t, x)) + Dx(u(t, x)) ~ 0]
+    bcs = [u(0, x) ~ 0.0, ϕ(0, x) ~ x, Dx(u(t, 1.0)) ~ 0.0, ϕ(t, 0.0) ~ 0.0]
+    @named staggered = PDESystem(
+        eqs, bcs, [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)], [t, x],
+        [u(t, x), ϕ(t, x)]
+    )
+    disc = MOLFiniteDifference(
+        [x => 0.25], t; grid_align = MethodOfLines.StaggeredGrid(), edge_aligned_var = ϕ(t, x)
+    )
+    sys, _ = symbolic_discretize(staggered, disc)
+    u0 = Dict(getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing).u0)
+    Φ = only(filter(v -> occursin("ϕ", string(v)), unknowns(sys)))
+    @test u0[Φ] == collect(0:0.25:1) .+ 0.125
+end
+
+@testset "safety predicate on slices" begin
+    @independent_variables τ
+    @variables a(τ)[1:3]
+    D = Differential(τ)
+    eqs = [D(a[2:3]) ~ -a[2:3], a[1] ~ 0.0]
+    build(init) = complete(
+        System(eqs, τ, [a], []; initialization_eqs = init, name = :sys)
+    )
+    @test isempty(MethodOfLines.brown_init_offenders(build([a[2:3] ~ [1.0, 2.0]])))
+    algebraic = MethodOfLines.brown_init_offenders(build([a[1:2] ~ [1.0, 2.0]]))
+    @test occursin("algebraic rather than differential", last(only(algebraic)))
+    coupled = MethodOfLines.brown_init_offenders(build([a[3] ~ a[1]]))
+    @test occursin("relates", last(only(coupled)))
+end

@@ -152,6 +152,12 @@ run_tests(;
             env = joinpath(@__DIR__, "NeuralNets"),
             body = joinpath(@__DIR__, "NeuralNets", "neural_network_terms.jl"),
         ),
+        # Own environment: needs CUDA and a GPU. Not part of "All" and not listed in
+        # test_groups.toml, so CI never runs it; run locally with GROUP=GPU.
+        "GPU" => (;
+            env = joinpath(@__DIR__, "GPU"),
+            body = joinpath(@__DIR__, "GPU", "solution_wrap.jl"),
+        ),
     ),
     qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),
     all = FUNCTIONAL_GROUPS,

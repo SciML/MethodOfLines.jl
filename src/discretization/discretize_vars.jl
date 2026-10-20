@@ -359,12 +359,12 @@ The unknowns of the discretized system: one per dependent variable, in the order
 `u(t)[1:n, ...]` whose elements `s.discvars[u]` holds; a variable of `t` alone is the
 scalar `u(t)` itself.
 """
-function PDEBase.get_system_unknowns(s::DiscreteSpace)
-    return map(s.ū) do u
-        disc = s.discvars[u]
-        ndims(disc) == 0 && return safe_unwrap(disc[])
-        return first(arguments(safe_unwrap(first(disc))))
-    end
+PDEBase.get_system_unknowns(s::DiscreteSpace) = map(u -> system_unknown(s, u), s.ū)
+
+function system_unknown(s::DiscreteSpace, u)
+    disc = s.discvars[u]
+    ndims(disc) == 0 && return safe_unwrap(disc[])
+    return first(arguments(safe_unwrap(first(disc))))
 end
 
 prepare_dx(dx::Integer, xdomain, ::CenterAlignedGrid) = (xdomain[2] - xdomain[1]) / (dx - 1)
