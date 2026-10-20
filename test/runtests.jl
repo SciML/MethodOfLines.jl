@@ -165,6 +165,10 @@ run_tests(;
             env = joinpath(@__DIR__, "GPU"),
             body = joinpath(@__DIR__, "GPU", "solution_wrap.jl"),
         ),
+        "SolutionAD" => (;
+            env = joinpath(@__DIR__, "SolutionAD"),
+            body = joinpath(@__DIR__, "SolutionAD", "solution_ad.jl"),
+        ),
     ),
     qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),
     all = FUNCTIONAL_GROUPS,

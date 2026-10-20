@@ -73,3 +73,19 @@ DAESolution
 ```
 
 This is useful where speed is important, but the shape of the solution is not.
+
+## Differentiation
+
+`sol[u(t, x)]`, `sol[u(t, x), inds...]` and `sol(t, x; dv)` differentiate in reverse mode through `solve`, with SciMLSensitivity loaded, and so do their stationary forms, `sol[u(x)]` and `sol(x; dv)`. The symbol is built outside the differentiated function, since symbolic expressions cannot be built inside it. With Zygote, for a system with parameters `α` and `β`, a target array `data` and a starting vector `p0`:
+
+```julia
+using SciMLSensitivity, Zygote
+using SymbolicIndexingInterface: setp_oop
+
+set_p = setp_oop(prob, [α, β])
+U = u(t, x)
+loss(p) = sum(abs2, solve(remake(prob; p = set_p(prob, p)); saveat = 0.1)[U] .- data)
+Zygote.gradient(loss, p0)
+```
+
+`setp_oop` builds the parameter object outside `remake`; a symbolic map passed to `remake` has no rule. With Mooncake, make the symbol a constant, `const U = u(t, x)`, and set the parameters through SciMLStructures, `tunables, repack, _ = canonicalize(Tunable(), prob.p)` and `remake(prob; p = repack(tunables))`, since a parameter object from `setp_oop` does not get through ModelingToolkit's rule for it yet. `sol.u` and complex-valued variables have no rule, and a gradient through them is an error. On the `DAEProblem` path of `discretize` the initial condition is evaluated when the problem is built, so a parameter in it is not carried by `remake`.

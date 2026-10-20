@@ -10,7 +10,7 @@ Used to unpack the solution.
 - `pdesys`: a PDESystem object, used in the discretization.
 """
 struct MOLMetadata{hasTime, Ds, Disc, PDE, M, C} <:
-    SciMLBase.AbstractDiscretizationMetadata{hasTime}
+    SciMLBase.AbstractDifferentiableDiscretizationMetadata{hasTime}
     discretespace::Ds
     disc::Disc
     pdesys::PDE

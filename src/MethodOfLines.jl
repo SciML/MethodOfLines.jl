@@ -97,6 +97,7 @@ include("interface/solution/MOLMetadata.jl")
 include("interface/solution/solution_utils.jl")
 include("interface/solution/common.jl")
 include("interface/solution/timedep.jl")
+include("interface/solution/cotangents.jl")
 include("interface/solution/timeindep.jl")
 
 # Weight calculation
