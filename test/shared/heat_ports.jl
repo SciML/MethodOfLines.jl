@@ -31,3 +31,20 @@ end
     ]
     return System(eqs, t, vars, pars; systems = [port_a, port_b], name)
 end
+
+# Whether ModelingToolkitBase can namespace the slice-form equations of a discretized system
+# nested in another system: SciML/ModelingToolkit.jl#5133. Without it `mtkcompile` of the
+# enclosing system fails with "matching non-exhaustive" in `renamespace`.
+function renamespace_supports_slices()
+    @parameters τ
+    @variables p(τ)[1:3]
+    D = Differential(τ)
+    inner = System([D(p[1:2]) ~ p[2:3] .+ 1], τ; name = :inner)
+    outer = System(Equation[], τ; systems = [inner], name = :outer)
+    return try
+        equations(outer)
+        true
+    catch
+        false
+    end
+end

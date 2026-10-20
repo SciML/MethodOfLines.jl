@@ -4,7 +4,7 @@ using MethodOfLines: select_port_nodes, port_spec
 include(joinpath(@__DIR__, "..", "shared", "heat_ports.jl"))
 
 @parameters x y ρc κ
-@variables T(..)
+@variables T(..) v(..)
 Dx = Differential(x)
 Dy = Differential(y)
 Dxx = Differential(x)^2
@@ -15,16 +15,18 @@ const T0 = 300.0
 const Tcap = 400.0
 const Ccap = 10.0
 
-# Nesting the discretized system as a subsystem namespaces its slice-form equations,
-# which needs SciML/ModelingToolkit.jl#5133.
-const nested = MethodOfLines._renamespace_supports_slices()
+# Composition nests the discretized system as a subsystem: SciML/ModelingToolkit.jl#5133.
+const nested = renamespace_supports_slices()
 
-function rod_pdesys(ports; tmax = 5.0, ic = T0)
+neumann_bcs(ic) = [T(0, x) ~ ic, Dx(T(t, 0)) ~ 0, Dx(T(t, 1)) ~ 0]
+periodic_bcs(ic) = [T(0, x) ~ ic, T(t, 0) ~ T(t, 1)]
+
+function rod_pdesys(
+        ports; tmax = 5.0, ic = T0, pde = Dt(T(t, x)) ~ α * Dxx(T(t, x)), bcs = neumann_bcs(ic)
+    )
     return PDESystem(
-        [Dt(T(t, x)) ~ α * Dxx(T(t, x))],
-        [T(0, x) ~ ic, Dx(T(t, 0)) ~ 0, Dx(T(t, 1)) ~ 0],
-        [t ∈ Interval(0.0, tmax), x ∈ Interval(0.0, 1.0)], [t, x], [T(t, x)], [ρc => 2.0];
-        systems = ports, name = :rod
+        [pde], bcs, [t ∈ Interval(0.0, tmax), x ∈ Interval(0.0, 1.0)], [t, x], [T(t, x)],
+        [ρc => 2.0]; systems = ports, name = :rod
     )
 end
 
@@ -43,21 +45,24 @@ end
 discrete_space(pdesys, disc) =
     MethodOfLines.construct_discrete_space(MethodOfLines.VariableMap(pdesys, disc), disc)
 
-# d(residual of node I)/d(Q_flow) for every node, read from the scalarized equations.
-function source_coefficients(sys, port, dims; values = Dict())
+# The source per unit flow that each node's equation adds to `Dt(u_I)`, read from the
+# scalarized equations: -(∂R/∂Q) / (∂R/∂Dt(u_I)).
+function effective_source(sys, port, dims; values = Dict())
     Q = Symbolics.unwrap(port.Q_flow)
     field = first(ModelingToolkit.get_unknowns(sys))
-    coef = zeros(dims...)
+    eff = zeros(dims...)
+    num(c) = Float64(Symbolics.unwrap_const(Symbolics.value(Symbolics.substitute(c, values))))
     for eq in equations(sys)
         eqs = Symbolics.scalarize(eq)
         for e in (eqs isa Equation ? [eqs] : vec(eqs))
             I = MethodOfLines.time_derivative_index(e, field, Symbolics.unwrap(t))
             I === nothing && continue
-            c = Symbolics.substitute(Symbolics.derivative(e.lhs - e.rhs, Q), values)
-            coef[I...] += Float64(Symbolics.unwrap_const(Symbolics.value(c)))
+            R = e.lhs - e.rhs
+            a = first(Symbolics.linear_expansion(R, Differential(t)(field[I...])))
+            eff[I...] += -num(Symbolics.derivative(R, Q)) / num(a)
         end
     end
-    return coef
+    return eff
 end
 
 trapezoid(n, dx) = [i == 1 || i == n ? dx / 2 : dx for i in 1:n]
@@ -78,6 +83,13 @@ function solve_with_capacitor(sys, tspan; op = nothing)
     return solve(prob, FBDF(); reltol = 1.0e-10, abstol = 1.0e-10), cap
 end
 
+# Relative energy imbalance between the capacitor and the field, with control volumes V.
+function imbalance(sol, sys, cap, V; heat_capacity = 2.0)
+    Efield = heat_capacity * sum(V .* (sol[sys.T][end] .- sol[sys.T][1]))
+    Ecap = Ccap * (sol[cap.T][end] - Tcap)
+    return abs(Efield + Ecap) / abs(Ecap)
+end
+
 heater_1d(; select = Interpolate(), at = 0.31, scale = 1 / ρc) = PointPort(
     HeatPort; name = :heater, var = T(t, x), at = [x => at], across = :T,
     through = :Q_flow => scale, select
@@ -92,11 +104,32 @@ heater_1d(; select = Interpolate(), at = 0.31, scale = 1 / ρc) = PointPort(
     @test nameof.(ModelingToolkit.get_systems(sys)) == [:heater, :probe]
     @test any(eq -> MethodOfLines.is_array_valued(eq.lhs), equations(sys))
 
-    nodes, w, V = select_port_nodes(port_spec(heater), discrete_space(pdesys, disc), 2; restrict_to = (2:50,))
-    coef = source_coefficients(sys, heater, 51)
-    @test findall(!iszero, coef) == first.(Tuple.(nodes))
-    @test coef[first.(Tuple.(nodes))] ≈ -0.5 .* w ./ V
-    @test sum(trapezoid(51, 0.02) .* coef) ≈ -0.5
+    nodes, w, V = select_port_nodes(port_spec(heater), discrete_space(pdesys, disc); restrict_to = (2:50,))
+    eff = effective_source(sys, heater, 51)
+    @test findall(!iszero, eff) == first.(Tuple.(nodes))
+    @test eff[first.(Tuple.(nodes))] ≈ 0.5 .* w ./ V
+    @test sum(trapezoid(51, 0.02) .* eff) ≈ 0.5
+end
+
+@testset "Source does not depend on how the PDE is written" begin
+    disc = MOLFiniteDifference([x => 0.02], t)
+    forms = [
+        Dt(T(t, x)) ~ α * Dxx(T(t, x)),
+        α * Dxx(T(t, x)) ~ Dt(T(t, x)),
+        κ * Dt(T(t, x)) ~ κ * α * Dxx(T(t, x)),
+        0 ~ α * Dxx(T(t, x)) - Dt(T(t, x)),
+    ]
+    effs = map(forms) do pde
+        heater = heater_1d(scale = 0.5)
+        sys, _ = symbolic_discretize(rod_pdesys([heater]; pde), disc)
+        effective_source(sys, heater, 51; values = Dict(κ => 3.0))
+    end
+    @test all(eff -> eff ≈ effs[1], effs)
+    @test sum(trapezoid(51, 0.02) .* effs[1]) ≈ 0.5
+
+    @test_throws r"first-order time derivative" symbolic_discretize(
+        rod_pdesys([heater_1d()]; pde = x * Dt(T(t, x)) ~ α * Dxx(T(t, x))), disc
+    )
 end
 
 @testset "1-D rod: read-out port at top level" begin
@@ -108,7 +141,7 @@ end
     sys, tspan = symbolic_discretize(pdesys, disc)
     sol = solve(ODEProblem(mtkcompile(sys), nothing, tspan), FBDF(); reltol = 1.0e-10, abstol = 1.0e-10)
     @test SciMLBase.successful_retcode(sol)
-    nodes, w, _ = select_port_nodes(port_spec(probe), discrete_space(pdesys, disc), 2)
+    nodes, w, _ = select_port_nodes(port_spec(probe), discrete_space(pdesys, disc))
     Tend = sol[T(t, x)][end, :]
     @test sol.original_sol[probe.T][end] ≈ sum(w .* Tend[first.(Tuple.(nodes))])
     @test all(iszero, sol.original_sol[heater.Q_flow])
@@ -120,9 +153,20 @@ end
     disc = MOLFiniteDifference([x => 0.02], t; approx_order = 4)
     sys, _ = symbolic_discretize(rod_pdesys([heater]), disc)
     @test any(isequal(κ), parameters(sys))
-    coef = source_coefficients(sys, heater, 51; values = Dict(κ => 2.0))
-    @test findall(!iszero, coef) == [2]
-    @test coef[2] ≈ -1 / (2.0 * 0.02)
+    eff = effective_source(sys, heater, 51; values = Dict(κ => 2.0))
+    @test findall(!iszero, eff) == [2]
+    @test eff[2] ≈ 1 / (2.0 * 0.02)
+end
+
+@testset "Periodic rod: ports across the seam" begin
+    disc = MOLFiniteDifference([x => 0.02], t)
+    for at in (0.99, 0.005)
+        heater = heater_1d(; at, scale = 1)
+        sys, _ = symbolic_discretize(rod_pdesys([heater]; bcs = periodic_bcs(T0)), disc)
+        eff = effective_source(sys, heater, 51)
+        @test eff[1] == 0
+        @test sum(0.02 .* eff[2:51]) ≈ 1
+    end
 end
 
 @testset "2-D plate: ported System" begin
@@ -132,15 +176,15 @@ end
     )
     sys, _ = symbolic_discretize(plate_pdesys([heater]), MOLFiniteDifference([x => 0.1, y => 0.1], t))
     @test any(eq -> MethodOfLines.is_array_valued(eq.lhs), equations(sys))
-    coef = source_coefficients(sys, heater, (11, 11))
-    @test count(!iszero, coef) == 9
-    @test sum(trapezoid(11, 0.1) * trapezoid(11, 0.1)' .* coef) ≈ -1
+    eff = effective_source(sys, heater, (11, 11))
+    @test count(!iszero, eff) == 4
+    @test all(>=(0), eff)
+    @test sum(trapezoid(11, 0.1) * trapezoid(11, 0.1)' .* eff) ≈ 1
 end
 
 @testset "Nested composition with lumped components" begin
     if !nested
-        heater = heater_1d()
-        sys, _ = symbolic_discretize(rod_pdesys([heater]), MOLFiniteDifference([x => 0.02], t))
+        sys, _ = symbolic_discretize(rod_pdesys([heater_1d()]), MOLFiniteDifference([x => 0.02], t))
         compiles = try
             mtkcompile(first(compose_with_capacitor(sys)))
             true
@@ -162,12 +206,39 @@ end
             s = discrete_space(pdesys, disc)
             Tend = sol[sys.T][end]
             for (port, interior) in ((heater, (2:50,)), (probe, nothing))
-                nodes, w, _ = select_port_nodes(port_spec(port), s, 2; restrict_to = interior)
+                nodes, w, _ = select_port_nodes(port_spec(port), s; restrict_to = interior)
                 @test sol[getproperty(sys, nameof(port)).T][end] ≈ sum(w .* Tend[first.(Tuple.(nodes))])
             end
-            Erod = 2.0 * sum(trapezoid(51, 0.02) .* (Tend .- sol[sys.T][1]))
-            Ecap = Ccap * (sol[cap.T][end] - Tcap)
-            @test abs(Erod + Ecap) / abs(Ecap) < 1.0e-3
+            @test imbalance(sol, sys, cap, trapezoid(51, 0.02)) < 1.0e-3
+        end
+
+        @testset "PDE written as α Dxx(T) ~ Dt(T)" begin
+            pde = α * Dxx(T(t, x)) ~ Dt(T(t, x))
+            sys, tspan = symbolic_discretize(rod_pdesys([heater_1d()]; pde), MOLFiniteDifference([x => 0.02], t))
+            sol, cap = solve_with_capacitor(sys, tspan)
+            @test SciMLBase.successful_retcode(sol)
+            @test sol[cap.T][end] < Tcap
+            @test imbalance(sol, sys, cap, trapezoid(51, 0.02)) < 1.0e-3
+        end
+
+        @testset "Edge-aligned rod conserves to solver tolerance" begin
+            disc = MOLFiniteDifference([x => 0.02], t; grid_align = edge_align)
+            sys, tspan = symbolic_discretize(rod_pdesys([heater_1d(at = 0.32)]), disc)
+            sol, cap = solve_with_capacitor(sys, tspan)
+            @test SciMLBase.successful_retcode(sol)
+            V = [i == 1 || i == 52 ? 0.0 : 0.02 for i in 1:52]
+            @test imbalance(sol, sys, cap, V) < 1.0e-8
+        end
+
+        @testset "Periodic rod conserves across the seam" begin
+            for at in (0.99, 0.005)
+                pdesys = rod_pdesys([heater_1d(; at)]; bcs = periodic_bcs(T0))
+                sys, tspan = symbolic_discretize(pdesys, MOLFiniteDifference([x => 0.02], t))
+                sol, cap = solve_with_capacitor(sys, tspan)
+                @test SciMLBase.successful_retcode(sol)
+                V = [i == 1 ? 0.0 : 0.02 for i in 1:51]
+                @test imbalance(sol, sys, cap, V) < 1.0e-8
+            end
         end
 
         @testset "1-D rod, Nearest on a pointwise host" begin
@@ -191,9 +262,7 @@ end
             sol, cap = solve_with_capacitor(sys, tspan)
             @test SciMLBase.successful_retcode(sol)
             V = trapezoid(11, 0.1) * trapezoid(11, 0.1)'
-            Eplate = 2.0 * sum(V .* reshape(sol[sys.T][end] .- sol[sys.T][1], 11, 11))
-            Ecap = Ccap * (sol[cap.T][end] - Tcap)
-            @test abs(Eplate + Ecap) / abs(Ecap) < 1.0e-2
+            @test imbalance(sol, sys, cap, V) < 1.0e-2
         end
     end
 end
@@ -201,7 +270,20 @@ end
 @testset "Errors" begin
     disc = MOLFiniteDifference([x => 0.02], t)
     @test_throws ArgumentError discretize(rod_pdesys([heater_1d()]), disc)
+    @test_throws ArgumentError DAEProblem(rod_pdesys([heater_1d()]), disc)
     @test_throws r"flux boundary condition" symbolic_discretize(rod_pdesys([heater_1d(at = 0.01)]), disc)
+
+    # a flow into a variable without a time derivative
+    @named hv = PointPort(HeatPort; var = v(t, x), at = [x => 0.5], across = :T, through = :Q_flow => 1)
+    eqs = [Dt(T(t, x)) ~ Dxx(T(t, x)) + v(t, x), 0 ~ Dxx(v(t, x)) - v(t, x) + T(t, x)]
+    bcs = [
+        T(0, x) ~ T0, T(t, 0) ~ T0, T(t, 1) ~ T0, v(0, x) ~ 0.0, v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    @named coupled = PDESystem(
+        eqs, bcs, [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)], [t, x],
+        [T(t, x), v(t, x)]; systems = [hv]
+    )
+    @test_throws r"first-order time derivative" symbolic_discretize(coupled, disc)
 end
 
 @testset "Port-free systems are unchanged" begin
