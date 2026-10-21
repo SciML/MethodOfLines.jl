@@ -20,6 +20,8 @@ using Symbolics: @variables, Differential, Equation, Integral, Num, terms
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term,
     symbolic_to_float
 using SymbolicUtils: operation, arguments, iscall, getmetadata, unwrap_const
+import TermInterface
+import Setfield
 import StaticArrays
 using StaticArrays: SVector
 import Interpolations
@@ -131,6 +133,7 @@ include("discretization/schemes/pseudospectral/pseudospectral.jl")
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
+include("discretization/generate_initialization.jl")
 include("discretization/staggered_discretize.jl")
 include("discretization/port_selection.jl")
 

@@ -134,7 +134,14 @@ run_tests(;
                 include(joinpath(@__DIR__, "Convection_NU", "MOL_1D_Interface_Upwind_NonUniform.jl"))
             end
         end,
-        "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
+        "Wave_Eq_Staggered" => function ()
+            @safetestset "Staggered grids" begin
+                include(joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"))
+            end
+            return @safetestset "Staggered groups" begin
+                include(joinpath(@__DIR__, "Wave_Eq_Staggered", "staggered_groups.jl"))
+            end
+        end,
         "Pseudospectral" => function ()
             @safetestset "Pseudospectral discretization" begin
                 include(joinpath(@__DIR__, "Pseudospectral", "pseudospectral.jl"))
@@ -156,6 +163,12 @@ run_tests(;
         "NeuralNets" => (;
             env = joinpath(@__DIR__, "NeuralNets"),
             body = joinpath(@__DIR__, "NeuralNets", "neural_network_terms.jl"),
+        ),
+        # Own environment: needs CUDA and a GPU. Not part of "All" and not listed in
+        # test_groups.toml, so CI never runs it; run locally with GROUP=GPU.
+        "GPU" => (;
+            env = joinpath(@__DIR__, "GPU"),
+            body = joinpath(@__DIR__, "GPU", "solution_wrap.jl"),
         ),
     ),
     qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),
