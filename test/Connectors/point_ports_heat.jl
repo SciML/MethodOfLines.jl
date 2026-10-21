@@ -15,9 +15,6 @@ const T0 = 300.0
 const Tcap = 400.0
 const Ccap = 10.0
 
-# Composition nests the discretized system as a subsystem: SciML/ModelingToolkit.jl#5133.
-const nested = renamespace_supports_slices()
-
 neumann_bcs(ic) = [T(0, x) ~ ic, Dx(T(t, 0)) ~ 0, Dx(T(t, 1)) ~ 0]
 periodic_bcs(ic) = [T(0, x) ~ ic, T(t, 0) ~ T(t, 1)]
 
@@ -230,87 +227,76 @@ end
 end
 
 @testset "Nested composition with lumped components" begin
-    if !nested
-        sys, _ = symbolic_discretize(rod_pdesys([heater_1d()]), MOLFiniteDifference([x => 0.02], t))
-        compiles = try
-            mtkcompile(first(compose_with_capacitor(sys)))
-            true
-        catch
-            false
+    @testset "1-D rod, Interpolate" begin
+        heater = heater_1d()
+        @named probe = PointPort(HeatPort; var = T(t, x), at = [x => 0.71], across = :T)
+        pdesys = rod_pdesys([heater, probe])
+        disc = MOLFiniteDifference([x => 0.02], t)
+        sys, tspan = symbolic_discretize(pdesys, disc)
+        sol, cap = solve_with_capacitor(sys, tspan)
+        @test SciMLBase.successful_retcode(sol)
+        # positive into the rod while the capacitor is hotter
+        @test sol[sys.heater.Q_flow][1] ≈ Tcap - T0
+        s = discrete_space(pdesys, disc)
+        Tend = sol[sys.T][end]
+        for (port, interior) in ((heater, (2:50,)), (probe, nothing))
+            nodes, w, _ = select_port_nodes(port_spec(port), s; restrict_to = interior)
+            @test sol[getproperty(sys, nameof(port)).T][end] ≈ sum(w .* Tend[first.(Tuple.(nodes))])
         end
-        @test_broken compiles
-    else
-        @testset "1-D rod, Interpolate" begin
-            heater = heater_1d()
-            @named probe = PointPort(HeatPort; var = T(t, x), at = [x => 0.71], across = :T)
-            pdesys = rod_pdesys([heater, probe])
-            disc = MOLFiniteDifference([x => 0.02], t)
-            sys, tspan = symbolic_discretize(pdesys, disc)
-            sol, cap = solve_with_capacitor(sys, tspan)
-            @test SciMLBase.successful_retcode(sol)
-            # positive into the rod while the capacitor is hotter
-            @test sol[sys.heater.Q_flow][1] ≈ Tcap - T0
-            s = discrete_space(pdesys, disc)
-            Tend = sol[sys.T][end]
-            for (port, interior) in ((heater, (2:50,)), (probe, nothing))
-                nodes, w, _ = select_port_nodes(port_spec(port), s; restrict_to = interior)
-                @test sol[getproperty(sys, nameof(port)).T][end] ≈ sum(w .* Tend[first.(Tuple.(nodes))])
-            end
-            @test imbalance(sol, sys, cap, trapezoid(51, 0.02)) < 1.0e-3
-        end
+        @test imbalance(sol, sys, cap, trapezoid(51, 0.02)) < 1.0e-3
+    end
 
-        @testset "PDE written as α Dxx(T) ~ Dt(T)" begin
-            pde = α * Dxx(T(t, x)) ~ Dt(T(t, x))
-            sys, tspan = symbolic_discretize(rod_pdesys([heater_1d()]; pde), MOLFiniteDifference([x => 0.02], t))
-            sol, cap = solve_with_capacitor(sys, tspan)
-            @test SciMLBase.successful_retcode(sol)
-            @test sol[cap.T][end] < Tcap
-            @test imbalance(sol, sys, cap, trapezoid(51, 0.02)) < 1.0e-3
-        end
+    @testset "PDE written as α Dxx(T) ~ Dt(T)" begin
+        pde = α * Dxx(T(t, x)) ~ Dt(T(t, x))
+        sys, tspan = symbolic_discretize(rod_pdesys([heater_1d()]; pde), MOLFiniteDifference([x => 0.02], t))
+        sol, cap = solve_with_capacitor(sys, tspan)
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[cap.T][end] < Tcap
+        @test imbalance(sol, sys, cap, trapezoid(51, 0.02)) < 1.0e-3
+    end
 
-        @testset "Edge-aligned rod conserves to solver tolerance" begin
-            disc = MOLFiniteDifference([x => 0.02], t; grid_align = edge_align)
-            sys, tspan = symbolic_discretize(rod_pdesys([heater_1d(at = 0.32)]), disc)
+    @testset "Edge-aligned rod conserves to solver tolerance" begin
+        disc = MOLFiniteDifference([x => 0.02], t; grid_align = edge_align)
+        sys, tspan = symbolic_discretize(rod_pdesys([heater_1d(at = 0.32)]), disc)
+        sol, cap = solve_with_capacitor(sys, tspan)
+        @test SciMLBase.successful_retcode(sol)
+        V = [i == 1 || i == 52 ? 0.0 : 0.02 for i in 1:52]
+        @test imbalance(sol, sys, cap, V) < 1.0e-8
+    end
+
+    @testset "Periodic rod conserves across the seam" begin
+        for at in (0.99, 0.005)
+            pdesys = rod_pdesys([heater_1d(; at)]; bcs = periodic_bcs(T0))
+            sys, tspan = symbolic_discretize(pdesys, MOLFiniteDifference([x => 0.02], t))
             sol, cap = solve_with_capacitor(sys, tspan)
             @test SciMLBase.successful_retcode(sol)
-            V = [i == 1 || i == 52 ? 0.0 : 0.02 for i in 1:52]
+            V = [i == 1 ? 0.0 : 0.02 for i in 1:51]
             @test imbalance(sol, sys, cap, V) < 1.0e-8
         end
+    end
 
-        @testset "Periodic rod conserves across the seam" begin
-            for at in (0.99, 0.005)
-                pdesys = rod_pdesys([heater_1d(; at)]; bcs = periodic_bcs(T0))
-                sys, tspan = symbolic_discretize(pdesys, MOLFiniteDifference([x => 0.02], t))
-                sol, cap = solve_with_capacitor(sys, tspan)
-                @test SciMLBase.successful_retcode(sol)
-                V = [i == 1 ? 0.0 : 0.02 for i in 1:51]
-                @test imbalance(sol, sys, cap, V) < 1.0e-8
-            end
-        end
+    @testset "1-D rod, Nearest on a pointwise host" begin
+        heater = heater_1d(select = Nearest(), at = 0.021, scale = 1 / κ)
+        disc = MOLFiniteDifference([x => 0.02], t; approx_order = 4)
+        sys, tspan = symbolic_discretize(rod_pdesys([heater]), disc)
+        sol, _ = solve_with_capacitor(sys, tspan; op = [sys.κ => 2.0])
+        @test SciMLBase.successful_retcode(sol)
+        @test sol[sys.heater.T] ≈ getindex.(sol[sys.T], 2)
+        @test sol[sys.heater.Q_flow][1] ≈ Tcap - T0
+    end
 
-        @testset "1-D rod, Nearest on a pointwise host" begin
-            heater = heater_1d(select = Nearest(), at = 0.021, scale = 1 / κ)
-            disc = MOLFiniteDifference([x => 0.02], t; approx_order = 4)
-            sys, tspan = symbolic_discretize(rod_pdesys([heater]), disc)
-            sol, _ = solve_with_capacitor(sys, tspan; op = [sys.κ => 2.0])
-            @test SciMLBase.successful_retcode(sol)
-            @test sol[sys.heater.T] ≈ getindex.(sol[sys.T], 2)
-            @test sol[sys.heater.Q_flow][1] ≈ Tcap - T0
-        end
-
-        @testset "2-D plate" begin
-            @named heater = PointPort(
-                HeatPort; var = T(t, x, y), at = [x => 0.53, y => 0.47], across = :T,
-                through = :Q_flow => 1 / ρc
-            )
-            sys, tspan = symbolic_discretize(
-                plate_pdesys([heater]), MOLFiniteDifference([x => 0.1, y => 0.1], t)
-            )
-            sol, cap = solve_with_capacitor(sys, tspan)
-            @test SciMLBase.successful_retcode(sol)
-            V = trapezoid(11, 0.1) * trapezoid(11, 0.1)'
-            @test imbalance(sol, sys, cap, V) < 1.0e-2
-        end
+    @testset "2-D plate" begin
+        @named heater = PointPort(
+            HeatPort; var = T(t, x, y), at = [x => 0.53, y => 0.47], across = :T,
+            through = :Q_flow => 1 / ρc
+        )
+        sys, tspan = symbolic_discretize(
+            plate_pdesys([heater]), MOLFiniteDifference([x => 0.1, y => 0.1], t)
+        )
+        sol, cap = solve_with_capacitor(sys, tspan)
+        @test SciMLBase.successful_retcode(sol)
+        V = trapezoid(11, 0.1) * trapezoid(11, 0.1)'
+        @test imbalance(sol, sys, cap, V) < 1.0e-2
     end
 end
 

@@ -72,22 +72,11 @@ sol[sys.T]              # the discretized field, one vector per time step
 The initial condition of the PDE travels with the discretized system, so `ODEProblem`
 needs no `u0` for it.
 
-!!! note "Requires SciML/ModelingToolkit.jl#5133"
-    Placing the discretized system inside another system namespaces its array (slice)
-    equations, which released ModelingToolkitBase cannot do yet. Until
-    [ModelingToolkit.jl#5133](https://github.com/SciML/ModelingToolkit.jl/pull/5133) is
-    released, `mtkcompile(model)` above fails with
+Keep the discretized system nested like this. Keeping it at top level and adding the
+components with `extend` does not work: its ports are then outer connectors, and MTK sets
+the flow of a top-level outer connector to zero.
 
-    ```
-    matching non-exhaustive
-    ```
-
-    raised from `renamespace`. MethodOfLines keeps the array form rather than scalarizing.
-    Keeping the discretized system at top level and adding the components with `extend`
-    does not help: the system's own ports are then outer connectors, and MTK sets the flow
-    of a top-level outer connector to zero.
-
-Read-out ports work today on the discretized system compiled on its own. Its ports are
+Read-out ports also work on the discretized system compiled on its own. Its ports are
 then outer connectors, so their flows are zero, and their variables are read from the
 underlying ODE solution with the port objects you declared:
 
@@ -145,5 +134,3 @@ the `PDESystem`.
     the composed model fails initialization.
   - The `PDESolution` interface (`sol[T(t, x)]`) does not cover composed models. Index the
     namespaced unknowns instead, such as `sol[sys.T]`.
-  - Composing a discretized system with lumped components needs
-    SciML/ModelingToolkit.jl#5133, see above.

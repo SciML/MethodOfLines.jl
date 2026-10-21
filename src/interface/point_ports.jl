@@ -81,9 +81,7 @@ sys, tspan = symbolic_discretize(rod, MOLFiniteDifference([x => 0.01], t))
 prob = ODEProblem(mtkcompile(model), nothing, tspan)
 ```
 
-Nesting `sys` inside another system needs SciML/ModelingToolkit.jl#5133; without it
-`mtkcompile(model)` fails with "matching non-exhaustive" in `renamespace`. A read-out port
-also works on `sys` compiled on its own, where its flow is zero.
+A read-out port also works on `sys` compiled on its own, where its flow is zero.
 """
 function PointPort(
         connector; name, var, at, across::Symbol, through = nothing,
