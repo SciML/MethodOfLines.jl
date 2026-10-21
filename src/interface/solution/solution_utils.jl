@@ -45,4 +45,34 @@ end
 
 sym_to_index(sym, syms) = findfirst(isequal(sym), syms)
 
+# The PDE solution constructors extract states element by element and evaluate observed
+# functions on them, which scalar-indexes device-resident states (e.g. `CuArray`s). Copy
+# those to the host once up front; host states are returned as is.
+function host_solution(sol::SciMLBase.AbstractODESolution)
+    eltype(sol.u) <: Array && return sol
+    return SciMLBase.build_solution(
+        sol.prob, sol.alg, sol.t, Array.(sol.u);
+        retcode = sol.retcode, calculate_error = false
+    )
+end
+
+function host_solution(sol::SciMLBase.NonlinearSolution)
+    sol.u isa Array && return sol
+    return SciMLBase.build_solution(
+        sol.prob, sol.alg, Array(sol.u), sol.resid;
+        retcode = sol.retcode, calculate_error = false
+    )
+end
+
+# The state index of each element of `discu`, or `nothing` where it is observed.
+function grid_indices(odesys, discu)
+    return map(I -> SymbolicIndexingInterface.variable_index(odesys, discu[I]), CartesianIndices(discu))
+end
+
+# The values of the observed elements `obs` of `discu`, from a single observed function
+# rather than one generated and compiled per element.
+function grid_observed_values(sol, discu, obs)
+    return SymbolicIndexingInterface.getsym(sol, [safe_unwrap(discu[I]) for I in obs])(sol)
+end
+
 iscomplex(A::SciMLBase.AbstractPDESolution) = !isnothing(A.disc_data.complexmap)
