@@ -306,6 +306,17 @@ end
     @test_throws ArgumentError DAEProblem(rod_pdesys([heater_1d()]), disc)
     @test_throws r"flux boundary condition" symbolic_discretize(rod_pdesys([heater_1d(at = 0.01)]), disc)
 
+    # Dirichlet ends on a grid whose first cells are far smaller than the domain: a flow
+    # at or just inside a boundary is still outside the interior nodes
+    stretched = MOLFiniteDifference([x => [0.0, 1.0e-10, 2.0e-10, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]], t)
+    dirichlet = [T(0, x) ~ T0, T(t, 0) ~ T0, T(t, 1) ~ T0]
+    for x0 in (0.0, 5.0e-11, 1.0)
+        @test_throws r"flux boundary condition" symbolic_discretize(
+            rod_pdesys([heater_1d(at = x0)]; bcs = dirichlet), stretched
+        )
+    end
+    @test symbolic_discretize(rod_pdesys([heater_1d(at = 1.0e-10)]; bcs = dirichlet), stretched) isa Tuple
+
     # a flow into a variable without a time derivative
     @named hv = PointPort(HeatPort; var = v(t, x), at = [x => 0.5], across = :T, through = :Q_flow => 1)
     eqs = [Dt(T(t, x)) ~ Dxx(T(t, x)) + v(t, x), 0 ~ Dxx(v(t, x)) - v(t, x) + T(t, x)]

@@ -21,11 +21,18 @@ function port_control_width(grid, i; periodic = false, upper_open = false)
     return (grid[min(i + 1, n)] - grid[max(i - 1, firstindex(grid))]) / 2
 end
 
+# Rounding tolerance at grid node `i`, scaled by its nearest neighbour gap so that it stays
+# below the spacing on strongly stretched grids.
+node_tol(grid, i) = sqrt(eps(Float64)) * minimum(
+    abs(grid[j] - grid[i]) for j in (i - 1, i + 1) if checkbounds(Bool, grid, j);
+    init = Inf
+)
+
 function select_port_nodes_1d(
         sel, grid, domain, x0, allowed, x; periodic = false, upper_open = false
     )
-    tol = sqrt(eps(Float64)) * (last(domain) - first(domain))
-    first(domain) - tol <= x0 <= last(domain) + tol ||
+    first(domain) - node_tol(grid, firstindex(grid)) <= x0 <=
+        last(domain) + node_tol(grid, lastindex(grid)) ||
         throw(ArgumentError("PointPort coordinate $x = $x0 lies outside the domain [$(first(domain)), $(last(domain))]."))
     n = port_npoints(sel)
     idx = collect(allowed)
@@ -38,7 +45,7 @@ function select_port_nodes_1d(
         idx = vcat(idx[(end - k + 1):end], idx, idx[1:k])
     else
         xs = grid[idx]
-        first(xs) - tol <= x0 <= last(xs) + tol || throw(
+        first(xs) - node_tol(grid, first(idx)) <= x0 <= last(xs) + node_tol(grid, last(idx)) || throw(
             ArgumentError(
                 "PointPort coordinate $x = $x0 carries a flow but lies outside the interior nodes " *
                     "$x ∈ [$(first(xs)), $(last(xs))] that hold the PDE; the nodes nearer the boundary " *
