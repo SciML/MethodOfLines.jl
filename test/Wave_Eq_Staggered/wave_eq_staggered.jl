@@ -297,6 +297,48 @@ end
     @test last(split_euler_energy(parity1, parity2)) > 100 * W0
 end
 
+# a, b and c are coupled pairwise, so no two groups separate every coupled pair; the split
+# falls back to grouping by staggering, with the edge aligned b in f1 and a and c in f2
+@testset "A coupling graph with an odd cycle splits by staggering" begin
+    t = ModelingToolkit.t_nounits
+    @parameters x
+    @variables a(..) b(..) c(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    eqs = [
+        Dt(a(t, x)) ~ -Dx(b(t, x)) + c(t, x),
+        Dt(b(t, x)) ~ -Dx(a(t, x)),
+        Dt(c(t, x)) ~ b(t, x),
+    ]
+    bcs = [a(0, x) ~ sin(π * x), b(0, x) ~ 0, c(0, x) ~ 0, a(t, 0) ~ 0, a(t, 1) ~ 0]
+    @named pdesys = PDESystem(
+        eqs, bcs, [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)], [t, x],
+        [a(t, x), b(t, x), c(t, x)]
+    )
+    disc = MOLFiniteDifference(
+        [x => 0.1], t; grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = b(t, x)
+    )
+    prob = discretize(pdesys, disc)
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    full = ODEProblem(mtkcompile(sys), nothing, tspan)
+    isf1 = first.(split_states(pdesys, disc)) .== :b
+
+    u = sin.(1:length(prob.u0)) .+ 0.5
+    du1, du2 = similar(u), similar(u)
+    prob.f.f1(du1, u, prob.p, 0.0)
+    prob.f.f2(du2, u, prob.p, 0.0)
+    @test all(iszero, du1[.!isf1])
+    @test all(iszero, du2[isf1])
+    @test maximum(abs, du1 .+ du2 .- full.f(u, full.p, 0.0)) < 1.0e-12
+
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test successful_retcode(sol)
+    fsol = solve(full, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test maximum(abs, fsol.u[end]) > 0.05
+    @test maximum(abs, sol.u[end] .- fsol.u[end]) < 1.0e-8
+end
+
 @testset "Three variables: Maxwell–Drude dispersion converges at second order" begin
     ε, μ, ωp, k = 1.0, 0.5, 2.0, 2π
     ω_exact = sqrt(ωp^2 / ε + k^2 / (ε * μ))

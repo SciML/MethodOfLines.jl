@@ -32,8 +32,11 @@ end
 # of the variables, as `staggered_groups` does, so that every coupled pair straddles the
 # two halves. Of each connected component, `f1` takes the colour of the variables edge
 # aligned in an odd number of directions, so a pure Yee system splits into E and H as its
-# staggering sets them. Constant fields go in `f2`. Each half generates its own rows of
-# `sys` on their own and zeroes the rest, so `f1 + f2` is exactly `f`, with time,
+# staggering sets them. Constant fields go in `f2`. A coupling graph with a cycle of odd
+# length has no such colouring, and then, as before the coupling graph was used, `f1` holds
+# the time derivatives of the variables edge aligned in an odd number of directions and `f2`
+# the rest; some coupled pairs then share a half. Each half generates its own rows of `sys`
+# on their own and zeroes the rest, so `f1 + f2` is exactly `f` either way, with time,
 # parameters and boundary values live.
 function staggered_split(prob, sys, edge_dims)
     nedge = Dict(nameof(op) => length(dims) for (op, dims) in edge_dims)
@@ -43,7 +46,7 @@ function staggered_split(prob, sys, edge_dims)
     owner = map(eq -> _parent_array(only(arguments(eq.lhs))), eqs)
     isconstant = map(eq -> isequal(unwrap_const(eq.rhs), 0), eqs)
     colour = _coupling_colours(eqs[.!isconstant], owner[.!isconstant]; first = isodd_edge)
-    isf1 = [get(colour, v, 2) == 1 for v in owner]
+    isf1 = colour isa Dict ? [get(colour, v, 2) == 1 for v in owner] : map(isodd_edge, owner)
     rows1, rows2 = findall(isf1), findall(!, isf1)
     rhs(rows) = ModelingToolkit.generate_rhs(
         Setfield.@set(sys.eqs = eqs[rows]);
@@ -58,7 +61,8 @@ end
 # Colour 1 or 2 for each of `owner`, the variables whose time derivatives `derivs` give, so
 # that no variable shares a colour with one in its time derivative's right hand side. The
 # first variable of each connected component, taking the variables that satisfy `first`
-# before the others and each in order, gets colour 1.
+# before the others and each in order, gets colour 1. If a cycle of odd length leaves no
+# such colouring, return instead a coupled pair of variables on it.
 function _coupling_colours(derivs, owner; first = Returns(false))
     vars = unique(owner)
     vars = [filter(first, vars); filter(!first, vars)]
@@ -82,11 +86,7 @@ function _coupling_colours(derivs, owner; first = Returns(false))
                     colour[w] = 3 - colour[v]
                     push!(queue, w)
                 elseif colour[w] == colour[v]
-                    throw(
-                        ArgumentError(
-                            "The coupling graph of the variables is not bipartite: $v and $w are coupled through a cycle of odd length, so no two groups separate every coupled pair."
-                        )
-                    )
+                    return (v, w)
                 end
             end
         end
@@ -123,7 +123,8 @@ the leapfrog needs; grouping by staggering instead would put a current that shar
 nodes in `E`'s group. For Maxwell's equations with a Drude current `J` and its integral
 `G` the groups are `(E, G)` and `(H, J)`. Taking the variables in the order of their
 equations, which follows the PDEs, the first of each connected component goes in the first
-group. A coupling graph that is not bipartite throws an `ArgumentError`.
+group. A coupling graph that is not bipartite throws an `ArgumentError`; `discretize`
+instead falls back to grouping such a system by staggering.
 """
 function staggered_groups(prob::DAEProblem)
     sys = prob.f.sys
@@ -135,6 +136,11 @@ function staggered_groups(prob::DAEProblem)
     )
 
     colour = _coupling_colours(derivs[.!isconstant], owner[.!isconstant])
+    colour isa Dict || throw(
+        ArgumentError(
+            "The coupling graph of the variables is not bipartite: $(colour[1]) and $(colour[2]) are coupled through a cycle of odd length, so no two groups separate every coupled pair."
+        )
+    )
 
     groups = map((1, 2)) do c
         eqs = [
