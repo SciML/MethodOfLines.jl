@@ -334,7 +334,8 @@ end
 
     sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
     @test successful_retcode(sol)
-    fsol = solve(full, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    # `full` keeps MOL's metadata, so its solution is wrapped; compare the state vectors
+    fsol = solve(full, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10).original_sol
     @test maximum(abs, fsol.u[end]) > 0.05
     @test maximum(abs, sol.u[end] .- fsol.u[end]) < 1.0e-8
 end
