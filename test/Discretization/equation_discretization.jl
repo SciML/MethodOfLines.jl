@@ -5221,6 +5221,16 @@ end
 
 # SymbolicUtils with fused broadcast codegen fuses `mol_broadcast` like `broadcast`.
 if isdefined(SymbolicUtils.Code, :is_elementwise_call)
+    struct MOLBroadcastReadVector{T} <: AbstractVector{T}
+        values::Vector{T}
+        reads::Vector{Int}
+    end
+    Base.size(v::MOLBroadcastReadVector) = size(v.values)
+    function Base.getindex(v::MOLBroadcastReadVector, i::Int)
+        push!(v.reads, i)
+        return v.values[i]
+    end
+
     @testset "mol_broadcast terms fuse into one broadcast" begin
         function ncalls(ex, f)
             ex isa Expr || return 0
@@ -5231,9 +5241,9 @@ if isdefined(SymbolicUtils.Code, :is_elementwise_call)
         ex = MethodOfLines.array_noinline_broadcasts(Symbolics.unwrap(a .+ 2 .* b))
         @test SymbolicUtils.operation(ex) === MethodOfLines.mol_broadcast
         av, bv = collect(1.0:20.0), collect(0.5:0.5:10.0)
-        evaluate(code) = eval(
+        evaluate(code, a = av, b = bv) = eval(
             :(
-                let a = $av, b = $bv
+                let a = $a, b = $b
                     $code
                 end
             )
@@ -5244,6 +5254,18 @@ if isdefined(SymbolicUtils.Code, :is_elementwise_call)
         @test ncalls(fused, MethodOfLines.mol_broadcast) == 0
         @test ncalls(fused, SymbolicUtils.Code.fused_materialize) == 1
         @test evaluate(fused) == evaluate(eager) == av .+ 2 .* bv
+        # Both operands log to one list, so the expected order does not depend on
+        # which operand is read first: eager makes two passes, fused makes one.
+        reads = Int[]
+        traced_av, traced_bv = MOLBroadcastReadVector(av, reads), MOLBroadcastReadVector(bv, reads)
+        indices = collect(eachindex(av))
+        for (code, expected_reads) in (
+                (eager, repeat(indices, 2)), (fused, repeat(indices; inner = 2)),
+            )
+            empty!(reads)
+            @test evaluate(code, traced_av, traced_bv) == av .+ 2 .* bv
+            @test reads == expected_reads
+        end
     end
 end
 
