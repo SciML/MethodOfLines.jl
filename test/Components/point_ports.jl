@@ -91,6 +91,23 @@ end
     end
 end
 
+@testset "Exact hits use the local spacing" begin
+    xs = [0.0, 1.0e-10, 2.0e-10, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0]
+    @named p = PointPort(HeatPort; var = T(t, x), at = [x => 2.0e-10], across = :T, select = Nearest())
+    spec, s = port_space(p, [x => xs])
+    @test select_port_nodes(spec, s; restrict_to = (2:8,))[1:2] == ([CartesianIndex(3)], [1.0])
+    @named p = PointPort(HeatPort; var = T(t, x), at = [x => 2.0e-10], across = :T)
+    @test select_port_nodes(port_spec(p), s; restrict_to = (2:8,))[1:2] == ([CartesianIndex(3)], [1.0])
+    @named p = PointPort(HeatPort; var = T(t, x), at = [x => 1.5e-10], across = :T)
+    nodes, w, _ = select_port_nodes(port_spec(p), s; restrict_to = (2:8,))
+    @test nodes == CartesianIndex.([2, 3]) && w ≈ [0.5, 0.5]
+    @named p = PointPort(HeatPort; var = T(t, x), at = [x => 1.4e-10], across = :T, select = Nearest())
+    @test select_port_nodes(port_spec(p), s; restrict_to = (2:8,))[1] == [CartesianIndex(2)]
+    # an exact node needs no stencil, so an order larger than the grid allows is fine there
+    @named p = PointPort(HeatPort; var = T(t, x), at = [x => 0.4], across = :T, select = Interpolate(20))
+    @test select_port_nodes(port_spec(p), s; restrict_to = (2:8,))[1:2] == ([CartesianIndex(6)], [1.0])
+end
+
 @testset "Periodic direction wraps" begin
     @named p = PointPort(HeatPort; var = T(t, x), at = [x => 0.005], across = :T)
     spec, s = port_space(p, [x => 0.02])
@@ -134,7 +151,7 @@ end
 @testset "PointPort validation" begin
     @named p = PointPort(HeatPort; var = T(t, x), at = x => 0.3, across = :T, through = :Q_flow => 2)
     @test port_spec(p).through == (:Q_flow, 2)
-    @test ModelingToolkit.isconnector(p)
+    @test ModelingToolkit.get_connector_type(p) !== nothing
     @named rod = PDESystem(
         [Dt(T(t, x)) ~ (Differential(x)^2)(T(t, x))], [T(0, x) ~ 0.0],
         [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)], [t, x], [T(t, x)]; systems = [p]

@@ -127,9 +127,56 @@ end
     @test all(eff -> eff ≈ effs[1], effs)
     @test sum(trapezoid(51, 0.02) .* effs[1]) ≈ 0.5
 
-    @test_throws r"first-order time derivative" symbolic_discretize(
+    @test_throws r"constant or parameter coefficient" symbolic_discretize(
         rod_pdesys([heater_1d()]; pde = x * Dt(T(t, x)) ~ α * Dxx(T(t, x))), disc
     )
+end
+
+# Rate added to [Dt(T[k]), Dt(v[k])] per unit flow, from the residuals R that evolve node k:
+# A = ∂R/∂Dt, b = -∂R/∂Q_flow, rate = A \ b.
+function coupled_rate(sys, port, k)
+    fields = ModelingToolkit.get_unknowns(sys)
+    field(n) = only(filter(u -> startswith(string(u), n), fields))
+    dts = [Differential(t)(Symbolics.unwrap(field(n))[k]) for n in ("T(t)", "v(t)")]
+    rows = Equation[]
+    for eq in equations(sys)
+        eqs = Symbolics.scalarize(eq)
+        for e in (eqs isa Equation ? [eqs] : vec(eqs))
+            any(d -> any(isequal(d), dts), Symbolics.get_differential_vars(e)) && push!(rows, e)
+        end
+    end
+    num(c) = Float64(Symbolics.unwrap_const(Symbolics.value(c)))
+    R = [e.lhs - e.rhs for e in rows]
+    A = [num(first(Symbolics.linear_expansion(r, d))) for r in R, d in dts]
+    b = [-num(Symbolics.derivative(r, Symbolics.unwrap(port.Q_flow))) for r in R]
+    return A \ b
+end
+
+@testset "Flow into a variable whose time derivative appears in several PDEs" begin
+    # The flow must add `scale * Q` to Dt(T) of the coupled system, not to the residual of
+    # the one PDE assigned to T: here A = [1 1; -1 1] in [T, v] order.
+    eqs = [
+        Dt(T(t, x)) + Dt(v(t, x)) ~ 0.01Dx(Dx(T(t, x))),
+        Dt(v(t, x)) - Dt(T(t, x)) ~ 0.01Dx(Dx(v(t, x))),
+    ]
+    bcs = [
+        T(0, x) ~ 300.0, v(0, x) ~ 300.0, Dx(T(t, 0)) ~ 0, Dx(T(t, 1)) ~ 0,
+        Dx(v(t, 0)) ~ 0, Dx(v(t, 1)) ~ 0,
+    ]
+    disc = MOLFiniteDifference([x => 0.1], t)
+    for (x0, weights) in ((0.5, [6 => 1.0]), (0.53, [6 => 0.7, 7 => 0.3]))
+        @named hmass = PointPort(
+            HeatPort; var = T(t, x), at = [x => x0], across = :T, through = :Q_flow => 1
+        )
+        @named cpl = PDESystem(
+            eqs, bcs, [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)], [t, x],
+            [T(t, x), v(t, x)]; systems = [hmass]
+        )
+        sys, _ = symbolic_discretize(cpl, disc)
+        for (k, wk) in weights
+            @test 0.1 .* coupled_rate(sys, hmass, k) ≈ [wk, 0.0] atol = 1.0e-12
+        end
+    end
 end
 
 @testset "1-D rod: read-out port at top level" begin
@@ -283,7 +330,7 @@ end
         eqs, bcs, [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)], [t, x],
         [T(t, x), v(t, x)]; systems = [hv]
     )
-    @test_throws r"first-order time derivative" symbolic_discretize(coupled, disc)
+    @test_throws r"no PDE contains" symbolic_discretize(coupled, disc)
 end
 
 @testset "Port-free systems are unchanged" begin

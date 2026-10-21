@@ -47,17 +47,22 @@ function select_port_nodes_1d(
             )
         )
     end
+    # a point on a node uses that node alone; "on" is judged against the local spacing,
+    # since stretched grids can hold nodes far closer together than the domain width
+    near = argmin(abs.(xs .- x0))
+    gaps = [abs(xs[j] - xs[near]) for j in (near - 1, near + 1) if checkbounds(Bool, xs, j)]
+    if abs(xs[near] - x0) <= sqrt(eps(Float64)) * minimum(gaps; init = Inf)
+        nodes = idx[near:near]
+        return nodes, [1.0], port_control_width.(Ref(grid), nodes; periodic, upper_open)
+    end
     n <= length(unique(idx)) ||
         throw(ArgumentError("PointPort selection $sel needs $n nodes in $x but only $(length(unique(idx))) are available."))
-    hit = findfirst(xi -> abs(xi - x0) <= tol, xs)
     lo = clamp(searchsortedlast(xs, x0), 1, length(xs) - 1)
-    window = if hit !== nothing
-        hit:hit
-    elseif n == 1
+    window = if n == 1
         inside = k -> first(domain) <= xs[k] <= last(domain)
         dlo, dhi = x0 - xs[lo], xs[lo + 1] - x0
-        pick = abs(dlo - dhi) <= tol ? (inside(lo) || !inside(lo + 1) ? lo : lo + 1) :
-            (dlo < dhi ? lo : lo + 1)
+        pick = abs(dlo - dhi) <= sqrt(eps(Float64)) * (xs[lo + 1] - xs[lo]) ?
+            (inside(lo) || !inside(lo + 1) ? lo : lo + 1) : (dlo < dhi ? lo : lo + 1)
         pick:pick
     else
         # grow outward from the bracketing pair, nearer side first, so x0 stays inside
@@ -124,7 +129,7 @@ function time_derivative_index(eq, array, t)
 end
 
 # Subtract `src * q_I` from the left-hand side of the equation that evolves each node.
-function inject_point_source(eqs, disc, nodes, q, src, t, name)
+function inject_point_source(eqs, disc, nodes, q, src, t, name, pde)
     array = first(arguments(safe_unwrap(first(disc))))
     hosted = zeros(Int, length(nodes))
     eqs = map(eqs) do eq
@@ -141,57 +146,86 @@ function inject_point_source(eqs, disc, nodes, q, src, t, name)
         end
         return (eq.lhs .- collect(src .* Q)) ~ eq.rhs
     end
-    all(==(1), hosted) || error(
-        "Internal error: PointPort $name selected nodes $(nodes[hosted .!= 1]) that are not " *
-            "evolved by exactly one interior equation."
+    all(==(1), hosted) || throw(
+        ArgumentError(
+            "PointPort $name selects nodes $(nodes[hosted .!= 1]) that the interior equations of " *
+                "$pde do not evolve exactly once. A flow into a variable whose time derivative " *
+                "appears in several PDEs needs those PDEs to share the port's interior nodes."
+        )
     )
     return eqs
 end
 
-# The coefficient `a` of `Dt(eqvar)` in `pde`, so that `a * src` adds `src` to `Dt(eqvar)`.
-function port_time_coefficient(pde, eqvar, s, name)
-    a, _, linear = Symbolics.linear_expansion(pde.lhs - pde.rhs, Differential(s.time)(eqvar))
-    av = unwrap_const(safe_unwrap(a))
-    ok = linear && !(av isa Number && iszero(av)) &&
-        all(Symbolics.get_variables(a)) do v
+# The coefficient `a` of `Dt(u)` in `pde`, zero when `pde` has no `Dt(u)`.
+function port_time_coefficient(pde, u, s, name)
+    a, _, linear = Symbolics.linear_expansion(pde.lhs - pde.rhs, Differential(s.time)(u))
+    ok = linear && all(Symbolics.get_variables(a)) do v
         ModelingToolkitBase.isparameter(v) && !any(x -> isequal(x, v), s.x̄)
     end
     ok || throw(
         ArgumentError(
-            "PointPort $name carries a flow into $eqvar, which needs a first-order time " *
-                "derivative of $eqvar entering its PDE linearly with a constant or " *
-                "parameter coefficient. Got coefficient $a in $pde."
+            "PointPort $name carries a flow into $u, which needs every PDE containing " *
+                "Dt($u) to contain it linearly with a constant or parameter coefficient. " *
+                "Got coefficient $a in $pde."
         )
     )
     return a
 end
 
-"""
-Add the sources and across equations of the ports on `eqvar` to its interior equations.
-"""
-function add_point_ports(eqs, pde, interior, eqvar, s, derivweights, bcmap)
-    ports = filter(p -> isequal(operation(port_spec(p).var), operation(eqvar)), derivweights.ports)
-    isempty(ports) && return eqs
-    disc = s.discvars[eqvar]
-    ifaces = map(x -> filter_interfaces(bcmap[operation(eqvar)][x]), ivs(eqvar, s))
+is_zero_coefficient(a) = (av = unwrap_const(safe_unwrap(a)); av isa Number && iszero(av))
+
+function port_nodes(spec, u, s, interiormap, bcmap)
+    xs = ivs(u, s)
+    ifaces = map(x -> filter_interfaces(bcmap[operation(u)][x]), xs)
     periodic = map(
-        (x, bs) -> any(b -> isequal(operation(b.u2), operation(eqvar)) && isequal(b.x2, x), bs),
-        ivs(eqvar, s), ifaces
+        (x, bs) -> any(b -> isequal(operation(b.u2), operation(u)) && isequal(b.x2, x), bs),
+        xs, ifaces
     )
     upper_open = map(bs -> any(isupper, bs), ifaces)
-    across = map(ports) do port
+    restrict = spec.through === nothing ? nothing : interiormap.I[interiormap.pde[u]].indices
+    return select_port_nodes(spec, s; restrict_to = restrict, periodic, upper_open)
+end
+
+"""
+Add the port sources and across equations that belong to `pde`, whose interior equations
+are `eqs`. A port's flow is added to `Dt(u)` of its variable `u`. Several PDEs may contain
+`Dt(u)`, so each gets the source scaled by its own coefficient of `Dt(u)`; the residuals
+then shift by `A * e_u * src`, with `A` the matrix of time-derivative coefficients, and
+the solved system gains exactly `src` in `Dt(u)`. Every PDE uses the nodes selected in the
+interior of the PDE assigned to `u`. The across equation goes with that PDE.
+"""
+function add_point_ports(eqs, pde, interiormap, eqvar, s, derivweights, bcmap)
+    across = Equation[]
+    for port in derivweights.ports
         spec = port_spec(port)
-        restrict = spec.through === nothing ? nothing : interior.indices
-        nodes, w, V = select_port_nodes(
-            spec, s; restrict_to = restrict, periodic, upper_open
-        )
-        if spec.through !== nothing
+        u = port_depvar(spec, s)
+        own = isequal(operation(u), operation(eqvar))
+        a = spec.through === nothing ? 0 : port_time_coefficient(pde, u, s, nameof(port))
+        flows = !is_zero_coefficient(a)
+        own || flows || continue
+        nodes, w, V = port_nodes(spec, u, s, interiormap, bcmap)
+        if flows
+            isequal(ivs(eqvar, s), ivs(u, s)) || throw(
+                ArgumentError(
+                    "PointPort $(nameof(port)) carries a flow into $u, whose time derivative " *
+                        "appears in $pde for $eqvar on different spatial variables."
+                )
+            )
             flow, scale = spec.through
-            a = port_time_coefficient(pde, eqvar, s, nameof(port))
             src = a * scale * getproperty(port, flow)
-            eqs = inject_point_source(eqs, disc, nodes, w ./ V, src, s.time, nameof(port))
+            eqs = inject_point_source(
+                eqs, s.discvars[eqvar], nodes, w ./ V, src, s.time, nameof(port), pde
+            )
         end
-        getproperty(port, spec.across) ~ sum(w .* [disc[I] for I in nodes])
+        own || continue
+        spec.through === nothing ||
+            any(p -> !is_zero_coefficient(port_time_coefficient(p, u, s, nameof(port))), keys(interiormap.I)) ||
+            throw(
+            ArgumentError(
+                "PointPort $(nameof(port)) carries a flow into $u, but no PDE contains Dt($u)."
+            )
+        )
+        push!(across, getproperty(port, spec.across) ~ sum(w .* [s.discvars[u][I] for I in nodes]))
     end
     return vcat(eqs, across)
 end

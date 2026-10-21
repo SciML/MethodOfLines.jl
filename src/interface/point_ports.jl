@@ -90,7 +90,8 @@ function PointPort(
         select::AbstractPortSelection = Interpolate(), kwargs...
     )
     sys = connector(; name, kwargs...)
-    ModelingToolkitBase.isconnector(sys) ||
+    ModelingToolkitBase.has_connector_type(sys) &&
+        ModelingToolkitBase.get_connector_type(sys) !== nothing ||
         throw(ArgumentError("PointPort $name: `$connector` did not return a connector; define it with `@connector`."))
     portvars = Dict(SymbolicIndexingInterface.getname(v) => v for v in get_unknowns(sys))
     haskey(portvars, across) ||
