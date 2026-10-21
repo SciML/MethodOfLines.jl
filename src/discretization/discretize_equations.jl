@@ -183,6 +183,8 @@ function PDEBase.discretize_equation!(
             )
         end
     end
+    isempty(derivweights.ports) ||
+        (eqs = add_point_ports(eqs, pde, interiormap, eqvar, s, derivweights, bcmap))
 
     newbceqs = (nbceqs0 + 1):length(disc_state.bceqs)
     disc_state.bceqs[newbceqs] = map(array_noinline_broadcasts, disc_state.bceqs[newbceqs])
