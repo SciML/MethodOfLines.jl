@@ -15,9 +15,4 @@ Order = [:constant, :type, :function]
 
 ## Developer API
 
-```@autodocs
-Modules = [MethodOfLines]
-Public = false
-Private = true
-Order = [:constant, :type, :function]
-```
+The private API reference is available on the [developer API page](developer.md).
