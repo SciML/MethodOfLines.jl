@@ -67,8 +67,9 @@ Returns `(; groups, constant, algebraic)`:
     .+ b[states] .* dv`, for per-state coefficient vectors `a` and `b` laid out like `u`.
     `fuse_broadcasts` and `kwargs` are passed to the code generation of `update!`.
     An equation that reads a state its group writes, other than its own, would race with
-    the in-place write: fused code generation then copies the group's inputs on entry, and
-    without it `update!` throws.
+    the in-place write, so such a group's `update!` reads a copy of `u` taken on entry,
+    into a buffer it allocates once for a `u` like `prob.u0`: it is then not safe to call
+    concurrently. `a` and `b` may be `u` itself, but must not otherwise share memory with it.
   - `constant` holds the states whose time derivative is zero (`Dt(c) ~ 0` coefficient
     fields). Neither group writes them.
   - `algebraic` holds the states `prob.differential_vars` marks algebraic, such as PEC walls
@@ -137,7 +138,7 @@ function staggered_groups(
         ]
         gsys = Setfield.@set sys.eqs = eqs
         f = ModelingToolkit.generate_rhs(gsys; expression = Val{false}, wrap_gfw = Val{true})
-        update! = _group_update(sys, eqs; lossy, fuse_broadcasts, kwargs...)
+        update! = _group_update(sys, eqs, prob.u0; lossy, fuse_broadcasts, kwargs...)
         (; f, update!, states = states(eqs))
     end
     return (;
@@ -151,20 +152,13 @@ end
 # equations' `r` and whose values are `u[r] + dt * f` (or `a[r] * u[r] + b[r] * f`), called
 # on the variable's block of `u`. The `ArrayMaker` writes only its regions, so constant and
 # algebraic states keep their values.
-function _group_update(sys, eqs; lossy, fuse_broadcasts, codegen_kwargs...)
+function _group_update(sys, eqs, u0; lossy, fuse_broadcasts, codegen_kwargs...)
     owner(eq) = _parent_array(only(arguments(eq.lhs)))
-    race = _group_race(eqs)
     # Without a race every region reads the elements of `u` it writes only at their own
-    # index, so fused code may read `u` while writing it, with no copies. With one, fused
-    # code copies its inputs on entry; unfused code writes region by region and cannot.
-    fused = fuse_broadcasts && isdefined(SymbolicUtils.Code, :FUSE_BROADCASTS_KEY)
-    race === nothing || fused || return function (args...)
-        throw(
-            ArgumentError(
-                "$(race[1]) reads $(race[2]), a state of its own group other than its own, so an in-place update would race on it."
-            )
-        )
-    end
+    # index, so it may read `u` while writing it. With one, every region reads a copy of
+    # `u` taken on entry. The unaliasing of fused code generation is no substitute: it
+    # covers fused regions only, not scalar ones, and released Symbolics does not fuse.
+    entry = _group_race(eqs) === nothing ? nothing : similar(u0)
     dvs = ModelingToolkitBase.flat_unknowns(sys)
     ps = ModelingToolkitBase.reorder_parameters(sys)
     T = SymbolicUtils.SymReal
@@ -200,11 +194,10 @@ function _group_update(sys, eqs; lossy, fuse_broadcasts, codegen_kwargs...)
                 push!(values, value)
             end
             maker = SymbolicUtils.ArrayMaker{T}(regions, values; shape = sh)
-            inplace = race === nothing ? (; fuse_unalias = false) : (;)
             _, iip = ModelingToolkitBase.build_function_wrapper(
                 sys, maker, dvs, ps..., ModelingToolkit.get_iv(sys), dt, ab...; p_start = 2,
                 p_end = 1 + length(ps), u_arg = 1, n_param_buffers = length(ps),
-                fuse_broadcasts, inplace..., codegen_kwargs...
+                fuse_broadcasts, fuse_unalias = false, codegen_kwargs...
             )
             f! = ModelingToolkitBase.eval_or_rgf(iip; eval_module = @__MODULE__)
             (f!, block, size(idx))
@@ -212,14 +205,27 @@ function _group_update(sys, eqs; lossy, fuse_broadcasts, codegen_kwargs...)
     )
     blockview(x, block, dims) = reshape(view(x, block), dims)
     return function update!(u, p, t, dt, a = nothing, b = nothing)
+        u_entry = _entry_state(entry, u)
         foreach(updates) do (f!, block, dims)
             out = blockview(u, block, dims)
-            lossy ? f!(out, u, p, t, dt, blockview(a, block, dims), blockview(b, block, dims)) :
-                f!(out, u, p, t, dt)
+            lossy ?
+                f!(out, u_entry, p, t, dt, blockview(a, block, dims), blockview(b, block, dims)) :
+                f!(out, u_entry, p, t, dt)
         end
         return nothing
     end
 end
+
+# `u` as it is on entry to `update!`: `u` itself for a group without a race, else a copy,
+# into `entry` when `u` is a CPU array of its element type and allocated otherwise, for a
+# GPU array say.
+_entry_state(::Nothing, u) = u
+function _entry_state(
+        entry::Array{T}, u::Union{Array{T}, SubArray{T, <:Any, <:Array}}
+    ) where {T}
+    return copyto!(entry, u)
+end
+_entry_state(entry, u) = copy(u)
 
 # The first `(eq, x)` of the equations `eqs` of one group such that `eq` reads `x`, a slice
 # of a variable the group writes other than the slice `eq` writes, compared by value; or
