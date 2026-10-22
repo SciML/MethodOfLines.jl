@@ -268,3 +268,30 @@ end
         @test e isa AssertionError
     end
 end
+
+@testset "Test 02: the error for an axis shorter than the boundary stencil names the minimum" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    heat(bcs) = PDESystem(
+        [Dt(u(t, x)) ~ Dxx(u(t, x))], [u(0, x) ~ sin(2pi * x); bcs], domains, [t, x],
+        [u(t, x)]; name = :heat
+    )
+    disc(ncells) = MOLFiniteDifference([x => 1 / ncells], t; approx_order = 4)
+    dirichlet = heat([u(t, 0) ~ 0, u(t, 1) ~ 0])
+
+    # order 2 + approx_order 4 needs 6 points; 4 cells give 5
+    thrown = try
+        symbolic_discretize(dirichlet, disc(4))
+        nothing
+    catch e
+        e
+    end
+    @test thrown isa ArgumentError
+    @test occursin("at least 6 grid points in x, but there are 5", sprint(showerror, thrown))
+    @test symbolic_discretize(dirichlet, disc(5)) isa Tuple
+    # a periodic axis has no one-sided stencils
+    @test symbolic_discretize(heat([u(t, 0) ~ u(t, 1)]), disc(2)) isa Tuple
+end
