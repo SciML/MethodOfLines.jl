@@ -132,6 +132,7 @@ include("discretization/schemes/pseudospectral/pseudospectral.jl")
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
+include("discretization/generate_initialization.jl")
 include("discretization/staggered_discretize.jl")
 
 # Main

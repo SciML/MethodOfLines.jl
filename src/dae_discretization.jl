@@ -66,65 +66,44 @@ function _time_deriv_order(ex, t)
     return op isa Differential && isequal(op.x, t) ? inner + op.order : inner
 end
 
-# A derivative of a slice, `D(u[2:n-1])`, names the slice; the unknowns are its elements.
-function _scalar_elements(ex)
-    ex = safe_unwrap(ex)
-    is_array_valued(ex) || return (ex,)
-    return safe_unwrap.(vec(collect(Symbolics.scalarize(Symbolics.wrap(ex)))))
-end
-
-function _collect_differentiated!(out, ex, unks)
-    ex = safe_unwrap(ex)
-    _issym(ex) || return out
-    if operation(ex) isa Differential
-        for arg in arguments(ex), v in _scalar_elements(arg)
-            v in unks && push!(out, v)
-        end
-    end
-    for arg in arguments(ex)
-        _collect_differentiated!(out, arg, unks)
-    end
-    return out
-end
-
-# The unknowns of `sys` that appear under a differential; the rest are algebraic.
+# The unknowns of `sys` that appear under a time derivative: a scalar unknown maps to
+# `true`, an array unknown to the mask of its differentiated elements. The rest are
+# algebraic.
 function differential_unknowns(sys, unks)
-    out = Set{Any}()
-    for eq in get_eqs(sys)
-        _collect_differentiated!(out, eq.lhs, unks)
-        _collect_differentiated!(out, eq.rhs, unks)
+    out = Dict{Any, Any}()
+    for part in keys(time_differentiated(get_eqs(sys), safe_unwrap(ModelingToolkitBase.get_iv(sys))))
+        if part in unks
+            out[part] = is_array_valued(part) ? trues(size(part)) : true
+            continue
+        end
+        unknown, idxs = _parent_and_indices(part)
+        (idxs !== nothing && unknown in unks) || continue
+        mask = get!(() -> falses(size(unknown)), out, unknown)
+        mask[_region(idxs)] .= true
     end
     return out
 end
 
-# The scalar unknowns of `sys` and the arrays they are elements of. An array unknown
-# `u(t)[1:n]` contributes its elements to the first set and itself to the second; a
-# scalarized system contributes its elements' parents to the second.
-function _scalar_unknowns(sys)
-    unks = Set{Any}()
-    arrays = Set{Any}()
-    for u in get_unknowns(sys)
-        u = safe_unwrap(u)
-        if is_array_valued(u)
-            push!(arrays, u)
-        elseif iscall(u) && operation(u) === getindex
-            push!(arrays, safe_unwrap(first(arguments(u))))
-        end
-        union!(unks, _scalar_elements(u))
+# Whether `x`, an unknown or an element or slice of one, is differential throughout, or
+# `nothing` if it is none of these.
+function _is_differential(x, diffvars, unks)
+    if x in unks
+        d = get(diffvars, x, false)
+        return d isa Bool ? d : all(d)
     end
-    return unks, arrays
+    unknown, idxs = _parent_and_indices(x)
+    (idxs !== nothing && unknown in unks) || return nothing
+    d = get(diffvars, unknown, false)
+    return d isa Bool ? d : all(view(d, _region(idxs)))
 end
 
-# An expression may mention a scalar unknown, the parent array or a slice of it, so check
-# both.
-function _mentions_unknown(ex, unks, arrays)
+# An expression may mention an unknown, or an element or slice of one.
+function _mentions_unknown(ex, unks)
     for v in Symbolics.get_variables(ex)
         v = safe_unwrap(v)
-        (v in unks || v in arrays) && return true
-        if iscall(v) && operation(v) === getindex &&
-                safe_unwrap(first(arguments(v))) in arrays
-            return true
-        end
+        v in unks && return true
+        unknown, idxs = _parent_and_indices(v)
+        idxs !== nothing && unknown in unks && return true
     end
     return false
 end
@@ -136,35 +115,37 @@ Return the initialization equations of `sys` that `BrownFullBasicInit()` would n
 each paired with the reason, and an empty vector when the algorithm is safe for `sys`.
 
 `BrownFullBasicInit()` holds the differential variables at their given values and solves
-for everything else, so an initialization equation survives it only when it fixes a single
-differential unknown to a value involving no other unknown. Everything else is reported,
-including equations this predicate cannot classify.
+for everything else, so an initialization equation survives it only when it fixes
+differential unknowns (an unknown, or an element or slice of one) to values involving no
+other unknown. Everything else is reported, including equations this predicate cannot
+classify.
 """
 function brown_init_offenders(sys)
     ieqs = initialization_equations(sys)
     offenders = Pair{Equation, String}[]
     isempty(ieqs) && return offenders
-    unks, arrays = _scalar_unknowns(sys)
+    unks = Set{Any}(safe_unwrap.(get_unknowns(sys)))
     diffvars = differential_unknowns(sys, unks)
     for eq in ieqs
-        reason = _brown_init_offence(eq, diffvars, unks, arrays)
+        reason = _brown_init_offence(eq, diffvars, unks)
         reason === nothing || push!(offenders, eq => reason)
     end
     return offenders
 end
 
-function _brown_init_offence(eq, diffvars, unks, arrays)
+function _brown_init_offence(eq, diffvars, unks)
     if _has_differential(eq.lhs) || _has_differential(eq.rhs)
         return "constrains a time derivative, which BrownFullBasicInit solves for."
     end
     lhs = safe_unwrap(eq.lhs)
-    if !(lhs in unks)
+    differential = _is_differential(lhs, diffvars, unks)
+    if differential === nothing
         return "does not fix a single unknown of the discretized system, so it cannot be checked against what BrownFullBasicInit holds fixed."
     end
-    if !(lhs in diffvars)
+    if !differential
         return "constrains $lhs, which is algebraic rather than differential; BrownFullBasicInit solves for algebraic variables instead of honoring a given value."
     end
-    if _mentions_unknown(eq.rhs, unks, arrays)
+    if _mentions_unknown(eq.rhs, unks)
         return "relates $lhs to other unknowns; BrownFullBasicInit fixes each differential unknown independently and does not enforce the relation."
     end
     return nothing
@@ -176,15 +157,18 @@ end
 function _dae_operating_point(sys, u0, t)
     D = Differential(t)
     op = Dict{Any, Any}()
-    for x in get_unknowns(sys), el in _scalar_elements(x)
-        op[el] = 0.0
-        op[D(el)] = 0.0
+    for x in get_unknowns(sys)
+        x = safe_unwrap(x)
+        op[x] = _zero_value(x)
+        op[D(x)] = _zero_value(x)
     end
     for (k, v) in u0
         op[safe_unwrap(k)] = v
     end
     return op
 end
+
+_zero_value(x) = is_array_valued(x) ? zeros(size(x)) : 0.0
 
 """
     DAEProblem(pdesys::PDESystem, discretization::MOLFiniteDifference; kwargs...)
