@@ -54,7 +54,7 @@ discretization = MOLFiniteDifference([x => 0.1], t)
 ```
 
 """
-struct MOLFiniteDifference{G} <: AbstractEquationSystemDiscretization
+struct MOLFiniteDifference{G} <: PDEBase.AbstractBoxDiscretization
     dxs::Any
     time::Any
     approx_order::Int

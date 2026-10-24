@@ -78,6 +78,9 @@ run_tests(;
             @safetestset "Zero-extent BC extrapolation on small grids" begin
                 include(joinpath(@__DIR__, "Components", "bc_extrap_zero_extent.jl"))
             end
+            @safetestset "Box discretization supertype" begin
+                include(joinpath(@__DIR__, "Components", "box_discretization_supertype.jl"))
+            end
             return @safetestset "Discrete Callbacks" begin
                 include(joinpath(@__DIR__, "Components", "callbacks.jl"))
             end
