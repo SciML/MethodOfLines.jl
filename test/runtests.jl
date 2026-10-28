@@ -150,6 +150,9 @@ run_tests(;
             @safetestset "Equation discretization" begin
                 include(joinpath(@__DIR__, "Discretization", "equation_discretization.jl"))
             end
+            @safetestset "Hermite finite differences" begin
+                include(joinpath(@__DIR__, "Discretization", "hermite.jl"))
+            end
             return @safetestset "Problem construction" begin
                 include(joinpath(@__DIR__, "Discretization", "problem_construction.jl"))
             end
