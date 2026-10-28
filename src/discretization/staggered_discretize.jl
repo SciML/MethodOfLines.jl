@@ -3,6 +3,7 @@ function SciMLBase.discretize(
         discretization::MOLFiniteDifference{G},
         analytic = nothing, kwargs...
     ) where {G <: StaggeredGrid}
+    reject_point_ports(pdesys, "discretize")
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     return try
         simpsys = mtkcompile(sys)

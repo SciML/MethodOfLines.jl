@@ -70,6 +70,9 @@ versions = ["lts", "1", "pre"]
 [Discretization]
 versions = ["lts", "1", "pre"]
 
+[Connectors]
+versions = ["lts", "1", "pre"]
+
 [Pseudospectral]
 versions = ["lts", "1", "pre"]
 
