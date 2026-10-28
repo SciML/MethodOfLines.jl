@@ -2,7 +2,7 @@
 
 julia_version = "1.13.3"
 manifest_format = "2.1"
-project_hash = "dd0b7dae2aa29afe1a58448cdb1d15b5f8429763"
+project_hash = "9b597fc5ae7d21cc6c7b3574e121bf40f970d8a1"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -1918,7 +1918,7 @@ version = "0.3.3"
 
 [[deps.MethodOfLines]]
 deps = ["Combinatorics", "DiffEqBase", "DomainSets", "Interpolations", "Latexify", "LinearAlgebra", "ModelingToolkit", "ModelingToolkitBase", "PDEBase", "PrecompileTools", "RuntimeGeneratedFunctions", "SciMLBase", "Setfield", "StaticArrays", "SymbolicIndexingInterface", "SymbolicUtils", "Symbolics", "TermInterface"]
-path = "/home/runner/work/MethodOfLines.jl/MethodOfLines.jl"
+path = "/home/runner/_work/MethodOfLines.jl/MethodOfLines.jl"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 version = "2.0.0"
 weakdeps = ["AbstractFFTs", "ModelingToolkitNeuralNets"]
