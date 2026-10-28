@@ -28,69 +28,46 @@ function SciMLBase.discretize(
     end
 end
 
-# `f1` holds the time derivatives of the variables edge aligned in an odd number of
-# directions and `f2` those of every other variable. A staggered derivative moves its
-# variable half a step in one direction, so it always couples the two groups, while
-# pointwise terms stay within one: for Maxwell's equations the groups are E and H.
-# Each half evaluates the full right hand side and zeroes the other group's rows, so
-# `f1 + f2` is exactly `f` for any number of variables, with time, parameters and
-# boundary values live, at the price of a second evaluation of `f` per step.
+# `f1` and `f2` hold the time derivatives of two groups that 2-colour the coupling graph
+# of the variables, as `staggered_groups` does, so that every coupled pair straddles the
+# two halves. Of each connected component, `f1` takes the colour of the variables edge
+# aligned in an odd number of directions, so a pure Yee system splits into E and H as its
+# staggering sets them. Constant fields go in `f2`. A coupling graph with a cycle of odd
+# length has no such colouring, and then, as before the coupling graph was used, `f1` holds
+# the time derivatives of the variables edge aligned in an odd number of directions and `f2`
+# the rest; some coupled pairs then share a half. Each half generates its own rows of `sys`
+# on their own and zeroes the rest, so `f1 + f2` is exactly `f` either way, with time,
+# parameters and boundary values live.
 function staggered_split(prob, sys, edge_dims)
-    get_var_from_state(state) = operation(arguments(state)[1])
     nedge = Dict(nameof(op) => length(dims) for (op, dims) in edge_dims)
-    isedge = [
-        isodd(get(nedge, nameof(get_var_from_state(u)), 0)) for u in get_unknowns(sys)
-    ]
-    rows1, rows2 = findall(isedge), findall(!, isedge)
-    f1(du, u, p, t) = (prob.f(du, u, p, t); du[rows2] .= 0; nothing)
-    f2(du, u, p, t) = (prob.f(du, u, p, t); du[rows1] .= 0; nothing)
+    isodd_edge(v) = isodd(get(nedge, nameof(operation(v)), 0))
+    # `mtkcompile` leaves one `D(u[i]) ~ rhs` per unknown, in the order of the unknowns
+    eqs = get_eqs(sys)
+    owner = map(eq -> _parent_array(only(arguments(eq.lhs))), eqs)
+    isconstant = map(eq -> isequal(unwrap_const(eq.rhs), 0), eqs)
+    colour = _coupling_colours(eqs[.!isconstant], owner[.!isconstant]; first = isodd_edge)
+    isf1 = colour isa Dict ? [get(colour, v, 2) == 1 for v in owner] : map(isodd_edge, owner)
+    rows1, rows2 = findall(isf1), findall(!, isf1)
+    rhs(rows) = ModelingToolkit.generate_rhs(
+        Setfield.@set(sys.eqs = eqs[rows]);
+        expression = Val{false}, wrap_gfw = Val{true}
+    )
+    g1, g2 = rhs(rows1), rhs(rows2)
+    f1(du, u, p, t) = (g1(view(du, rows1), u, p, t); du[rows2] .= 0; nothing)
+    f2(du, u, p, t) = (g2(view(du, rows2), u, p, t); du[rows1] .= 0; nothing)
     return SplitODEProblem(f1, f2, prob.u0, prob.tspan, prob.p)
 end
 
-"""
-    staggered_groups(prob::DAEProblem)
-
-Split the differential equations of `prob`, a `DAEProblem(pdesys, disc)` on a staggered
-grid, into the two groups a leapfrog alternates between, and generate each group's right
-hand side on its own, so that each half step evaluates only its own equations.
-
-Returns `(; groups, constant, algebraic)`:
-
-  - `groups` holds two `(; f, states)`. `f(dv, u, p, t)` writes the time derivatives of
-    the states `states` at the full state `u`, in that order: `dv[k]` is `du[states[k]]`.
-    Taking `v = u[states]` as a partitioned state therefore needs no gather. `f` reads all
-    of `u`, so both halves of a partitioned state are scattered into one full state first.
-  - `constant` holds the states whose time derivative is zero (`Dt(c) ~ 0` coefficient
-    fields). Neither group writes them.
-  - `algebraic` holds the states `prob.differential_vars` marks algebraic, such as PEC walls
-    and other Dirichlet points. Neither group writes them, so a leapfrog holds them at their
-    value, which is right for time-independent Dirichlet values only.
-
-A row's time derivative is solved for from its residual, so for any `u`, setting
-`du[states] = dv` for both groups and zero elsewhere makes `prob.f` vanish on every
-differential row.
-
-The groups 2-colour the coupling graph of the variables: `w` is coupled to `u` when `w`
-appears in `Dt(u)`'s right hand side. Each coupled pair then straddles the two groups, as
-the leapfrog needs; grouping by staggering instead would put a current that shares `E`'s
-nodes in `E`'s group. For Maxwell's equations with a Drude current `J` and its integral
-`G` the groups are `(E, G)` and `(H, J)`. Taking the variables in the order of their
-equations, which follows the PDEs, the first of each connected component goes in the first
-group. A coupling graph that is not bipartite throws an `ArgumentError`.
-"""
-function staggered_groups(prob::DAEProblem)
-    sys = prob.f.sys
-    derivs = filter(!isnothing, map(_solve_time_derivative, get_eqs(sys)))
-    owner = map(eq -> _parent_array(only(arguments(eq.lhs))), derivs)
-    isconstant = map(eq -> eq.rhs === 0, derivs)
-    states(eqs) = reduce(
-        vcat, map(eq -> _state_indices(sys, only(arguments(eq.lhs))), eqs); init = Int[]
-    )
-
-    vars = unique(owner[.!isconstant])
+# Colour 1 or 2 for each of `owner`, the variables whose time derivatives `derivs` give, so
+# that no variable shares a colour with one in its time derivative's right hand side. The
+# first variable of each connected component, taking the variables that satisfy `first`
+# before the others and each in order, gets colour 1. If a cycle of odd length leaves no
+# such colouring, return instead a coupled pair of variables on it.
+function _coupling_colours(derivs, owner; first = Returns(false))
+    vars = unique(owner)
+    vars = [filter(first, vars); filter(!first, vars)]
     coupled = Dict(v => Set{Any}() for v in vars)
-    for (eq, v) in zip(derivs[.!isconstant], owner[.!isconstant]),
-            x in Symbolics.get_variables(eq.rhs)
+    for (eq, v) in zip(derivs, owner), x in Symbolics.get_variables(eq.rhs)
         w = _parent_array(x)
         if haskey(coupled, w) && !isequal(w, v)
             push!(coupled[v], w)
@@ -109,15 +86,73 @@ function staggered_groups(prob::DAEProblem)
                     colour[w] = 3 - colour[v]
                     push!(queue, w)
                 elseif colour[w] == colour[v]
-                    throw(
-                        ArgumentError(
-                            "The coupling graph of the variables is not bipartite: $v and $w are coupled through a cycle of odd length, so no two groups separate every coupled pair."
-                        )
-                    )
+                    return (v, w)
                 end
             end
         end
     end
+    return colour
+end
+
+"""
+    staggered_groups(prob::DAEProblem; lossy = false, fuse_broadcasts = true, kwargs...)
+
+Split the differential equations of `prob`, a `DAEProblem(pdesys, disc)` on a staggered
+grid, into the two groups a leapfrog alternates between, and generate each group's right
+hand side on its own, so that each half step evaluates only its own equations.
+
+Returns `(; groups, constant, algebraic)`:
+
+  - `groups` holds two `(; f, update!, states)`. `f(dv, u, p, t)` writes the time
+    derivatives of the states `states` at the full state `u`, in that order: `dv[k]` is
+    `du[states[k]]`. Taking `v = u[states]` as a partitioned state therefore needs no
+    gather. `f` reads all of `u`, so both halves of a partitioned state are scattered into
+    one full state first.
+  - `update!(u, p, t, dt)` steps the group's states in place, `u[states] .+= dt .* dv`,
+    without `dv`: each variable's regions are written straight into its block of `u`. With
+    `lossy = true` it is `update!(u, p, t, dt, a, b)`, `u[states] .= a[states] .* u[states]
+    .+ b[states] .* dv`, for per-state coefficient vectors `a` and `b` laid out like `u`.
+    `fuse_broadcasts` and `kwargs` are passed to the code generation of `update!`.
+    An equation that reads a state its group writes, other than its own, would race with
+    the in-place write, so such a group's `update!` reads a copy of `u` taken on entry,
+    into a buffer it allocates once for a `u` like `prob.u0`: it is then not safe to call
+    concurrently. `a` and `b` may be `u` itself, but must not otherwise share memory with it.
+  - `constant` holds the states whose time derivative is zero (`Dt(c) ~ 0` coefficient
+    fields). Neither group writes them.
+  - `algebraic` holds the states `prob.differential_vars` marks algebraic, such as PEC walls
+    and other Dirichlet points. Neither group writes them, so a leapfrog holds them at their
+    value, which is right for time-independent Dirichlet values only.
+
+A row's time derivative is solved for from its residual, so for any `u`, setting
+`du[states] = dv` for both groups and zero elsewhere makes `prob.f` vanish on every
+differential row.
+
+The groups 2-colour the coupling graph of the variables: `w` is coupled to `u` when `w`
+appears in `Dt(u)`'s right hand side. Each coupled pair then straddles the two groups, as
+the leapfrog needs; grouping by staggering instead would put a current that shares `E`'s
+nodes in `E`'s group. For Maxwell's equations with a Drude current `J` and its integral
+`G` the groups are `(E, G)` and `(H, J)`. Taking the variables in the order of their
+equations, which follows the PDEs, the first of each connected component goes in the first
+group. A coupling graph that is not bipartite throws an `ArgumentError`; `discretize`
+instead falls back to grouping such a system by staggering.
+"""
+function staggered_groups(
+        prob::DAEProblem; lossy = false, fuse_broadcasts = true, kwargs...
+    )
+    sys = prob.f.sys
+    derivs = filter(!isnothing, map(_solve_time_derivative, get_eqs(sys)))
+    owner = map(eq -> _parent_array(only(arguments(eq.lhs))), derivs)
+    isconstant = map(eq -> eq.rhs === 0, derivs)
+    states(eqs) = reduce(
+        vcat, map(eq -> _state_indices(sys, only(arguments(eq.lhs))), eqs); init = Int[]
+    )
+
+    colour = _coupling_colours(derivs[.!isconstant], owner[.!isconstant])
+    colour isa Dict || throw(
+        ArgumentError(
+            "The coupling graph of the variables is not bipartite: $(colour[1]) and $(colour[2]) are coupled through a cycle of odd length, so no two groups separate every coupled pair."
+        )
+    )
 
     groups = map((1, 2)) do c
         eqs = [
@@ -126,12 +161,111 @@ function staggered_groups(prob::DAEProblem)
         ]
         gsys = Setfield.@set sys.eqs = eqs
         f = ModelingToolkit.generate_rhs(gsys; expression = Val{false}, wrap_gfw = Val{true})
-        (; f, states = states(eqs))
+        update! = _group_update(sys, eqs, prob.u0; lossy, fuse_broadcasts, kwargs...)
+        (; f, update!, states = states(eqs))
     end
     return (;
         groups, constant = states(derivs[isconstant]),
         algebraic = findall(!, prob.differential_vars),
     )
+end
+
+# `update!` for the group of equations `D(u[r]) ~ f` in `eqs`: per variable one in-place
+# function over the variable's grid, compiled from an `ArrayMaker` whose regions are the
+# equations' `r` and whose values are `u[r] + dt * f` (or `a[r] * u[r] + b[r] * f`), called
+# on the variable's block of `u`. The `ArrayMaker` writes only its regions, so constant and
+# algebraic states keep their values.
+function _group_update(sys, eqs, u0; lossy, fuse_broadcasts, codegen_kwargs...)
+    owner(eq) = _parent_array(only(arguments(eq.lhs)))
+    # Without a race every region reads the elements of `u` it writes only at their own
+    # index, so it may read `u` while writing it. With one, every region reads a copy of
+    # `u` taken on entry. The unaliasing of fused code generation is no substitute: it
+    # covers fused regions only, not scalar ones, and released Symbolics does not fuse.
+    entry = _group_race(eqs) === nothing ? nothing : similar(u0)
+    dvs = ModelingToolkitBase.flat_unknowns(sys)
+    ps = ModelingToolkitBase.reorder_parameters(sys)
+    T = SymbolicUtils.SymReal
+    dt = SymbolicUtils.Sym{T}(:mol_dt; type = Real)
+    updates = Tuple(
+        map(unique(map(owner, eqs))) do v
+            idx = SymbolicIndexingInterface.variable_index(sys, v)
+            block = first(idx):last(idx)
+            vec(collect(idx)) == block || throw(
+                ArgumentError("The states of $v are not contiguous in the state vector.")
+            )
+            sh = SymbolicUtils.shape(v)
+            coef(name) = SymbolicUtils.Sym{T}(name; type = Array{Real, length(sh)}, shape = sh)
+            ab = lossy ? (coef(:mol_a), coef(:mol_b)) : ()
+            # An `ArrayMaker` this small is generated element by element, uncovered elements
+            # included, so it is given the variable itself everywhere first.
+            regions = length(v) <= 16 ? [collect(UnitRange{Int}, sh)] : Vector{UnitRange{Int}}[]
+            values = length(v) <= 16 ? Any[v] : Any[]
+            for eq in eqs
+                isequal(owner(eq), v) || continue
+                x = only(arguments(eq.lhs))
+                r = x === v ? collect(UnitRange{Int}, sh) : map(unwrap_const.(arguments(x)[2:end])) do i
+                        UnitRange{Int}(i isa Integer ? (i:i) : i)
+                end
+                slice(c) = Symbolics.unwrap(Symbolics.wrap(c)[r...])
+                ar = map(slice, ab)
+                # a pointwise equation writes `u[i]`, a scalar: its region is `u[i:i]`
+                xr = is_array_valued(x) ? x : slice(v)
+                value = lossy ?
+                    _broadcast(+, _broadcast(*, ar[1], xr), _broadcast(*, ar[2], eq.rhs)) :
+                    _broadcast(+, xr, _broadcast(*, dt, eq.rhs))
+                push!(regions, r)
+                push!(values, value)
+            end
+            maker = SymbolicUtils.ArrayMaker{T}(regions, values; shape = sh)
+            _, iip = ModelingToolkitBase.build_function_wrapper(
+                sys, maker, dvs, ps..., ModelingToolkit.get_iv(sys), dt, ab...; p_start = 2,
+                p_end = 1 + length(ps), u_arg = 1, n_param_buffers = length(ps),
+                fuse_broadcasts, fuse_unalias = false, codegen_kwargs...
+            )
+            f! = ModelingToolkitBase.eval_or_rgf(iip; eval_module = @__MODULE__)
+            (f!, block, size(idx))
+        end
+    )
+    blockview(x, block, dims) = reshape(view(x, block), dims)
+    return function update!(u, p, t, dt, a = nothing, b = nothing)
+        u_entry = _entry_state(entry, u)
+        foreach(updates) do (f!, block, dims)
+            out = blockview(u, block, dims)
+            lossy ?
+                f!(out, u_entry, p, t, dt, blockview(a, block, dims), blockview(b, block, dims)) :
+                f!(out, u_entry, p, t, dt)
+        end
+        return nothing
+    end
+end
+
+# `u` as it is on entry to `update!`: `u` itself for a group without a race, else a copy,
+# into `entry` when `u` is a CPU array of its element type and allocated otherwise, for a
+# GPU array say.
+_entry_state(::Nothing, u) = u
+function _entry_state(
+        entry::Array{T}, u::Union{Array{T}, SubArray{T, <:Any, <:Array}}
+    ) where {T}
+    return copyto!(entry, u)
+end
+_entry_state(entry, u) = copy(u)
+
+# The first `(eq, x)` of the equations `eqs` of one group such that `eq` reads `x`, a slice
+# of a variable the group writes other than the slice `eq` writes, compared by value; or
+# `nothing`. An in-place update without such reads reads each state it writes only in the
+# kernel that writes it, at the same element.
+function _group_race(eqs)
+    written = Set(map(eq -> _parent_array(only(arguments(eq.lhs))), eqs))
+    function slice(x)
+        v = _parent_array(x)
+        return (v, x === v ? nothing : unwrap_const.(arguments(x)[2:end]))
+    end
+    for eq in eqs, x in Symbolics.get_variables(eq.rhs)
+        _parent_array(x) in written || continue
+        xs, ys = slice(x), slice(only(arguments(eq.lhs)))
+        isequal(xs[1], ys[1]) && xs[2] == ys[2] || return (eq, x)
+    end
+    return nothing
 end
 
 # `(lhs = D(u[r]), rhs = f)`, with `f` the literal `0` for a constant, for an equation linear
