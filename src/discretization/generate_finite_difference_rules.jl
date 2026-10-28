@@ -91,11 +91,10 @@ function generate_finite_difference_rules(
         spherical_diffusion_rules = generate_spherical_diffusion_rules(
             II, s, stencilvars, derivweights, bmap, indexmap, split_additive_terms(pde)
         )
-        integration_rules = vec(
-            generate_euler_integration_rules(
-                II, s, stencilvars, indexmap, terms
-            )
-        )
+        # The running-integral rules cost O(index) symbolic terms each, so building them at
+        # every point is quadratic in the grid size.
+        integration_rules = has_integral(pde) ?
+            vec(generate_euler_integration_rules(II, s, stencilvars, indexmap, terms)) : []
     else
         central_deriv_rules_cartesian = []
         advection_rules = []
