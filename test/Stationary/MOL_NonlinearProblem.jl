@@ -132,3 +132,65 @@ end
     end #
     @test all(fd)
 end
+
+# Structural simplification used to eliminate most of these unknowns into observed
+# expressions (8 of 81 left on 9x9) and Newton then stalled on 11x11.
+@testset "2D Laplace - exact solution u = x*y, $bc_style boundary" for bc_style in
+    (:Dirichlet, :Neumann)
+    @parameters x y
+    @variables u(..)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dxx(u(x, y)) + Dyy(u(x, y)) ~ 0
+    bcs = [
+        u(0, y) ~ 0,
+        bc_style === :Dirichlet ? u(1, y) ~ y : Dx(u(1, y)) ~ y,
+        u(x, 0) ~ 0,
+        u(x, 1) ~ x,
+    ]
+    domains = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+
+    for n in (9, 11)
+        h = 1 / (n - 1)
+        @named pdesys = PDESystem([eq], bcs, domains, [x, y], [u(x, y)])
+        prob = discretize(pdesys, MOLFiniteDifference([x => h, y => h], nothing, approx_order = 2))
+        # (n - 2)^2 interior unknowns plus the boundary nodes the boundary conditions fix
+        @test length(prob.u0) == n^2
+
+        sol = NonlinearSolve.solve(prob, NewtonRaphson())
+        @test sol.retcode == ReturnCode.Success
+        grid = range(0, 1, length = n)
+        interior = 2:(n - 1)
+        @test sol[u(x, y)][interior, interior] ≈ [xi * yi for xi in grid[interior], yi in grid[interior]] atol = 1.0e-10
+    end
+end
+
+@testset "Stationary problems use a sparse Jacobian unless told otherwise" begin
+    @parameters x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    domains = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    h = 0.1
+
+    @named pdesys1 = PDESystem(
+        [Dxx(u(x)) ~ 0], [u(0) ~ 1, u(1) ~ 2], [x ∈ Interval(0.0, 1.0)], [x], [u(x)]
+    )
+    prob1 = discretize(pdesys1, MOLFiniteDifference([x => h], nothing))
+    @test nameof(typeof(prob1.f.jac_prototype)) === :SparseMatrixCSC
+    @test NonlinearSolve.solve(prob1, NewtonRaphson()).retcode == ReturnCode.Success
+
+    eq = Dxx(u(x, y)) + Dyy(u(x, y)) ~ 0
+    bcs = [u(0, y) ~ 0, u(1, y) ~ y, u(x, 0) ~ 0, u(x, 1) ~ x]
+    @named pdesys2 = PDESystem([eq], bcs, domains, [x, y], [u(x, y)])
+    disc = MOLFiniteDifference([x => h, y => h], nothing)
+    prob2 = discretize(pdesys2, disc)
+    @test nameof(typeof(prob2.f.jac_prototype)) === :SparseMatrixCSC
+    @test NonlinearSolve.solve(prob2, NewtonRaphson()).retcode == ReturnCode.Success
+
+    dense = discretize(pdesys2, disc; sparse = false)
+    @test nameof(typeof(dense.f.jac_prototype)) !== :SparseMatrixCSC
+    @test NonlinearSolve.solve(dense, NewtonRaphson()).retcode == ReturnCode.Success
+end

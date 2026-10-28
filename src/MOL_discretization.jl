@@ -265,11 +265,15 @@ function SciMLBase.discretize(
 end
 
 function _stationary_problem(sys, discretization::MOLDiscretization; kwargs...)
-    simpsys = mtkcompile(sys)
+    # Structural simplification tears the integer-coefficient stencil rows into a nonlinear
+    # recursion with few iteration variables (8 of 81 on 9x9) that conditions badly as the
+    # grid grows, and can overflow `Int64` in Bareiss elimination. The discretized system is
+    # already square, so skip it and keep the Jacobian sparse (symbolic, to avoid colored AD).
+    simpsys = complete(sys)
     PDEBase.add_metadata!(getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
-    u0_guess = Dict(u => 1.0 for u in get_unknowns(simpsys))
+    u0_guess = Dict(u => isempty(size(u)) ? 1.0 : ones(size(u)) for u in get_unknowns(simpsys))
     return NonlinearProblem(
-        simpsys, u0_guess; discretization.kwargs..., kwargs...
+        simpsys, u0_guess; sparse = true, jac = true, discretization.kwargs..., kwargs...
     )
 end
 
