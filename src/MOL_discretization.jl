@@ -280,7 +280,14 @@ function _stationary_problem(sys, discretization::MOLDiscretization; kwargs...)
     # past the default abstol on fine grids and makes Newton report `Stalled`. J(u0) is only
     # a scale guess (it can be enormous for a nonlinear system), so the result is capped.
     T = real(eltype(prob.u0))
-    scale = LinearAlgebra.norm(prob.f.jac(prob.u0, prob.p), Inf)
+    # Best effort: J(u0) can throw outside the nonlinearity's domain, and callers may still
+    # remake the problem with a valid guess, so skip the scaling instead.
+    scale = try
+        LinearAlgebra.norm(prob.f.jac(prob.u0, prob.p), Inf)
+    catch e
+        e isa InterruptException && rethrow()
+        return prob
+    end
     isfinite(scale) || return prob
     abstol = clamp(100 * eps(T) * scale, eps(T)^(4 // 5), T(1.0e-8))
     return SciMLBase.remake(prob; kwargs = (; prob.kwargs..., abstol))

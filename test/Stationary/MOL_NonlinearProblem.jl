@@ -256,4 +256,13 @@ end
     nojac = discretize(linear, disc; jac = false)
     @test !haskey(nojac.kwargs, :abstol)
     @test NonlinearSolve.solve(nojac, NewtonRaphson()).retcode == ReturnCode.Success
+
+    # J(u0 = 1) throws a DomainError for sqrt(u - 2); building the problem must not.
+    @named domain = PDESystem(
+        [Dxx(u(x)) + sqrt(u(x) - 2) ~ 0], [u(0) ~ 3, u(1) ~ 3], domains, [x], [u(x)]
+    )
+    guarded = discretize(domain, disc)
+    @test !haskey(guarded.kwargs, :abstol)
+    sol = NonlinearSolve.solve(remake(guarded; u0 = fill(3.0, length(guarded.u0))), NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
 end
