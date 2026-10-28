@@ -272,9 +272,16 @@ function _stationary_problem(sys, discretization::MOLDiscretization; kwargs...)
     simpsys = complete(sys)
     PDEBase.add_metadata!(getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
     u0_guess = Dict(u => isempty(size(u)) ? 1.0 : ones(size(u)) for u in get_unknowns(simpsys))
-    return NonlinearProblem(
+    prob = NonlinearProblem(
         simpsys, u0_guess; sparse = true, jac = true, discretization.kwargs..., kwargs...
     )
+    haskey(prob.kwargs, :abstol) && return prob
+    # The stencil residual cannot drop below roundoff ~ eps * ||J|| ~ eps / h^2, which grows
+    # past the default abstol on fine grids and makes Newton report `Stalled`.
+    scale = LinearAlgebra.norm(prob.f.jac(prob.u0, prob.p), Inf)
+    isfinite(scale) || return prob
+    abstol = max(100 * eps(real(eltype(prob.u0))) * scale, eps(real(eltype(prob.u0)))^(4 // 5))
+    return SciMLBase.remake(prob; kwargs = (; prob.kwargs..., abstol))
 end
 
 function _ode_problem(

@@ -3,7 +3,7 @@
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test
 using ModelingToolkit: Differential, get_unknowns
-using NonlinearSolve
+using NonlinearSolve, SciMLBase
 using DomainSets
 
 # Handrolled discrete laplace problem
@@ -193,4 +193,44 @@ end
     dense = discretize(pdesys2, disc; sparse = false)
     @test nameof(typeof(dense.f.jac_prototype)) !== :SparseMatrixCSC
     @test NonlinearSolve.solve(dense, NewtonRaphson()).retcode == ReturnCode.Success
+end
+
+@testset "2D Laplace - default tolerance succeeds on fine grids" begin
+    @parameters x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+    eq = Dxx(u(x, y)) + Dyy(u(x, y)) ~ 0
+    bcs = [u(0, y) ~ 0, u(1, y) ~ y, u(x, 0) ~ 0, u(x, 1) ~ x]
+    domains = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    n = 31
+    h = 1 / (n - 1)
+    @named pdesys = PDESystem([eq], bcs, domains, [x, y], [u(x, y)])
+    disc = MOLFiniteDifference([x => h, y => h], nothing)
+
+    # The roundoff floor of the 1/h^2 stencil residual exceeds NonlinearSolve's default abstol.
+    prob = discretize(pdesys, disc)
+    sol = NonlinearSolve.solve(prob, NewtonRaphson())
+    @test SciMLBase.successful_retcode(sol)
+    grid = range(0, 1, length = n)
+    interior = 2:(n - 1)
+    @test sol[u(x, y)][interior, interior] ≈ [xi * yi for xi in grid[interior], yi in grid[interior]] atol = 1.0e-10
+
+    # An explicit abstol is respected.
+    @test discretize(pdesys, disc; abstol = 1.0e-9).kwargs[:abstol] == 1.0e-9
+end
+
+# Systems with unequal equation and unknown counts never reach the stationary path:
+# PDEBase rejects them while discretizing.
+@testset "Non-square stationary systems are rejected" begin
+    @parameters x
+    @variables u(..)
+    Dxx = Differential(x)^2
+    @named pdesys = PDESystem(
+        [Dxx(u(x)) ~ 0, Dxx(u(x)) ~ 1], [u(0) ~ 1, u(1) ~ 2],
+        [x ∈ Interval(0.0, 1.0)], [x], [u(x)]
+    )
+    @test_throws "same number of equations and unknowns" discretize(
+        pdesys, MOLFiniteDifference([x => 0.25], nothing)
+    )
 end
