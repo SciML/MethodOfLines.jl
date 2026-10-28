@@ -26,6 +26,7 @@ const FUNCTIONAL_GROUPS = [
     "Convection_NU",
     "Wave_Eq_Staggered",
     "Discretization",
+    "Connectors",
     "Pseudospectral",
 ]
 
@@ -80,6 +81,9 @@ run_tests(;
             end
             @safetestset "Box discretization supertype" begin
                 include(joinpath(@__DIR__, "Components", "box_discretization_supertype.jl"))
+            end
+            @safetestset "PointPort node selection" begin
+                include(joinpath(@__DIR__, "Components", "point_ports.jl"))
             end
             return @safetestset "Discrete Callbacks" begin
                 include(joinpath(@__DIR__, "Components", "callbacks.jl"))
@@ -157,6 +161,7 @@ run_tests(;
                 include(joinpath(@__DIR__, "Discretization", "problem_construction.jl"))
             end
         end,
+        "Connectors" => joinpath(@__DIR__, "Connectors", "point_ports_heat.jl"),
         # Own environment: ModelingToolkitNeuralNets pulls in Lux. Not part of "All".
         "NeuralNets" => (;
             env = joinpath(@__DIR__, "NeuralNets"),
