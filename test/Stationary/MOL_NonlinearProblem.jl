@@ -216,6 +216,10 @@ end
     interior = 2:(n - 1)
     @test sol[u(x, y)][interior, interior] ≈ [xi * yi for xi in grid[interior], yi in grid[interior]] atol = 1.0e-10
 
+    # The tolerance also scales without a symbolic Jacobian (the path used on Julia 1.10).
+    nojac = discretize(pdesys, disc; jac = false)
+    @test SciMLBase.successful_retcode(NonlinearSolve.solve(nojac, NewtonRaphson()))
+
     # An explicit abstol is respected.
     @test discretize(pdesys, disc; abstol = 1.0e-9).kwargs[:abstol] == 1.0e-9
 end
@@ -251,10 +255,10 @@ end
     sol = NonlinearSolve.solve(prob, NewtonRaphson())
     @test !SciMLBase.successful_retcode(sol) || maximum(abs, sol[u(x)]) < 1.0e-6
 
-    # Without a symbolic Jacobian the NonlinearSolve default tolerance is left alone.
+    # Without a symbolic Jacobian the scale comes from a finite-difference probe instead.
     @named linear = PDESystem([Dxx(u(x)) ~ 0], [u(0) ~ 1, u(1) ~ 2], domains, [x], [u(x)])
     nojac = discretize(linear, disc; jac = false)
-    @test !haskey(nojac.kwargs, :abstol)
+    @test eps()^(4 // 5) <= nojac.kwargs[:abstol] <= 1.0e-8
     @test NonlinearSolve.solve(nojac, NewtonRaphson()).retcode == ReturnCode.Success
 
     # J(u0 = 1) throws a DomainError for sqrt(u - 2); building the problem must not.

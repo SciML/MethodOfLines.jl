@@ -285,26 +285,41 @@ function SciMLBase.discretize(
     return _ode_problem(sys, tspan, pdesys, discretization; analytic, kwargs...)
 end
 
+# ||J(u0)||_inf from the symbolic Jacobian when there is one, else from a central difference
+# along a fixed pseudo-random sign vector (within a small factor of the row sums).
+function _jacobian_scale(prob)
+    prob.f.jac === nothing || return LinearAlgebra.norm(prob.f.jac(prob.u0, prob.p), Inf)
+    T = real(eltype(prob.u0))
+    signs = [isodd(hash(i)) ? one(T) : -one(T) for i in eachindex(prob.u0)]
+    step = sqrt(eps(T)) * max(one(T), LinearAlgebra.norm(prob.u0, Inf))
+    plus, minus = similar(prob.u0), similar(prob.u0)
+    prob.f(plus, prob.u0 .+ step .* signs, prob.p)
+    prob.f(minus, prob.u0 .- step .* signs, prob.p)
+    return LinearAlgebra.norm(plus .- minus, Inf) / (2 * step)
+end
+
 function _stationary_problem(sys, discretization::MOLDiscretization; kwargs...)
     # Structural simplification tears the integer-coefficient stencil rows into a nonlinear
     # recursion with few iteration variables (8 of 81 on 9x9) that conditions badly as the
     # grid grows, and can overflow `Int64` in Bareiss elimination. The discretized system is
-    # already square, so skip it and keep the Jacobian sparse (symbolic, to avoid colored AD).
+    # already square, so skip it and keep the Jacobian sparse. The symbolic Jacobian is only
+    # requested on Julia >= 1.11: on 1.10 its generated function overflows the stack in type
+    # inference for grids of a few thousand unknowns, which can deadlock the runtime.
     simpsys = complete(sys)
     PDEBase.add_metadata!(getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing), sys)
     u0_guess = Dict(u => isempty(size(u)) ? 1.0 : ones(size(u)) for u in get_unknowns(simpsys))
     prob = NonlinearProblem(
-        simpsys, u0_guess; sparse = true, jac = true, discretization.kwargs..., kwargs...
+        simpsys, u0_guess; sparse = true, jac = VERSION >= v"1.11", discretization.kwargs..., kwargs...
     )
-    (haskey(prob.kwargs, :abstol) || prob.f.jac === nothing) && return prob
+    haskey(prob.kwargs, :abstol) && return prob
     # The stencil residual cannot drop below roundoff ~ eps * ||J|| ~ eps / h^2, which grows
     # past the default abstol on fine grids and makes Newton report `Stalled`. J(u0) is only
     # a scale guess (it can be enormous for a nonlinear system), so the result is capped.
     T = real(eltype(prob.u0))
-    # Best effort: J(u0) can throw outside the nonlinearity's domain, and callers may still
-    # remake the problem with a valid guess, so skip the scaling instead.
+    # Best effort: the residual can throw outside the nonlinearity's domain, and callers may
+    # still remake the problem with a valid guess, so skip the scaling instead.
     scale = try
-        LinearAlgebra.norm(prob.f.jac(prob.u0, prob.p), Inf)
+        _jacobian_scale(prob)
     catch e
         e isa InterruptException && rethrow()
         return prob
