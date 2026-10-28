@@ -48,7 +48,7 @@ function staggered_split(prob, sys, edge_dims)
 end
 
 """
-    staggered_groups(prob::DAEProblem)
+    staggered_groups(prob::DAEProblem; lossy = false, fuse_broadcasts = true, kwargs...)
 
 Split the differential equations of `prob`, a `DAEProblem(pdesys, disc)` on a staggered
 grid, into the two groups a leapfrog alternates between, and generate each group's right
@@ -56,10 +56,20 @@ hand side on its own, so that each half step evaluates only its own equations.
 
 Returns `(; groups, constant, algebraic)`:
 
-  - `groups` holds two `(; f, states)`. `f(dv, u, p, t)` writes the time derivatives of
-    the states `states` at the full state `u`, in that order: `dv[k]` is `du[states[k]]`.
-    Taking `v = u[states]` as a partitioned state therefore needs no gather. `f` reads all
-    of `u`, so both halves of a partitioned state are scattered into one full state first.
+  - `groups` holds two `(; f, update!, states)`. `f(dv, u, p, t)` writes the time
+    derivatives of the states `states` at the full state `u`, in that order: `dv[k]` is
+    `du[states[k]]`. Taking `v = u[states]` as a partitioned state therefore needs no
+    gather. `f` reads all of `u`, so both halves of a partitioned state are scattered into
+    one full state first.
+  - `update!(u, p, t, dt)` steps the group's states in place, `u[states] .+= dt .* dv`,
+    without `dv`: each variable's regions are written straight into its block of `u`. With
+    `lossy = true` it is `update!(u, p, t, dt, a, b)`, `u[states] .= a[states] .* u[states]
+    .+ b[states] .* dv`, for per-state coefficient vectors `a` and `b` laid out like `u`.
+    `fuse_broadcasts` and `kwargs` are passed to the code generation of `update!`.
+    An equation that reads a state its group writes, other than its own, would race with
+    the in-place write, so such a group's `update!` reads a copy of `u` taken on entry,
+    into a buffer it allocates once for a `u` like `prob.u0`: it is then not safe to call
+    concurrently. `a` and `b` may be `u` itself, but must not otherwise share memory with it.
   - `constant` holds the states whose time derivative is zero (`Dt(c) ~ 0` coefficient
     fields). Neither group writes them.
   - `algebraic` holds the states `prob.differential_vars` marks algebraic, such as PEC walls
@@ -78,7 +88,9 @@ nodes in `E`'s group. For Maxwell's equations with a Drude current `J` and its i
 equations, which follows the PDEs, the first of each connected component goes in the first
 group. A coupling graph that is not bipartite throws an `ArgumentError`.
 """
-function staggered_groups(prob::DAEProblem)
+function staggered_groups(
+        prob::DAEProblem; lossy = false, fuse_broadcasts = true, kwargs...
+    )
     sys = prob.f.sys
     derivs = filter(!isnothing, map(_solve_time_derivative, get_eqs(sys)))
     owner = map(eq -> _parent_array(only(arguments(eq.lhs))), derivs)
@@ -126,12 +138,111 @@ function staggered_groups(prob::DAEProblem)
         ]
         gsys = Setfield.@set sys.eqs = eqs
         f = ModelingToolkit.generate_rhs(gsys; expression = Val{false}, wrap_gfw = Val{true})
-        (; f, states = states(eqs))
+        update! = _group_update(sys, eqs, prob.u0; lossy, fuse_broadcasts, kwargs...)
+        (; f, update!, states = states(eqs))
     end
     return (;
         groups, constant = states(derivs[isconstant]),
         algebraic = findall(!, prob.differential_vars),
     )
+end
+
+# `update!` for the group of equations `D(u[r]) ~ f` in `eqs`: per variable one in-place
+# function over the variable's grid, compiled from an `ArrayMaker` whose regions are the
+# equations' `r` and whose values are `u[r] + dt * f` (or `a[r] * u[r] + b[r] * f`), called
+# on the variable's block of `u`. The `ArrayMaker` writes only its regions, so constant and
+# algebraic states keep their values.
+function _group_update(sys, eqs, u0; lossy, fuse_broadcasts, codegen_kwargs...)
+    owner(eq) = _parent_array(only(arguments(eq.lhs)))
+    # Without a race every region reads the elements of `u` it writes only at their own
+    # index, so it may read `u` while writing it. With one, every region reads a copy of
+    # `u` taken on entry. The unaliasing of fused code generation is no substitute: it
+    # covers fused regions only, not scalar ones, and released Symbolics does not fuse.
+    entry = _group_race(eqs) === nothing ? nothing : similar(u0)
+    dvs = ModelingToolkitBase.flat_unknowns(sys)
+    ps = ModelingToolkitBase.reorder_parameters(sys)
+    T = SymbolicUtils.SymReal
+    dt = SymbolicUtils.Sym{T}(:mol_dt; type = Real)
+    updates = Tuple(
+        map(unique(map(owner, eqs))) do v
+            idx = SymbolicIndexingInterface.variable_index(sys, v)
+            block = first(idx):last(idx)
+            vec(collect(idx)) == block || throw(
+                ArgumentError("The states of $v are not contiguous in the state vector.")
+            )
+            sh = SymbolicUtils.shape(v)
+            coef(name) = SymbolicUtils.Sym{T}(name; type = Array{Real, length(sh)}, shape = sh)
+            ab = lossy ? (coef(:mol_a), coef(:mol_b)) : ()
+            # An `ArrayMaker` this small is generated element by element, uncovered elements
+            # included, so it is given the variable itself everywhere first.
+            regions = length(v) <= 16 ? [collect(UnitRange{Int}, sh)] : Vector{UnitRange{Int}}[]
+            values = length(v) <= 16 ? Any[v] : Any[]
+            for eq in eqs
+                isequal(owner(eq), v) || continue
+                x = only(arguments(eq.lhs))
+                r = x === v ? collect(UnitRange{Int}, sh) : map(unwrap_const.(arguments(x)[2:end])) do i
+                        UnitRange{Int}(i isa Integer ? (i:i) : i)
+                end
+                slice(c) = Symbolics.unwrap(Symbolics.wrap(c)[r...])
+                ar = map(slice, ab)
+                # a pointwise equation writes `u[i]`, a scalar: its region is `u[i:i]`
+                xr = is_array_valued(x) ? x : slice(v)
+                value = lossy ?
+                    _broadcast(+, _broadcast(*, ar[1], xr), _broadcast(*, ar[2], eq.rhs)) :
+                    _broadcast(+, xr, _broadcast(*, dt, eq.rhs))
+                push!(regions, r)
+                push!(values, value)
+            end
+            maker = SymbolicUtils.ArrayMaker{T}(regions, values; shape = sh)
+            _, iip = ModelingToolkitBase.build_function_wrapper(
+                sys, maker, dvs, ps..., ModelingToolkit.get_iv(sys), dt, ab...; p_start = 2,
+                p_end = 1 + length(ps), u_arg = 1, n_param_buffers = length(ps),
+                fuse_broadcasts, fuse_unalias = false, codegen_kwargs...
+            )
+            f! = ModelingToolkitBase.eval_or_rgf(iip; eval_module = @__MODULE__)
+            (f!, block, size(idx))
+        end
+    )
+    blockview(x, block, dims) = reshape(view(x, block), dims)
+    return function update!(u, p, t, dt, a = nothing, b = nothing)
+        u_entry = _entry_state(entry, u)
+        foreach(updates) do (f!, block, dims)
+            out = blockview(u, block, dims)
+            lossy ?
+                f!(out, u_entry, p, t, dt, blockview(a, block, dims), blockview(b, block, dims)) :
+                f!(out, u_entry, p, t, dt)
+        end
+        return nothing
+    end
+end
+
+# `u` as it is on entry to `update!`: `u` itself for a group without a race, else a copy,
+# into `entry` when `u` is a CPU array of its element type and allocated otherwise, for a
+# GPU array say.
+_entry_state(::Nothing, u) = u
+function _entry_state(
+        entry::Array{T}, u::Union{Array{T}, SubArray{T, <:Any, <:Array}}
+    ) where {T}
+    return copyto!(entry, u)
+end
+_entry_state(entry, u) = copy(u)
+
+# The first `(eq, x)` of the equations `eqs` of one group such that `eq` reads `x`, a slice
+# of a variable the group writes other than the slice `eq` writes, compared by value; or
+# `nothing`. An in-place update without such reads reads each state it writes only in the
+# kernel that writes it, at the same element.
+function _group_race(eqs)
+    written = Set(map(eq -> _parent_array(only(arguments(eq.lhs))), eqs))
+    function slice(x)
+        v = _parent_array(x)
+        return (v, x === v ? nothing : unwrap_const.(arguments(x)[2:end]))
+    end
+    for eq in eqs, x in Symbolics.get_variables(eq.rhs)
+        _parent_array(x) in written || continue
+        xs, ys = slice(x), slice(only(arguments(eq.lhs)))
+        isequal(xs[1], ys[1]) && xs[2] == ys[2] || return (eq, x)
+    end
+    return nothing
 end
 
 # `(lhs = D(u[r]), rhs = f)`, with `f` the literal `0` for a constant, for an equation linear
