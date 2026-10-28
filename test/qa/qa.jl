@@ -23,6 +23,10 @@ run_qa(
                 :AbstractCartesianIndex, :EquationState, :PDESolution,
                 :cardinalize_eqs!, :observed, :parse_bcs, :scalarization_function,
                 :promote_symtype, # public since SymbolicUtils 4.46; older supported releases lack the metadata
+                # SymbolicUtils/ModelingToolkitBase code generation, for the staggered
+                # groups' in-place `update!`, which `generate_rhs` has no option to build
+                :ArrayMaker, :build_function_wrapper, :eval_or_rgf, :flat_unknowns,
+                :reorder_parameters,
             ),
         ),
     ),
