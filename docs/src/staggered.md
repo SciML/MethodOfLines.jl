@@ -19,7 +19,9 @@ edge_aligned_var = [Ex(t, x, y, z) => x, Ey(t, x, y, z) => y, Ez(t, x, y, z) => 
 
 and the 2D TE layout is `[Hz(t, x, y), Ex(t, x, y) => x, Ey(t, x, y) => y]`.
 
-`discretize` returns a `SplitODEProblem` whose `f1` holds the time derivatives of the variables edge aligned in an odd number of directions and whose `f2` holds those of every other variable; `f1 + f2` is the full right hand side. A staggered derivative always couples the two groups, so for Maxwell's equations they are E and H.
+`discretize` returns a `SplitODEProblem` whose `f1` and `f2` each hold the time derivatives of one of two groups of variables; `f1 + f2` is the full right hand side. The groups come from the coupling graph of the variables, in which `u` and `w` are coupled when either appears in the right hand side of the other's time derivative. The two groups 2-colour this graph, so every coupled pair has one variable in each group and a split integrator updates each group from the other. In each connected component of the graph, `f1` takes the group of a variable edge aligned in an odd number of directions. For Maxwell's equations the groups are H in `f1` and E in `f2`. A Drude current `J` is updated from E, so it goes in `f1` with H, although it shares E's points. A variable whose time derivative is zero, such as a coefficient field held fixed by `Dt(ε(t, x)) ~ 0`, goes in `f2`.
+
+A coupling graph with a cycle of odd length, such as three variables each coupled to the other two, has no two such groups. `discretize` then falls back to grouping by staggering: `f1` holds the time derivatives of the variables edge aligned in an odd number of directions and `f2` those of every other variable. `f1 + f2` is still the full right hand side, so any ODE solver gives the same solution as for the unsplit system, but some coupled pairs share a group.
 
 Solvers should be chosen carefully, the only officially supported solver is `SplitEuler`, but in theory any SSP solver could be used.
 
