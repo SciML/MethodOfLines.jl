@@ -1,7 +1,8 @@
 using ModelingToolkit, MethodOfLines, DomainSets, Test
 using SciMLBase: DAEProblem
 using SymbolicIndexingInterface: variable_index
-using SymbolicUtils: operation
+using SymbolicUtils: SymbolicUtils, operation
+using Symbolics: Symbolics
 using StableRNGs
 
 # The names of the variables whose states are in `states`.
@@ -36,6 +37,28 @@ function groups_residual(prob, sg; t = 0.37)
     return maximum(abs, F(du)[rows]) / maximum(abs, F0[rows])
 end
 
+# `update!` steps each group in place exactly as `u[states] .+= dt .* dv` does with the
+# group's `f` (or `.= a .* u .+ b .* dv` when `lossy`), bit for bit, and writes no other
+# state: constant and algebraic states keep their values.
+function updates_match(prob, sg; lossy = false, t = 0.37, dt = 0.013)
+    rng = StableRNG(2)
+    N = length(prob.u0)
+    u, a, b = randn(rng, N), 1 .+ 0.1 .* randn(rng, N), dt .* (1 .+ 0.1 .* randn(rng, N))
+    return all(sg.groups) do g
+        dv = zeros(length(g.states))
+        g.f(dv, u, prob.p, t)
+        expected = copy(u)
+        if lossy
+            expected[g.states] .= a[g.states] .* u[g.states] .+ b[g.states] .* dv
+        else
+            expected[g.states] .+= dt .* dv
+        end
+        stepped = copy(u)
+        lossy ? g.update!(stepped, prob.p, t, dt, a, b) : g.update!(stepped, prob.p, t, dt)
+        stepped == expected
+    end
+end
+
 @testset "1D wave equation: groups ρ | ϕ, Neumann row algebraic" begin
     @parameters t x
     @variables ρ(..) ϕ(..)
@@ -61,6 +84,7 @@ end
     @test variable_names(prob, sg.algebraic) == Set([:ρ, :ϕ])
     @test isempty(sg.constant)
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
 end
 
 @testset "1D Maxwell–Drude with ε ≠ 1: groups E | H, J" begin
@@ -93,6 +117,8 @@ end
     @test variable_names(prob, sg.groups[2].states) == Set([:H, :J])
     @test variable_names(prob, sg.algebraic) == Set([:E])
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
+    @test updates_match(prob, MethodOfLines.staggered_groups(prob; lossy = true); lossy = true)
 end
 
 @testset "Periodic Maxwell–Drude with pointwise interiors: groups E | H, J" begin
@@ -126,6 +152,7 @@ end
     @test variable_names(prob, sg.groups[2].states) == Set([:H, :J])
     @test variable_names(prob, sg.algebraic) == Set([:E, :H])
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
 end
 
 @testset "A coupling graph with an odd cycle has no two groups" begin
@@ -201,6 +228,7 @@ end
     @test variable_names(prob, sg.algebraic) == Set([:Ez])
     @test isempty(sg.constant)
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
 end
 
 @testset "2D TM Yee with a Drude current: groups Ez, G | Hx, Hy, J" begin
@@ -213,6 +241,8 @@ end
     @test sort(sg.constant) == sort(vec(collect(variable_index(prob.f.sys, Eps))))
     @test variable_names(prob, sg.algebraic) == Set([:Ez])
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
+    @test updates_match(prob, MethodOfLines.staggered_groups(prob; lossy = true); lossy = true)
 end
 
 # Velocity Verlet with the groups is Yee's leapfrog. Started from the (1, 1) cavity mode
@@ -291,4 +321,149 @@ end
     @test variable_names(prob, sg.groups[2].states) == Set([:Hx, :Hy, :Hz])
     @test variable_names(prob, sg.algebraic) == Set([:Ex, :Ey, :Ez])
     @test groups_residual(prob, sg) < 1.0e-14
+    @test updates_match(prob, sg)
+end
+
+@testset "An in-place update must not read other states of its own group" begin
+    @variables t x(t)[1:5]
+    D = Differential(t)
+    slice(r) = Symbolics.unwrap(x[r])
+    # spelled as MOL spells a discretized equation, a broadcast over slices
+    eq(r, rhs...) = (lhs = Symbolics.unwrap(D(x[r])), rhs = MethodOfLines._broadcast(rhs...))
+    @test MethodOfLines._group_race([eq(2:4, *, 2, slice(2:4))]) === nothing
+    shifted = eq(2:4, +, slice(1:3), slice(2:4))
+    race = MethodOfLines._group_race([shifted])
+    @test race !== nothing
+    # the slice read, compared by value: `isequal` tells equal ranges apart by their type
+    @test SymbolicUtils.unwrap_const.(SymbolicUtils.arguments(race[2])[2:end]) == [1:3]
+end
+
+@testset "Staggered updates read the complete group entry state" begin
+    for n in (5, 20), scalar_seam in (false, true), periodic in (false, true),
+            scalarize in (false, true), lossy in (false, true)
+        @testset "n=$n scalar=$scalar_seam periodic=$periodic scalarize=$scalarize lossy=$lossy" begin
+            @variables t v(t)[1:n] h(t)[1:n] c(t)[1:n]
+            D = Differential(t)
+            seam = if periodic
+                scalar_seam ? D(v[n]) ~ v[1] - v[n] : D(v[n:n]) ~ v[1:1] .- v[n:n]
+            else
+                D(v[n:n]) ~ zeros(1)
+            end
+            eqs = [D(v[1:(n - 1)]) ~ v[2:n] .- v[1:(n - 1)], seam, D(h) ~ v, D(c) ~ zeros(n)]
+            @named raw = System(eqs, t, [v, h, c], [])
+            sys = complete(raw)
+            prob = DAEProblem(
+                sys, [
+                    v => collect(1.0:n), h => zeros(n), c => fill(3.0, n),
+                    D(v) => zeros(n), D(h) => zeros(n), D(c) => zeros(n),
+                ],
+                (0.0, 1.0); build_initializeprob = false
+            )
+            sg = MethodOfLines.staggered_groups(
+                prob; lossy, scalarize_single_element_regions = scalarize
+            )
+            iv = vec(collect(variable_index(sys, v)))
+            for T in (Float32, Float64), coefficient_alias in (false, true)
+                storage = [T(-777); T.(prob.u0); T(-888)]
+                u = view(storage, 2:(length(storage) - 1))
+                a = coefficient_alias ? u : fill(T(0.75), length(u))
+                b = fill(T(0.125), length(u))
+                dt = T(0.125)
+                for iteration in 1:2, group in sg.groups
+                    entry = copy(u)
+                    aa = copy(a)
+                    dv = zeros(T, length(group.states))
+                    group.f(dv, entry, prob.p, T(0.25))
+                    expected = copy(entry)
+                    if lossy
+                        expected[group.states] .= aa[group.states] .* entry[group.states] .+
+                            b[group.states] .* dv
+                    else
+                        expected[group.states] .+= dt .* dv
+                    end
+                    lossy ? group.update!(u, prob.p, T(0.25), dt, a, b) :
+                        group.update!(u, prob.p, T(0.25), dt)
+                    @test u == expected
+                    untouched = setdiff(eachindex(u), group.states)
+                    @test u[untouched] == entry[untouched]
+                    @test storage[1] == -777 && storage[end] == -888
+                    if periodic && !lossy && iteration == 1 && first(iv) in group.states
+                        @test sum(u[iv]) == sum(entry[iv])
+                    end
+                end
+            end
+        end
+    end
+end
+
+# A periodic forward difference on 20 points, whose seam reads the state the first region
+# writes, spelled as a slice and as a scalar: one step must read the group's state on entry,
+# and so keep the total at 210.
+@testset "update! reads its group's state on entry across a periodic seam" begin
+    @variables t v(t)[1:20] h(t)[1:20]
+    D = Differential(t)
+    dt = 1 / 8
+    for seam in (D(v[20:20]) ~ v[1:1] .- v[20:20], D(v[20]) ~ v[1] - v[20])
+        @named raw = System([D(v[1:19]) ~ v[2:20] .- v[1:19], seam, D(h) ~ v], t, [v, h], [])
+        sys = complete(raw)
+        prob = DAEProblem(
+            sys, [v => collect(1.0:20.0), h => zeros(20), D(v) => zeros(20), D(h) => zeros(20)],
+            (0.0, 1.0); build_initializeprob = false
+        )
+        ids = vec(collect(variable_index(sys, v)))
+        expected = copy(prob.u0)
+        expected[ids] .+= dt .* (circshift(prob.u0[ids], -1) .- prob.u0[ids])
+        for fuse_broadcasts in (true, false), scalarize_single_element_regions in (true, false),
+                lossy in (false, true)
+            sg = MethodOfLines.staggered_groups(
+                prob; lossy, fuse_broadcasts, scalarize_single_element_regions
+            )
+            g = only(filter(g -> ids[1] in g.states, sg.groups))
+            u = copy(prob.u0)
+            lossy ? g.update!(u, prob.p, 0.0, dt, ones(length(u)), fill(dt, length(u))) :
+                g.update!(u, prob.p, 0.0, dt)
+            @test u == expected
+            @test sum(u[ids]) == 210.0
+        end
+    end
+end
+
+# Only a group that reads its own states at other elements copies `u` on entry, into the
+# buffer its `update!` holds as `entry`; Yee's groups, plain or lossy, read `u` itself. With
+# fused code generation no `update!` allocates. The seam is kept a one-element region: its
+# scalarized write allocates 64 bytes in the generated code itself, entry copy or not.
+function seam_problem()
+    @variables t v(t)[1:20] h(t)[1:20]
+    D = Differential(t)
+    eqs = [D(v[1:19]) ~ v[2:20] .- v[1:19], D(v[20]) ~ v[1] - v[20], D(h) ~ v]
+    @named raw = System(eqs, t, [v, h], [])
+    return DAEProblem(
+        complete(raw),
+        [v => collect(1.0:20.0), h => zeros(20), D(v) => zeros(20), D(h) => zeros(20)],
+        (0.0, 1.0); build_initializeprob = false
+    )
+end
+fused = isdefined(Symbolics, :CodegenFunctionOptions) &&
+    hasfield(Symbolics.CodegenFunctionOptions, :fuse_broadcasts)
+@testset "Only a racing group's update! copies its entry state" begin
+    allocations(update!, args...) = (update!(args...); @allocated update!(args...))
+    for (prob, racing, scalarize_single_element_regions) in (
+            (DAEProblem(tm_yee(1 / 10)...), (false, false), true),
+            (seam_problem(), (true, false), false),
+        )
+        N = length(prob.u0)
+        for lossy in (false, true)
+            groups = MethodOfLines.staggered_groups(
+                prob; lossy, scalarize_single_element_regions
+            ).groups
+            @test map(g -> g.update!.entry isa Vector{Float64}, groups) == racing
+            @test all(g -> g.update!.entry === nothing || length(g.update!.entry) == N, groups)
+            fused || continue
+            for g in groups
+                args = lossy ? (copy(prob.u0), prob.p, 0.0, 0.01, ones(N), fill(0.01, N)) :
+                    (copy(prob.u0), prob.p, 0.0, 0.01)
+                @test allocations(g.update!, args...) == 0
+            end
+        end
+    end
 end
