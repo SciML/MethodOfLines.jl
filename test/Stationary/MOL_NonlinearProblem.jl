@@ -234,3 +234,26 @@ end
         pdesys, MOLFiniteDifference([x => 0.25], nothing)
     )
 end
+
+@testset "Stationary default abstol is bounded and optional" begin
+    @parameters x
+    @variables u(..)
+    Dxx = Differential(x)^2
+    domains = [x ∈ Interval(0.0, 1.0)]
+    disc = MOLFiniteDifference([x => 0.25], nothing)
+
+    # J(u0) is ~e^100 here; an unbounded Jacobian-scaled abstol would accept any iterate.
+    @named stiff = PDESystem(
+        [Dxx(u(x)) - (exp(100 * u(x)) - 1) ~ 0], [u(0) ~ 0, u(1) ~ 0], domains, [x], [u(x)]
+    )
+    prob = discretize(stiff, disc)
+    @test prob.kwargs[:abstol] <= 1.0e-8
+    sol = NonlinearSolve.solve(prob, NewtonRaphson())
+    @test !SciMLBase.successful_retcode(sol) || maximum(abs, sol[u(x)]) < 1.0e-6
+
+    # Without a symbolic Jacobian the NonlinearSolve default tolerance is left alone.
+    @named linear = PDESystem([Dxx(u(x)) ~ 0], [u(0) ~ 1, u(1) ~ 2], domains, [x], [u(x)])
+    nojac = discretize(linear, disc; jac = false)
+    @test !haskey(nojac.kwargs, :abstol)
+    @test NonlinearSolve.solve(nojac, NewtonRaphson()).retcode == ReturnCode.Success
+end

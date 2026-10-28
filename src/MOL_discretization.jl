@@ -275,12 +275,14 @@ function _stationary_problem(sys, discretization::MOLDiscretization; kwargs...)
     prob = NonlinearProblem(
         simpsys, u0_guess; sparse = true, jac = true, discretization.kwargs..., kwargs...
     )
-    haskey(prob.kwargs, :abstol) && return prob
+    (haskey(prob.kwargs, :abstol) || prob.f.jac === nothing) && return prob
     # The stencil residual cannot drop below roundoff ~ eps * ||J|| ~ eps / h^2, which grows
-    # past the default abstol on fine grids and makes Newton report `Stalled`.
+    # past the default abstol on fine grids and makes Newton report `Stalled`. J(u0) is only
+    # a scale guess (it can be enormous for a nonlinear system), so the result is capped.
+    T = real(eltype(prob.u0))
     scale = LinearAlgebra.norm(prob.f.jac(prob.u0, prob.p), Inf)
     isfinite(scale) || return prob
-    abstol = max(100 * eps(real(eltype(prob.u0))) * scale, eps(real(eltype(prob.u0)))^(4 // 5))
+    abstol = clamp(100 * eps(T) * scale, eps(T)^(4 // 5), T(1.0e-8))
     return SciMLBase.remake(prob; kwargs = (; prob.kwargs..., abstol))
 end
 
