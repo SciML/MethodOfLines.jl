@@ -2,7 +2,7 @@
 
 julia_version = "1.13.3"
 manifest_format = "2.1"
-project_hash = "9b597fc5ae7d21cc6c7b3574e121bf40f970d8a1"
+project_hash = "dd0b7dae2aa29afe1a58448cdb1d15b5f8429763"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -1918,7 +1918,7 @@ version = "0.3.3"
 
 [[deps.MethodOfLines]]
 deps = ["Combinatorics", "DiffEqBase", "DomainSets", "Interpolations", "Latexify", "LinearAlgebra", "ModelingToolkit", "ModelingToolkitBase", "PDEBase", "PrecompileTools", "RuntimeGeneratedFunctions", "SciMLBase", "Setfield", "StaticArrays", "SymbolicIndexingInterface", "SymbolicUtils", "Symbolics", "TermInterface"]
-path = "/home/runner/_work/MethodOfLines.jl/MethodOfLines.jl"
+path = "/home/runner/work/MethodOfLines.jl/MethodOfLines.jl"
 uuid = "94925ecb-adb7-4558-8ed8-f975c56a0bf4"
 version = "2.0.0"
 weakdeps = ["AbstractFFTs", "ModelingToolkitNeuralNets"]
@@ -2448,10 +2448,10 @@ version = "10.47.0+0"
 
 [[deps.PDEBase]]
 deps = ["DomainSets", "IntervalSets", "ModelingToolkitBase", "PrecompileTools", "SciMLBase", "SciMLPublic", "SymbolicIndexingInterface", "SymbolicUtils", "Symbolics", "TermInterface"]
-git-tree-sha1 = "c8a2beff749cb9bc2d7c7066687b6b7657c84e39"
+git-tree-sha1 = "7f46abb37516358e1dc35c4d3e5a1ad5bc9c241b"
 registries = "General"
 uuid = "a7812802-0625-4b9e-961c-d332478797e5"
-version = "0.1.39"
+version = "0.1.40"
 
 [[deps.PDMats]]
 deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
