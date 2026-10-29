@@ -56,6 +56,18 @@ end
 
 function PDEBase.should_transform(pdesys::PDESystem, disc::MOLFiniteDifference, boundarymap)
     if !disc.should_transform
+        # The automatic HermiteScheme finds its derivative partners during the
+        # transformation; without it every derivative would silently fall back to
+        # centered differences.
+        scheme = disc.advection_scheme
+        scheme isa HermiteScheme && scheme.automatic && throw(
+            ArgumentError(
+                "`HermiteScheme()` introduces its derivative partners by transforming " *
+                    "the PDE system, which `should_transform = false` disables. Set " *
+                    "`should_transform = true`, or give the partners explicitly with " *
+                    "`HermiteScheme(deriv_var = u => v)`."
+            )
+        )
         return false
     end
     if has_interfaces(boundarymap) && !(disc.advection_scheme isa HermiteScheme)
@@ -247,19 +259,29 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
             # Register the new variable in the VariableMap.
             update_varmap!(v, newvar)
 
-            # Find the original PDE for u: the equation whose LHS contains Dt(u).
+            # Find the original PDE for u: the one equation containing Dt(u). Other
+            # equations may mention u (coupled systems), so containing u is not enough.
             Dt = Differential(t)
-            u_eq_idx = findfirst(eqs) do eq
-                dv = get_depvars(eq.lhs, v.depvar_ops)
-                any(d -> isequal(operation(d), uop), dv)
-            end
-            u_eq_idx === nothing && error(
-                "HermiteScheme: could not find a time-evolution equation for $uop."
+            dt_u = Dt(u_applied)
+            u_eq_idxs = findall(eq -> Symbolics.hasnode(Symbolics.value(dt_u), Symbolics.value(eq.lhs - eq.rhs)), eqs)
+            isempty(u_eq_idxs) && throw(
+                ArgumentError(
+                    "HermiteScheme needs an equation with the first time derivative " *
+                        "$dt_u to transform $u_applied; none of the equations contains it. " *
+                        "Write higher time derivatives as a first-order system, e.g. " *
+                        "`Dt(u) ~ p` and `Dt(p) ~ ...` for `Dt(Dt(u)) ~ ...`."
+                )
             )
+            length(u_eq_idxs) == 1 || throw(
+                ArgumentError(
+                    "HermiteScheme needs exactly one equation with $dt_u to transform " *
+                        "$u_applied, found $(length(u_eq_idxs)): $(eqs[u_eq_idxs])."
+                )
+            )
+            u_eq_idx = only(u_eq_idxs)
             # PDEBase cardinalizes equations before this transformation, so the
             # equation is `lhs - rhs ~ 0` and its stored RHS is zero. Recover
             # the actual evolution RHS by solving for the time derivative.
-            dt_u = Dt(u_applied)
             original_rhs = symbolic_linear_solve(eqs[u_eq_idx], dt_u)
 
             # Replacement rule: Dx(u(t,x,...)) => v(t,x,...) throughout the system.

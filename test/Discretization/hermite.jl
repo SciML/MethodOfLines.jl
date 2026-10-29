@@ -401,3 +401,113 @@ end
     @test length(scheme.deriv_var) == 1
     @test isequal(only(keys(scheme.deriv_var)), operation(Symbolics.value(q(t, x))))
 end
+
+@testset "HermiteScheme with should_transform = false" begin
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Dx^2
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(-1.0, 1.0)]
+
+    # The automatic scheme needs the transformation to find its partners, so turning
+    # it off must not silently fall back to centered differences.
+    advection = PDESystem(
+        Dt(u(t, x)) ~ -Dx(u(t, x)),
+        [
+            u(0, x) ~ exp(-x^2), u(t, -1.0) ~ exp(-(-1.0 - t)^2),
+            u(t, 1.0) ~ exp(-(1.0 - t)^2),
+        ],
+        domains, [t, x], [u(t, x)]; name = :no_transform_auto
+    )
+    automatic = MOLFiniteDifference(
+        [x => 0.5], t; advection_scheme = HermiteScheme(), should_transform = false
+    )
+    err = @test_throws ArgumentError symbolic_discretize(advection, automatic)
+    @test occursin("should_transform = false", sprint(showerror, err.value))
+    @test occursin("deriv_var", sprint(showerror, err.value))
+    @test_throws ArgumentError discretize(advection, automatic)
+
+    # A scheme whose partners were filled in by an earlier transformed run must not
+    # reuse them, possibly from another system, once the transformation is off.
+    reused = HermiteScheme()
+    symbolic_discretize(advection, MOLFiniteDifference([x => 0.5], t; advection_scheme = reused))
+    @test !isempty(reused.deriv_var)
+    @test_throws ArgumentError symbolic_discretize(
+        advection,
+        MOLFiniteDifference([x => 0.5], t; advection_scheme = reused, should_transform = false)
+    )
+
+    # Explicit partners need no transformation, so they still work.
+    coupled = PDESystem(
+        [Dt(u(t, x)) ~ -v(t, x), Dt(v(t, x)) ~ -Dxx(u(t, x))],
+        [
+            u(0, x) ~ 0.0, v(0, x) ~ 0.0, u(t, -1.0) ~ 0.0, u(t, 1.0) ~ 0.0,
+            v(t, -1.0) ~ 0.0, v(t, 1.0) ~ 0.0,
+        ],
+        domains, [t, x], [u(t, x), v(t, x)]; name = :no_transform_explicit
+    )
+    explicit(should_transform) = MOLFiniteDifference(
+        [x => 0.25], t; advection_scheme = HermiteScheme(deriv_var = u => v),
+        should_transform
+    )
+    sys_off, tspan = symbolic_discretize(coupled, explicit(false))
+    @test tspan == (0.0, 0.1)
+    eqs_off = string.(ModelingToolkit.equations(sys_off))
+    # Same equations as with the transformation on.
+    sys_on, _ = symbolic_discretize(coupled, explicit(true))
+    @test Set(eqs_off) == Set(string.(ModelingToolkit.equations(sys_on)))
+    # Hermite weights are used: Dxx(u) at node 2 reads v at nodes 1 and 3, which a
+    # centered difference of u does not.
+    v2 = only(filter(e -> occursin("Differential(t, 1)((v(t))[2])", e), eqs_off))
+    @test occursin("(v(t))[1]", v2) && occursin("(v(t))[3]", v2)
+end
+
+@testset "HermiteScheme automatic transformation picks the Dt(u) equation" begin
+    @parameters t x
+    @variables u(..) w(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    T = 0.1
+    u_exact(x, t) = exp(-π^2 * t) * sin(π * x)
+    w_exact(x, t) = t * exp(-π^2 * t) * sin(π * x)
+    domains = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)]
+    bcs = [
+        u(0, x) ~ sin(π * x), w(0, x) ~ 0.0,
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0, w(t, 0) ~ 0.0, w(t, 1) ~ 0.0,
+    ]
+    eq_u = Dt(u(t, x)) ~ Dxx(u(t, x))
+    eq_w = Dt(w(t, x)) ~ Dxx(w(t, x)) + u(t, x)
+    hermite() = MOLFiniteDifference([x => 0.1], t; advection_scheme = HermiteScheme())
+
+    # The w equation mentions u; whichever order the equations and unknowns come in,
+    # u must be paired with its own Dt(u) equation.
+    for (eqs, dvs) in (
+            ([eq_u, eq_w], [u(t, x), w(t, x)]), ([eq_w, eq_u], [u(t, x), w(t, x)]),
+            ([eq_w, eq_u], [w(t, x), u(t, x)]), ([eq_u, eq_w], [w(t, x), u(t, x)]),
+        )
+        @named coupled = PDESystem(eqs, bcs, domains, [t, x], dvs)
+        sol = solve(discretize(coupled, hermite()); abstol = 1.0e-10, reltol = 1.0e-10)
+        @test successful_retcode(sol)
+        @test maximum(abs, sol[u(t, x)][end, :] .- u_exact.(sol[x], T)) < 1.0e-4
+        @test maximum(abs, sol[w(t, x)][end, :] .- w_exact.(sol[x], T)) < 1.0e-5
+    end
+
+    # No first time derivative of u: a clear error rather than a wrong system.
+    @named wave = PDESystem(
+        Dt(Dt(u(t, x))) ~ Dxx(u(t, x)),
+        [u(0, x) ~ sin(π * x), Dt(u(0, x)) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        domains, [t, x], [u(t, x)]
+    )
+    err = @test_throws ArgumentError symbolic_discretize(wave, hermite())
+    @test occursin("first time derivative", sprint(showerror, err.value))
+    @test occursin("first-order system", sprint(showerror, err.value))
+
+    # Dt(u) in two equations is ambiguous.
+    @named twice = PDESystem(
+        [eq_u, Dt(w(t, x)) ~ Dxx(w(t, x)) + Dt(u(t, x))], bcs, domains, [t, x],
+        [u(t, x), w(t, x)]
+    )
+    err = @test_throws ArgumentError symbolic_discretize(twice, hermite())
+    @test occursin("exactly one equation", sprint(showerror, err.value))
+end
