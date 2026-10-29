@@ -10,7 +10,7 @@ using ModelingToolkit: get_unknowns,
     get_ivs
 import ModelingToolkitBase
 using ModelingToolkitBase: @named, @parameters, PDESystem, complete, initialization_equations,
-    mtkcompile, unknowns
+    mtkcompile
 import SymbolicIndexingInterface
 using SymbolicIndexingInterface: NotSymbolic, symbolic_type
 import SymbolicUtils
@@ -20,6 +20,8 @@ using Symbolics: @variables, Differential, Equation, Integral, Num, terms
 using Symbolics: unwrap, symbolic_linear_solve, expand_derivatives, diff2term,
     symbolic_to_float
 using SymbolicUtils: operation, arguments, iscall, getmetadata, unwrap_const
+import TermInterface
+import Setfield
 import StaticArrays
 using StaticArrays: SVector
 import Interpolations
@@ -66,6 +68,7 @@ import SciMLBase.symbolic_discretize
 import PDEBase.get_time
 import PDEBase.get_eqvar
 import PDEBase.get_discvars
+import PDEBase.get_system_unknowns
 import PDEBase.depvar
 import PDEBase.x2i
 import Base.display
@@ -84,6 +87,7 @@ include("interface/scheme_types.jl")
 include("interface/callbacks.jl")
 include("interface/MOLFiniteDifference.jl")
 include("interface/PseudospectralDiscretization.jl")
+include("interface/point_ports.jl")
 
 include("discretization/discretize_vars.jl")
 include("MOL_utils.jl")
@@ -130,7 +134,9 @@ include("discretization/schemes/pseudospectral/pseudospectral.jl")
 include("discretization/generate_finite_difference_rules.jl")
 include("discretization/generate_bc_eqs.jl")
 include("discretization/generate_ic_defaults.jl")
+include("discretization/generate_initialization.jl")
 include("discretization/staggered_discretize.jl")
+include("discretization/port_selection.jl")
 
 # Main
 include("discretization/discretize_equations.jl")
@@ -146,5 +152,6 @@ export MOLFiniteDifference, PseudospectralDiscretization, ChebyshevCollocation,
     FourierCollocation, discretize, symbolic_discretize, ODEFunctionExpr, generate_code,
     edge_align, center_align, get_discrete, chebyspace
 export UpwindScheme, WENOScheme, FunctionalScheme, HermiteScheme, MOLDiscCallback
+export PointPort, Nearest, Interpolate
 
 end

@@ -335,6 +335,9 @@ function whole_domain_integral(II, s, jx, u, ufunc)
     return _euler_integral(Imax, s, jx, u, ufunc, dx)
 end
 
+has_integral(ex) = iscall(ex) && (operation(ex) isa Integral || any(has_integral, arguments(ex)))
+has_integral(pde::Equation) = has_integral(safe_unwrap(pde.lhs)) || has_integral(safe_unwrap(pde.rhs))
+
 @inline function generate_euler_integration_rules(
         II::CartesianIndex, s::DiscreteSpace, depvars, indexmap, terms
     )

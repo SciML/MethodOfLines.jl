@@ -128,7 +128,7 @@ discretization = PseudospectralDiscretization([x => FourierCollocation(64)], t)
 - Derivatives are dense matrix products, `O(n^2)` per application in one
   dimension, and the Jacobian is dense.
 """
-struct PseudospectralDiscretization <: AbstractEquationSystemDiscretization
+struct PseudospectralDiscretization <: PDEBase.AbstractBoxDiscretization
     dxs::Any
     time::Any
     kwargs::Any

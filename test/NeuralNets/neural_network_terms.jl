@@ -193,7 +193,8 @@ end
     # The periodic seam points stay pointwise; their number does not grow with the grid.
     nscalar_interior(sys) = count(!isarrayeq, filter(isinterioreq, get_eqs(sys)))
     sys, _ = symbolic_discretize(bruss, disc)
-    @test narrayeqs_interior(sys) == 2
+    # per field, the core and the two seam points, each a one-element slice
+    @test narrayeqs_interior(sys) == 6
     sys_fine, _ = symbolic_discretize(bruss, MOLFiniteDifference([x => 0.025], t))
     @test nscalar_interior(sys_fine) == nscalar_interior(sys)
     sol = solve(discretize(bruss, disc); saveat = 0.1)
@@ -247,26 +248,31 @@ end
         )
     end
     # (right-hand side for a network, batched network, point-by-point twin, parameters,
-    # function in the interior equation)
+    # function in the interior equation, interior equations). `Dx(c Dx(u))` keeps its
+    # core to 4:19, which leaves the frame points 2, 3 and 20 as one-element slices.
     cases = (
         (
             net -> Dx((1 + net(u(t, x), θc)[1]) * Dx(u(t, x))), NNc, NNcpp, θc,
-            "array_batch_callable_getindex(",
+            "array_batch_callable_getindex(", 4,
         ),
         (
             net -> Dx((1 + net([u(t, x), x], θx)[1]) * Dx(u(t, x))), NNx, NNxpp, θx,
-            "array_batch_callable_stacked_getindex(",
+            "array_batch_callable_stacked_getindex(", 4,
         ),
         (
             net -> (1 + net([u(t, x), x], θx)[1]) * Dxx(u(t, x)), NNx, NNxpp, θx,
-            "array_batch_callable_stacked_getindex(",
+            "array_batch_callable_stacked_getindex(", 1,
         ),
     )
-    for (rhs, net, netpp, ps, fname) in cases
+    for (rhs, net, netpp, ps, fname, n) in cases
         pdesys = system(rhs(net), [net, ps], :nn_coefficient)
         sys, _ = symbolic_discretize(pdesys, disc)
-        @test narrayeqs_interior(sys) == 1
-        int_eq = only(filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys)))
+        @test narrayeqs_interior(sys) == n
+        # the core equation: the interior equation over the most points
+        int_eq = argmax(
+            eq -> length(Symbolics.unwrap(eq.lhs)),
+            filter(eq -> isinterioreq(eq) && isarrayeq(eq), get_eqs(sys))
+        )
         @test occursin(fname, string(int_eq))
         sol = solve_tight(discretize(pdesys, disc))
         @test successful_retcode(sol)

@@ -22,6 +22,10 @@ A discretization algorithm.
   stable and accurate at the cost of complexity.
 - `grid_align`: The grid alignment value. Use [`center_align`](@ref),
   [`edge_align`](@ref), or `StaggeredGrid()` as appropriate for the discretization.
+- `edge_aligned_var`: Required with `StaggeredGrid()`. The dependent variable, or a
+  collection of dependent variables, that is edge aligned. Every other dependent
+  variable is center aligned. An entry `u => x` or `u => (x, y)` edge aligns `u` in
+  those directions only, as a Yee grid needs (`Ex(t, x, y) => x`).
 - `kwargs`: Additional keyword arguments passed to the generated problem.
 
 # Fields
@@ -50,7 +54,7 @@ discretization = MOLFiniteDifference([x => 0.1], t)
 ```
 
 """
-struct MOLFiniteDifference{G} <: AbstractEquationSystemDiscretization
+struct MOLFiniteDifference{G} <: PDEBase.AbstractBoxDiscretization
     dxs::Any
     time::Any
     approx_order::Int
@@ -60,6 +64,7 @@ struct MOLFiniteDifference{G} <: AbstractEquationSystemDiscretization
     useIR::Bool
     callbacks::Any
     kwargs::Any
+    ports::Vector{Any}
 end
 
 # Constructors. If no order is specified, both upwind and centered differences will be 2nd order
@@ -90,8 +95,14 @@ function MOLFiniteDifference(
 
     return MOLFiniteDifference{typeof(grid_align)}(
         dxs, time, approx_order, advection_scheme, grid_align, should_transform,
-        useIR, callbacks, kwargs
+        useIR, callbacks, kwargs, Any[]
     )
 end
+
+# The PointPorts of the system being discretized, set by `symbolic_discretize`.
+with_ports(d::MOLFiniteDifference{G}, ports) where {G} = MOLFiniteDifference{G}(
+    d.dxs, d.time, d.approx_order, d.advection_scheme, d.grid_align, d.should_transform,
+    d.useIR, d.callbacks, d.kwargs, collect(Any, ports)
+)
 
 PDEBase.get_time(disc::MOLFiniteDifference) = disc.time

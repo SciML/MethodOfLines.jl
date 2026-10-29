@@ -20,6 +20,7 @@ pages = [
     "Solution Interface - PDESolutions" => "solutions.md",
     "Grid and Solution Retrieval - Deprecated" => "get_grid.md",
     "Boundary Conditions" => "boundary_conditions.md",
+    "Connector Ports" => "connectors.md",
     "Advection Schemes" => "advection_schemes.md",
     "Hermite Finite Differences" => "fornberg_hermite_weights.md",
     "Non-Uniform Rectilinear Grids" => "nonuniform.md",
@@ -28,5 +29,5 @@ pages = [
     "How it Works" => "howitworks.md",
     "Notes for Developers: Implement a Scheme" => "devnotes.md",
     "Generated Examples" => ["generated/bruss_code.md", "generated/bruss_ode_eqs.md"],
-    "API Reference" => ["api/discretization.md", "api/utils.md"],
+    "API Reference" => ["api/discretization.md", "api/connectors.md", "api/developer.md", "api/utils.md"],
 ]

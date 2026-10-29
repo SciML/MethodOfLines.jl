@@ -26,6 +26,7 @@ const FUNCTIONAL_GROUPS = [
     "Convection_NU",
     "Wave_Eq_Staggered",
     "Discretization",
+    "Connectors",
     "Pseudospectral",
 ]
 
@@ -74,6 +75,15 @@ run_tests(;
             end
             @safetestset "Missing dependent variable" begin
                 include(joinpath(@__DIR__, "Components", "missing_dependent_variable.jl"))
+            end
+            @safetestset "Zero-extent BC extrapolation on small grids" begin
+                include(joinpath(@__DIR__, "Components", "bc_extrap_zero_extent.jl"))
+            end
+            @safetestset "Box discretization supertype" begin
+                include(joinpath(@__DIR__, "Components", "box_discretization_supertype.jl"))
+            end
+            @safetestset "PointPort node selection" begin
+                include(joinpath(@__DIR__, "Components", "point_ports.jl"))
             end
             return @safetestset "Discrete Callbacks" begin
                 include(joinpath(@__DIR__, "Components", "callbacks.jl"))
@@ -127,7 +137,14 @@ run_tests(;
                 include(joinpath(@__DIR__, "Convection_NU", "MOL_1D_Interface_Upwind_NonUniform.jl"))
             end
         end,
-        "Wave_Eq_Staggered" => joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"),
+        "Wave_Eq_Staggered" => function ()
+            @safetestset "Staggered grids" begin
+                include(joinpath(@__DIR__, "Wave_Eq_Staggered", "wave_eq_staggered.jl"))
+            end
+            return @safetestset "Staggered groups" begin
+                include(joinpath(@__DIR__, "Wave_Eq_Staggered", "staggered_groups.jl"))
+            end
+        end,
         "Pseudospectral" => function ()
             @safetestset "Pseudospectral discretization" begin
                 include(joinpath(@__DIR__, "Pseudospectral", "pseudospectral.jl"))
@@ -147,10 +164,17 @@ run_tests(;
                 include(joinpath(@__DIR__, "Discretization", "problem_construction.jl"))
             end
         end,
+        "Connectors" => joinpath(@__DIR__, "Connectors", "point_ports_heat.jl"),
         # Own environment: ModelingToolkitNeuralNets pulls in Lux. Not part of "All".
         "NeuralNets" => (;
             env = joinpath(@__DIR__, "NeuralNets"),
             body = joinpath(@__DIR__, "NeuralNets", "neural_network_terms.jl"),
+        ),
+        # Own environment: needs CUDA and a GPU. Not part of "All" and not listed in
+        # test_groups.toml, so CI never runs it; run locally with GROUP=GPU.
+        "GPU" => (;
+            env = joinpath(@__DIR__, "GPU"),
+            body = joinpath(@__DIR__, "GPU", "solution_wrap.jl"),
         ),
     ),
     qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),

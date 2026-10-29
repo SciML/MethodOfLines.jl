@@ -134,6 +134,24 @@ function get_discrete(pdesys, discretization)
     )
 end
 
+# PDEBase rebuilds the PDESystem without its `systems` before any discretizer hook runs,
+# so the PointPorts travel on the discretization instead.
+function SciMLBase.symbolic_discretize(
+        pdesys::PDESystem, discretization::MOLDiscretization; checks = true
+    )
+    generic(disc, checks) = invoke(
+        SciMLBase.symbolic_discretize,
+        Tuple{PDESystem, AbstractEquationSystemDiscretization},
+        pdesys, disc; checks
+    )
+    ports = point_port_systems(pdesys)
+    isempty(ports) && return generic(discretization, checks)
+    discretization isa MOLFiniteDifference ||
+        throw(ArgumentError("PointPorts are only supported with MOLFiniteDifference."))
+    sys, tspan = generic(with_ports(discretization, ports), false)
+    return attach_point_ports(sys, ports; checks), tspan
+end
+
 """
     ODEFunctionExpr(pdesys, discretization)
 
@@ -142,6 +160,7 @@ Generate an expression for the ODE function produced by method-of-lines discreti
 function ODEFunctionExpr(
         pdesys::PDESystem, discretization::MethodOfLines.MOLDiscretization
     )
+    reject_point_ports(pdesys, "ODEFunctionExpr")
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     return try
         if tspan === nothing
@@ -164,6 +183,7 @@ function SciMLBase.ODEFunction(
         pdesys::PDESystem, discretization::MethodOfLines.MOLDiscretization;
         analytic = nothing, kwargs...
     )
+    reject_point_ports(pdesys, "ODEFunction")
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
     return try
         if tspan === nothing
@@ -247,6 +267,7 @@ function SciMLBase.discretize(
         pdesys::PDESystem, discretization::MOLDiscretization;
         analytic = nothing, checks = true, fallback = true, kwargs...
     )
+    reject_point_ports(pdesys, "discretize")
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization; checks = checks)
     if tspan === nothing
         return _stationary_problem(sys, discretization; kwargs...)

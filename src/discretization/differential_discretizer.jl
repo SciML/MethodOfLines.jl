@@ -16,6 +16,7 @@ struct DifferentialDiscretizer{T, D1, S, H} <: AbstractDifferentialDiscretizer
     boundary::Dict{Num, DerivativeOperator}
     callbacks::Any
     icformulas::Any
+    ports::Vector{Any}
     hermitemap::H  # HFD weights by derivative operator
 end
 
@@ -29,6 +30,14 @@ function PDEBase.construct_differential_discretizer(
     approx_order = discretization.approx_order
     advection_scheme = discretization.advection_scheme
     callbacks = discretization.callbacks
+    ports = discretization.ports
+    if !isempty(ports)
+        s.time === nothing &&
+            throw(ArgumentError("PointPorts are not supported on stationary (time-independent) systems."))
+        get_grid_type(s) <: StaggeredGrid &&
+            throw(ArgumentError("PointPorts are not supported on a StaggeredGrid."))
+        foreach(p -> port_depvar(port_spec(p), s), ports)
+    end
     upwind_order = advection_scheme isa UpwindScheme ? advection_scheme.order : 1
 
     differentialmap = Array{Pair{Num, DerivativeOperator}, 1}()
@@ -142,7 +151,7 @@ function PDEBase.construct_differential_discretizer(
         approx_order, advection_scheme, Dict(differentialmap),
         (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)),
         Dict(interp), Dict(orders), Dict(boundary), callbacks,
-        array_ic_formulas(pdesys, s), hermitemap
+        array_ic_formulas(pdesys, s), ports, hermitemap
     )
 end
 
