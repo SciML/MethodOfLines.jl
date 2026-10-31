@@ -5388,3 +5388,108 @@ end
     end
     @test log2(errs[1] / errs[2]) > 1.8
 end
+
+@testset "Boundary condition referencing another variable's trace" begin
+    # v(t, 1) ~ u(t, 1) is owned by v, and u has no condition at x = 1 (outflow).
+    # The trace u(t, 1.0) must become the grid value of u at x = 1.
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    eqs = [Dt(u(t, x)) ~ -Dx(u(t, x)), Dt(v(t, x)) ~ Dxx(v(t, x))]
+    bcs = [
+        u(0, x) ~ sin(2π * x), u(t, 0) ~ sin(-2π * t),
+        v(0, x) ~ x * sin(2π), v(t, 0) ~ 0.0, v(t, 1) ~ u(t, 1),
+    ]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
+    disc = MOLFiniteDifference([x => 0.05], t)
+
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    # no continuous trace such as u(t, 1) or u(t, 1.0) is left in the equations
+    @test !any(eq -> occursin(r"u\(t, [0-9.]+\)", string(eq)), equations(sys))
+
+    prob = ODEProblem(mtkcompile(sys), nothing, tspan)
+    sol = solve(prob, Tsit5(); saveat = 0.1, abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[v(t, x)][end, end] ≈ sol[u(t, x)][end, end] atol = 1.0e-8
+end
+
+@testset "Corner points read by a mixed derivative" begin
+    # No face covers a corner, and the centred stencil of u_xy at (2, 2) reads the corner
+    # (1, 1). Corners used to be 0 there, so the solution did not converge. The source
+    # makes u = cos(πx) cos(πy) (1 + sin(t)/2) exact, with Neumann conditions; it is
+    # ±1.42 at the corners at t = 1.
+    @parameters t x y
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dy = Differential(y)
+    T = 1.0
+    g(t) = 1 + sin(t) / 2
+    uexact(x, y, t) = cos(π * x) * cos(π * y) * g(t)
+    source(x, y, t, c) = cos(π * x) * cos(π * y) * cos(t) / 2 + 2π^2 * uexact(x, y, t) -
+        c * π^2 * sin(π * x) * sin(π * y) * g(t)
+    bcs = [
+        u(0, x, y) ~ uexact(x, y, 0.0),
+        Dx(u(t, 0.0, y)) ~ 0.0, Dx(u(t, 1.0, y)) ~ 0.0,
+        Dy(u(t, x, 0.0)) ~ 0.0, Dy(u(t, x, 1.0)) ~ 0.0,
+    ]
+    domains = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    function corner_run(rhs, N)
+        @named pdesys = PDESystem(
+            [Dt(u(t, x, y)) ~ rhs], bcs, domains, [t, x, y], [u(t, x, y)]
+        )
+        disc = MOLFiniteDifference([x => 1 / (N - 1), y => 1 / (N - 1)], t)
+        sys, tspan = symbolic_discretize(pdesys, disc)
+        prob = ODEProblem(mtkcompile(sys), nothing, tspan)
+        sol = solve(prob, Tsit5(); saveat = [0.0, T], abstol = 1.0e-10, reltol = 1.0e-10)
+        @test SciMLBase.successful_retcode(sol)
+        U, xs, ys = sol[u(t, x, y)][end, :, :], sol[x], sol[y]
+        err = maximum(
+            abs(U[i, j] - uexact(xs[i], ys[j], T))
+                for i in 1:N, j in 1:N if !(i in (1, N) && j in (1, N))
+        )
+        return err, U[1, 1]
+    end
+    laplacian = Dx(Dx(u(t, x, y))) + Dy(Dy(u(t, x, y)))
+    mixed = laplacian + Dx(Dy(u(t, x, y))) + source(x, y, t, 1)
+    plain = laplacian + source(x, y, t, 0)
+
+    # With u_xy: second order, and the corner holds the solution (was 0, error about 3)
+    e17, c17 = corner_run(mixed, 17)
+    e33, c33 = corner_run(mixed, 33)
+    @test e17 < 0.1
+    @test log2(e17 / e33) > 1.8
+    @test c33 ≈ uexact(0.0, 0.0, T) atol = 3.0e-2
+
+    # Without a mixed derivative nothing reads the corners, and they keep their old value 0
+    _, c0 = corner_run(plain, 17)
+    @test c0 == 0
+
+    # 3D: corners, edges and vertices keep their array form, so the number of equations
+    # does not depend on the grid (1 interior, 6 faces, 12 edges, 8 vertices)
+    @parameters z
+    Dz = Differential(z)
+    U3 = u(t, x, y, z)
+    @named pdesys3 = PDESystem(
+        [Dt(U3) ~ Dx(Dx(U3)) + Dy(Dy(U3)) + Dz(Dz(U3)) + Dx(Dy(U3))],
+        [
+            u(0, x, y, z) ~ 0.0,
+            u(t, 0.0, y, z) ~ 0.0, u(t, 1.0, y, z) ~ 0.0, u(t, x, 0.0, z) ~ 0.0,
+            u(t, x, 1.0, z) ~ 0.0, u(t, x, y, 0.0) ~ 0.0, u(t, x, y, 1.0) ~ 0.0,
+        ],
+        [
+            t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0),
+            z ∈ Interval(0.0, 1.0),
+        ],
+        [t, x, y, z], [U3]
+    )
+    for N in (9, 13)
+        dx = 1 / (N - 1)
+        disc3 = MOLFiniteDifference([x => dx, y => dx, z => dx], t)
+        sys3, _ = symbolic_discretize(pdesys3, disc3)
+        @test length(equations(sys3)) == 27
+    end
+end
