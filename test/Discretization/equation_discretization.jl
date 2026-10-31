@@ -5388,3 +5388,30 @@ end
     end
     @test log2(errs[1] / errs[2]) > 1.8
 end
+
+@testset "Boundary condition referencing another variable's trace" begin
+    # v(t, 1) ~ u(t, 1) is owned by v, and u has no condition at x = 1 (outflow).
+    # The trace u(t, 1.0) must become the grid value of u at x = 1.
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    eqs = [Dt(u(t, x)) ~ -Dx(u(t, x)), Dt(v(t, x)) ~ Dxx(v(t, x))]
+    bcs = [
+        u(0, x) ~ sin(2π * x), u(t, 0) ~ sin(-2π * t),
+        v(0, x) ~ x * sin(2π), v(t, 0) ~ 0.0, v(t, 1) ~ u(t, 1),
+    ]
+    domains = [t ∈ Interval(0.0, 0.2), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
+    disc = MOLFiniteDifference([x => 0.05], t)
+
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    # no continuous trace such as u(t, 1) or u(t, 1.0) is left in the equations
+    @test !any(eq -> occursin(r"u\(t, [0-9.]+\)", string(eq)), equations(sys))
+
+    prob = ODEProblem(mtkcompile(sys), nothing, tspan)
+    sol = solve(prob, Tsit5(); saveat = 0.1, abstol = 1.0e-10, reltol = 1.0e-10)
+    @test SciMLBase.successful_retcode(sol)
+    @test sol[v(t, x)][end, end] ≈ sol[u(t, x)][end, end] atol = 1.0e-8
+end

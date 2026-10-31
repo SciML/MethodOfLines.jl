@@ -102,8 +102,10 @@ function boundary_value_maps(
 
     val = unwrap_const(first(filter(z -> unwrap_const(z) isa Number, arguments(u_))))
     r = x_ => val
+    # `substitute` does not descend into the arguments of a dependent-variable call,
+    # so rebuild the call to get the boundary trace, e.g. u(t, x) -> u(t, 0.0).
     othervars = map(boundary.depvars) do v
-        substitute(v, r)
+        operation(v)(substitute.(arguments(v), (r,))...)
     end
     othervars = filter(
         v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
@@ -185,8 +187,10 @@ function boundary_value_maps(
     II = newindex(u_, II, s, indexmap)
     val = unwrap_const(first(filter(z -> unwrap_const(z) isa Number, arguments(u_))))
     r = x_ => val
+    # `substitute` does not descend into the arguments of a dependent-variable call,
+    # so rebuild the call to get the boundary trace, e.g. u(t, x) -> u(t, 0.0).
     othervars = map(boundary.depvars) do v
-        substitute(v, r)
+        operation(v)(substitute.(arguments(v), (r,))...)
     end
     othervars = filter(
         v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
@@ -261,8 +265,10 @@ function boundary_value_maps(
     II = newindex(u_, II, s, indexmap)
     val = unwrap_const(first(filter(z -> unwrap_const(z) isa Number, arguments(u_))))
     r = x_ => val
+    # `substitute` does not descend into the arguments of a dependent-variable call,
+    # so rebuild the call to get the boundary trace, e.g. u(t, x) -> u(t, 0.0).
     othervars = map(boundary.depvars) do v
-        substitute(v, r)
+        operation(v)(substitute.(arguments(v), (r,))...)
     end
     othervars = filter(
         v -> (length(arguments(v)) != 1) && any(isequal(x_), arguments(depvar(v, s))),
