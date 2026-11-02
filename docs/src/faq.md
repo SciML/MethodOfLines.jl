@@ -99,3 +99,29 @@ There are changes in the works to roll this back in to `for` loops over each poi
 ## Why are the corners of my domain held at 0?
 
 The corner points do not have a valid discretization, and as such are held at 0.
+
+## Why does a steady solve return `Stalled` although the answer is exact?
+
+MethodOfLines does not set a tolerance for stationary problems, so `solve` uses NonlinearSolve's default `abstol` (and `reltol`) of about `3e-13`. The residual of a second-order stencil scales like `1/h^2`, so in floating point it cannot drop below roughly `4 * eps / h^2` (`eps` being machine epsilon, `h` the grid spacing). For a steady 2D Laplace problem this floor was measured at `6e-13` to `1e-12` on 31 points per side and at `3e-12` to `4.5e-12` on 61 points per side, so the default tolerance is unreachable from about 31 points per side on.
+
+Newton's method then reaches the exact discrete answer in one step but can never satisfy the tolerance. NonlinearSolve's step-stagnation rule (more than 32 steps smaller than `abstol`) ends the solve with `ReturnCode.Stalled` after about 33 steps, each of which costs a full Jacobian factorisation (about 118 ms per step on 61 points per side, making the solve roughly 30 times slower than needed). Pass your own `abstol` instead:
+
+```julia
+using ModelingToolkit, MethodOfLines, NonlinearSolve, DomainSets
+
+@parameters x
+@variables u(..)
+Dxx = Differential(x)^2
+
+pdesys = PDESystem(
+    [Dxx(u(x)) ~ -pi^2 * sin(pi * x)], [u(0.0) ~ 0.0, u(1.0) ~ 0.0],
+    [x ∈ Interval(0.0, 1.0)], [x], [u(x)]; name = :poisson)
+prob = discretize(pdesys, MOLFiniteDifference([x => 0.01], nothing, approx_order = 2))
+
+solve(prob, NewtonRaphson())                 # Stalled after 33 steps, 1.35 s (after compilation)
+solve(prob, NewtonRaphson(); abstol = 1e-9)  # Success after 10 steps, 0.03 s, same solution
+```
+
+The timings above were measured on 101 grid points with ModelingToolkit 11.46.1, NonlinearSolve 4.32.0 and Julia 1.12; both solves return the same solution (maximum error against `sin(pi * x)` of `8.2251e-5`, the discretization error). Note that on ModelingToolkit versions without the fix for the stationary collapse (ModelingToolkit PR #5352), `discretize` also reduces the stencil system to a handful of unknowns (here 1), so step counts differ from what you get with the full set of unknowns, but the `Stalled` default and the remedy are the same.
+
+Choose `abstol` well above the floor: for the 2D Laplace problem `1e-9` and `1e-10` succeeded in one step on both grids, `1e-11` took one or two, while `1e-12` and `3e-12` still stalled on 61 points per side. A rule of thumb is `abstol ≈ 1e3 * eps * h^-2 * norm(u, Inf)`, which gives `1e-9` to `1e-8` for these sizes. A loose `abstol` still catches genuine failures, because those leave residuals of order 1 rather than `1e-12`; inspect the residual or the solution if in doubt. Loosening `reltol` alone has no effect, and switching the termination mode (`Rel`, `Abs` or `Norm`) at the default tolerances runs to `MaxIters` instead.
