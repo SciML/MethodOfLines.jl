@@ -82,6 +82,9 @@ run_tests(;
             @safetestset "Box discretization supertype" begin
                 include(joinpath(@__DIR__, "Components", "box_discretization_supertype.jl"))
             end
+            @safetestset "Supported conditions" begin
+                include(joinpath(@__DIR__, "Components", "supported_conditions.jl"))
+            end
             @safetestset "PointPort node selection" begin
                 include(joinpath(@__DIR__, "Components", "point_ports.jl"))
             end
