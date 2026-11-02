@@ -63,6 +63,7 @@ import PDEBase.construct_differential_discretizer
 import PDEBase.discretize_equation!
 import PDEBase.generate_ic_defaults
 import PDEBase.generate_metadata
+import PDEBase.supported_conditions
 import SciMLBase.symbolic_discretize
 
 import PDEBase.get_time
