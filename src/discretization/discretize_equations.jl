@@ -105,6 +105,34 @@ function discretize_equation_at_point(
     end
 end
 
+function find_spatial_differential(ex, x̄)
+    ex = safe_unwrap(ex)
+    _issym(ex) || return nothing
+    op = operation(ex)
+    op isa Differential && any(x -> isequal(op.x, safe_unwrap(x)), x̄) && return ex
+    for arg in arguments(ex)
+        found = find_spatial_differential(arg, x̄)
+        found === nothing || return found
+    end
+    return nothing
+end
+
+function check_no_spatial_differentials(eqs, pde, s)
+    for eq in eqs, side in (eq.lhs, eq.rhs)
+        term = find_spatial_differential(side, s.x̄)
+        term === nothing && continue
+        throw(
+            ArgumentError(
+                "The derivative $term in the equation $pde could not be discretized. " *
+                    "This happens with the default UpwindScheme when a first derivative " *
+                    "is multiplied by another derivative, such as Dy(ψ) * Dx(ω). " *
+                    "Try `advection_scheme = WENOScheme()` in `MOLFiniteDifference`."
+            )
+        )
+    end
+    return nothing
+end
+
 function PDEBase.discretize_equation!(
         disc_state::PDEBase.EquationState, pde::Equation, interiormap,
         eqvar, bcmap, depvars, s::DiscreteSpace, derivweights, indexmap,
@@ -183,6 +211,7 @@ function PDEBase.discretize_equation!(
             )
         end
     end
+    check_no_spatial_differentials(eqs, pde, s)
     isempty(derivweights.ports) ||
         (eqs = add_point_ports(eqs, pde, interiormap, eqvar, s, derivweights, bcmap))
 
