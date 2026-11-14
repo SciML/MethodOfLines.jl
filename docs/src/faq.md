@@ -96,6 +96,12 @@ At the moment, MOL effectively generates an assignment statement to a calculatio
 
 There are changes in the works to roll this back in to `for` loops over each point, by maintaining some structural information, which will remedy this problem. Watch this space!
 
-## Why are the corners of my domain held at 0?
+## What values do the corners of my domain take?
 
-The corner points do not have a valid discretization, and as such are held at 0.
+No PDE or boundary condition applies at a corner (a grid point on two or more boundaries).
+If the system has a mixed spatial derivative such as `Dx(Dy(u))`, the stencils next to a
+corner read it, so MethodOfLines sets each corner by extrapolating from the neighbouring
+boundary points along one direction. Otherwise nothing reads the corners and they are held
+at 0. They are also held at 0 next to a periodic direction or an interface between domains,
+when a boundary band is wider than one point, when the interior is too short for the
+extrapolation stencil, and for array-valued dependent variables such as `u(..)[1:n]`.

@@ -50,8 +50,8 @@ using OrdinaryDiffEqLowOrderRK: SplitEuler
 end
 
 # Neumann BC test: each boundary condition involves both ρ and ϕ at the boundary. The
-# value of the variable that does not own the condition (e.g. ρ(t, 8.0)) is now mapped
-# to its grid value, so the condition no longer leaves a continuous term in the system.
+# value of the variable that does not own the condition (e.g. ρ(t, 8.0)) is mapped to
+# its grid value, so the discretized condition contains only grid unknowns.
 @testset "1D wave equation, staggered grid, Neumann BC" begin
     @test begin
         @parameters t x
@@ -90,7 +90,7 @@ end
         )
         prob = discretize(pdesys, discretization)
         sol = solve(prob, SplitEuler(), dt = (dx / a)^2)
-        maximum(sol[:, end]) < 1.0e-3
+        successful_retcode(sol) && sol.t[end] ≈ tmax && maximum(abs, sol[:, end]) < 1.0e-3
     end
 end
 

@@ -5418,7 +5418,7 @@ end
 
 @testset "Corner points read by a mixed derivative" begin
     # No face covers a corner, and the centred stencil of u_xy at (2, 2) reads the corner
-    # (1, 1). Corners used to be 0 there, so the solution did not converge. The source
+    # (1, 1), so the corner must hold the solution for the scheme to converge. The source
     # makes u = cos(πx) cos(πy) (1 + sin(t)/2) exact, with Neumann conditions; it is
     # ±1.42 at the corners at t = 1.
     @parameters t x y
@@ -5457,14 +5457,14 @@ end
     mixed = laplacian + Dx(Dy(u(t, x, y))) + source(x, y, t, 1)
     plain = laplacian + source(x, y, t, 0)
 
-    # With u_xy: second order, and the corner holds the solution (was 0, error about 3)
+    # With u_xy: second order, and the corner holds the solution
     e17, c17 = corner_run(mixed, 17)
     e33, c33 = corner_run(mixed, 33)
     @test e17 < 0.1
     @test log2(e17 / e33) > 1.8
     @test c33 ≈ uexact(0.0, 0.0, T) atol = 3.0e-2
 
-    # Without a mixed derivative nothing reads the corners, and they keep their old value 0
+    # Without a mixed derivative nothing reads the corners, and they stay 0
     _, c0 = corner_run(plain, 17)
     @test c0 == 0
 
