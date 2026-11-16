@@ -49,12 +49,11 @@ using OrdinaryDiffEqLowOrderRK: SplitEuler
     @test_broken maximum(sol[1:128, 1] .- sol[1:128, 2 * test_ind]) < 10 * max(dx^2, dt)
 end
 
-# Neumann BC test: staggered discretization produces boundary terms (e.g. ϕ(t, 8.0))
-# that aren't in the discretized unknowns. MTK v11's mtkcompile is stricter about this
-# validation than the old structural_simplify. This is a pre-existing staggered grid
-# boundary handling issue now surfaced by MTK v11.
+# Neumann BC test: each boundary condition involves both ρ and ϕ at the boundary. The
+# value of the variable that does not own the condition (e.g. ρ(t, 8.0)) is mapped to
+# its grid value, so the discretized condition contains only grid unknowns.
 @testset "1D wave equation, staggered grid, Neumann BC" begin
-    @test_broken begin
+    @test begin
         @parameters t x
         @variables ρ(..) ϕ(..)
         Dt = Differential(t)
@@ -91,7 +90,7 @@ end
         )
         prob = discretize(pdesys, discretization)
         sol = solve(prob, SplitEuler(), dt = (dx / a)^2)
-        maximum(sol[:, end]) < 1.0e-3
+        successful_retcode(sol) && sol.t[end] ≈ tmax && maximum(abs, sol[:, end]) < 1.0e-3
     end
 end
 
