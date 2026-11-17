@@ -159,8 +159,10 @@ end
 
     @test tspan == (0.0, 0.1)
     @test !isempty(partner_equations)
+    # The partner equations read both u and uˍx: as indexed terms `(u(t))[i]` pointwise, or
+    # as arguments `(u(t), uˍx(t))` of the fused slice call of the array form.
     @test any(partner_equations) do partner_equation
-        occursin("(u(t))", partner_equation) && occursin("(uˍx(t))", partner_equation)
+        occursin(r"(?<![\wˍ])u\(t\)", partner_equation) && occursin("uˍx(t)", partner_equation)
     end
     @test !any(occursin("NaN", discrete_equation) for discrete_equation in discrete_equations)
 
@@ -458,9 +460,10 @@ end
     sys_on, _ = symbolic_discretize(coupled, explicit(true))
     @test Set(eqs_off) == Set(string.(ModelingToolkit.equations(sys_on)))
     # Hermite weights are used: Dxx(u) at node 2 reads v at nodes 1 and 3, which a
-    # centered difference of u does not.
-    v2 = only(filter(e -> occursin("Differential(t, 1)((v(t))[2])", e), eqs_off))
-    @test occursin("(v(t))[1]", v2) && occursin("(v(t))[3]", v2)
+    # centered difference of u does not. Node 2 starts the interior core, whose equation
+    # is one slice equation over nodes 2:8, reading v over 1:7 and 3:9.
+    v2 = only(filter(e -> occursin(r"Differential\(t, 1\)\(\(v\(t\)\)\[2(:\d+)?\]\)", e), eqs_off))
+    @test occursin(r"\(v\(t\)\)\[1(:\d+)?\]", v2) && occursin(r"\(v\(t\)\)\[3(:\d+)?\]", v2)
 end
 
 @testset "HermiteScheme automatic transformation picks the Dt(u) equation" begin
@@ -493,15 +496,24 @@ end
         @test maximum(abs, sol[w(t, x)][end, :] .- w_exact.(sol[x], T)) < 1.0e-5
     end
 
-    # No first time derivative of u: a clear error rather than a wrong system.
+    # Dt(Dt(u)) is rewritten as Dt(u) ~ uˍt, Dt(uˍt) ~ Dxx(u); u = sin(πx) cos(πt).
     @named wave = PDESystem(
         Dt(Dt(u(t, x))) ~ Dxx(u(t, x)),
         [u(0, x) ~ sin(π * x), Dt(u(0, x)) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
         domains, [t, x], [u(t, x)]
     )
-    err = @test_throws ArgumentError symbolic_discretize(wave, hermite())
-    @test occursin("first time derivative", sprint(showerror, err.value))
-    @test occursin("first-order system", sprint(showerror, err.value))
+    sol = solve(discretize(wave, hermite()); abstol = 1.0e-10, reltol = 1.0e-10)
+    @test successful_retcode(sol)
+    @test maximum(abs, sol[u(t, x)][end, :] .- sin.(π .* sol[x]) .* cos(π * T)) < 1.0e-4
+
+    # Without an initial condition for Dt(u): a clear error rather than a wrong system.
+    @named wave0 = PDESystem(
+        Dt(Dt(u(t, x))) ~ Dxx(u(t, x)),
+        [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        domains, [t, x], [u(t, x)]
+    )
+    err = @test_throws ArgumentError symbolic_discretize(wave0, hermite())
+    @test occursin("initial condition for", sprint(showerror, err.value))
 
     # Dt(u) in two equations is ambiguous.
     @named twice = PDESystem(
@@ -510,4 +522,85 @@ end
     )
     err = @test_throws ArgumentError symbolic_discretize(twice, hermite())
     @test occursin("exactly one equation", sprint(showerror, err.value))
+end
+
+# The error bounds below sit about twice above the errors of the scheme, so that solver
+# round-off does not fail them; the error ratios check the order of convergence.
+@testset "HermiteScheme wave equation with Dirichlet walls" begin
+    @parameters t x
+    @variables u(..) p(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    T = 0.75
+    # waves running both ways, nonzero wall data
+    u_exact(x, t) = sin(2π * (x - t)) + 0.5 * cos(3π * (x + t))
+    p_exact(x, t) = -2π * cos(2π * (x - t)) - 1.5π * sin(3π * (x + t))
+    domains = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)]
+    ubc = [u(t, 0.0) ~ u_exact(0.0, t), u(t, 1.0) ~ u_exact(1.0, t)]
+    pbc = [p(t, 0.0) ~ p_exact(0.0, t), p(t, 1.0) ~ p_exact(1.0, t)]
+    @named system = PDESystem(
+        [Dt(u(t, x)) ~ p(t, x), Dt(p(t, x)) ~ Dx(Dx(u(t, x)))],
+        [u(0, x) ~ u_exact(x, 0.0), p(0, x) ~ p_exact(x, 0.0), ubc..., pbc...],
+        domains, [t, x], [u(t, x), p(t, x)]
+    )
+    @named direct = PDESystem(
+        Dt(Dt(u(t, x))) ~ Dx(Dx(u(t, x))),
+        [u(0, x) ~ u_exact(x, 0.0), Dt(u(0, x)) ~ p_exact(x, 0.0), ubc...],
+        domains, [t, x], [u(t, x)]
+    )
+    function werr(sys, N, ao)
+        disc = MOLFiniteDifference(
+            [x => 1 / (N - 1)], t; approx_order = ao, advection_scheme = HermiteScheme()
+        )
+        sol = solve(discretize(sys, disc); saveat = [T], abstol = 1.0e-12, reltol = 1.0e-12)
+        @test successful_retcode(sol)
+        return maximum(abs, sol[u(t, x)][end, :] .- u_exact.(sol[x], T))
+    end
+    # approx_order 2: fourth order
+    e21, e41 = werr(system, 21, 2), werr(system, 41, 2)
+    @test e41 < 4.0e-5
+    @test e21 / e41 > 12
+    # Dt(Dt(u)) is rewritten to the same system: same result
+    @test isapprox(werr(direct, 41, 2), e41; rtol = 1.0e-3)
+    # approx_order 4
+    @test werr(direct, 41, 4) < 1.5e-6
+end
+
+@testset "HermiteScheme periodic wave equation as Dt(Dt(u))" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dx = Differential(x)
+    T = 0.75
+    @named wave = PDESystem(
+        Dt(Dt(u(t, x))) ~ Dx(Dx(u(t, x))),
+        [u(0, x) ~ sin(2π * x), Dt(u(0, x)) ~ -2π * cos(2π * x), u(t, 0.0) ~ u(t, 1.0)],
+        [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]
+    )
+    disc = MOLFiniteDifference([x => 1 / 40], t; advection_scheme = HermiteScheme())
+    sol = solve(discretize(wave, disc); saveat = [T], abstol = 1.0e-10, reltol = 1.0e-10)
+    @test successful_retcode(sol)
+    # fourth order at approx_order 2, against second order for the default scheme
+    @test maximum(abs, sol[u(t, x)][end, :] .- sin.(2π .* (sol[x] .- T))) < 1.0e-5
+end
+
+@testset "HermiteScheme 2D advection with a free outflow" begin
+    @parameters t x y
+    @variables u(..)
+    Dt, Dx, Dy = Differential(t), Differential(x), Differential(y)
+    ua(x, y, t) = sin(2π * (x - 0.8t)) * sin(2π * (y - 0.6t))
+    @named adv = PDESystem(
+        Dt(u(t, x, y)) ~ -0.8 * Dx(u(t, x, y)) - 0.6 * Dy(u(t, x, y)),
+        [u(0, x, y) ~ ua(x, y, 0.0), u(t, 0.0, y) ~ ua(0.0, y, t), u(t, x, 0.0) ~ ua(x, 0.0, t)],
+        [t ∈ Interval(0.0, 0.5), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+        [t, x, y], [u(t, x, y)]
+    )
+    disc = MOLFiniteDifference(
+        [x => 1 / 16, y => 1 / 16], t; approx_order = 4, advection_scheme = HermiteScheme()
+    )
+    sol = solve(discretize(adv, disc); saveat = [0.5], abstol = 1.0e-10, reltol = 1.0e-10)
+    @test successful_retcode(sol)
+    E = [ua(xi, yj, 0.5) for xi in sol[x], yj in sol[y]]
+    # fails without the inflow corner closure or MOL's first differences at the free outflow
+    @test maximum(abs, sol[u(t, x, y)][end, :, :] .- E) < 8.0e-5
 end

@@ -282,6 +282,13 @@ function boundary_value_maps(
         )
             for d in derivweights.orders[x_]
     ]
+    # HermiteScheme: Dx of a derivative partner uses the Hermite stencil (no-op otherwise)
+    hrule = hermite_partner_derivative_rule(derivweights, s, u_, II, x_)
+    if hrule !== nothing
+        depvarderivbcmaps = [
+            filter(r -> !isequal(r.first, hrule.first), depvarderivbcmaps); hrule
+        ]
+    end
     depvarbcmaps = [v_ => s.discvars[depvar(v_, s)][II] for v_ in [u_; othervars]]
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value

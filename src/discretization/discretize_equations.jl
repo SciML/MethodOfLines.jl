@@ -192,8 +192,11 @@ function PDEBase.discretize_equation!(
         (eqs = add_point_ports(eqs, pde, interiormap, eqvar, s, derivweights, bcmap))
 
     newbceqs = (nbceqs0 + 1):length(disc_state.bceqs)
-    disc_state.bceqs[newbceqs] = map(array_noinline_broadcasts, disc_state.bceqs[newbceqs])
-    return vcat!(disc_state.eqs, map(array_noinline_broadcasts, eqs))
+    # HermiteScheme: one fused call per slice expression (same values, fewer temporaries)
+    finalize = derivweights.advection_scheme isa HermiteScheme ?
+        hermite_finalize_equation : array_noinline_broadcasts
+    disc_state.bceqs[newbceqs] = map(finalize, disc_state.bceqs[newbceqs])
+    return vcat!(disc_state.eqs, map(finalize, eqs))
 end
 
 """
@@ -220,7 +223,7 @@ function discretize_equation_array_form(
     )
     # The staggered path never consults the advection scheme (see the staggered
     # `generate_finite_difference_rules`), so the requirement only applies otherwise.
-    isstag || derivweights.advection_scheme isa Union{UpwindScheme, FunctionalScheme} ||
+    isstag || derivweights.advection_scheme isa Union{UpwindScheme, FunctionalScheme, HermiteScheme} ||
         throw(
         ArrayFormFallback(
             "unsupported advection scheme $(derivweights.advection_scheme)"
@@ -233,6 +236,8 @@ function discretize_equation_array_form(
         s, array_unique_depvars(array_pde_occurrences(pde, s), s), args
     )
     periodic = array_wrap_dims(s, slicevars, args, bcmap)
+    ishermite = !isstag && derivweights.advection_scheme isa HermiteScheme
+    ishermite && array_validate_hermite(s, args, periodic)
 
     pdeorders = Dict(x => d_orders(x, [pde]) for x in args)
     isstag && validate_staggered_array_form(s, depvars, pdeorders, args)
@@ -261,6 +266,7 @@ function discretize_equation_array_form(
     end
     mixedterms = isstag ? [] : array_mixed_terms(pde, slicevars, args, pdeorders, s)
     mixedorders = mixed_orders_by_direction(mixedterms)
+    ishermite && array_hermite_mixed_orders!(mixedorders, pde, s, slicevars, derivweights)
     bands, clean = array_bands(
         interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders,
         sph_orders, mixedorders
@@ -574,18 +580,28 @@ function array_core_equation(
         sphrules = Pair[]
         advrules = Pair[]
     else
-        derivrules = array_cartesian_rules(
-            s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
-        )
         mixedrules = array_mixed_rules(
             mixedterms, s, derivweights, ranges, indexmap, periodic
         )
-        # Include bvalrules so `u(t, 1)*Dx(u)`, `Dx(u(t, 1))*Dx(u)`, and
-        # `u(0, x)*Dx(u)` substitute first.
-        windrules = array_winding_rules(
-            terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
-            vcat(bvalrules, varrules, gridrules), periodic
-        )
+        if derivweights.advection_scheme isa HermiteScheme
+            # Hermite stencils for every order, no winding (as `generate_hermite_rules`);
+            # its `u_xy` combination before MOL's tensor stencil (pointwise: last key wins)
+            hmixed, derivrules = array_hermite_rules(
+                pde, s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
+            )
+            mixedrules = vcat(hmixed, mixedrules)
+            windrules = Pair[]
+        else
+            derivrules = array_cartesian_rules(
+                s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
+            )
+            # Include bvalrules so `u(t, 1)*Dx(u)`, `Dx(u(t, 1))*Dx(u)`, and
+            # `u(0, x)*Dx(u)` substitute first.
+            windrules = array_winding_rules(
+                terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
+                vcat(bvalrules, varrules, gridrules), periodic
+            )
+        end
         nllaprules = array_nonlinlap_rules(
             nllap_matches, s, depvars, derivweights, ranges, indexmap,
             vcat(bvalrules, varrules, gridrules), periodic
@@ -782,6 +798,11 @@ function array_tap_extents(x, pdeorders, derivweights, ::Type{G}, mixedorders) w
             taps = half_range(Dop.stencil_length)
             mintap = min(mintap, first(taps))
             maxtap = max(maxtap, last(taps))
+        elseif derivweights.advection_scheme isa HermiteScheme
+            # Hermite: centred stencils for odd orders too
+            taps = half_range(derivweights.map[Differential(x)^d].stencil_length)
+            mintap = min(mintap, first(taps))
+            maxtap = max(maxtap, last(taps))
         elseif array_functional_advection(derivweights, d)
             taps = half_range(derivweights.advection_scheme.interior_points)
             mintap = min(mintap, first(taps))
@@ -887,7 +908,7 @@ function array_bands(
                 bpc = derivweights.map[Differential(x)^d].boundary_point_count
                 wlower === nothing && (lo = max(lo, bpc + 1))
                 wupper === nothing && (hi = min(hi, n - bpc))
-            elseif iseven(d)
+            elseif iseven(d) || derivweights.advection_scheme isa HermiteScheme
                 bpc = derivweights.map[Differential(x)^d].boundary_point_count
                 wlower === nothing && (lo = max(lo, bpc + 1))
                 wupper === nothing && (hi = min(hi, n - bpc))
@@ -3457,6 +3478,16 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         end
         push!(derivrules, safe_unwrap((Differential(x_)^d)(u)) => expr)
     end
+    # HermiteScheme: Dx of a derivative partner uses the Hermite stencil (no-op otherwise)
+    hexpr = array_hermite_partner_derivative(derivweights, s, u, x_, ranges, indexmap, II0)
+    if hexpr !== nothing
+        hkeys = [
+            safe_unwrap((Differential(x_)^1)(v)) for v in [bcdepvars..., u]
+                if isequal(depvar(v, s), u)
+        ]
+        filter!(r -> !any(k -> isequal(r.first, k), hkeys), derivrules)
+        append!(derivrules, [k => hexpr for k in hkeys])
+    end
 
     # Face slice, aligned to the face axes. Time-only variables are scalars.
     varrules = Pair[]
@@ -3816,6 +3847,56 @@ function array_corner_eqs(s, interiormap, u, N; bcmap = nothing, derivweights = 
 end
 
 """
+    array_hermite_corner_dirichlet(s, u, ranges, J, bcmap)
+
+The corner point `ranges` (non-interior in the directions `J`) set to the Dirichlet data of
+`u`, evaluated at the corner, as one slice equation; or `nothing`, so that the caller
+extrapolates, unless every direction in `J` has a Dirichlet condition on `u` at this end and
+none has an interface. The data of the meeting faces agree at the corner, so any one of
+them gives the value.
+"""
+function array_hermite_corner_dirichlet(s, u, ranges, J, bcmap)
+    args = ivs(u, s)
+    all(j -> length(ranges[j]) == 1, J) || return nothing
+    uop = operation(u)
+    val = nothing
+    for j in J
+        x = args[j]
+        atlow = first(ranges[j]) == 1
+        raw = get(bcmap[uop], x, [])
+        bcs = filter(b -> !(b isa InterfaceBoundary), raw)
+        isempty(bcs) && return nothing           # a free/outflow face: not this kind
+        length(bcs) == length(raw) || return nothing  # an interface here: leave to extrap
+        onside(b) = atlow ? b isa LowerBoundary : b isa UpperBoundary
+        dir = filter(b -> onside(b) && b.order == 0, bcs)
+        isempty(dir) && return nothing           # non-Dirichlet (Neumann/Robin) here
+        if val === nothing
+            b = first(dir)
+            F = symbolic_linear_solve(b.eq, b.u)
+            isequal(Symbolics.value(F), NaN) && return nothing
+            # bind every spatial coordinate to its grid value at the corner
+            sub = Dict(args[k] => s.grid[args[k]][first(ranges[k])] for k in 1:length(args))
+            val = substitute(expand_derivatives(F), sub)
+            # must resolve to data on the corner: no leftover dep-var call or spatial iv
+            _is_corner_data(Symbolics.unwrap(val), s, args) || return nothing
+        end
+    end
+    val === nothing && return nothing
+    arr = array_variable(u, s)
+    return arr[ranges...] ~ reshape([val], ntuple(_ -> 1, length(args)))
+end
+
+# `ex` is corner data: no derivative, no dependent-variable call, no spatial variable left.
+function _is_corner_data(ex, s, args)
+    ex isa SymbolicUtils.BasicSymbolic || return true
+    iscall(ex) || return !any(a -> isequal(ex, Symbolics.unwrap(a)), args)
+    op = operation(ex)
+    op isa Differential && return false
+    op === getindex && return false            # reads a dependent-variable grid value
+    return all(a -> _is_corner_data(a, s, args), arguments(ex))
+end
+
+"""
     array_corner_extrapolation(s, u, ranges, J, lo, hi, bcmap, derivweights)
 
 The corner region `ranges` (non-interior in the directions `J`) extrapolated along `J[1]`
@@ -3839,6 +3920,13 @@ boundary band wider than one point, or an interior too short for the stencil.
 function array_corner_extrapolation(s, u, ranges, J, lo, hi, bcmap, derivweights)
     (bcmap === nothing || derivweights === nothing) && return nothing
     args = ivs(u, s)
+    # HermiteScheme: at a corner where every non-interior direction carries a Dirichlet
+    # condition on this variable, the corner value is the (agreeing) trace of those
+    # conditions, evaluated at the corner — exact, where MOL's extrapolation is not.
+    if derivweights.advection_scheme isa HermiteScheme
+        ce = array_hermite_corner_dirichlet(s, u, ranges, J, bcmap)
+        ce === nothing || return ce
+    end
     for j in J
         length(ranges[j]) == 1 || return nothing
         isempty(filter_interfaces(get(bcmap[operation(u)], args[j], []))) || return nothing
