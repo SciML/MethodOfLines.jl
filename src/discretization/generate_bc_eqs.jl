@@ -282,7 +282,6 @@ function boundary_value_maps(
         )
             for d in derivweights.orders[x_]
     ]
-    # HermiteScheme: Dx of a derivative partner uses the Hermite stencil (no-op otherwise)
     hrule = hermite_partner_derivative_rule(derivweights, s, u_, II, x_)
     if hrule !== nothing
         depvarderivbcmaps = [

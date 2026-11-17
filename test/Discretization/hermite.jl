@@ -1,4 +1,3 @@
-using Test, DomainSets
 using Test
 using DomainSets
 using ModelingToolkit
@@ -131,7 +130,6 @@ end
     @test_throws ArgumentError symbolic_discretize(pdesys, ambiguous)
 end
 
-
 @testset "HermiteScheme automatic transformation for 1D advection" begin
     @parameters t x
     @variables u(..)
@@ -159,8 +157,6 @@ end
 
     @test tspan == (0.0, 0.1)
     @test !isempty(partner_equations)
-    # The partner equations read both u and uˍx: as indexed terms `(u(t))[i]` pointwise, or
-    # as arguments `(u(t), uˍx(t))` of the fused slice call of the array form.
     @test any(partner_equations) do partner_equation
         occursin(r"(?<![\wˍ])u\(t\)", partner_equation) && occursin("uˍx(t)", partner_equation)
     end
@@ -412,8 +408,6 @@ end
     Dxx = Dx^2
     domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(-1.0, 1.0)]
 
-    # The automatic scheme needs the transformation to find its partners, so turning
-    # it off must not silently fall back to centered differences.
     advection = PDESystem(
         Dt(u(t, x)) ~ -Dx(u(t, x)),
         [
@@ -430,8 +424,6 @@ end
     @test occursin("deriv_var", sprint(showerror, err.value))
     @test_throws ArgumentError discretize(advection, automatic)
 
-    # A scheme whose partners were filled in by an earlier transformed run must not
-    # reuse them, possibly from another system, once the transformation is off.
     reused = HermiteScheme()
     symbolic_discretize(advection, MOLFiniteDifference([x => 0.5], t; advection_scheme = reused))
     @test !isempty(reused.deriv_var)
@@ -440,7 +432,6 @@ end
         MOLFiniteDifference([x => 0.5], t; advection_scheme = reused, should_transform = false)
     )
 
-    # Explicit partners need no transformation, so they still work.
     coupled = PDESystem(
         [Dt(u(t, x)) ~ -v(t, x), Dt(v(t, x)) ~ -Dxx(u(t, x))],
         [
@@ -456,12 +447,8 @@ end
     sys_off, tspan = symbolic_discretize(coupled, explicit(false))
     @test tspan == (0.0, 0.1)
     eqs_off = string.(ModelingToolkit.equations(sys_off))
-    # Same equations as with the transformation on.
     sys_on, _ = symbolic_discretize(coupled, explicit(true))
     @test Set(eqs_off) == Set(string.(ModelingToolkit.equations(sys_on)))
-    # Hermite weights are used: Dxx(u) at node 2 reads v at nodes 1 and 3, which a
-    # centered difference of u does not. Node 2 starts the interior core, whose equation
-    # is one slice equation over nodes 2:8, reading v over 1:7 and 3:9.
     v2 = only(filter(e -> occursin(r"Differential\(t, 1\)\(\(v\(t\)\)\[2(:\d+)?\]\)", e), eqs_off))
     @test occursin(r"\(v\(t\)\)\[1(:\d+)?\]", v2) && occursin(r"\(v\(t\)\)\[3(:\d+)?\]", v2)
 end
@@ -483,8 +470,6 @@ end
     eq_w = Dt(w(t, x)) ~ Dxx(w(t, x)) + u(t, x)
     hermite() = MOLFiniteDifference([x => 0.1], t; advection_scheme = HermiteScheme())
 
-    # The w equation mentions u; whichever order the equations and unknowns come in,
-    # u must be paired with its own Dt(u) equation.
     for (eqs, dvs) in (
             ([eq_u, eq_w], [u(t, x), w(t, x)]), ([eq_w, eq_u], [u(t, x), w(t, x)]),
             ([eq_w, eq_u], [w(t, x), u(t, x)]), ([eq_u, eq_w], [w(t, x), u(t, x)]),
@@ -496,8 +481,6 @@ end
         @test maximum(abs, sol[w(t, x)][end, :] .- w_exact.(sol[x], T)) < 1.0e-5
     end
 
-    # Two-way coupling (each equation reads the other variable): the discretized system
-    # does not depend on the order of the equations.
     @variables v(..)
     eu = Dt(u(t, x)) ~ Dxx(u(t, x)) + v(t, x)
     ev = Dt(v(t, x)) ~ Dxx(v(t, x)) + u(t, x)
@@ -511,7 +494,6 @@ end
     end
     @test texts[1] == texts[2]
 
-    # Dt(Dt(u)) is rewritten as Dt(u) ~ uˍt, Dt(uˍt) ~ Dxx(u); u = sin(πx) cos(πt).
     @named wave = PDESystem(
         Dt(Dt(u(t, x))) ~ Dxx(u(t, x)),
         [u(0, x) ~ sin(π * x), Dt(u(0, x)) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
@@ -521,7 +503,6 @@ end
     @test successful_retcode(sol)
     @test maximum(abs, sol[u(t, x)][end, :] .- sin.(π .* sol[x]) .* cos(π * T)) < 1.0e-4
 
-    # Without an initial condition for Dt(u): a clear error rather than a wrong system.
     @named wave0 = PDESystem(
         Dt(Dt(u(t, x))) ~ Dxx(u(t, x)),
         [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
@@ -530,7 +511,6 @@ end
     err = @test_throws ArgumentError symbolic_discretize(wave0, hermite())
     @test occursin("initial condition for", sprint(showerror, err.value))
 
-    # Dt(u) in two equations is ambiguous.
     @named twice = PDESystem(
         [eq_u, Dt(w(t, x)) ~ Dxx(w(t, x)) + Dt(u(t, x))], bcs, domains, [t, x],
         [u(t, x), w(t, x)]
@@ -538,23 +518,30 @@ end
     err = @test_throws ArgumentError symbolic_discretize(twice, hermite())
     @test occursin("exactly one equation", sprint(showerror, err.value))
 
-    # Dt(u) must appear linearly.
     @named nonlinear = PDESystem(
         Dt(u(t, x))^2 ~ Dxx(u(t, x)), bcs[[1, 3, 4]], domains, [t, x], [u(t, x)]
     )
     err = @test_throws ArgumentError symbolic_discretize(nonlinear, hermite())
     @test occursin("linearly", sprint(showerror, err.value))
+
+    @named coupled_wall = PDESystem(
+        [eq_u, Dt(w(t, x)) ~ Dxx(w(t, x))],
+        [
+            u(0, x) ~ 0.0, w(0, x) ~ sin(π * x), u(t, 0) ~ w(t, 0), u(t, 1) ~ 0.0,
+            w(t, 0) ~ 0.0, w(t, 1) ~ 0.0,
+        ],
+        domains, [t, x], [u(t, x), w(t, x)]
+    )
+    err = @test_throws ArgumentError symbolic_discretize(coupled_wall, hermite())
+    @test occursin("contain a dependent variable", sprint(showerror, err.value))
 end
 
-# The error bounds below sit about twice above the errors of the scheme, so that solver
-# round-off does not fail them; the error ratios check the order of convergence.
 @testset "HermiteScheme wave equation with Dirichlet walls" begin
     @parameters t x
     @variables u(..) p(..)
     Dt = Differential(t)
     Dx = Differential(x)
     T = 0.75
-    # waves running both ways, nonzero wall data
     u_exact(x, t) = sin(2π * (x - t)) + 0.5 * cos(3π * (x + t))
     p_exact(x, t) = -2π * cos(2π * (x - t)) - 1.5π * sin(3π * (x + t))
     domains = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)]
@@ -578,13 +565,10 @@ end
         @test successful_retcode(sol)
         return maximum(abs, sol[u(t, x)][end, :] .- u_exact.(sol[x], T))
     end
-    # approx_order 2: fourth order
     e21, e41 = werr(system, 21, 2), werr(system, 41, 2)
     @test e41 < 4.0e-5
     @test e21 / e41 > 12
-    # Dt(Dt(u)) is rewritten to the same system: same result
     @test isapprox(werr(direct, 41, 2), e41; rtol = 1.0e-3)
-    # approx_order 4
     @test werr(direct, 41, 4) < 1.5e-6
 end
 
@@ -602,7 +586,6 @@ end
     disc = MOLFiniteDifference([x => 1 / 40], t; advection_scheme = HermiteScheme())
     sol = solve(discretize(wave, disc); saveat = [T], abstol = 1.0e-10, reltol = 1.0e-10)
     @test successful_retcode(sol)
-    # fourth order at approx_order 2, against second order for the default scheme
     @test maximum(abs, sol[u(t, x)][end, :] .- sin.(2π .* (sol[x] .- T))) < 1.0e-5
 end
 
@@ -623,6 +606,5 @@ end
     sol = solve(discretize(adv, disc); saveat = [0.5], abstol = 1.0e-10, reltol = 1.0e-10)
     @test successful_retcode(sol)
     E = [ua(xi, yj, 0.5) for xi in sol[x], yj in sol[y]]
-    # fails without the inflow corner closure or MOL's first differences at the free outflow
     @test maximum(abs, sol[u(t, x, y)][end, :, :] .- E) < 8.0e-5
 end

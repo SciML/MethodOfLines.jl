@@ -53,8 +53,7 @@ function generate_finite_difference_rules(
         # Whole-domain integrals may drop rank; stencil generators and running
         # (dummy-upper-bound) integrals cannot — those need every IV in `indexmap`.
         stencilvars = idx_depvars(depvars, s, indexmap)
-        # Standard cartesian centered difference scheme, or the Hermite
-        # dual-array variant for mapped variables.
+        # Standard cartesian centered difference scheme
         central_deriv_rules_cartesian = if derivweights.advection_scheme isa HermiteScheme
             generate_hermite_rules(
                 II, s, stencilvars, derivweights, bmap, indexmap, terms
@@ -86,8 +85,6 @@ function generate_finite_difference_rules(
                 )
             )
         elseif derivweights.advection_scheme isa HermiteScheme
-            # Hermite rules handle all mapped derivative orders; no separate
-            # upwind/winding rules are generated for this scheme.
             advection_rules = []
         else
             error("Unsupported advection scheme $(derivweights.advection_scheme) encountered.")
