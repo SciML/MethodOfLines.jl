@@ -136,10 +136,15 @@ function PDEBase.discretize_equation!(
     nbceqs = length(disc_state.bceqs)
     generate_extrap_eqs!(disc_state, pde, eqvar, s, derivweights, interiormap, bcmap)
     array_lift_bceqs!(disc_state, nbceqs, s)
+    # corner values are only read by mixed derivative stencils
+    cornerweights = has_mixed_derivative(interiormap, s) ? derivweights : nothing
     try
         vcat!(
             disc_state.bceqs,
-            array_corner_eqs(s, interiormap, eqvar, ndims(s.discvars[eqvar]))
+            array_corner_eqs(
+                s, interiormap, eqvar, ndims(s.discvars[eqvar]);
+                bcmap, derivweights = cornerweights
+            )
         )
     catch e
         e isa InterruptException && rethrow(e)
@@ -3783,7 +3788,7 @@ in 3D — a count that does not depend on the grid resolution.
 Without this the 3D edges stay pointwise and cost `12n - 10` equations, which is what
 keeps 3D at `O(n)` once the faces are sliced.
 """
-function array_corner_eqs(s, interiormap, u, N)
+function array_corner_eqs(s, interiormap, u, N; bcmap = nothing, derivweights = nothing)
     N >= 2 || throw(ArrayFormFallback("no corner region below 2 dimensions"))
     interior = interiormap.I[interiormap.pde[u]]
     length(interior) == 0 && throw(ArrayFormFallback("empty interior"))
@@ -3802,8 +3807,106 @@ function array_corner_eqs(s, interiormap, u, N)
         count(!=(2), combo) >= 2 || continue          # needs >= 2 non-interior bands
         ranges = ntuple(j -> bands[j][combo[j]], N)
         any(isempty, ranges) && continue
+        J = [j for j in 1:N if combo[j] != 2]
+        eq = array_corner_extrapolation(s, u, ranges, J, lo, hi, bcmap, derivweights)
         # a single point too: the scalar equation reads the state elementwise
-        push!(eqs, arr[ranges...] ~ zeros(map(length, ranges)))
+        push!(eqs, eq === nothing ? arr[ranges...] ~ zeros(map(length, ranges)) : eq)
     end
     return eqs
+end
+
+"""
+    array_corner_extrapolation(s, u, ranges, J, lo, hi, bcmap, derivweights)
+
+The corner region `ranges` (non-interior in the directions `J`) extrapolated along `J[1]`
+with the boundary extrapolation of `generate_extrap_eqs!`, as one slice equation, or
+`nothing` to keep the region at 0.
+
+No face covers these points, but stencils can read them: the centred stencil of a mixed
+derivative `Dx(Dy(u))` next to a 2D corner reads the corner. The taps along `J[1]` lie in
+the interior band of that direction, on fewer boundaries than the region itself (a vertex
+reads edge points, an edge reads face points), so the extrapolations do not form a cycle.
+The row is scaled to unit 1-norm: same solution, but the integer Lagrange weights
+(5, -10, 10, -5, 1) would otherwise enter ModelingToolkit's integer elimination in
+`mtkcompile`, which can overflow.
+
+The region stays at 0 where nothing needs it or the extrapolation does not apply: no
+`bcmap`/`derivweights` (callers other than the finite difference path, and systems without
+a mixed derivative, whose stencils never read these points), an adjacent periodic
+direction (periodic stencils wrap to interior images and do not read the corner), a
+boundary band wider than one point, or an interior too short for the stencil.
+"""
+function array_corner_extrapolation(s, u, ranges, J, lo, hi, bcmap, derivweights)
+    (bcmap === nothing || derivweights === nothing) && return nothing
+    args = ivs(u, s)
+    for j in J
+        length(ranges[j]) == 1 || return nothing
+        isempty(filter_interfaces(get(bcmap[operation(u)], args[j], []))) || return nothing
+    end
+    j0 = J[1]
+    x0 = args[j0]
+    II0 = CartesianIndex(first.(ranges))
+    # as in `generate_extrap_eqs!`; no interface conditions here (checked above)
+    ws, Itap = central_difference_weights_and_stencil(
+        derivweights.boundary[x0], II0, s, [], (j0, x0), u
+    )
+    offsets = [I[j0] - II0[j0] for I in Itap]
+    keep = findall(!iszero, offsets)
+    all(in(lo[j0]:hi[j0]), II0[j0] .+ offsets[keep]) || return nothing
+    w = 1 + sum(abs, ws[keep])
+    indexmap = Dict(args[i] => i for i in 1:length(args))
+    rdict = Dict(i => ranges[i] for i in 1:length(args))
+    slices = [
+        array_slice(u, s, rdict, indexmap; shiftx = x0, offset = offsets[k])
+            for k in keep
+    ]
+    lhs = array_stencil([1 / w], [array_slice(u, s, rdict, indexmap)])
+    return lhs ~ array_stencil(collect(ws[keep]) ./ w, slices)
+end
+
+"""
+    has_mixed_derivative(interiormap, s)
+
+Whether any equation of the system differentiates in two different spatial directions,
+e.g. `Dx(Dy(u))`. Only such stencils read the corner points of a grid, so only then do
+the corners need values (see `array_corner_extrapolation`).
+"""
+function has_mixed_derivative(interiormap, s)
+    for eq in keys(interiormap.var)
+        contains_mixed_derivative(eq.lhs, s.x̄) && return true
+        contains_mixed_derivative(eq.rhs, s.x̄) && return true
+    end
+    return false
+end
+
+# Whether `op` differentiates in one of the spatial variables `xs`
+is_spatial_differential(op, xs) = op isa Differential && any(isequal(op.x), xs)
+
+# The spatial variables that `ex` is differentiated in, anywhere inside it
+function spatial_derivative_vars(ex, xs)
+    ex = safe_unwrap(ex)
+    iscall(ex) || return Any[]
+    vars = Any[]
+    for arg in arguments(ex)
+        append!(vars, spatial_derivative_vars(arg, xs))
+    end
+    op = operation(ex)
+    is_spatial_differential(op, xs) && push!(vars, op.x)
+    return vars
+end
+
+# Whether `ex` contains a spatial derivative of an expression that is differentiated in
+# another spatial direction, e.g. `Dx(Dy(u))`
+function contains_mixed_derivative(ex, xs)
+    ex = safe_unwrap(ex)
+    iscall(ex) || return false
+    op = operation(ex)
+    if is_spatial_differential(op, xs)
+        inner = spatial_derivative_vars(only(arguments(ex)), xs)
+        any(!isequal(op.x), inner) && return true
+    end
+    for arg in arguments(ex)
+        contains_mixed_derivative(arg, xs) && return true
+    end
+    return false
 end
