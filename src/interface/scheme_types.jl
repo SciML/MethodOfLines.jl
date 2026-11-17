@@ -162,15 +162,13 @@ struct HermiteScheme{D} <: AbstractScheme
     diffusive::Set{Any}
 end
 
-HermiteScheme(deriv_var, automatic::Bool) = HermiteScheme(deriv_var, automatic, Set{Any}())
-
 function HermiteScheme(; deriv_var = nothing)
     return if deriv_var === nothing
-        HermiteScheme(Dict{Any, Any}(), true)
+        HermiteScheme(Dict{Any, Any}(), true, Set{Any}())
     elseif deriv_var isa Pair
-        HermiteScheme(Dict(deriv_var), false)
+        HermiteScheme(Dict(deriv_var), false, Set{Any}())
     else
-        HermiteScheme(Dict(deriv_var...), false)
+        HermiteScheme(Dict(deriv_var...), false, Set{Any}())
     end
 end
 

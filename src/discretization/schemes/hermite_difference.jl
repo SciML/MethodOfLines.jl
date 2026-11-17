@@ -96,30 +96,18 @@ via `calculate_weights` on the taps of [`_hermite_boundary_stencil`](@ref).
                 "HermiteScheme does not yet support cross-variable interface stencils."
             )
         )
-
-        dweights = H.d_weights
-        eweights = H.e_weights
-        if dweights === nothing || eweights === nothing
-            error("Missing precomputed Hermite weights for uniform periodic stencil.")
-        end
-        periodic_taps = [I isa RefCartesianIndex ? I.I : I for I in Itap]
-        return dweights, eweights, periodic_taps
+        return H.d_weights, H.e_weights, [I isa RefCartesianIndex ? I.I : I for I in Itap]
     end
 
-    x0 = s.grid[x][II[j]]
-    dorder = D.derivative_order
     interior = s.grid[x] isa StepRangeLen &&
         II[j] > D.boundary_point_count &&
         II[j] <= length(s, x) - D.boundary_point_count &&
         length(Itap) == H.stencil_length
-    dweights = H.d_weights
-    eweights = H.e_weights
-    if interior && dweights !== nothing && eweights !== nothing
-        return dweights, eweights, Itap
-    end
+    interior && return H.d_weights, H.e_weights, Itap
     Itap = _hermite_boundary_stencil(D, II, s, j, x, Itap; wide)
     coords = [s.grid[x][I[j]] for I in Itap]
-    dweights, eweights = calculate_weights(dorder, x0, coords; dfdx = true)
+    x0 = s.grid[x][II[j]]
+    dweights, eweights = calculate_weights(D.derivative_order, x0, coords; dfdx = true)
     return dweights, eweights, Itap
 end
 
@@ -625,21 +613,17 @@ const _fused_operations = (+, -, *, /)
 """
     FusedStencil{N, S, K}
 
-One elementwise expression tree over a box of size `S`, evaluated in one pass.
+One elementwise expression tree over a box of size `S`, evaluated in one pass instead of
+as nested broadcasts over slices, where every slice is a copy and every broadcast a
+temporary.
 
-Nodes are stored children-first, each with a `kind`: `:constant` (a number), `:shifted`
-(argument `source` read at the shifted index `ranges`), `:array` (argument `source`, of size
-`S`, read at the same element), `:scalar` (a scalar argument), `:constant_array` (a fixed
-array of size `S`), and `:operation` (`_fused_operations[operation_index]` applied to
-`children`). `kernel` is the tree compiled into a loop over the box with one statement per
-node ([`_fused_loop_expr`](@ref)); the node list is kept for scalarization.
-
-It replaces a tree of `broadcast(f, ...)` over slices of the state arrays, where every slice
-is a copy and every broadcast a temporary, by one call that reads the state arrays in place.
-The loop applies the same operations to the same operands in the same order, so the values
-are bit-for-bit those of the nested broadcasts: n-ary `+` and `*` fold left, as
-`+(a, b, c...)` does for each element, and the scalarization applies the same `f` with the
-same arguments per element, as `_scalarize_broadcast` does for the nested broadcasts.
+Nodes are stored children-first, each with a `kind`: `:constant`, `:shifted` (argument
+`source` read at the shifted index `ranges`), `:array` (argument `source` read at the same
+element), `:scalar`, `:constant_array`, or `:operation` (`_fused_operations[operation_index]`
+applied to `children`). `kernel` is the tree compiled into a loop with one statement per
+node ([`_fused_loop_expr`](@ref)); the node list is kept for scalarization. The loop applies
+the same operations to the same operands in the same order as the nested broadcasts, with
+n-ary `+` and `*` folded left, so the values are bit-for-bit the same.
 """
 struct FusedStencil{N, S, K} <: Function
     kind::Vector{Symbol}
@@ -711,11 +695,8 @@ function _fused_loop_expr(b, N, S, nargs)
     )
 end
 
-_fused_eltype(A::AbstractArray) = eltype(A)
-_fused_eltype(a) = typeof(a)
-
 function (op::FusedStencil{N, S})(As::Vararg{Any, K}) where {N, S, K}
-    T = promote_type(Float64, map(_fused_eltype, As)...)
+    T = promote_type(Float64, map(eltype, As)...)
     out = Array{T, N}(undef, S)
     return op.kernel(out, op.constant_arrays, As...)
 end

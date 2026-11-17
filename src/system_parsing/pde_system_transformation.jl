@@ -547,32 +547,23 @@ end
     hermite_transform!(eqs, bcs, boundarymap, v, disc)
 
 Introduce the derivative partners of an automatic `HermiteScheme`: for each dependent
-variable `u` and spatial variable `x`, a variable `uˍx` standing for `Dx(u)`, with its own
-evolution equation, initial condition and boundary conditions.
+variable `u` and spatial variable `x`, a variable `uˍx` standing for `Dx(u)`, with the
+evolution equation `Dt(uˍx) ~ Dx(R)` from `u`'s equation `Dt(u) ~ R`, the initial condition
+`Dx` of `u`'s, and boundary conditions derived from `u`'s. `Dx(u)` is replaced by `uˍx`
+everywhere.
 
-The steps, in order:
-  1. Rewrite `Dt(Dt(u)) ~ R` as a first-order system in time
-     ([`_hermite_reduce_second_order_in_time!`](@ref)).
-  2. Record the directions in which a variable's PDE is diffusive (only even-order `x`
-     derivatives), whose boundary stencils are wider (`scheme.diffusive`).
-  3. For each `u` and `x`: replace `Dx(u)` by `uˍx` in the equations and conditions, and add
-     `Dt(uˍx) ~ Dx(R)` from `u`'s equation `Dt(u) ~ R`.
-  4. Give `uˍx` the initial condition `Dx` of `u`'s, and boundary conditions from `u`'s:
-     at a boundary of `x`, Neumann or Robin data on `u` become a condition on `uˍx`, which
-     replaces the one on `u`; Dirichlet data give `Dx(uˍx) ~ u_xx` from `u`'s equation
-     solved on the wall, or, where that equation has no `x` derivative, from the other
-     equations ([`_hermite_wall_partner_condition`](@ref)). At a boundary of another
-     direction `y`, Dirichlet data give `uˍx` by differentiation along the boundary; with
-     Neumann or Robin data `uˍx` has no condition and is evolved by its own equation.
-     Periodic conditions carry over.
+`Dt(Dt(u)) ~ R` is first rewritten as a first-order system
+([`_hermite_reduce_second_order_in_time!`](@ref)), and the directions in which a PDE is
+diffusive are recorded in `scheme.diffusive` for the boundary stencils. At a boundary of
+`x`, Neumann or Robin data on `u` become a condition on `uˍx` that replaces the one on `u`,
+and Dirichlet data give one from the equations
+([`_hermite_dirichlet_partner_condition`](@ref)). At a boundary of another direction,
+Dirichlet data are differentiated along it; with Neumann or Robin data `uˍx` is evolved by
+its own equation. The replaced conditions are removed only after every direction is done,
+since the tangential partners are derived from them.
 
-The conditions on `u` that a partner condition replaces are removed only after every
-direction is done, since the tangential partners of the other directions are derived from
-them. PDEBase stores each equation as `lhs - rhs ~ 0`, so `u`'s right-hand side `R` is
-recovered by solving for `Dt(u)` ([`_hermite_evolution_rhs`](@ref)).
-
-The mapping `u => uˍx` is recorded in `disc.advection_scheme.deriv_var`. Nothing is done
-for a scheme with explicit partners (`HermiteScheme(deriv_var = ...)`).
+The mapping is recorded in `disc.advection_scheme.deriv_var`. Nothing is done for a scheme
+with explicit partners (`HermiteScheme(deriv_var = ...)`).
 """
 function hermite_transform!(eqs, bcs, boundarymap, v, disc)
     scheme = disc.advection_scheme
@@ -585,6 +576,7 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
     _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
     original_depvar_ops = copy(v.depvar_ops)
 
+    evol_rhs = Dict{Any, Any}()
     for uop in original_depvar_ops
         uargs = v.args[uop]
         dt_u = Symbolics.value(Dt(uop(uargs...)))
@@ -595,13 +587,7 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
             orders = _x_derivative_orders!(Set{Int}(), eq.lhs - eq.rhs, x)
             !isempty(orders) && all(iseven, orders) && push!(scheme.diffusive, (uop, x))
         end
-    end
-    evol_rhs = Dict{Any, Any}()
-    for uop in original_depvar_ops
-        dt_u = Symbolics.value(Dt(uop(v.args[uop]...)))
-        idxs = _hermite_dt_equation_indices(eqs, dt_u)
-        length(idxs) == 1 || continue
-        evol_rhs[uop] = _hermite_evolution_rhs(eqs[only(idxs)], dt_u)
+        evol_rhs[uop] = _hermite_evolution_rhs(eq, dt_u)
     end
     replaced_bcs = Pair[]
 
