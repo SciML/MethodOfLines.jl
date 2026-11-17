@@ -34,6 +34,19 @@ Periodic and interface boundary conditions are supported on nonuniform grids. St
 
 Specified on pages 8-9 of [this document](https://repository.library.brown.edu/studio/item/bdr:297524/PDF/)
 
+## HermiteScheme
+
+```julia
+HermiteScheme(; deriv_var = nothing)
+```
+
+Hermite finite differences ([Fornberg 2021](@ref hermite_references)): every spatial
+derivative of a variable is approximated from its values and the values of its first
+derivative at the stencil points, which about doubles the order on the same points.
+`HermiteScheme()` adds the first derivatives as extra unknowns by transforming the PDE
+system. It applies no upwinding, so it is meant for smooth solutions. See [Hermite finite
+differences](@ref hermite_scheme) for usage, boundary conditions, examples and limitations.
+
 ## FunctionalScheme
 
 `WENOScheme` is itself implemented as a `FunctionalScheme`, a general mechanism for supplying your own advection scheme as a set of Julia functions. See the [`FunctionalScheme`](@ref) API reference and [the developer notes](devnotes.md) for how schemes are wired into the discretization.
