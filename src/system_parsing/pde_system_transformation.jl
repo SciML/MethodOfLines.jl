@@ -454,6 +454,15 @@ function _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
     return
 end
 
+# The right-hand side `R` of `eq` written as `dt_u ~ R`; throws if `eq` is not linear in `dt_u`.
+function _hermite_evolution_rhs(eq, dt_u)
+    a, _, islinear = Symbolics.linear_expansion(eq.lhs - eq.rhs, dt_u)
+    (islinear && !isequal(Symbolics.value(a), 0)) || throw(
+        ArgumentError("HermiteScheme needs $dt_u to appear linearly in its equation, got $eq.")
+    )
+    return symbolic_linear_solve(eq, dt_u)
+end
+
 """
     hermite_transform!(eqs, bcs, boundarymap, v, disc)
 
@@ -512,8 +521,7 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
         dt_u = Symbolics.value(Differential(t)(uop(v.args[uop]...)))
         idxs = findall(eq -> Symbolics.hasnode(dt_u, Symbolics.value(eq.lhs - eq.rhs)), eqs)
         length(idxs) == 1 || continue
-        r = symbolic_linear_solve(eqs[only(idxs)], dt_u)
-        isequal(Symbolics.value(r), NaN) || (evol_rhs[uop] = r)
+        evol_rhs[uop] = _hermite_evolution_rhs(eqs[only(idxs)], dt_u)
     end
     # Neumann/Robin conditions on u that a normal partner condition replaces.
     replaced_bcs = Pair[]
@@ -558,7 +566,7 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
             # PDEBase cardinalizes equations before this transformation, so the
             # equation is `lhs - rhs ~ 0` and its stored RHS is zero. Recover
             # the actual evolution RHS by solving for the time derivative.
-            original_rhs = symbolic_linear_solve(eqs[u_eq_idx], dt_u)
+            original_rhs = _hermite_evolution_rhs(eqs[u_eq_idx], dt_u)
 
             # Replacement rule: Dx(u(t,x,...)) => v(t,x,...) throughout the system.
             rule = Symbolics.value(dx_u) => newvar

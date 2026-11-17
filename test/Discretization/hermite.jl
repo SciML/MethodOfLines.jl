@@ -496,6 +496,21 @@ end
         @test maximum(abs, sol[w(t, x)][end, :] .- w_exact.(sol[x], T)) < 1.0e-5
     end
 
+    # Two-way coupling (each equation reads the other variable): the discretized system
+    # does not depend on the order of the equations.
+    @variables v(..)
+    eu = Dt(u(t, x)) ~ Dxx(u(t, x)) + v(t, x)
+    ev = Dt(v(t, x)) ~ Dxx(v(t, x)) + u(t, x)
+    bcs2 = [
+        u(0, x) ~ sin(π * x), v(0, x) ~ sin(π * x),
+        u(t, 0) ~ 0.0, u(t, 1) ~ 0.0, v(t, 0) ~ 0.0, v(t, 1) ~ 0.0,
+    ]
+    texts = map(((eu, ev), (ev, eu))) do order
+        @named sys2 = PDESystem(collect(order), bcs2, domains, [t, x], [u(t, x), v(t, x)])
+        sort(string.(equations(first(symbolic_discretize(sys2, hermite())))))
+    end
+    @test texts[1] == texts[2]
+
     # Dt(Dt(u)) is rewritten as Dt(u) ~ uˍt, Dt(uˍt) ~ Dxx(u); u = sin(πx) cos(πt).
     @named wave = PDESystem(
         Dt(Dt(u(t, x))) ~ Dxx(u(t, x)),
@@ -522,6 +537,13 @@ end
     )
     err = @test_throws ArgumentError symbolic_discretize(twice, hermite())
     @test occursin("exactly one equation", sprint(showerror, err.value))
+
+    # Dt(u) must appear linearly.
+    @named nonlinear = PDESystem(
+        Dt(u(t, x))^2 ~ Dxx(u(t, x)), bcs[[1, 3, 4]], domains, [t, x], [u(t, x)]
+    )
+    err = @test_throws ArgumentError symbolic_discretize(nonlinear, hermite())
+    @test occursin("linearly", sprint(showerror, err.value))
 end
 
 # The error bounds below sit about twice above the errors of the scheme, so that solver
