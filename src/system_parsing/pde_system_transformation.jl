@@ -383,7 +383,7 @@ function _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
         u = uop(v.args[uop]...)
         dt2 = Symbolics.value(Dt(Dt(u)))
         dt1 = Symbolics.value(Dt(u))
-        has(ex, term) = Symbolics.hasnode(term, Symbolics.value(ex.lhs - ex.rhs))
+        has(ex, term) = subsmatch(Symbolics.value(ex.lhs - ex.rhs), term => nothing)
         idx2 = findall(eq -> has(eq, dt2), eqs)
         isempty(idx2) && continue
         any(eq -> has(eq, dt1), eqs) && continue
@@ -477,7 +477,7 @@ end
 The indices of the equations in `eqs` that contain `dt_u`.
 """
 _hermite_dt_equation_indices(eqs, dt_u) =
-    findall(eq -> Symbolics.hasnode(Symbolics.value(dt_u), Symbolics.value(eq.lhs - eq.rhs)), eqs)
+    findall(eq -> subsmatch(Symbolics.value(eq.lhs - eq.rhs), Symbolics.value(dt_u) => nothing), eqs)
 
 """
     _hermite_dirichlet_partner_condition(bc, bc_val, uop, u_applied, dt_u, original_rhs,

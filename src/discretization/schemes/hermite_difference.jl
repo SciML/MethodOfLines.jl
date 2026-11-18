@@ -145,7 +145,8 @@ function _hermite_boundary_stencil(D, II, s, j, x, Itap; wide = false)
     k = lower ? i - 1 : n - i
     w = min(max(m, 2k + 1), length(Itap))
     first = clamp(lower ? i - cld(w - 1, 2) : i - fld(w - 1, 2), 1, n - w + 1)
-    return [CartesianIndex(Base.setindex(Tuple(Itap[1]), l, j)) for l in first:(first + w - 1)]
+    I0 = Itap[1]
+    return [CartesianIndex(ntuple(k -> k == j ? l : I0[k], length(I0))) for l in first:(first + w - 1)]
 end
 
 """
@@ -209,9 +210,11 @@ end
 
 For a derivative partner `v = Dx(w)`, the `w`, the operator `D` and Hermite weights `H` of
 `Dx^2` and whether `w`'s PDE is diffusive in `x`, as `(; w, D, H, wide)`; `nothing` if the
-scheme is not a `HermiteScheme`, `v` is not a partner in `x`, or `Dx^2` has no weights.
+discretization is not a finite difference one (pseudospectral), the scheme is not a
+`HermiteScheme`, `v` is not a partner in `x`, or `Dx^2` has no weights.
 """
 function _hermite_partner_second_derivative(derivweights, s, v, x)
+    derivweights isa DifferentialDiscretizer || return nothing
     scheme = derivweights.advection_scheme
     scheme isa HermiteScheme || return nothing
     w = _hermite_primary(scheme, v, x, s)
