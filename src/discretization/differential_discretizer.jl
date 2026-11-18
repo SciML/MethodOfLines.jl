@@ -1,11 +1,4 @@
 # Use DiffEqOperators to generate weights and calculate derivative orders
-"""
-    HermiteWeightData
-
-Interior Hermite weights of one derivative operator on a uniform grid: `d_weights` for the
-values and `e_weights` for the first derivatives on `stencil_length` centred points.
-`nothing` and `0` on a non-uniform grid, where the weights are computed at each point.
-"""
 struct HermiteWeightData
     d_weights::Union{Nothing, Vector{Float64}}
     e_weights::Union{Nothing, Vector{Float64}}

@@ -20,8 +20,7 @@ makedocs(
     ],
     format = Documenter.HTML(
         assets = ["assets/favicon.ico"],
-        canonical = "https://docs.sciml.ai/MethodOfLines/stable/",
-        size_threshold = 300 * 2^10
+        canonical = "https://docs.sciml.ai/MethodOfLines/stable/"
     ),
     pages = pages
 )

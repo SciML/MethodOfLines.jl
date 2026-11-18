@@ -212,12 +212,6 @@ function descend_to_incompatible(term, v)
     return (nothing, nothing, false)
 end
 
-"""
-    _x_derivative_orders!(acc, ex, x)
-
-Push into `acc` the total order in `x` of every derivative chain in `ex`; `Dx(Dy(Dx(u)))`
-counts 2, and a chain without an `x` derivative adds nothing.
-"""
 function _x_derivative_orders!(acc, ex, x)
     ex = Symbolics.value(ex)
     (ex isa SymbolicUtils.BasicSymbolic && iscall(ex)) || return acc
@@ -236,13 +230,6 @@ function _x_derivative_orders!(acc, ex, x)
     return acc
 end
 
-"""
-    _hermite_dependent_terms!(acc, ex, x, ops)
-
-Collect the dependent-variable terms of `ex` into `acc`: subexpression => `(op, order in x,
-other differentials applied, outermost first)`, or `nothing` for a derivative of a compound
-expression, which cannot be evaluated on a wall.
-"""
 function _hermite_dependent_terms!(acc, ex, x, ops)
     ex = Symbolics.value(ex)
     (ex isa SymbolicUtils.BasicSymbolic && iscall(ex)) || return acc
@@ -271,12 +258,6 @@ function _hermite_dependent_terms!(acc, ex, x, ops)
     return acc
 end
 
-"""
-    _hermite_wall_dirichlet_data(q, x, upper, boundarymap, ops)
-
-The Dirichlet data of `q` on the wall (the `upper` end of `x`) if they contain no dependent
-variable, or `nothing`.
-"""
 function _hermite_wall_dirichlet_data(q, x, upper, boundarymap, ops)
     for b in get(get(boundarymap, q, Dict()), x, [])
         b isa InterfaceBoundary && continue
@@ -290,21 +271,6 @@ function _hermite_wall_dirichlet_data(q, x, upper, boundarymap, ops)
     return nothing
 end
 
-"""
-    _hermite_wall_normal_derivative(q, k, t, x, xval, upper, R, boundarymap, depth)
-
-`Dx^k(q)` on the wall `x = xval`, as an expression in the remaining variables, or `nothing`.
-
-It uses the Dirichlet data on that wall and the evolution equations `Dt(r) ~ R[r]` as given.
-On the wall `Dt(Dx^j(r)) = Dx^j(R[r])`; where `Dx^j(r)` is known there, this is an equation
-for the one unknown wall derivative it contains, once every other term is known in turn
-(recursively, at most `depth` levels; derivatives along the wall and in time of a known
-wall value are taken directly).
-
-For the wave equation as a system, `Dt(u) ~ p` and `Dt(p) ~ Dxx(u)`, with `u` given on the
-wall: `p_wall = Dt(u_wall)`, then `u_xx = Dt(p_wall)` from `p`'s equation. `u_x` and `p_x`
-are not determined (the wave reflects), so they are evolved.
-"""
 function _hermite_wall_normal_derivative(q, k, t, x, xval, upper, R, boundarymap, depth)
     ops = collect(keys(R))
     if k == 0
@@ -344,13 +310,6 @@ function _hermite_wall_normal_derivative(q, k, t, x, xval, upper, R, boundarymap
     return nothing
 end
 
-"""
-    _hermite_wall_partner_condition(uop, t, x, xval, upper, v_at_boundary, Dx, R, boundarymap)
-
-Condition for the normal partner `v = Dx(u)` on a Dirichlet wall when `u`'s own equation
-gives none: `v ~ u_x` if the wall determines `u_x`, else `Dx(v) ~ u_xx`, both from
-[`_hermite_wall_normal_derivative`](@ref). Returns `(lhs, rhs, order)` or `nothing`.
-"""
 function _hermite_wall_partner_condition(uop, t, x, xval, upper, v_at_boundary, Dx, R, boundarymap)
     for k in 1:2
         h = _hermite_wall_normal_derivative(uop, k, t, x, xval, upper, R, boundarymap, 3)
@@ -360,22 +319,6 @@ function _hermite_wall_partner_condition(uop, t, x, xval, upper, v_at_boundary, 
     return nothing
 end
 
-"""
-    _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
-
-Rewrite every `Dt(Dt(u)) ~ R` as the first-order system `Dt(u) ~ uˍt`, `Dt(uˍt) ~ R` (with
-`Dt(u)` in `R` replaced by `uˍt`), so that [`hermite_transform!`](@ref) treats it as a
-system written out by the user.
-
-`uˍt` gets:
-  - the initial condition from `Dt(u(t0, x)) ~ g`, which is removed from `u`'s conditions;
-  - on each spatial boundary, the time derivative of `u`'s condition when that condition is
-    data (Dirichlet `u ~ g` gives `uˍt ~ Dt(g)`, Neumann `Dx(u) ~ h` gives `Dx(uˍt) ~ Dt(h)`);
-  - the periodic conditions of `u`.
-
-A missing initial condition for `Dt(u)`, or another kind of boundary condition (Robin, or
-one with a time derivative), throws an `ArgumentError` that asks for the first-order system.
-"""
 function _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
     t = v.time
     Dt = Differential(t)
@@ -457,12 +400,6 @@ function _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
     return
 end
 
-"""
-    _hermite_evolution_rhs(eq, dt_u)
-
-The right-hand side `R` of `eq` written as `dt_u ~ R`. Throws an `ArgumentError` if `eq` is
-not linear in `dt_u`.
-"""
 function _hermite_evolution_rhs(eq, dt_u)
     a, _, islinear = Symbolics.linear_expansion(eq.lhs - eq.rhs, dt_u)
     (islinear && !isequal(Symbolics.value(a), 0)) || throw(
@@ -471,27 +408,9 @@ function _hermite_evolution_rhs(eq, dt_u)
     return symbolic_linear_solve(eq, dt_u)
 end
 
-"""
-    _hermite_dt_equation_indices(eqs, dt_u)
-
-The indices of the equations in `eqs` that contain `dt_u`.
-"""
 _hermite_dt_equation_indices(eqs, dt_u) =
     findall(eq -> subsmatch(Symbolics.value(eq.lhs - eq.rhs), Symbolics.value(dt_u) => nothing), eqs)
 
-"""
-    _hermite_dirichlet_partner_condition(bc, bc_val, uop, u_applied, dt_u, original_rhs,
-                                         newvar, v_at_boundary, t, x, xval, evol_rhs,
-                                         boundarymap, u_eq)
-
-The condition `(lhs, rhs, order)` for the normal partner `v = Dx(u)` (`newvar`, and
-`v_at_boundary` on the boundary) where `u` has the Dirichlet data `bc_val` on a boundary
-`x = xval`. `u`'s equation `dt_u ~ original_rhs` on the boundary, with `u` replaced by the
-data and its `x` derivatives by those of `v`, is solved for the highest derivative of `v` it
-contains. Where it contains none, [`_hermite_wall_partner_condition`](@ref) derives the
-condition from the other equations `evol_rhs`. Throws an `ArgumentError` if neither gives
-one; `u_eq` is the equation named in the message.
-"""
 function _hermite_dirichlet_partner_condition(
         bc, bc_val, uop, u_applied, dt_u, original_rhs, newvar, v_at_boundary, t, x, xval,
         evol_rhs, boundarymap, u_eq
@@ -547,23 +466,10 @@ end
     hermite_transform!(eqs, bcs, boundarymap, v, disc)
 
 Introduce the derivative partners of an automatic `HermiteScheme`: for each dependent
-variable `u` and spatial variable `x`, a variable `uˍx` standing for `Dx(u)`, with the
-evolution equation `Dt(uˍx) ~ Dx(R)` from `u`'s equation `Dt(u) ~ R`, the initial condition
-`Dx` of `u`'s, and boundary conditions derived from `u`'s. `Dx(u)` is replaced by `uˍx`
-everywhere.
-
-`Dt(Dt(u)) ~ R` is first rewritten as a first-order system
-([`_hermite_reduce_second_order_in_time!`](@ref)), and the directions in which a PDE is
-diffusive are recorded in `scheme.diffusive` for the boundary stencils. At a boundary of
-`x`, Neumann or Robin data on `u` become a condition on `uˍx` that replaces the one on `u`,
-and Dirichlet data give one from the equations
-([`_hermite_dirichlet_partner_condition`](@ref)). At a boundary of another direction,
-Dirichlet data are differentiated along it; with Neumann or Robin data `uˍx` is evolved by
-its own equation. The replaced conditions are removed only after every direction is done,
-since the tangential partners are derived from them.
-
-The mapping is recorded in `disc.advection_scheme.deriv_var`. Nothing is done for a scheme
-with explicit partners (`HermiteScheme(deriv_var = ...)`).
+variable `u` and spatial variable `x`, a variable `uˍx` for `Dx(u)` with the evolution
+equation `Dt(uˍx) ~ Dx(R)` from `Dt(u) ~ R`, and initial and boundary conditions derived
+from `u`'s. `Dx(u)` is replaced by `uˍx` everywhere, and the mapping is recorded in
+`disc.advection_scheme.deriv_var`.
 """
 function hermite_transform!(eqs, bcs, boundarymap, v, disc)
     scheme = disc.advection_scheme

@@ -1,27 +1,12 @@
-"""
-    _hermite_operation(a)
-
-The operation of an applied variable `u(t, x)`, or `a` itself for a bare `u`.
-"""
 @inline function _hermite_operation(a)
     av = unwrap(a)
     return iscall(av) ? operation(av) : av
 end
 
-"""
-    _same_hermite_variable(a, b)
-
-Whether `a` and `b` are the same dependent variable, applied (`u(t, x)`) or bare (`u`).
-"""
 @inline function _same_hermite_variable(a, b)::Bool
     return isequal(_hermite_operation(a), _hermite_operation(b))
 end
 
-"""
-    _resolve_hermite_variable(v, s::DiscreteSpace)
-
-Return the key in `s.discvars` that matches `v`, or `nothing`.
-"""
 @inline function _resolve_hermite_variable(v, s)
     haskey(s.discvars, v) && return v
     for candidate in keys(s.discvars)
@@ -30,22 +15,9 @@ Return the key in `s.discvars` that matches `v`, or `nothing`.
     return nothing
 end
 
-"""
-    _hermite_is_diffusive(scheme::HermiteScheme, u, x)
-
-Whether the PDE of `u` is diffusive in `x` (recorded by the transformation in
-`scheme.diffusive`), so its stencils near `x` boundaries use the wider windows of
-[`_hermite_boundary_stencil`](@ref).
-"""
 _hermite_is_diffusive(scheme::HermiteScheme, u, x) =
     any(k -> _same_hermite_variable(k[1], u) && isequal(k[2], x), scheme.diffusive)
 
-"""
-    _hermite_partner(scheme::HermiteScheme, u, x, s::DiscreteSpace)
-
-Look up the derivative-partner variable for `u` in direction `x`.
-Returns the resolved key into `s.discvars`, or `nothing` if `u` is not mapped.
-"""
 @inline function _hermite_partner(scheme::HermiteScheme, u, x, s)
     for (key, value) in scheme.deriv_var
         if key isa Tuple && length(key) == 2
@@ -65,15 +37,6 @@ Returns the resolved key into `s.discvars`, or `nothing` if `u` is not mapped.
     return nothing
 end
 
-"""
-    _hermite_weights_and_taps(D, H, II, s, bs, jx, u; wide = false)
-
-Compute the HFD weight vectors `(d_weights, e_weights)` and stencil tap indices
-for the derivative operator `D` at grid index `II`.  Reuses
-`central_difference_weights_and_stencil` for tap selection; interior uniform
-points use the precomputed weights in `H`, boundary/nonuniform points recompute
-via `calculate_weights` on the taps of [`_hermite_boundary_stencil`](@ref).
-"""
 @inline function _hermite_weights_and_taps(D, H, II, s, bs, jx, u; wide = false)
     j, x = jx
     if !isempty(bs) && !(s.grid[x] isa StepRangeLen)
@@ -114,24 +77,12 @@ end
 """
     _hermite_boundary_stencil(D, II, s, j, x, Itap; wide = false)
 
-Grid points of the Hermite stencil for `D` at a point within `boundary_point_count` of a
-boundary of `x`, in place of MOL's one-sided points `Itap`.
-
-A Hermite stencil uses the values and the first derivatives at its points, so on `m` points
-it has order `2m - d` for a derivative of order `d`. On MOL's `d + approx_order` one-sided
-points this order and the weights are large, and the semi-discrete system is unstable
-above `approx_order = 2`. Instead, the point `k` steps from the boundary uses the window of
-`2k + 1` points centred on it, clipped to the grid, with at least `m = d + 1` and at most
-`length(Itap)` points, so the stencil widens gradually into the interior one. The windows
-must be centred: the `d + 1` points nearest the boundary are unstable at high
-`approx_order`. MOL's points are kept at `approx_order = 2`, except for `d ≥ 3` (the
-`Dxxx(u)` in the partner equation of a wave equation), where they are unstable too.
-
-With `d + 1` points, the two points nearest the boundary have order `d + 2`, which limits
-the global order. `wide = true`, for a variable whose PDE is diffusive in `x` (see
-[`_hermite_is_diffusive`](@ref)), raises the minimum to `m = cld(approx_order + d, 2) + 1`
-points, of boundary order `2m - d ≥ approx_order + 2`. It is not used when the PDE has a
-first derivative in `x`, where these wider windows are unstable.
+Grid points of the Hermite stencil for `D` near a boundary of `x`, in place of MOL's
+one-sided points `Itap`. Hermite weights on one-sided points make the semi-discrete system
+unstable above `approx_order = 2`, so the point `k` steps from the boundary uses the
+centred window of `2k + 1` points, clipped to the grid, with between `d + 1` and
+`length(Itap)` points. `wide = true`, for a PDE diffusive in `x`, raises the minimum to
+`cld(approx_order + d, 2) + 1` points.
 """
 function _hermite_boundary_stencil(D, II, s, j, x, Itap; wide = false)
     d = D.derivative_order
@@ -149,12 +100,6 @@ function _hermite_boundary_stencil(D, II, s, j, x, Itap; wide = false)
     return [CartesianIndex(ntuple(k -> k == j ? l : I0[k], length(I0))) for l in first:(first + w - 1)]
 end
 
-"""
-    hermite_central_difference(D, H, II, s, bs, jx, u, v; wide = false)
-
-Return the symbolic HFD approximation `sym_dot(D_w, u_taps) + sym_dot(E_w, v_taps)`
-for the derivative described by operator `D` at index `II`.
-"""
 @inline function hermite_central_difference(D, H, II, s, bs, jx, u, v; wide = false)
     dweights, eweights, Itap = _hermite_weights_and_taps(D, H, II, s, bs, jx, u; wide)
     u_vals = [s.discvars[u][I] for I in Itap]
@@ -162,17 +107,6 @@ for the derivative described by operator `D` at index `II`.
     return sym_dot(dweights, u_vals) + sym_dot(eweights, v_vals)
 end
 
-"""
-    hermite_partner_derivative_rule(derivweights, s, v_, II, x_)
-
-The rule `Dx(v) => w_xx` for a boundary condition on the partner `v = Dx(w)` at grid index
-`II`, with the Hermite stencil of `w` and `v` as in the PDE rows; `nothing` if `v_` is not a
-partner in `x_`.
-
-A Dirichlet condition on `w` gives its partner the derived condition `Dx(v) ~ w_t` (the PDE
-at the boundary). MOL's one-sided first difference of `v` alone has order `approx_order`,
-below that of the PDE rows; the Hermite stencil uses `w` and `v` together and has their order.
-"""
 function hermite_partner_derivative_rule(derivweights, s, v_, II, x_)
     v = depvar(v_, s)
     p = _hermite_partner_second_derivative(derivweights, s, v, x_)
@@ -183,14 +117,6 @@ function hermite_partner_derivative_rule(derivweights, s, v_, II, x_)
     return (Differential(x_)^1)(v_) => rhs
 end
 
-"""
-    array_hermite_partner_derivative(derivweights, s, v, x_, ranges, indexmap, II0)
-
-Array (face slice) form of [`hermite_partner_derivative_rule`](@ref): the Hermite
-approximation of `w_xx` for `Dx(v)` on a whole boundary face of `x_`, where `v = Dx(w)`.
-The weights and taps are those at the representative point `II0`; they depend only on the
-index along `x_`, which is constant on the face. `nothing` if `v` is not a partner in `x_`.
-"""
 function array_hermite_partner_derivative(derivweights, s, v, x_, ranges, indexmap, II0)
     p = _hermite_partner_second_derivative(derivweights, s, v, x_)
     p === nothing && return nothing
@@ -205,14 +131,6 @@ function array_hermite_partner_derivative(derivweights, s, v, x_, ranges, indexm
     return array_stencil(vcat(collect(dw), collect(ew)), slices)
 end
 
-"""
-    _hermite_partner_second_derivative(derivweights, s, v, x)
-
-For a derivative partner `v = Dx(w)`, the `w`, the operator `D` and Hermite weights `H` of
-`Dx^2` and whether `w`'s PDE is diffusive in `x`, as `(; w, D, H, wide)`; `nothing` if the
-discretization is not a finite difference one (pseudospectral), the scheme is not a
-`HermiteScheme`, `v` is not a partner in `x`, or `Dx^2` has no weights.
-"""
 function _hermite_partner_second_derivative(derivweights, s, v, x)
     derivweights isa DifferentialDiscretizer || return nothing
     scheme = derivweights.advection_scheme
@@ -227,12 +145,6 @@ function _hermite_partner_second_derivative(derivweights, s, v, x)
     )
 end
 
-"""
-    _hermite_primary(scheme::HermiteScheme, v, x, s)
-
-The variable `w` whose partner in direction `x` is `v` (`v = Dx(w)`), resolved as a key of
-`s.discvars`, or `nothing`.
-"""
 function _hermite_primary(scheme::HermiteScheme, v, x, s)
     for (key, value) in scheme.deriv_var
         _same_hermite_variable(value, v) || continue
@@ -248,13 +160,9 @@ end
 """
     generate_hermite_rules(II, s, depvars, derivweights, bcmap, indexmap, terms)
 
-Generate replacement rules for all spatial derivatives at index `II`.
-
-For each dependent variable and spatial direction:
-  - If a partner is mapped via `HermiteScheme`, use HFD weights for all orders.
-  - Otherwise, fall back to standard central differences.
-
-This replaces `generate_cartesian_rules` when `advection_scheme isa HermiteScheme`.
+Rules for all spatial derivatives at index `II` when `advection_scheme isa HermiteScheme`,
+in place of `generate_cartesian_rules`: Hermite weights for a variable with a derivative
+partner in that direction, central differences otherwise.
 """
 function generate_hermite_rules(
         II::CartesianIndex, s::DiscreteSpace, depvars,
@@ -294,17 +202,10 @@ end
 """
     hermite_mixed_derivative_rules(II, s, depvars, derivweights, bcmap, indexmap)
 
-Rules for the mixed derivative `u_xy` of every `u` with derivative partners `v = u_x` and
-`w = u_y`, in each form the transformed system can contain: `Dx(Dy(u))`, `Dy(Dx(u))`,
-`Dy(v)` and `Dx(w)`. All get
-
-    u_xy ≈ δy v + δx w - δx δy u,
-
-where `δx`, `δy` are first-derivative stencils: MOL's in the interior, and near boundaries
-those of [`_mixed_first_difference`](@ref). Writing `δx = (1 + Ex) ∂x`, the combination
-equals `(1 - Ex Ey) u_xy`, so its error is the product of the two stencil errors: order
-`2 approx_order` in the interior, against `approx_order` for `δx δy u` or `δy v` alone. These rules come after the
-pure-derivative rules, so they replace the ordinary `Dy(v)` difference.
+Rules for `Dx(Dy(u))`, `Dy(Dx(u))`, `Dy(v)` and `Dx(w)` of every `u` with partners
+`v = u_x` and `w = u_y`, all as `u_xy ≈ δy v + δx w - δx δy u` with first-derivative
+stencils `δx` and `δy`. The error is the product of the two stencil errors, twice the order
+of `δx δy u`.
 """
 function hermite_mixed_derivative_rules(II, s, depvars, derivweights, bcmap, indexmap)
     rules = Pair[]
@@ -339,24 +240,6 @@ function hermite_mixed_derivative_rules(II, s, depvars, derivweights, bcmap, ind
     return rules
 end
 
-"""
-    _mixed_first_difference(D, II, s, bs, jx, u; tbcs = [])
-
-Weights and grid points of the first difference `δx` in the `u_xy` combination of
-[`hermite_mixed_derivative_rules`](@ref).
-
-In the interior and on periodic axes this is MOL's stencil. Near a boundary with data
-(`tbcs`, the non-periodic conditions of `u` in `x`, has one on that side) and for
-`approx_order > 2`, it uses the centred window of [`_hermite_boundary_stencil`](@ref) with
-ordinary (Fornberg) weights. The combination puts `δx w` into the equation of `w` itself,
-and MOL's one-sided stencil, biased downwind next to an inflow boundary, gives a growing
-mode next to an inflow corner. The lower order of the window costs little, since the error
-of the combination is the product of the two stencil errors.
-
-At a side without a condition (a free outflow), MOL's one-sided stencil is kept: there it
-looks upstream, while the window's two-point difference at the last point is of first order
-and limits the global order.
-"""
 function _mixed_first_difference(D, II, s, bs, jx, u; tbcs = [])
     j, x = jx
     weights, Itap = central_difference_weights_and_stencil(D, II, s, bs, jx, u)
@@ -374,24 +257,6 @@ function _mixed_first_difference(D, II, s, bs, jx, u; tbcs = [])
     return calculate_weights(1, s.grid[x][II[j]], coords), taps
 end
 
-"""
-    _hermite_face_mixed_derivative(II, s, u, v, w, x, y, bcmap, indexmap)
-
-`u_xy` at a point `II` on a boundary face of `x` where the normal partner `v = u_x` has a
-condition `v ~ F` (Neumann/Robin data, see `hermite_transform!`) and the tangential partner
-`w = u_y` has none, so `w` is evolved by its own equation there. Along the face `v = F`
-holds exactly, hence `u_xy = Dy(F)`, which is discretized directly: `Dy(u)` becomes `w`,
-`u` its grid value and `y` its grid coordinate. Neumann data give `Dy(g)`, a Robin
-condition `u - u_x = r` gives `w - Dy(r)`; both exact.
-
-The interior combination `δy v + δx w - δx δy u` uses a one-sided `δx w` here. At an
-inflow face that adds a downwind difference of `w` to `w`'s own equation, which lowers the
-order of 2D advection with Neumann or Robin inflow.
-
-Returns `nothing` when `II` is not on such a face, or when `Dy(F)` contains derivatives or
-variables other than `u` and `Dy(u)` (for example another dependent variable); the caller
-then keeps the interior combination.
-"""
 function _hermite_face_mixed_derivative(II, s, u, v, w, x, y, bcmap, indexmap)
     j = x2i(s, v, x)
     Iv = Idx(II, s, v, indexmap)
@@ -415,12 +280,6 @@ function _hermite_face_mixed_derivative(II, s, u, v, w, x, y, bcmap, indexmap)
     return ex
 end
 
-"""
-    _is_face_data(ex, s, y)
-
-Whether `ex`, after the substitutions of [`_hermite_face_mixed_derivative`](@ref), is data
-on the face: no derivative, no dependent-variable call other than grid values, and no `y`.
-"""
 function _is_face_data(ex, s, y)
     iscall(ex) || return !isequal(ex, unwrap(y))
     op = operation(ex)
@@ -432,13 +291,6 @@ function _is_face_data(ex, s, y)
     return all(a -> _is_face_data(unwrap(a), s, y), arguments(ex))
 end
 
-"""
-    array_validate_hermite(s, args, periodic)
-
-Throw `ArrayFormFallback` where the Hermite array form does not apply: a non-uniform grid
-(the pointwise path recomputes the weights at every point) or a two-domain interface (the
-pointwise path rejects cross-variable interface stencils with an error of its own).
-"""
 function array_validate_hermite(s, args, periodic)
     for x in args
         s.grid[x] isa StepRangeLen ||
@@ -451,13 +303,6 @@ function array_validate_hermite(s, args, periodic)
     return nothing
 end
 
-"""
-    _hermite_mixed_derivative_terms(s, depvars, derivweights)
-
-The `(; u, v, w, x, y, keys)` for which the `u_xy` combination of
-[`hermite_mixed_derivative_rules`](@ref) applies: `u` with partners `v = u_x` and `w = u_y`,
-and the rule keys of that combination.
-"""
 function _hermite_mixed_derivative_terms(s, depvars, derivweights)
     scheme = derivweights.advection_scheme
     found = []
@@ -477,23 +322,8 @@ function _hermite_mixed_derivative_terms(s, depvars, derivweights)
     return found
 end
 
-"""
-    _hermite_pde_has(pde, key)
-
-Whether `key` occurs in either side of `pde`.
-"""
 _hermite_pde_has(pde, key) = subsmatch(pde.lhs, key => nothing) || subsmatch(pde.rhs, key => nothing)
 
-"""
-    array_hermite_mixed_orders!(mixedorders, pde, s, depvars, derivweights)
-
-Register derivative order 1 in `x` and `y` for every variable the `u_xy` combination of
-`pde` reads, so the points where its stencils are not the interior ones stay pointwise.
-
-The `u_xy` combination reads first-difference stencils of `u`, `v` and `w` in both
-directions, also where the equation itself has no derivative in one of them (the `uˍy`
-equation of 2D advection contains `Dy(uˍx)` but nothing in `x`).
-"""
 function array_hermite_mixed_orders!(mixedorders, pde, s, depvars, derivweights)
     for p in _hermite_mixed_derivative_terms(s, depvars, derivweights)
         any(k -> _hermite_pde_has(pde, k), p.keys) || continue
@@ -506,16 +336,9 @@ end
 """
     array_hermite_rules(pde, s, depvars, pdeorders, derivweights, ranges, indexmap, periodic)
 
-Core-region rules of the Hermite array form, as `(mixedrules, derivrules)`.
-
-In the core every derivative takes its interior stencil, so the pointwise rules of
-[`generate_hermite_rules`](@ref) reduce to fixed weights applied to shifted slices: the
-Hermite stencil `Σ D_k u[i+k] + Σ E_k v[i+k]` for a variable `u` with partner `v`, MOL's
-centred stencil for a variable without one, and the `u_xy` combination from MOL's
-first-difference stencils. The points outside the core stay pointwise, so the equations
-are those of the pointwise path, spelled over slices. The mixed rules must take precedence
-over MOL's tensor stencil for `Dx(Dy(u))`, as in the pointwise path. Throws
-`ArrayFormFallback` if an interior Hermite weight set is missing.
+Rules of the Hermite array form in the core region, as `(mixedrules, derivrules)`: the
+interior stencils of `generate_hermite_rules` and `hermite_mixed_derivative_rules` applied
+to shifted slices. Throws `ArrayFormFallback` if an interior Hermite weight set is missing.
 """
 function array_hermite_rules(pde, s, depvars, pdeorders, derivweights, ranges, indexmap, periodic)
     scheme = derivweights.advection_scheme
@@ -557,15 +380,6 @@ function array_hermite_rules(pde, s, depvars, pdeorders, derivweights, ranges, i
     return mixedrules, derivrules
 end
 
-"""
-    array_hermite_corner_dirichlet(s, u, ranges, J, bcmap)
-
-The corner point `ranges` (non-interior in the directions `J`) set to the Dirichlet data of
-`u`, evaluated at the corner, as one slice equation; or `nothing`, so that the caller
-extrapolates, unless every direction in `J` has a Dirichlet condition on `u` at this end and
-none has an interface. The data of the meeting faces agree at the corner, so any one of
-them gives the value.
-"""
 function array_hermite_corner_dirichlet(s, u, ranges, J, bcmap)
     args = ivs(u, s)
     all(j -> length(ranges[j]) == 1, J) || return nothing
@@ -595,12 +409,6 @@ function array_hermite_corner_dirichlet(s, u, ranges, J, bcmap)
     return arr[ranges...] ~ reshape([val], ntuple(_ -> 1, length(args)))
 end
 
-"""
-    _is_corner_data(ex, s, args)
-
-Whether `ex` is data on a corner: no derivative, no grid value or call of a dependent
-variable, and none of the spatial variables `args`.
-"""
 function _is_corner_data(ex, s, args)
     ex isa SymbolicUtils.BasicSymbolic || return true
     iscall(ex) || return !any(a -> isequal(ex, Symbolics.unwrap(a)), args)
@@ -616,17 +424,10 @@ const _fused_operations = (+, -, *, /)
 """
     FusedStencil{N, S, K}
 
-One elementwise expression tree over a box of size `S`, evaluated in one pass instead of
-as nested broadcasts over slices, where every slice is a copy and every broadcast a
-temporary.
-
-Nodes are stored children-first, each with a `kind`: `:constant`, `:shifted` (argument
-`source` read at the shifted index `ranges`), `:array` (argument `source` read at the same
-element), `:scalar`, `:constant_array`, or `:operation` (`_fused_operations[operation_index]`
-applied to `children`). `kernel` is the tree compiled into a loop with one statement per
-node ([`_fused_loop_expr`](@ref)); the node list is kept for scalarization. The loop applies
-the same operations to the same operands in the same order as the nested broadcasts, with
-n-ary `+` and `*` folded left, so the values are bit-for-bit the same.
+One elementwise expression tree over a box of size `S`, evaluated by a compiled loop
+(`kernel`) instead of nested broadcasts over slice copies. The loop applies the same
+operations in the same order, so the values are bit-for-bit those of the broadcasts. The
+node list is kept for scalarization.
 """
 struct FusedStencil{N, S, K} <: Function
     kind::Vector{Symbol}
@@ -641,13 +442,6 @@ struct FusedStencil{N, S, K} <: Function
 end
 Base.size(::FusedStencil{N, S}) where {N, S} = S
 
-"""
-    _fused_loop_expr(b, N, S, nargs)
-
-The expression `function (out, C, A1, ..., An) ... end` that evaluates the node list of
-builder `b` over the box `S`, with `i1` innermost. `C` is the vector of constant arrays,
-passed as one argument so that the call does not splat a vector of unknown length.
-"""
 function _fused_loop_expr(b, N, S, nargs)
     A = [Symbol("A", k) for k in 1:nargs]
     is = [Symbol("i", d) for d in 1:N]
@@ -762,12 +556,6 @@ function _contains_derivative(ex)
     return any(_contains_derivative, arguments(ex))
 end
 
-"""
-    _slice_parts(sl, N)
-
-`(array, ranges)` of a plain slice `arr[r1, ..., rN]`, possibly nested or wrapped in an
-`ArrayOp`, or `nothing`.
-"""
 function _slice_parts(sl, N)
     sl = Symbolics.unwrap(sl)
     sl isa SymbolicUtils.BasicSymbolic || return nothing
@@ -831,13 +619,6 @@ function _fused_argument_index!(b, a)
     return p
 end
 
-"""
-    _fused_node!(b::_FusedStencilBuilder, ex)
-
-Push the node for `ex`, an array of size `b.S` or a scalar, and its subtree; return its
-index. Array subexpressions that are not arithmetic broadcasts become argument nodes, with
-their own subtrees fused first. Throws an `ArgumentError` for what cannot be fused.
-"""
 function _fused_node!(b::_FusedStencilBuilder{N}, ex) where {N}
     ex = Symbolics.unwrap(ex)
     if !(ex isa SymbolicUtils.BasicSymbolic)
@@ -875,13 +656,6 @@ function _fused_node!(b::_FusedStencilBuilder{N}, ex) where {N}
     return _push_fused_node!(b, :array; source = _fused_argument_index!(b, fuse_stencils(ex)))
 end
 
-"""
-    fuse_stencils(ex)
-
-`ex` with each maximal arithmetic broadcast tree over arrays of one size replaced by one
-[`FusedStencil`](@ref) call that evaluates the same tree in the same order. Subtrees with
-time derivatives are left unchanged.
-"""
 function fuse_stencils(ex)
     ex = Symbolics.unwrap(ex)
     ex isa SymbolicUtils.BasicSymbolic || return ex
@@ -929,13 +703,6 @@ function _fuse_arguments(ex)
 end
 fuse_stencils(eq::Equation) = Equation(fuse_stencils(eq.lhs), fuse_stencils(eq.rhs))
 
-"""
-    hermite_finalize_equation(eq)
-
-The last step for a HermiteScheme equation in `PDEBase.discretize_equation!`: fuse its slice
-expressions ([`fuse_stencils`](@ref)), then spell the remaining broadcasts as `mol_broadcast`
-like every other equation. If fusing fails, the equation is kept as it was.
-"""
 hermite_finalize_equation(eq) = array_noinline_broadcasts(_fuse_or_keep(eq))
 
 function _fuse_or_keep(eq)
