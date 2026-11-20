@@ -106,3 +106,11 @@ with_ports(d::MOLFiniteDifference{G}, ports) where {G} = MOLFiniteDifference{G}(
 )
 
 PDEBase.get_time(disc::MOLFiniteDifference) = disc.time
+
+function supported_conditions(::MOLFiniteDifference)
+    return PDEBase.SupportedConditions(;
+        geometries = (:interval, :box), dirichlet = true, neumann = true, robin = true,
+        periodic = true, interface = true, time_dependent = true,
+        notes = "Conditions must be supplied at the edge of the domain. Rectangle domains are lowered to box conditions by `PDEBase.to_box_bcs`. Interface conditions connect variables on adjacent intervals, which must share a step size (except `WENOScheme()` on nonuniform grids), and disable system transformation."
+    )
+end

@@ -149,3 +149,11 @@ end
 PDEBase.get_time(disc::PseudospectralDiscretization) = disc.time
 
 const MOLDiscretization = Union{MOLFiniteDifference, PseudospectralDiscretization}
+
+function supported_conditions(::PseudospectralDiscretization)
+    return PDEBase.SupportedConditions(;
+        geometries = (:interval, :box), dirichlet = true, neumann = true, robin = true,
+        periodic = true, interface = false, time_dependent = true,
+        notes = "Periodic conditions require `FourierCollocation` in that direction, and Fourier directions accept no other conditions. Multi-domain interface conditions are rejected; only same-variable periodic conditions are supported."
+    )
+end
