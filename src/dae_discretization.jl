@@ -213,6 +213,10 @@ end
 Build the `DAEProblem` from an already discretized system. Shared by
 `DAEProblem(::PDESystem, ::MOLFiniteDifference)` and [`discretize`](@ref) so that the
 system is discretized once.
+
+With a [`HermiteScheme`](@ref) and no `initializealg`, `BrownFullBasicInit` uses
+`abstol = 1e-8`: the partner equations carry one derivative order more than the PDE, so
+their round-off exceeds the default tolerance on fine grids.
 """
 function _dae_problem(
         sys, tspan, discretization::MOLDiscretization;
@@ -222,7 +226,8 @@ function _dae_problem(
     if initializealg === nothing
         offenders = brown_init_offenders(sys)
         isempty(offenders) || throw(BrownFullBasicInitUnsafeError(offenders))
-        initializealg = DiffEqBase.BrownFullBasicInit()
+        initializealg = _is_hermite_discretization(discretization) ?
+            DiffEqBase.BrownFullBasicInit(abstol = 1.0e-8) : DiffEqBase.BrownFullBasicInit()
     end
     t = safe_unwrap(get_time(discretization))
     maxorder = maximum(
@@ -243,3 +248,6 @@ function _dae_problem(
         discretization.kwargs..., kwargs...
     )
 end
+
+_is_hermite_discretization(discretization) = discretization isa MOLFiniteDifference &&
+    discretization.advection_scheme isa HermiteScheme

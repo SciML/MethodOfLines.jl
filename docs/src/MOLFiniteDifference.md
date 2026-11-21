@@ -24,7 +24,7 @@ domain = [your domain, a vector of Intervals i.e. x ∈ Interval(x_min, x_max)]
 
 discretization = MOLFiniteDifference(dxs,
                                       <your choice of continuous variable, usually time>;
-                                      advection_scheme = <UpwindScheme() or WENOScheme()>,
+                                      advection_scheme = <UpwindScheme(), WENOScheme() or HermiteScheme()>,
                                       approx_order = <Order of derivative approximation, starting from 2>,
                                       grid_align = <your grid type choice>,
                                       should_transform = <Whether to automatically transform the PDESystem (see below)>)
@@ -36,7 +36,7 @@ For a non-uniform rectilinear grid, replace any or all of the step sizes with th
 
 Note that the second argument to `MOLFiniteDifference` is optional, all parameters can be discretized if all required boundary conditions are specified.
 
-Currently, implemented options for `advection_scheme` are `UpwindScheme()` and `WENOScheme()`, defaults to upwind. See [advection schemes](@ref adschemes) for more information, and the [WENO tutorial](@ref weno_tutorial) for a worked comparison of the two.
+Currently, implemented options for `advection_scheme` are `UpwindScheme()`, `WENOScheme()` and `HermiteScheme()`, defaults to upwind. See [advection schemes](@ref adschemes) for more information, the [WENO tutorial](@ref weno_tutorial) for a worked comparison of the first two, and [Hermite finite differences](@ref hermite_scheme) for `HermiteScheme()`.
 
 Currently supported options are `grid_align`: `center_align` and `edge_align`. Edge align will give better accuracy with Neumann boundary conditions. Defaults to `center_align`.
 

@@ -221,8 +221,10 @@ function PDEBase.discretize_equation!(
         (eqs = add_point_ports(eqs, pde, interiormap, eqvar, s, derivweights, bcmap))
 
     newbceqs = (nbceqs0 + 1):length(disc_state.bceqs)
-    disc_state.bceqs[newbceqs] = map(array_noinline_broadcasts, disc_state.bceqs[newbceqs])
-    return vcat!(disc_state.eqs, map(array_noinline_broadcasts, eqs))
+    finalize = derivweights.advection_scheme isa HermiteScheme ?
+        hermite_finalize_equation : array_noinline_broadcasts
+    disc_state.bceqs[newbceqs] = map(finalize, disc_state.bceqs[newbceqs])
+    return vcat!(disc_state.eqs, map(finalize, eqs))
 end
 
 """
@@ -249,7 +251,7 @@ function discretize_equation_array_form(
     )
     # The staggered path never consults the advection scheme (see the staggered
     # `generate_finite_difference_rules`), so the requirement only applies otherwise.
-    isstag || derivweights.advection_scheme isa Union{UpwindScheme, FunctionalScheme} ||
+    isstag || derivweights.advection_scheme isa Union{UpwindScheme, FunctionalScheme, HermiteScheme} ||
         throw(
         ArrayFormFallback(
             "unsupported advection scheme $(derivweights.advection_scheme)"
@@ -262,6 +264,8 @@ function discretize_equation_array_form(
         s, array_unique_depvars(array_pde_occurrences(pde, s), s), args
     )
     periodic = array_wrap_dims(s, slicevars, args, bcmap)
+    ishermite = !isstag && derivweights.advection_scheme isa HermiteScheme
+    ishermite && array_validate_hermite(s, args, periodic)
 
     pdeorders = Dict(x => d_orders(x, [pde]) for x in args)
     isstag && validate_staggered_array_form(s, depvars, pdeorders, args)
@@ -290,6 +294,7 @@ function discretize_equation_array_form(
     end
     mixedterms = isstag ? [] : array_mixed_terms(pde, slicevars, args, pdeorders, s)
     mixedorders = mixed_orders_by_direction(mixedterms)
+    ishermite && array_hermite_mixed_orders!(mixedorders, pde, s, slicevars, derivweights)
     bands, clean = array_bands(
         interior, s, args, pdeorders, derivweights, indexmap, periodic, nllap_orders,
         sph_orders, mixedorders
@@ -603,18 +608,26 @@ function array_core_equation(
         sphrules = Pair[]
         advrules = Pair[]
     else
-        derivrules = array_cartesian_rules(
-            s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
-        )
         mixedrules = array_mixed_rules(
             mixedterms, s, derivweights, ranges, indexmap, periodic
         )
-        # Include bvalrules so `u(t, 1)*Dx(u)`, `Dx(u(t, 1))*Dx(u)`, and
-        # `u(0, x)*Dx(u)` substitute first.
-        windrules = array_winding_rules(
-            terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
-            vcat(bvalrules, varrules, gridrules), periodic
-        )
+        if derivweights.advection_scheme isa HermiteScheme
+            hmixed, derivrules = array_hermite_rules(
+                pde, s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
+            )
+            mixedrules = vcat(hmixed, mixedrules)
+            windrules = Pair[]
+        else
+            derivrules = array_cartesian_rules(
+                s, depvars, pdeorders, derivweights, ranges, indexmap, periodic
+            )
+            # Include bvalrules so `u(t, 1)*Dx(u)`, `Dx(u(t, 1))*Dx(u)`, and
+            # `u(0, x)*Dx(u)` substitute first.
+            windrules = array_winding_rules(
+                terms, s, depvars, pdeorders, derivweights, ranges, indexmap,
+                vcat(bvalrules, varrules, gridrules), periodic
+            )
+        end
         nllaprules = array_nonlinlap_rules(
             nllap_matches, s, depvars, derivweights, ranges, indexmap,
             vcat(bvalrules, varrules, gridrules), periodic
@@ -811,6 +824,10 @@ function array_tap_extents(x, pdeorders, derivweights, ::Type{G}, mixedorders) w
             taps = half_range(Dop.stencil_length)
             mintap = min(mintap, first(taps))
             maxtap = max(maxtap, last(taps))
+        elseif derivweights.advection_scheme isa HermiteScheme
+            taps = half_range(derivweights.map[Differential(x)^d].stencil_length)
+            mintap = min(mintap, first(taps))
+            maxtap = max(maxtap, last(taps))
         elseif array_functional_advection(derivweights, d)
             taps = half_range(derivweights.advection_scheme.interior_points)
             mintap = min(mintap, first(taps))
@@ -916,7 +933,7 @@ function array_bands(
                 bpc = derivweights.map[Differential(x)^d].boundary_point_count
                 wlower === nothing && (lo = max(lo, bpc + 1))
                 wupper === nothing && (hi = min(hi, n - bpc))
-            elseif iseven(d)
+            elseif iseven(d) || derivweights.advection_scheme isa HermiteScheme
                 bpc = derivweights.map[Differential(x)^d].boundary_point_count
                 wlower === nothing && (lo = max(lo, bpc + 1))
                 wupper === nothing && (hi = min(hi, n - bpc))
@@ -3486,6 +3503,15 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         end
         push!(derivrules, safe_unwrap((Differential(x_)^d)(u)) => expr)
     end
+    hexpr = array_hermite_partner_derivative(derivweights, s, u, x_, ranges, indexmap, II0)
+    if hexpr !== nothing
+        hkeys = [
+            safe_unwrap((Differential(x_)^1)(v)) for v in [bcdepvars..., u]
+                if isequal(depvar(v, s), u)
+        ]
+        filter!(r -> !any(k -> isequal(r.first, k), hkeys), derivrules)
+        append!(derivrules, [k => hexpr for k in hkeys])
+    end
 
     # Face slice, aligned to the face axes. Time-only variables are scalars.
     varrules = Pair[]
@@ -3868,6 +3894,10 @@ boundary band wider than one point, or an interior too short for the stencil.
 function array_corner_extrapolation(s, u, ranges, J, lo, hi, bcmap, derivweights)
     (bcmap === nothing || derivweights === nothing) && return nothing
     args = ivs(u, s)
+    if derivweights.advection_scheme isa HermiteScheme
+        ce = array_hermite_corner_dirichlet(s, u, ranges, J, bcmap)
+        ce === nothing || return ce
+    end
     for j in J
         length(ranges[j]) == 1 || return nothing
         isempty(filter_interfaces(get(bcmap[operation(u)], args[j], []))) || return nothing

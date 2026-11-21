@@ -1,4 +1,10 @@
 # Use DiffEqOperators to generate weights and calculate derivative orders
+struct HermiteWeightData
+    d_weights::Union{Nothing, Vector{Float64}}
+    e_weights::Union{Nothing, Vector{Float64}}
+    stencil_length::Int
+end
+
 struct DifferentialDiscretizer{T, D1, S} <: AbstractDifferentialDiscretizer
     approx_order::Int
     advection_scheme::S
@@ -11,6 +17,7 @@ struct DifferentialDiscretizer{T, D1, S} <: AbstractDifferentialDiscretizer
     callbacks::Any
     icformulas::Any
     ports::Vector{Any}
+    hermitemap::Dict{Differential, HermiteWeightData}
 end
 
 function PDEBase.construct_differential_discretizer(
@@ -109,13 +116,33 @@ function PDEBase.construct_differential_discretizer(
         push!(boundary, x => BoundaryInterpolatorExtrapolator(max(6, approx_order), dx))
     end
 
+    hermitemap = Dict{Differential, HermiteWeightData}()
+    if advection_scheme isa HermiteScheme
+        for x in s.x̄
+            dx = s.dxs[x]
+            for d in union(orders[x], (1, 2))
+                if s.grid[x] isa StepRangeLen
+                    stencil_length = d + approx_order - 1 + (d + approx_order) % 2
+                    half = div(stencil_length, 2)
+                    stencil_nodes = [Float64(k * dx) for k in -half:half]
+                    d_w, e_w = calculate_weights(d, 0.0, stencil_nodes; dfdx = true)
+                    hermitemap[Differential(x)^d] =
+                        HermiteWeightData(d_w, e_w, stencil_length)
+                else
+                    hermitemap[Differential(x)^d] =
+                        HermiteWeightData(nothing, nothing, 0)
+                end
+            end
+        end
+    end
+
     return DifferentialDiscretizer{
         eltype(orders), typeof(Dict(differentialmap)), typeof(advection_scheme),
     }(
         approx_order, advection_scheme, Dict(differentialmap),
         (Dict(nonlinlap_inner), Dict(nonlinlap_outer)), (Dict(windpos), Dict(windneg)),
         Dict(interp), Dict(orders), Dict(boundary), callbacks,
-        array_ic_formulas(pdesys, s), ports
+        array_ic_formulas(pdesys, s), ports, hermitemap
     )
 end
 

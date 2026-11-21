@@ -104,6 +104,76 @@ function extent(scheme::FunctionalScheme, dorder)
     return lower
 end
 
+"""
+    HermiteScheme(; deriv_var = nothing)
+
+Hermite finite differences (Fornberg 2021): every spatial derivative of a variable `u` is
+approximated from the values of `u` and of its first derivative at the stencil points. With
+`m` points the order is `2m - d` for a derivative of order `d`, about twice that of the
+ordinary stencil on the same points. Pass it as `advection_scheme` to
+[`MOLFiniteDifference`](@ref).
+
+The first derivative is carried as an extra unknown, the derivative partner `uˍx = Dx(u)`.
+`HermiteScheme()` adds the partners, with their equations, initial and boundary conditions,
+by transforming the PDE system, so the PDE is written as usual; `Dt(Dt(u)) ~ R` is first
+rewritten as a first-order system in time. `HermiteScheme(deriv_var = u => v)` (one spatial
+dimension) or `HermiteScheme(deriv_var = [(u, x) => vx, (u, y) => vy])` uses the given
+variables as partners instead; the system is then not transformed, and the partners'
+equations and conditions must be part of the `PDESystem`.
+
+`discretize` returns a `DAEProblem`. The scheme applies no upwinding and is meant for smooth
+solutions. See the "Hermite finite differences" page of the documentation for the boundary
+conditions, mixed derivatives and limitations.
+
+# Example
+
+```julia
+using MethodOfLines, ModelingToolkit, DomainSets, OrdinaryDiffEq
+
+@parameters t x
+@variables u(..)
+Dt, Dx = Differential(t), Differential(x)
+
+eq = Dt(u(t, x)) ~ Dx(Dx(u(t, x)))
+bcs = [u(0, x) ~ sin(π * x), u(t, 0) ~ 0, u(t, 1) ~ 0]
+domains = [t ∈ Interval(0.0, 0.25), x ∈ Interval(0.0, 1.0)]
+@named heat = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+disc = MOLFiniteDifference([x => 0.05], t; advection_scheme = HermiteScheme())
+sol = solve(discretize(heat, disc); abstol = 1e-10, reltol = 1e-10)
+maximum(abs, sol[u(t, x)][end, :] .- exp(-π^2 * 0.25) .* sin.(π .* sol[x]))
+```
+
+# Reference
+
+B. Fornberg, *An algorithm for calculating Hermite-based finite difference weights*,
+IMA Journal of Numerical Analysis 41 (2021), 801–813,
+[doi:10.1093/imanum/draa006](https://doi.org/10.1093/imanum/draa006).
+"""
+struct HermiteScheme{D} <: AbstractScheme
+    """Map from `u` (one spatial dimension) or `(u, x)` to the derivative partner `Dx(u)`."""
+    deriv_var::D
+    """Whether the partners are added by transforming the system (`HermiteScheme()`)."""
+    automatic::Bool
+    """
+    `(u, x)` pairs whose PDE has only even-order derivatives in `x`, set by the
+    transformation; their stencils near `x` boundaries are wider.
+    """
+    diffusive::Set{Any}
+end
+
+function HermiteScheme(; deriv_var = nothing)
+    return if deriv_var === nothing
+        HermiteScheme(Dict{Any, Any}(), true, Set{Any}())
+    elseif deriv_var isa Pair
+        HermiteScheme(Dict(deriv_var), false, Set{Any}())
+    else
+        HermiteScheme(Dict(deriv_var...), false, Set{Any}())
+    end
+end
+
+extent(::HermiteScheme, dorder) = 0
+
 function lower_extent(scheme::FunctionalScheme, dorder)
     @assert dorder == 1 "Only first order spatial derivatives are implemented for functional schemes."
     return length(findall(isnothing, scheme.lower))
