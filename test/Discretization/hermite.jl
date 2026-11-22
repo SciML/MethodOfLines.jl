@@ -627,19 +627,19 @@ end
     @variables u(..)
     Dt, Dx, Dy = Differential(t), Differential(x), Differential(y)
     k, T = 0.1, 0.5
-    ue(x, y, t) = exp(-t) * sin(π * x + 0.5) * (2 + cos(2π * y))
-    U, E = u(t, x, y), ue(x, y, t)
+    uexact(x, y, t) = exp(-t) * sin(π * x + 0.5) * (2 + cos(2π * y))
+    U, E = u(t, x, y), uexact(x, y, t)
     f = expand_derivatives(Dt(E) - k * (Dx(Dx(E)) + Dy(Dy(E)) + Dx(Dy(E))))
     eq = Dt(U) ~ k * (Dx(Dx(U)) + Dy(Dy(U)) + Dx(Dy(U))) + f
     dom = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-    xwalls = [u(t, 0.0, y) ~ ue(0.0, y, t), u(t, 1.0, y) ~ ue(1.0, y, t)]
+    xwalls = [u(t, 0.0, y) ~ uexact(0.0, y, t), u(t, 1.0, y) ~ uexact(1.0, y, t)]
     for (name, ywalls) in (
             (:xy_periodic, [u(t, x, 0.0) ~ u(t, x, 1.0)]),
-            (:xy_dirichlet, [u(t, x, 0.0) ~ ue(x, 0.0, t), u(t, x, 1.0) ~ ue(x, 1.0, t)]),
+            (:xy_dirichlet, [u(t, x, 0.0) ~ uexact(x, 0.0, t), u(t, x, 1.0) ~ uexact(x, 1.0, t)]),
         )
         errs = map((9, 17)) do N
             sys = PDESystem(
-                [eq], [u(0, x, y) ~ ue(x, y, 0.0); xwalls; ywalls], dom, [t, x, y], [U]; name
+                [eq], [u(0, x, y) ~ uexact(x, y, 0.0); xwalls; ywalls], dom, [t, x, y], [U]; name
             )
             disc = MOLFiniteDifference(
                 [x => 1 / (N - 1), y => 1 / (N - 1)], t; approx_order = 2,
@@ -647,7 +647,7 @@ end
             )
             sol = solve(discretize(sys, disc); saveat = [T], abstol = 1.0e-10, reltol = 1.0e-10)
             @test successful_retcode(sol)
-            e = abs.(sol[U][end, :, :] .- [ue(a, b, T) for a in sol[x], b in sol[y]])
+            e = abs.(sol[U][end, :, :] .- [uexact(a, b, T) for a in sol[x], b in sol[y]])
             e[1, 1] = e[1, end] = e[end, 1] = e[end, end] = 0
             maximum(e)
         end
@@ -661,11 +661,11 @@ end
     @variables u(..)
     Dt, Dx = Differential(t), Differential(x)
     T = 0.5
-    ue(x, t) = exp(-0.04π^2 * t) * sin(2π * (x - t))
+    uexact(x, t) = exp(-0.04π^2 * t) * sin(2π * (x - t))
     function aderr(N, ao)
         @named advdiff = PDESystem(
             [Dt(u(t, x)) ~ -Dx(u(t, x)) + 0.01 * Dx(Dx(u(t, x)))],
-            [u(0, x) ~ ue(x, 0.0), u(t, 0.0) ~ ue(0.0, t), u(t, 1.0) ~ ue(1.0, t)],
+            [u(0, x) ~ uexact(x, 0.0), u(t, 0.0) ~ uexact(0.0, t), u(t, 1.0) ~ uexact(1.0, t)],
             [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]
         )
         disc = MOLFiniteDifference(
@@ -673,7 +673,7 @@ end
         )
         sol = solve(discretize(advdiff, disc); saveat = [T], abstol = 1.0e-10, reltol = 1.0e-10)
         @test successful_retcode(sol)
-        return maximum(abs, sol[u(t, x)][end, :] .- ue.(sol[x], T))
+        return maximum(abs, sol[u(t, x)][end, :] .- uexact.(sol[x], T))
     end
     for (ao, Ns) in ((2, (13, 14)), (4, (17, 18)))
         @test maximum(N -> aderr(N, ao), Ns) < 2.0e-3
@@ -693,17 +693,17 @@ end
     @variables u(..) p(..)
     Dt, Dx = Differential(t), Differential(x)
     T = 1.0
-    ue(x, t) = exp(-t) * sin(π * x)
+    uexact(x, t) = exp(-t) * sin(π * x)
     domains = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)]
     walls = [u(t, 0.0) ~ 0.0, u(t, 1.0) ~ 0.0]
     @named direct = PDESystem(
         Dt(Dt(u(t, x))) ~ Dx(Dx(u(t, x))) / π^2 - 2 * Dt(u(t, x)),
-        [u(0, x) ~ ue(x, 0.0), Dt(u(0, x)) ~ -ue(x, 0.0), walls...],
+        [u(0, x) ~ uexact(x, 0.0), Dt(u(0, x)) ~ -uexact(x, 0.0), walls...],
         domains, [t, x], [u(t, x)]
     )
     @named system = PDESystem(
         [Dt(u(t, x)) ~ p(t, x), Dt(p(t, x)) ~ Dx(Dx(u(t, x))) / π^2 - 2 * p(t, x)],
-        [u(0, x) ~ ue(x, 0.0), p(0, x) ~ -ue(x, 0.0), walls..., p(t, 0.0) ~ 0.0, p(t, 1.0) ~ 0.0],
+        [u(0, x) ~ uexact(x, 0.0), p(0, x) ~ -uexact(x, 0.0), walls..., p(t, 0.0) ~ 0.0, p(t, 1.0) ~ 0.0],
         domains, [t, x], [u(t, x), p(t, x)]
     )
     function werr(sys, N)
@@ -712,7 +712,7 @@ end
         )
         sol = solve(discretize(sys, disc); saveat = [T], abstol = 1.0e-12, reltol = 1.0e-12)
         @test successful_retcode(sol)
-        return maximum(abs, sol[u(t, x)][end, :] .- ue.(sol[x], T))
+        return maximum(abs, sol[u(t, x)][end, :] .- uexact.(sol[x], T))
     end
     e21, e41 = werr(direct, 21), werr(direct, 41)
     @test e41 < 4.0e-5
