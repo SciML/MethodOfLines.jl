@@ -131,6 +131,50 @@ function array_hermite_partner_derivative(derivweights, s, v, x_, ranges, indexm
     return array_stencil(vcat(collect(dw), collect(ew)), slices)
 end
 
+function hermite_boundary_derivative_rules(derivweights, s, boundary, II, indexmap, bcmap)
+    rules = Pair[]
+    derivweights isa DifferentialDiscretizer || return rules
+    derivweights.advection_scheme isa HermiteScheme || return rules
+    get_grid_type(s) <: CenterAlignedGrid || return rules
+    u_, x_ = getvars(boundary)
+    u = depvar(u_, s)
+    II = newindex(u_, II, s, indexmap)
+    ufunc(v, I, _) = s.discvars[v][I]
+    for y in ivs(u, s)
+        isequal(y, x_) && continue
+        bs = filter_interfaces(get(get(bcmap, operation(u), Dict()), y, []))
+        for d in get(derivweights.orders, y, Int[])
+            D = get(derivweights.map, Differential(y)^d, nothing)
+            D === nothing && continue
+            rhs = central_difference(D, II, s, bs, (x2i(s, u, y), y), u, ufunc)
+            push!(rules, (Differential(y)^d)(u_) => rhs)
+        end
+    end
+    scheme = derivweights.advection_scheme
+    if scheme.automatic && _hermite_partner(scheme, u, x_, s) !== nothing
+        g = s.grid[x_]
+        D = CompleteCenteredDifference(
+            1, length(g) >= 14 ? 6 : length(g) >= 5 ? 4 : 2, g isa StepRangeLen ? s.dxs[x_] : g
+        )
+        push!(rules, Differential(x_)(u_) => central_difference(D, II, s, [], (x2i(s, u, x_), x_), u, ufunc))
+    end
+    return rules
+end
+
+function hermite_bc_fallback(derivweights, s, boundary, u, x_)
+    derivweights isa DifferentialDiscretizer || return nothing
+    derivweights.advection_scheme isa HermiteScheme || return nothing
+    for y in ivs(u, s)
+        isequal(y, x_) && continue
+        any(side -> !isempty(_x_derivative_orders!(Set{Int}(), side, y)), (boundary.eq.lhs, boundary.eq.rhs)) &&
+            throw(ArrayFormFallback("HermiteScheme boundary condition with a derivative in $y along the face"))
+    end
+    ex = Symbolics.value(boundary.eq.lhs - boundary.eq.rhs)
+    any(w -> !isequal(depvar(w, s), u) && subsmatch(ex, Symbolics.value(Differential(x_)(w)) => nothing), boundary.depvars) &&
+        throw(ArrayFormFallback("HermiteScheme boundary condition with a derivative of another variable"))
+    return nothing
+end
+
 function _hermite_partner_second_derivative(derivweights, s, v, x)
     derivweights isa DifferentialDiscretizer || return nothing
     scheme = derivweights.advection_scheme
@@ -619,16 +663,18 @@ function _fused_argument_index!(b, a)
     return p
 end
 
+_is_float64(c) = c isa Real && Float64(c) == c
+
 function _fused_node!(b::_FusedStencilBuilder{N}, ex) where {N}
     ex = Symbolics.unwrap(ex)
     if !(ex isa SymbolicUtils.BasicSymbolic)
-        ex isa Real || throw(ArgumentError("FusedStencil: non-real constant $ex"))
+        _is_float64(ex) || throw(ArgumentError("FusedStencil: constant $ex is not a Float64"))
         return _push_fused_node!(b, :constant; value = ex, symbolic_value = ex)
     end
     if SymbolicUtils.isconst(ex)
         v = unwrap_const(ex)
-        v isa Real && return _push_fused_node!(b, :constant; value = v, symbolic_value = v)
-        if v isa AbstractArray{<:Real} && size(v) == b.S
+        _is_float64(v) && return _push_fused_node!(b, :constant; value = v, symbolic_value = v)
+        if v isa AbstractArray{<:Real} && size(v) == b.S && all(_is_float64, v)
             push!(b.constant_arrays, Array{Float64, N}(v))
             return _push_fused_node!(b, :constant_array; source = length(b.constant_arrays))
         end

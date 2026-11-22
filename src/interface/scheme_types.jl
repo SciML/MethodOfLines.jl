@@ -107,8 +107,9 @@ end
 """
     HermiteScheme(; deriv_var = nothing)
 
-Hermite finite differences (Fornberg 2021): every spatial derivative of a variable `u` is
-approximated from the values of `u` and of its first derivative at the stencil points. With
+Hermite finite differences (Fornberg 2021): every spatial derivative of a variable `u` in a
+direction where `u` has a derivative partner is approximated from the values of `u` and of
+its first derivative at the stencil points; other derivatives use central differences. With
 `m` points the order is `2m - d` for a derivative of order `d`, about twice that of the
 ordinary stencil on the same points. Pass it as `advection_scheme` to
 [`MOLFiniteDifference`](@ref).

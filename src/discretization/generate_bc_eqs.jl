@@ -73,7 +73,10 @@ function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivwei
                     x -> haskey(indexmap, x),
                     filter(x -> !(unwrap_const(safe_unwrap(x)) isa Number), b.indvars)
                 )
-                II -> boundary_value_maps(II, s, b, derivweights, indexmap)
+                II -> vcat(
+                    boundary_value_maps(II, s, b, derivweights, indexmap),
+                    hermite_boundary_derivative_rules(derivweights, s, b, II, indexmap, boundarymap)
+                )
             else
                 II -> []
             end

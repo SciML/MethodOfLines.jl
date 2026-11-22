@@ -3483,6 +3483,7 @@ function array_bc_eqs(s, boundary, interiormap, derivweights, bcmap)
         filter!(r -> !any(k -> isequal(r.first, k), hkeys), derivrules)
         append!(derivrules, [k => hexpr for k in hkeys])
     end
+    hermite_bc_fallback(derivweights, s, boundary, u, x_)
 
     # Face slice, aligned to the face axes. Time-only variables are scalars.
     varrules = Pair[]

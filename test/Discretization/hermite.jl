@@ -6,11 +6,9 @@ using MethodOfLines
 using OrdinaryDiffEq
 using SciMLBase: DAEProblem, successful_retcode
 
-@testset "HermiteScheme constructor and uniform discretization" begin
+@testset "HermiteScheme constructor" begin
     @parameters t x
     @variables u(..) v(..)
-    Dt = Differential(t)
-    Dxx = Differential(x)^2
 
     scheme = @inferred HermiteScheme(deriv_var = u => v)
     @test scheme.deriv_var[u] === v
@@ -18,27 +16,6 @@ using SciMLBase: DAEProblem, successful_retcode
     @test (@inferred HermiteScheme()).automatic
     @test @inferred(MethodOfLines._same_hermite_variable(u, u(t, x)))
     @test MethodOfLines.extent(scheme, 2) == 0
-
-    eqs = [
-        Dt(u(t, x)) ~ -v(t, x),
-        Dt(v(t, x)) ~ -Dxx(u(t, x)),
-    ]
-    bcs = [
-        u(0, x) ~ 0.0,
-        v(0, x) ~ 0.0,
-        u(t, -1.0) ~ 0.0,
-        u(t, 1.0) ~ 0.0,
-        v(t, -1.0) ~ 0.0,
-        v(t, 1.0) ~ 0.0,
-    ]
-    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(-1.0, 1.0)]
-    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t, x)])
-    discretization = MOLFiniteDifference(
-        [x => 0.25], t; approx_order = 2, advection_scheme = scheme
-    )
-
-    _, tspan = symbolic_discretize(pdesys, discretization)
-    @test tspan == (0.0, 0.1)
 end
 
 @testset "HermiteScheme nonuniform grid and boundary rules" begin
@@ -494,15 +471,6 @@ end
     end
     @test texts[1] == texts[2]
 
-    @named wave = PDESystem(
-        Dt(Dt(u(t, x))) ~ Dxx(u(t, x)),
-        [u(0, x) ~ sin(π * x), Dt(u(0, x)) ~ 0.0, u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
-        domains, [t, x], [u(t, x)]
-    )
-    sol = solve(discretize(wave, hermite()); abstol = 1.0e-10, reltol = 1.0e-10)
-    @test successful_retcode(sol)
-    @test maximum(abs, sol[u(t, x)][end, :] .- sin.(π .* sol[x]) .* cos(π * T)) < 1.0e-4
-
     @named wave0 = PDESystem(
         Dt(Dt(u(t, x))) ~ Dxx(u(t, x)),
         [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
@@ -607,4 +575,190 @@ end
     @test successful_retcode(sol)
     E = [ua(xi, yj, 0.5) for xi in sol[x], yj in sol[y]]
     @test maximum(abs, sol[u(t, x, y)][end, :, :] .- E) < 8.0e-5
+end
+
+@testset "HermiteScheme rejects staggered and multidimensional edge-aligned grids" begin
+    @parameters t x y
+    @variables u(..) ρ(..) ϕ(..)
+    Dt, Dx, Dy = Differential(t), Differential(x), Differential(y)
+
+    heat1 = PDESystem(
+        Dt(u(t, x)) ~ Dx(Dx(u(t, x))),
+        [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]; name = :edge1
+    )
+    edge1 = MOLFiniteDifference(
+        [x => 0.1], t; advection_scheme = HermiteScheme(), grid_align = MethodOfLines.edge_align
+    )
+    @test discretize(heat1, edge1) isa DAEProblem
+
+    heat2 = PDESystem(
+        Dt(u(t, x, y)) ~ Dx(Dx(u(t, x, y))) + Dy(Dy(u(t, x, y))),
+        [
+            u(0, x, y) ~ sin(π * x) * sin(π * y), u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+            u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        ],
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+        [t, x, y], [u(t, x, y)]; name = :edge2
+    )
+    edge2 = MOLFiniteDifference(
+        [x => 0.25, y => 0.25], t; advection_scheme = HermiteScheme(),
+        grid_align = MethodOfLines.edge_align
+    )
+    err = @test_throws ArgumentError discretize(heat2, edge2)
+    @test occursin("EdgeAlignedGrid", sprint(showerror, err.value))
+
+    L = 8.0
+    acoustic = PDESystem(
+        [Dt(ρ(t, x)) + Dx(ϕ(t, x)) ~ 0, Dt(ϕ(t, x)) + 25.0 * Dx(ρ(t, x)) ~ 0],
+        [ρ(0, x) ~ exp(-(x - L / 2)^2), ϕ(0.0, x) ~ 0.0, ρ(t, L) ~ ρ(t, -L), ϕ(t, -L) ~ ϕ(t, L)],
+        [t ∈ Interval(0.0, 1.0), x ∈ Interval(-L, L)], [t, x], [ρ(t, x), ϕ(t, x)]; name = :stag
+    )
+    stag = MOLFiniteDifference(
+        [x => 0.125], t; advection_scheme = HermiteScheme(),
+        grid_align = MethodOfLines.StaggeredGrid(), edge_aligned_var = ϕ(t, x)
+    )
+    err = @test_throws ArgumentError symbolic_discretize(acoustic, stag)
+    @test occursin("StaggeredGrid", sprint(showerror, err.value))
+end
+
+@testset "HermiteScheme mixed derivative u_xy with Dirichlet walls" begin
+    @parameters t x y
+    @variables u(..)
+    Dt, Dx, Dy = Differential(t), Differential(x), Differential(y)
+    k, T = 0.1, 0.5
+    ue(x, y, t) = exp(-t) * sin(π * x + 0.5) * (2 + cos(2π * y))
+    U, E = u(t, x, y), ue(x, y, t)
+    f = expand_derivatives(Dt(E) - k * (Dx(Dx(E)) + Dy(Dy(E)) + Dx(Dy(E))))
+    eq = Dt(U) ~ k * (Dx(Dx(U)) + Dy(Dy(U)) + Dx(Dy(U))) + f
+    dom = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    xwalls = [u(t, 0.0, y) ~ ue(0.0, y, t), u(t, 1.0, y) ~ ue(1.0, y, t)]
+    for (name, ywalls) in (
+            (:xy_periodic, [u(t, x, 0.0) ~ u(t, x, 1.0)]),
+            (:xy_dirichlet, [u(t, x, 0.0) ~ ue(x, 0.0, t), u(t, x, 1.0) ~ ue(x, 1.0, t)]),
+        )
+        errs = map((9, 17)) do N
+            sys = PDESystem(
+                [eq], [u(0, x, y) ~ ue(x, y, 0.0); xwalls; ywalls], dom, [t, x, y], [U]; name
+            )
+            disc = MOLFiniteDifference(
+                [x => 1 / (N - 1), y => 1 / (N - 1)], t; approx_order = 2,
+                advection_scheme = HermiteScheme()
+            )
+            sol = solve(discretize(sys, disc); saveat = [T], abstol = 1.0e-10, reltol = 1.0e-10)
+            @test successful_retcode(sol)
+            e = abs.(sol[U][end, :, :] .- [ue(a, b, T) for a in sol[x], b in sol[y]])
+            e[1, 1] = e[1, end] = e[end, 1] = e[end, end] = 0
+            maximum(e)
+        end
+        @test errs[2] < 2.0e-4
+        @test log2(errs[1] / errs[2]) > 3.5
+    end
+end
+
+@testset "HermiteScheme advection-diffusion with a Dirichlet outflow" begin
+    @parameters t x
+    @variables u(..)
+    Dt, Dx = Differential(t), Differential(x)
+    T = 0.5
+    ue(x, t) = exp(-0.04π^2 * t) * sin(2π * (x - t))
+    function aderr(N, ao)
+        @named advdiff = PDESystem(
+            [Dt(u(t, x)) ~ -Dx(u(t, x)) + 0.01 * Dx(Dx(u(t, x)))],
+            [u(0, x) ~ ue(x, 0.0), u(t, 0.0) ~ ue(0.0, t), u(t, 1.0) ~ ue(1.0, t)],
+            [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]
+        )
+        disc = MOLFiniteDifference(
+            [x => 1 / (N - 1)], t; approx_order = ao, advection_scheme = HermiteScheme()
+        )
+        sol = solve(discretize(advdiff, disc); saveat = [T], abstol = 1.0e-10, reltol = 1.0e-10)
+        @test successful_retcode(sol)
+        return maximum(abs, sol[u(t, x)][end, :] .- ue.(sol[x], T))
+    end
+    for (ao, Ns) in ((2, (13, 14)), (4, (17, 18)))
+        @test maximum(N -> aderr(N, ao), Ns) < 2.0e-3
+        @test aderr(41, ao) < 1.0e-6
+    end
+    @named adv4 = PDESystem(
+        [Dt(u(t, x)) ~ -Dx(u(t, x))],
+        [u(0, x) ~ sin(2π * x), u(t, 0.0) ~ sin(-2π * t), u(t, 1.0) ~ sin(2π * (1 - t))],
+        [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]
+    )
+    disc4 = MOLFiniteDifference([x => 1 / 3], t; approx_order = 2, advection_scheme = HermiteScheme())
+    @test discretize(adv4, disc4) isa DAEProblem
+end
+
+@testset "HermiteScheme damped wave equation as Dt(Dt(u))" begin
+    @parameters t x
+    @variables u(..) p(..)
+    Dt, Dx = Differential(t), Differential(x)
+    T = 1.0
+    ue(x, t) = exp(-t) * sin(π * x)
+    domains = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)]
+    walls = [u(t, 0.0) ~ 0.0, u(t, 1.0) ~ 0.0]
+    @named direct = PDESystem(
+        Dt(Dt(u(t, x))) ~ Dx(Dx(u(t, x))) / π^2 - 2 * Dt(u(t, x)),
+        [u(0, x) ~ ue(x, 0.0), Dt(u(0, x)) ~ -ue(x, 0.0), walls...],
+        domains, [t, x], [u(t, x)]
+    )
+    @named system = PDESystem(
+        [Dt(u(t, x)) ~ p(t, x), Dt(p(t, x)) ~ Dx(Dx(u(t, x))) / π^2 - 2 * p(t, x)],
+        [u(0, x) ~ ue(x, 0.0), p(0, x) ~ -ue(x, 0.0), walls..., p(t, 0.0) ~ 0.0, p(t, 1.0) ~ 0.0],
+        domains, [t, x], [u(t, x), p(t, x)]
+    )
+    function werr(sys, N)
+        disc = MOLFiniteDifference(
+            [x => 1 / (N - 1)], t; approx_order = 2, advection_scheme = HermiteScheme()
+        )
+        sol = solve(discretize(sys, disc); saveat = [T], abstol = 1.0e-12, reltol = 1.0e-12)
+        @test successful_retcode(sol)
+        return maximum(abs, sol[u(t, x)][end, :] .- ue.(sol[x], T))
+    end
+    e21, e41 = werr(direct, 21), werr(direct, 41)
+    @test e41 < 4.0e-5
+    @test e21 / e41 > 12
+    @test isapprox(werr(system, 41), e41; rtol = 1.0e-3)
+end
+
+@testset "FusedStencil keeps only exact Float64 constants" begin
+    b = MethodOfLines._FusedStencilBuilder((3,))
+    MethodOfLines._fused_node!(b, 2.0)
+    @test b.value[end] == 2.0
+    @test_throws ArgumentError MethodOfLines._fused_node!(b, π)
+    c = big"1.0000000000000000000000001"
+    @test_throws ArgumentError MethodOfLines._fused_node!(b, c)
+    @test_throws ArgumentError MethodOfLines._fused_node!(b, Symbolics.unwrap(Num(c)))
+    @test_throws ArgumentError MethodOfLines._fused_node!(b, 1 // 3)
+end
+
+@testset "HermiteScheme rejects invalid explicit mappings" begin
+    @parameters t x
+    @variables u(..) v(..) w(..) z(..) q(..)
+    Dt, Dx = Differential(t), Differential(x)
+    @named sys = PDESystem(
+        [
+            Dt(u(t, x)) ~ -v(t, x), Dt(v(t, x)) ~ -Dx(Dx(u(t, x))),
+            Dt(w(t, x)) ~ Dx(Dx(w(t, x))), Dt(z(t)) ~ -z(t),
+        ],
+        [
+            u(0, x) ~ 0.0, v(0, x) ~ 0.0, w(0, x) ~ 0.0, z(0) ~ 1.0,
+            u(t, 0.0) ~ 0.0, u(t, 1.0) ~ 0.0, v(t, 0.0) ~ 0.0, v(t, 1.0) ~ 0.0,
+            w(t, 0.0) ~ 0.0, w(t, 1.0) ~ 0.0,
+        ],
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x), v(t, x), w(t, x), z(t)]
+    )
+    function message(deriv_var)
+        disc = MOLFiniteDifference([x => 0.25], t; advection_scheme = HermiteScheme(; deriv_var))
+        try
+            symbolic_discretize(sys, disc)
+            return ""
+        catch e
+            e isa ArgumentError || rethrow(e)
+            return sprint(showerror, e)
+        end
+    end
+    @test occursin("dependent variables of the PDE system", message(u => q))
+    @test occursin("a directional key must be (u, x)", message([(u, t) => v]))
+    @test occursin("spatial variables of", message(u => z))
+    @test occursin("partner of more than one", message([u => v, w => v]))
 end

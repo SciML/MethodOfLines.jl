@@ -99,7 +99,8 @@ time derivative ``u_t``, and ``u_t`` must appear linearly in it.
 ### Second time derivatives
 
 An equation ``u_{tt} = R``, written with `Dt(Dt(u))`, is first rewritten as
-``u_t = w,\; w_t = R`` (``w`` is named `uˍt`), and the partners are added to that system. This
+``u_t = w,\; w_t = R`` (``w`` is named `uˍt`), and the partners are added to that system.
+``R`` may contain ``u_t``, as in a damped wave ``u_{tt} = u_{xx} - 2u_t``. This
 needs the initial condition ``u_t(t_0, x) = g(x)`` (`Dt(u(t0, x)) ~ g`) and Dirichlet, Neumann
 or periodic conditions on ``u``. With Robin conditions, or conditions that contain time
 derivatives, write the first-order system yourself.
@@ -110,11 +111,17 @@ The partners' boundary conditions are derived from those of ``u``:
 
 | condition on ``u`` at a boundary of ``x`` | condition on the partner ``v = u_x`` |
 |:---|:---|
-| Dirichlet ``u = g`` | a condition on ``v`` or ``v_x`` solved from ``u``'s equation on the boundary: ``v_x = g_t`` for ``u_t = u_{xx}``, ``v = -g_t`` for ``u_t = -u_x`` |
+| Dirichlet ``u = g`` | a condition on ``v`` or ``v_x`` solved from ``u``'s equation on the boundary: ``v_x = g_t`` for ``u_t = u_{xx}``, ``v = -g_t`` for ``u_t = -u_x`` at ``x = 0`` |
 | Neumann ``u_x = g`` | ``v = g``, which replaces the condition on ``u`` |
 | Robin ``a u + b u_x = g`` | ``v = (g - a u)/b``, which replaces the condition on ``u`` |
 | periodic | periodic |
 | none (free outflow) | none |
+
+At a Dirichlet wall where the advection velocity points out of the domain (``a > 0`` at
+``x = 1`` for ``u_t = -a u_x + \dots``), the condition solved from ``u``'s equation would make
+the system unstable on some grids. There the partner is instead a one-sided difference of ``u`` of order
+6, or lower if the direction has fewer than 14 points, as MOL's upwind scheme does not use the
+outflow value for advection. This needs a velocity that is a number at the wall.
 
 Along a boundary, the partner of the tangential direction gets the tangential derivative of
 the data, e.g. ``u_y = g_y`` on a boundary ``x = 0`` with ``u = g``. For a wave equation
@@ -130,7 +137,9 @@ u_{xy} \approx \delta_y u_x + \delta_x u_y - \delta_x \delta_y u,
 ```
 
 where ``\delta_x`` and ``\delta_y`` are difference operators in ``x`` and ``y``. Its order is
-twice that of ``\delta_x \delta_y u``.
+twice that of ``\delta_x \delta_y u``. On a Dirichlet wall ``x = 0``, the condition on ``u_x``
+then contains its derivative along the wall, ``\partial_y u_x``, which uses MOL's centred
+difference in ``y``.
 
 ### Explicit partners
 
@@ -178,8 +187,8 @@ E_N = \max_i \left| u_i(T) - u^*(x_i, T) \right|,
 ```
 
 the maximum over the grid points ``x_i`` of a grid with ``N`` points per direction, including
-the boundary points. In 2D the four corner points are left out: these problems have no mixed
-derivative, so MOL's default scheme holds the corners at 0. The observed order between two
+the boundary points. In 2D the four corner points are left out: no equation holds there (see
+[What values do the corners of my domain take?](@ref)). The observed order between two
 grids is
 
 ```math
@@ -420,6 +429,12 @@ On ``0 \le x \le 1``:
 
 ![Convergence of MOL's default scheme and HermiteScheme in 1D](assets/hermite/convergence_1d.png)
 
+For the advection-diffusion problem ``u_t = -u_x + \varepsilon u_{xx}`` with Dirichlet data
+at both ends, `HermiteScheme` is stable on every grid from 11 to 41 points, for
+``\varepsilon = 0.1, 0.01, 0.001`` and `approx_order` 2, 4 and 6. On grids with fewer than 14
+points the outflow stencil has order 4, which is why the three Hermite curves meet at
+``N = 11``.
+
 ### Two dimensions
 
 On ``0 \le x, y \le 1``:
@@ -432,6 +447,10 @@ On ``0 \le x, y \le 1``:
 | heat, periodic | ``u_t = 0.1\,(u_{xx} + u_{yy})`` | ``u(0,x,y) = u^*(x,y,0)`` | ``u(t,0,y) = u(t,1,y),\; u(t,x,0) = u(t,x,1)`` | ``u^* = e^{-0.8\pi^2 t}\sin(2\pi x)\sin(2\pi y)`` | ``T = 0.5`` | 9, 17, 33 |
 | advection, periodic | ``u_t = -0.8\,u_x - 0.6\,u_y`` | ``u(0,x,y) = u^*(x,y,0)`` | ``u(t,0,y) = u(t,1,y),\; u(t,x,0) = u(t,x,1)`` | ``u^* = \sin(2\pi(x - 0.8t))\sin(2\pi(y - 0.6t))`` | ``T = 0.5`` | 9, 17, 33 |
 | advection, inflow / free outflow | ``u_t = -0.8\,u_x - 0.6\,u_y`` | ``u(0,x,y) = u^*(x,y,0)`` | ``u(t,0,y) = u^*(0,y,t),\; u(t,x,0) = u^*(x,0,t)\text{; none at } x = 1,\ y = 1`` | ``u^* = \sin(2\pi(x - 0.8t))\sin(2\pi(y - 0.6t))`` | ``T = 0.5`` | 9, 17, 33 |
+| heat with ``u_{xy}``, Dirichlet / periodic | ``u_t = 0.1\,(u_{xx} + u_{yy} + u_{xy}) + f`` | ``u(0,x,y) = u^*(x,y,0)`` | ``u(t,0,y) = u^*(0,y,t),\; u(t,1,y) = u^*(1,y,t),\; u(t,x,0) = u(t,x,1)`` | ``u^* = e^{-t}\sin(\pi x + 0.5)\,(2 + \cos(2\pi y))`` | ``T = 0.5`` | 9, 17, 33 |
+| heat with ``u_{xy}``, Dirichlet | ``u_t = 0.1\,(u_{xx} + u_{yy} + u_{xy}) + f`` | ``u(0,x,y) = u^*(x,y,0)`` | ``u = u^* \text{ on all four sides}`` | ``u^* = e^{-t}\sin(\pi x + 0.5)\,(2 + \cos(2\pi y))`` | ``T = 0.5`` | 9, 17, 33 |
+
+In the two ``u_{xy}`` cases the source ``f`` is chosen so that ``u^*`` is the exact solution.
 
 ![Convergence of MOL's default scheme and HermiteScheme in 2D](assets/hermite/convergence_2d.png)
 
@@ -449,11 +468,19 @@ These throw an `ArgumentError`:
     `u(t, 0) ~ w(t, 0)`;
   - an automatic `HermiteScheme()` with `should_transform = false`;
   - an explicit mapping without a direction (`u => vx`) for a variable of more than one
-    spatial dimension.
+    spatial dimension;
+  - an explicit mapping whose variable or partner is not a dependent variable of the PDE
+    system;
+  - a `StaggeredGrid`, and an `EdgeAlignedGrid` for a variable of more than one spatial
+    dimension.
 
 A boundary without a condition (the free outflow of an advection equation) has a lower order
 than the interior. In the convergence study above this limits the observed order to about 5
 at `approx_order = 6`.
+
+At a Dirichlet wall where the advection velocity depends on ``t`` or on a parameter, the
+partner keeps the condition solved from ``u``'s equation, which can make the system unstable
+on some grids.
 
 `HermiteScheme` applies no upwinding. It is meant for smooth solutions; for steep fronts and
 discontinuities use an upwind or WENO scheme (see [advection schemes](@ref adschemes)).

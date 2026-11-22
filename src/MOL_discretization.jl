@@ -11,6 +11,47 @@ function PDEBase.interface_errors(
     if !any(s -> discretization.advection_scheme isa s, [UpwindScheme, FunctionalScheme, HermiteScheme])
         throw(ArgumentError("Only `UpwindScheme()`, `FunctionalScheme()`, and `HermiteScheme()` are supported advection schemes. Got $(typeof(discretization.advection_scheme))."))
     end
+    discretization.advection_scheme isa HermiteScheme && _hermite_interface_errors(v, discretization)
+    return
+end
+
+function _hermite_interface_errors(v, discretization)
+    scheme = discretization.advection_scheme
+    scheme.automatic || _hermite_mapping_errors(scheme.deriv_var, v)
+    discretization.grid_align isa StaggeredGrid && throw(
+        ArgumentError("HermiteScheme does not support a StaggeredGrid; use a center-aligned grid.")
+    )
+    if discretization.grid_align isa EdgeAlignedGrid
+        for op in v.depvar_ops
+            count(a -> !isequal(a, v.time), v.args[op]) > 1 && throw(
+                ArgumentError(
+                    "HermiteScheme supports an EdgeAlignedGrid only for variables of one " *
+                        "spatial dimension; $(op) has more. Use a center-aligned grid."
+                )
+            )
+        end
+    end
+    return
+end
+
+function _hermite_mapping_errors(deriv_var, v)
+    spatial(op) = filter(a -> !isequal(a, v.time), v.args[op])
+    seen = Any[]
+    for (key, partner) in deriv_var
+        u = key isa Tuple ? first(key) : key
+        bad(msg) = throw(ArgumentError("HermiteScheme mapping $key => $partner: $msg"))
+        i = findfirst(op -> _same_hermite_variable(op, u), v.depvar_ops)
+        k = findfirst(op -> _same_hermite_variable(op, partner), v.depvar_ops)
+        (i === nothing || k === nothing) &&
+            bad("both must be dependent variables of the PDE system.")
+        uop, pop = v.depvar_ops[i], v.depvar_ops[k]
+        key isa Tuple && !(length(key) == 2 && any(isequal(key[2]), spatial(uop))) &&
+            bad("a directional key must be (u, x) with x a spatial variable of u.")
+        isequal(spatial(uop), spatial(pop)) ||
+            bad("the partner must have the spatial variables of $u, in the same order.")
+        any(isequal(pop), seen) && bad("$partner is the partner of more than one derivative.")
+        push!(seen, pop)
+    end
     return
 end
 

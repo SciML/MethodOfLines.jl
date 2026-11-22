@@ -329,7 +329,7 @@ function _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
         has(ex, term) = subsmatch(Symbolics.value(ex.lhs - ex.rhs), term => nothing)
         idx2 = findall(eq -> has(eq, dt2), eqs)
         isempty(idx2) && continue
-        any(eq -> has(eq, dt1), eqs) && continue
+        any(eq -> has(eq, dt1) && !has(eq, dt2), eqs) && continue
         length(idx2) == 1 || throw(
             ArgumentError(
                 "HermiteScheme needs exactly one equation with $(Dt(Dt(u))), found " *
@@ -411,9 +411,17 @@ end
 _hermite_dt_equation_indices(eqs, dt_u) =
     findall(eq -> subsmatch(Symbolics.value(eq.lhs - eq.rhs), Symbolics.value(dt_u) => nothing), eqs)
 
+function _hermite_outflow(rhs, v, partner_derivatives, upper)
+    r = pde_substitute(rhs, Dict{Any, Any}(d => 0 for d in partner_derivatives))
+    c, _, islinear = Symbolics.linear_expansion(r, v)
+    c = unwrap_const(Symbolics.value(c))
+    (islinear && c isa Real) || return false
+    return upper ? c < 0 : c > 0
+end
+
 function _hermite_dirichlet_partner_condition(
         bc, bc_val, uop, u_applied, dt_u, original_rhs, newvar, v_at_boundary, t, x, xval,
-        evol_rhs, boundarymap, u_eq
+        evol_rhs, boundarymap, u_eq; partners = Dict{Any, Any}()
     )
     Dx = Differential(x)
     u_t_boundary = expand_derivatives(Differential(t)(bc_val))
@@ -422,9 +430,26 @@ function _hermite_dirichlet_partner_condition(
         partner_term(order) = order == 1 ? newvar : (Dx^(order - 1))(newvar)
         boundary_partner_term(order) = order == 1 ?
             v_at_boundary : (Dx^(order - 1))(v_at_boundary)
-        partner_rules = Dict(
+        partner_rules = Dict{Any, Any}(
             (Dx^order)(u_applied) => partner_term(order) for order in directional_orders
         )
+        ops = Any[uop; collect(keys(partners))]
+        for (te, info) in _hermite_dependent_terms!(Dict{Any, Any}(), original_rhs, x, ops)
+            info === nothing && continue
+            op, n, ds = info
+            n >= 1 || continue
+            if isequal(op, uop)
+                isempty(ds) && continue
+                r = partner_term(n)
+            else
+                z = only(z for (o, z) in partners if isequal(o, op))
+                r = Differential(z)(partner_term(n))
+            end
+            for d in reverse(ds)
+                r = d(r)
+            end
+            partner_rules[te] = r
+        end
         rhs_at_boundary = pde_substitute(original_rhs, partner_rules)
         rhs_at_boundary = expand_derivatives(
             pde_substitute(rhs_at_boundary, Dict(u_applied => bc_val))
@@ -440,7 +465,12 @@ function _hermite_dirichlet_partner_condition(
             target = order == 0 ? v_at_boundary : (Dx^order)(v_at_boundary)
             candidate = symbolic_linear_solve(boundary_eq, target)
             isequal(Symbolics.value(candidate), NaN) && continue
-            return target, candidate, order
+            out = _hermite_outflow(
+                rhs_at_boundary, v_at_boundary,
+                [boundary_partner_term(o) for o in directional_orders if o > 1], isupper(bc)
+            )
+            out || return target, candidate, order
+            return v_at_boundary, Differential(x)(bc.u), 0
         end
     end
     fb = _hermite_wall_partner_condition(
@@ -613,10 +643,14 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
                             if !isequal(iv, x)
                                 rhs = expand_derivatives(Dx(bc_val))
                             else
+                                partners = Dict{Any, Any}(
+                                    op => k[2] for (k, op) in scheme.deriv_var
+                                        if k isa Tuple && isequal(k[1], uop)
+                                )
                                 bclhs, rhs, new_order = _hermite_dirichlet_partner_condition(
                                     bc, bc_val, uop, u_applied, dt_u, original_rhs, newvar,
                                     v_at_boundary, t, x, xval, evol_rhs, boundarymap,
-                                    eqs[u_eq_idx]
+                                    eqs[u_eq_idx]; partners
                                 )
                             end
                         end
