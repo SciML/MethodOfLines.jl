@@ -168,6 +168,10 @@ function _dae_operating_point(sys, u0, t)
     return op
 end
 
+_has_parameter(u0) = any(
+    vals -> any(v -> !isempty(Symbolics.get_variables(v)), vals), last.(u0)
+)
+
 _zero_value(x) = is_array_valued(x) ? zeros(size(x)) : 0.0
 
 """
@@ -185,13 +189,16 @@ system's initialization equations are ones it honors; otherwise a
 [`BrownFullBasicInitUnsafeError`](@ref) is raised naming the offending equations. Passing
 `initializealg` explicitly overrides both the default and that check.
 
+`build_initializeprob` defaults to `true` only when an initial condition depends on a
+parameter, so that `remake(prob; p = ...)` carries the new value into the initial state.
+
 The solution is a `PDETimeSeriesSolution`, the same wrapper [`discretize`](@ref)
 produces, so it is indexed and interpolated by the `PDESystem`'s own variables:
 `sol[u(t, x)]`, `sol(t, x)`.
 """
 function SciMLBase.DAEProblem(
         pdesys::PDESystem, discretization::MOLDiscretization;
-        initializealg = nothing, build_initializeprob = false, kwargs...
+        initializealg = nothing, build_initializeprob = nothing, kwargs...
     )
     reject_point_ports(pdesys, "DAEProblem")
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
@@ -216,7 +223,7 @@ system is discretized once.
 """
 function _dae_problem(
         sys, tspan, discretization::MOLDiscretization;
-        initializealg = nothing, build_initializeprob = false, kwargs...
+        initializealg = nothing, build_initializeprob = nothing, kwargs...
     )
     sys = complete(sys)
     if initializealg === nothing
@@ -238,6 +245,9 @@ function _dae_problem(
     end
     metadata = getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing)
     op = _dae_operating_point(sys, metadata.u0, t)
+    # An initial condition that depends on a parameter is only carried through `remake`
+    # by the initialization problem, so build it exactly then.
+    build_initializeprob === nothing && (build_initializeprob = _has_parameter(metadata.u0))
     return DAEProblem(
         sys, op, tspan; initializealg, build_initializeprob,
         discretization.kwargs..., kwargs...

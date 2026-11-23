@@ -62,3 +62,31 @@ using ModelingToolkit: Differential
         @test all(isapprox.(v_exact(x_sol, t_sol[i]), solv[i, :], atol = 0.01))
     end
 end
+
+@testset "remake(prob; p) re-initializes a parameter in the initial condition" begin
+    using SymbolicIndexingInterface: setp_oop
+    import SciMLBase
+    @parameters t x α
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    bcs = [
+        u(0, x) ~ α * cos(x), u(t, 0) ~ α * exp(-t), u(t, 1) ~ α * exp(-t) * cos(1),
+    ]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    build(α0) = PDESystem(
+        Dt(u(t, x)) ~ Dxx(u(t, x)), bcs, domains, [t, x], [u(t, x)], [α => α0];
+        name = :heat
+    )
+    disc = MOLFiniteDifference([x => 0.1], t)
+    prob = discretize(build(1.2), disc; fallback = false)
+    fresh = discretize(build(2.4), disc; fallback = false)
+    @test prob isa SciMLBase.DAEProblem
+    prob2 = remake(prob; p = setp_oop(prob, [α])(prob, [2.4]))
+
+    sol2 = solve(prob2; saveat = 0.1)
+    solf = solve(fresh; saveat = 0.1)
+    # `prob2.u0` is refreshed by the initialization at solve time
+    @test sol2[u(t, x)][1, :] ≈ 2.4 .* cos.(sol2[x])
+    @test sol2[u(t, x)] ≈ solf[u(t, x)] atol = 1.0e-6
+end
