@@ -85,8 +85,8 @@ end
     prob2 = remake(prob; p = setp_oop(prob, [α])(prob, [2.4]))
 
     sol2 = solve(prob2; saveat = 0.1)
-    solf = solve(fresh; saveat = 0.1)
+    sol_fresh = solve(fresh; saveat = 0.1)
     # `prob2.u0` is refreshed by the initialization at solve time
     @test sol2[u(t, x)][1, :] ≈ 2.4 .* cos.(sol2[x])
-    @test sol2[u(t, x)] ≈ solf[u(t, x)] atol = 1.0e-6
+    @test sol2[u(t, x)] ≈ sol_fresh[u(t, x)] atol = 1.0e-6
 end
