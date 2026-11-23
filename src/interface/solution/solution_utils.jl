@@ -23,9 +23,11 @@ function build_interpolation(
         # A single saved time (for example `save_on = false`) still allows interpolation in
         # space: the slice is repeated over a degenerate time interval.
         ti = findfirst(isequal(discretespace.time), args)
+        repeated_time = false
         if ti !== nothing && length(nodes[ti]) == 1 && all(length.(nodes[1:end .!= ti]) .> 1)
             nodes = Base.setindex(nodes, [only(nodes[ti]), nextfloat(only(nodes[ti]))], ti)
             data = cat(data, data; dims = ti)
+            repeated_time = true
         end
         if all(length.(nodes) .> 1)
             interp = interpolate(nodes, data, Gridded(Linear()))
@@ -33,8 +35,11 @@ function build_interpolation(
             # the grid (`sol(t, :)`) reaches half a step past the first point
             shifted = arg -> !isequal(arg, discretespace.time) &&
                 !iszero(staggered_shift(discretespace, k.val, arg))
-            any(shifted, args) &&
-                (interp = Interpolations.extrapolate(interp, Interpolations.Line()))
+            # extrapolating along the repeated time interval would divide by its width
+            bc = repeated_time ?
+                Tuple(map(a -> shifted(a) ? Interpolations.Line() : Interpolations.Throw(), args)) :
+                Interpolations.Line()
+            any(shifted, args) && (interp = Interpolations.extrapolate(interp, bc))
         else
             i = findfirst(a -> a <= 1, length.(nodes))
             @warn "Solution has length 1 in dimension $(ivs[i]). Interpolation will not be possible for variable $k. Solution return code is $(sol.retcode)."

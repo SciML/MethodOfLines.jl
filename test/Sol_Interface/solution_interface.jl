@@ -238,3 +238,35 @@ end
         @test sol(1.0, :) ≈ full(1.0, :) atol = 1.0e-6
     end
 end
+
+@testset "Test 13: a single saved time on a staggered grid extrapolates in space only" begin
+    @parameters t x y
+    @variables Ez(..) Hx(..) Hy(..)
+    Dt, Dx, Dy = Differential(t), Differential(x), Differential(y)
+    X = (t, x, y)
+    eqs = [
+        Dt(Ez(X...)) ~ Dx(Hy(X...)) - Dy(Hx(X...)), Dt(Hx(X...)) ~ -Dy(Ez(X...)),
+        Dt(Hy(X...)) ~ Dx(Ez(X...)),
+    ]
+    bcs = [
+        Ez(0, x, y) ~ sin(pi * x) * sin(pi * y), Hx(0, x, y) ~ 0, Hy(0, x, y) ~ 0,
+        Ez(t, 0, y) ~ 0, Ez(t, 1, y) ~ 0, Ez(t, x, 0) ~ 0, Ez(t, x, 1) ~ 0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named tm = PDESystem(eqs, bcs, domains, [t, x, y], [Ez(X...), Hx(X...), Hy(X...)])
+    disc = MOLFiniteDifference(
+        [x => 0.125, y => 0.125], t; grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = [Hx(X...) => y, Hy(X...) => x]
+    )
+    prob = DAEProblem(tm, disc)
+    full = solve(prob; saveat = [0.0, 0.002])
+    for t0 in (0.0, 0.002)
+        sol = solve(prob; saveat = [t0])
+        for dv in (Ez(X...), Hx(X...), Hy(X...))
+            for (xp, yp) in ((0.0, 0.0), (0.3, 0.0), (1.0, 1.0), (0.5, 0.3))
+                @test isfinite(sol(t0, xp, yp; dv))
+                @test sol(t0, xp, yp; dv) ≈ full(t0, xp, yp; dv) atol = 1.0e-6
+            end
+        end
+    end
+end
