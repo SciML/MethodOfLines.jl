@@ -25,7 +25,8 @@ function build_interpolation(
         ti = findfirst(isequal(discretespace.time), args)
         repeated_time = false
         if ti !== nothing && length(nodes[ti]) == 1 && all(length.(nodes[1:end .!= ti]) .> 1)
-            nodes = Base.setindex(nodes, [only(nodes[ti]), nextfloat(only(nodes[ti]))], ti)
+            t1 = float(only(nodes[ti]))
+            nodes = Base.setindex(nodes, [t1, nextfloat(t1)], ti)
             data = cat(data, data; dims = ti)
             repeated_time = true
         end

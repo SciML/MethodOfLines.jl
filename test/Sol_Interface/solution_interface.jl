@@ -3,6 +3,7 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, Nonli
     DomainSets
 using ModelingToolkit: Differential
 using SciMLBase
+using OrdinaryDiffEqLowOrderRK: Euler
 include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 @testset "Test 00a: Test solution interface, time dependent" begin
@@ -237,6 +238,19 @@ end
         @test sol(1.0, 0.3; dv = u(t, x)) ≈ full(1.0, 0.3; dv = u(t, x)) atol = 1.0e-6
         @test sol(1.0, :) ≈ full(1.0, :) atol = 1.0e-6
     end
+end
+
+@testset "Test 12b: a single saved integer time" begin
+    @parameters t x
+    @variables u(..)
+    eq = Differential(t)(u(t, x)) ~ (Differential(x)^2)(u(t, x))
+    bcs = [u(0, x) ~ 1, u(t, 0) ~ 1, u(t, 1) ~ 1]
+    domains = [t ∈ Interval(0, 1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    prob = ode_discretize(pdesys, MOLFiniteDifference([x => 0.1], t))
+    sol = solve(prob, Euler(); dt = 1, save_start = false, save_everystep = false)
+    @test eltype(sol.t) <: Integer
+    @test sol(1, 0.3) ≈ [1.0]
 end
 
 @testset "Test 13: a single saved time on a staggered grid extrapolates in space only" begin
