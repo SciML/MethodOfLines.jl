@@ -85,17 +85,21 @@ end
     # opt-in: remake(p) recomputes the initial condition. The oldest allowed
     # ModelingToolkitBase (the Downgrade job's floor) cannot compile the
     # initialization system ("different independent variable"); skip only on that error.
-    try
-        prob = discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
+    prob = try
+        discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
+    catch err
+        occursin("different independent variable", sprint(showerror, err)) || rethrow()
+        nothing
+    end
+    if prob === nothing
+        @test_skip false
+    else
         @test prob isa SciMLBase.DAEProblem
         sol2 = solve(remake(prob; p = newp(prob)); saveat = 0.1)
         sol_fresh = solve(fresh; saveat = 0.1)
         # `prob2.u0` is refreshed by the initialization at solve time
         @test sol2[u(t, x)][1, :] ≈ 2.4 .* cos.(sol2[x])
         @test sol2[u(t, x)] ≈ sol_fresh[u(t, x)] atol = 1.0e-6
-    catch err
-        occursin("different independent variable", sprint(showerror, err)) || rethrow()
-        @test_skip false
     end
 
     # default: remake(u0) is honoured

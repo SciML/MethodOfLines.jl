@@ -189,7 +189,8 @@ system's initialization equations are ones it honors; otherwise a
 parameter, `remake(prob; p = ...)` does not update it unless `build_initializeprob = true`
 was passed when the problem was built; the initialization problem then recomputes the
 initial state from the new parameters, which also means a `remake(prob; u0 = ...)` is
-overridden by it.
+overridden by it. The opt-in needs a recent ModelingToolkitBase: the oldest
+supported release fails to compile the initialization system for some problems.
 
 The solution is a `PDETimeSeriesSolution`, the same wrapper [`discretize`](@ref)
 produces, so it is indexed and interpolated by the `PDESystem`'s own variables:
