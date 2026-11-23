@@ -257,6 +257,7 @@ end
     sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, saveat = [1.0])
     @test sol(1.0, 0.3) ≈ full(1.0, 0.3) atol = 1.0e-6
     @test sol(1.0; dv = v(t)) ≈ full(1.0; dv = v(t)) atol = 1.0e-6
+    @test_throws MethodError sol(1.0, 0.3; dv = v(t))
 end
 
 @testset "Test 12b: a single saved integer time" begin

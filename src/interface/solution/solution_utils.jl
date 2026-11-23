@@ -10,6 +10,12 @@ struct SingleTimeInterpolation{I, T}
     ti::Int
 end
 
+struct TimeOnlyValue{T}
+    value::T
+end
+
+(f::TimeOnlyValue)() = f.value
+
 function (f::SingleTimeInterpolation)(args...)
     targ = args[f.ti]
     all(==(f.t), targ) || throw(
@@ -59,7 +65,7 @@ function build_interpolation(
             interp = gridded(nodes, umap[k])
         elseif ti !== nothing && length(nodes[ti]) == 1 && all(length.(_without(nodes, ti)) .> 1)
             # a field of time only has no spatial interpolation to build
-            spatial = length(nodes) == 1 ? Returns(only(umap[k])) :
+            spatial = length(nodes) == 1 ? TimeOnlyValue(only(umap[k])) :
                 gridded(_without(nodes, ti), dropdims(umap[k]; dims = ti))
             interp = SingleTimeInterpolation(spatial, only(nodes[ti]), ti)
         else
