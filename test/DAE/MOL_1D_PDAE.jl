@@ -105,6 +105,21 @@ end
         @test sol2[u(t, x)] ≈ sol_fresh[u(t, x)] atol = 1.0e-6
     end
 
+    # default: a stale parameter-dependent initial condition is warned about, once per
+    # discretize, naming the opt-in; an explicit `build_initializeprob = false` and an
+    # initial condition without a parameter stay quiet
+    @test_logs (:warn, r"build_initializeprob = true") discretize(
+        build(1.2), disc; fallback = false
+    )
+    @test_logs discretize(build(1.2), disc; fallback = false, build_initializeprob = false)
+    bcs_const = [u(0, x) ~ cos(x), u(t, 0) ~ α * exp(-t), u(t, 1) ~ α * exp(-t) * cos(1)]
+    @test_logs discretize(
+        PDESystem(
+            Dt(u(t, x)) ~ Dxx(u(t, x)), bcs_const, domains, [t, x], [u(t, x)], [α => 1.2];
+            name = :heat_const
+        ), disc; fallback = false
+    )
+
     # default: remake(u0) is honoured
     prob = discretize(build(1.2), disc; fallback = false)
     @test prob isa SciMLBase.DAEProblem

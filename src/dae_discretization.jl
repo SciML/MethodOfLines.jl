@@ -168,6 +168,10 @@ function _dae_operating_point(sys, u0, t)
     return op
 end
 
+_has_parameter(u0) = any(
+    vals -> any(v -> !isempty(Symbolics.get_variables(v)), vals), last.(u0)
+)
+
 _zero_value(x) = is_array_valued(x) ? zeros(size(x)) : 0.0
 
 """
@@ -186,11 +190,13 @@ system's initialization equations are ones it honors; otherwise a
 `initializealg` explicitly overrides both the default and that check.
 
 `build_initializeprob` defaults to `false`. When an initial condition depends on a
-parameter, `remake(prob; p = ...)` does not update it unless `build_initializeprob = true`
-was passed when the problem was built; the initialization problem then recomputes the
-initial state from the new parameters, which also means a `remake(prob; u0 = ...)` is
-overridden by it. The opt-in needs a recent ModelingToolkitBase: the oldest
-supported release fails to compile the initialization system for some problems.
+parameter, `remake(prob; p = ...)` does not update `prob.u0` unless
+`build_initializeprob = true` was passed when the problem was built: `remake` itself never
+changes `u0`, the updated state appears once the solver initializes the problem. With the
+default, discretizing such a system emits a warning naming the opt-in. The initialization
+problem overrides a `remake(prob; u0 = ...)`, which is why it is not on by default. The
+opt-in needs a recent ModelingToolkitBase: the oldest supported release fails to compile
+the initialization system for some problems.
 
 The solution is a `PDETimeSeriesSolution`, the same wrapper [`discretize`](@ref)
 produces, so it is indexed and interpolated by the `PDESystem`'s own variables:
@@ -198,7 +204,7 @@ produces, so it is indexed and interpolated by the `PDESystem`'s own variables:
 """
 function SciMLBase.DAEProblem(
         pdesys::PDESystem, discretization::MOLDiscretization;
-        initializealg = nothing, build_initializeprob = false, kwargs...
+        initializealg = nothing, build_initializeprob = nothing, kwargs...
     )
     reject_point_ports(pdesys, "DAEProblem")
     sys, tspan = SciMLBase.symbolic_discretize(pdesys, discretization)
@@ -223,7 +229,7 @@ system is discretized once.
 """
 function _dae_problem(
         sys, tspan, discretization::MOLDiscretization;
-        initializealg = nothing, build_initializeprob = false, kwargs...
+        initializealg = nothing, build_initializeprob = nothing, kwargs...
     )
     sys = complete(sys)
     if initializealg === nothing
@@ -245,6 +251,12 @@ function _dae_problem(
     end
     metadata = getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing)
     op = _dae_operating_point(sys, metadata.u0, t)
+    if build_initializeprob === nothing
+        build_initializeprob = false
+        _has_parameter(metadata.u0) && @warn(
+            "An initial condition depends on a parameter, so `remake(prob; p = ...)` will not update it; pass `build_initializeprob = true` to `discretize` to recompute it from the new parameters (this overrides a `remake(prob; u0 = ...)`)."
+        )
+    end
     return DAEProblem(
         sys, op, tspan; initializealg, build_initializeprob,
         discretization.kwargs..., kwargs...
