@@ -397,3 +397,36 @@ end
         xgrid, v, tspan, u0, u_exact,
     )
 end
+
+@testset "Parameterized advection velocity on a nonuniform grid" begin
+    @parameters v
+    Dt = Differential(t)
+    Dx = Differential(x)
+    tspan = (0.0, 0.2)
+    domains = [t ∈ Interval(tspan...), x ∈ Interval(0.0, 1.0)]
+    # With a symbolic velocity the sign is unknown, so both upwind
+    # directions are generated at every point, including the free outflow end.
+    for vel in (0.5, -0.5)
+        exact(x, t) = sin(2π * (x - vel * t))
+        # Inflow boundary only, so the outflow end is a free point discretized by the scheme.
+        inflow = vel > 0 ? 0.0 : 1.0
+        bcs = [u(0.0, x) ~ exact(x, 0.0), u(t, inflow) ~ exact(inflow, t)]
+        @named pdesys_param = PDESystem(
+            Dt(u(t, x)) ~ -v * Dx(u(t, x)), bcs, domains, [t, x], [u(t, x)], [v => vel]
+        )
+        @named pdesys_const = PDESystem(
+            Dt(u(t, x)) ~ -vel * Dx(u(t, x)), bcs, domains, [t, x], [u(t, x)]
+        )
+        gridnu = chebyspace(41, domains[2])
+        disc = MOLFiniteDifference([gridnu], t; advection_scheme = UpwindScheme())
+        sols = map((pdesys_param, pdesys_const)) do sys
+            prob = ode_discretize(sys, disc)
+            solve(prob, SSPRK33(); dt = 1.0e-4, adaptive = false, saveat = [tspan[2]])
+        end
+        xs = gridnu.second
+        uparam = sols[1][u(t, x)][end, :]
+        uconst = sols[2][u(t, x)][end, :]
+        @test uparam ≈ uconst
+        @test maximum(abs.(uparam .- exact.(xs, tspan[2]))) < 0.2
+    end
+end

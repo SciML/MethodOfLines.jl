@@ -151,7 +151,6 @@ function CompleteUpwindDifference(
 
     # _high_boundary_coefs    = SVector{boundary_stencil_length, T}[convert(SVector{boundary_stencil_length, T}, (1/dx^derivative_order) * calculate_weights(derivative_order, oneunit(T)*x0, reverse(right_boundary_x))) for x0 in R_boundary_deriv_spots]
 
-    offside = 0
     coefficients = nothing
 
     return DerivativeOperator{
