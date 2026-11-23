@@ -191,8 +191,9 @@ system's initialization equations are ones it honors; otherwise a
 
 `build_initializeprob` defaults to `false`. When an initial condition depends on a
 parameter, `remake(prob; p = ...)` does not update `prob.u0` unless
-`build_initializeprob = true` was passed when the problem was built: `remake` itself never
-changes `u0`, the updated state appears once the solver initializes the problem. With the
+`build_initializeprob = true` was passed when the problem was built. Even then `remake`
+leaves `u0` alone under the default lazy initialization: the updated state appears once
+the problem is initialized, which `solve` does. With the
 default, discretizing such a system emits a warning naming the opt-in. The initialization
 problem overrides a `remake(prob; u0 = ...)`, which is why it is not on by default. The
 opt-in needs a recent ModelingToolkitBase: the oldest supported release fails to compile
@@ -253,7 +254,8 @@ function _dae_problem(
     op = _dae_operating_point(sys, metadata.u0, t)
     if build_initializeprob === nothing
         build_initializeprob = false
-        _has_parameter(metadata.u0) && @warn(
+        get(discretization.kwargs, :build_initializeprob, false) ||
+            !_has_parameter(metadata.u0) || @warn(
             "An initial condition depends on a parameter, so `remake(prob; p = ...)` will not update it; pass `build_initializeprob = true` to `discretize` to recompute it from the new parameters (this overrides a `remake(prob; u0 = ...)`)."
         )
     end

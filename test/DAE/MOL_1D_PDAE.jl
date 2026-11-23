@@ -112,6 +112,13 @@ end
         build(1.2), disc; fallback = false
     )
     @test_logs discretize(build(1.2), disc; fallback = false, build_initializeprob = false)
+    if pkgversion(MethodOfLines.ModelingToolkitBase) >= v"1.74"
+        disc_init = MOLFiniteDifference([x => 0.1], t; build_initializeprob = true)
+        logs, _ = Test.collect_test_logs() do
+            discretize(build(1.2), disc_init; fallback = false)
+        end
+        @test !any(l -> occursin("build_initializeprob = true", l.message), logs)
+    end
     bcs_const = [u(0, x) ~ cos(x), u(t, 0) ~ α * exp(-t), u(t, 1) ~ α * exp(-t) * cos(1)]
     @test_logs discretize(
         PDESystem(
