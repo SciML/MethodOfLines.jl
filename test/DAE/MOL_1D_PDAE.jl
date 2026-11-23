@@ -119,6 +119,14 @@ end
         end
         @test !any(l -> occursin("build_initializeprob = true", l.message), logs)
     end
+    if pkgversion(MethodOfLines.ModelingToolkitBase) >= v"1.74"
+        # a per-call keyword wins over the one stored on the discretization
+        disc_off = MOLFiniteDifference([x => 0.1], t; build_initializeprob = false)
+        probo = discretize(
+            build(1.2), disc_off; fallback = false, build_initializeprob = true
+        )
+        @test SciMLBase.has_initialization_data(probo.f)
+    end
     bcs_const = [u(0, x) ~ cos(x), u(t, 0) ~ α * exp(-t), u(t, 1) ~ α * exp(-t) * cos(1)]
     @test_logs discretize(
         PDESystem(

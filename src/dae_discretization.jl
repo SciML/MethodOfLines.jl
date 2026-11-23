@@ -252,15 +252,15 @@ function _dae_problem(
     end
     metadata = getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing)
     op = _dae_operating_point(sys, metadata.u0, t)
+    # A per-call keyword takes precedence over the one stored on the discretization.
     if build_initializeprob === nothing
-        build_initializeprob = false
-        get(discretization.kwargs, :build_initializeprob, false) ||
-            !_has_parameter(metadata.u0) || @warn(
+        build_initializeprob = get(discretization.kwargs, :build_initializeprob, false)
+        build_initializeprob || !_has_parameter(metadata.u0) || @warn(
             "An initial condition depends on a parameter, so `remake(prob; p = ...)` will not update it; pass `build_initializeprob = true` to `discretize` to recompute it from the new parameters (this overrides a `remake(prob; u0 = ...)`)."
         )
     end
     return DAEProblem(
-        sys, op, tspan; initializealg, build_initializeprob,
-        discretization.kwargs..., kwargs...
+        sys, op, tspan; initializealg, discretization.kwargs..., kwargs...,
+        build_initializeprob
     )
 end
