@@ -19,8 +19,16 @@ function build_interpolation(
             )
         ) "Please ensure that the order that your independent variables appear in your PDESystem matches the order that they appear in the argument signature of your dependent variables. For example, if you have a PDESystem with independent variables `[t, x, y]`, and a dependent variable `u(t, x, y)`, then you should use `u(t, x, y)` instead of `u(t, y, x)` in your sytstem definition.\nFound a problem with the dependent variable $k, given that your ivs are $(get_ivs(pdesys))."
         kreplaced = get(replaced_vars, k, nothing)
+        data = umap[k]
+        # A single saved time (for example `save_on = false`) still allows interpolation in
+        # space: the slice is repeated over a degenerate time interval.
+        ti = findfirst(isequal(discretespace.time), args)
+        if ti !== nothing && length(nodes[ti]) == 1 && all(length.(nodes[1:end .!= ti]) .> 1)
+            nodes = Base.setindex(nodes, [only(nodes[ti]), nextfloat(only(nodes[ti]))], ti)
+            data = cat(data, data; dims = ti)
+        end
         if all(length.(nodes) .> 1)
-            interp = interpolate(nodes, umap[k], Gridded(Linear()))
+            interp = interpolate(nodes, data, Gridded(Linear()))
             # staggered points start half a step inside the domain edge, so evaluating on
             # the grid (`sol(t, :)`) reaches half a step past the first point
             shifted = arg -> !isequal(arg, discretespace.time) &&

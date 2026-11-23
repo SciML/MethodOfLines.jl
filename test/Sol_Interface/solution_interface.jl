@@ -218,3 +218,23 @@ end
     discu = sol.disc_data.discretespace.discvars[sol.disc_data.discretespace.ū[1]]
     @test [raw[discu[I]] for I in CartesianIndices(discu)] ≈ sol[u(x, y)] atol = 1.0e-12
 end
+
+@testset "Test 12: interpolation when only the final time is saved" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ cos(x), u(t, 0) ~ exp(-t), u(t, 1) ~ exp(-t) * cos(1)]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    prob = ode_discretize(pdesys, MOLFiniteDifference([x => 0.1], t))
+    full = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    for kwargs in ((; save_on = false, save_start = false), (; saveat = [1.0]), (; save_everystep = false, save_start = false))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, kwargs...)
+        @test length(sol.t) == 1
+        @test sol(1.0, 0.3) ≈ full(1.0, 0.3) atol = 1.0e-6
+        @test sol(1.0, 0.3; dv = u(t, x)) ≈ full(1.0, 0.3; dv = u(t, x)) atol = 1.0e-6
+        @test sol(1.0, :) ≈ full(1.0, :) atol = 1.0e-6
+    end
+end
