@@ -1,5 +1,24 @@
 # TODO: Check if the grid is uniform and use the supported higher order interpolations
 
+# The interpolation of a solution saved at a single time (for example with `save_on = false`):
+# `spatial` interpolates the saved slice, and the time argument at position `ti` must be that time.
+_without(xs, i) = Tuple(x for (j, x) in enumerate(xs) if j != i)
+
+struct SingleTimeInterpolation{I, T}
+    spatial::I
+    t::T
+    ti::Int
+end
+
+function (f::SingleTimeInterpolation)(args...)
+    args[f.ti] == f.t || throw(
+        ArgumentError(
+            "The solution was saved only at t = $(f.t), so it cannot be interpolated at t = $(args[f.ti])."
+        )
+    )
+    return f.spatial(_without(args, f.ti)...)
+end
+
 function build_interpolation(
         umap, dvs, ivs, ivgrid, sol, pdesys, replaced_vars, discretespace
     )
@@ -19,29 +38,21 @@ function build_interpolation(
             )
         ) "Please ensure that the order that your independent variables appear in your PDESystem matches the order that they appear in the argument signature of your dependent variables. For example, if you have a PDESystem with independent variables `[t, x, y]`, and a dependent variable `u(t, x, y)`, then you should use `u(t, x, y)` instead of `u(t, y, x)` in your sytstem definition.\nFound a problem with the dependent variable $k, given that your ivs are $(get_ivs(pdesys))."
         kreplaced = get(replaced_vars, k, nothing)
-        data = umap[k]
-        # A single saved time (for example `save_on = false`) still allows interpolation in
-        # space: the slice is repeated over a degenerate time interval.
-        ti = findfirst(isequal(discretespace.time), args)
-        repeated_time = false
-        if ti !== nothing && length(nodes[ti]) == 1 && all(length.(nodes[1:end .!= ti]) .> 1)
-            t1 = only(nodes[ti])
-            t2 = t1 isa Integer ? t1 + 1 : nextfloat(t1)
-            nodes = Base.setindex(nodes, [t1, t2], ti)
-            data = cat(data, data; dims = ti)
-            repeated_time = true
-        end
-        if all(length.(nodes) .> 1)
+        # staggered points start half a step inside the domain edge, so evaluating on
+        # the grid (`sol(t, :)`) reaches half a step past the first point
+        shifted = arg -> !isequal(arg, discretespace.time) &&
+            !iszero(staggered_shift(discretespace, k.val, arg))
+        gridded(nodes, data) = begin
             interp = interpolate(nodes, data, Gridded(Linear()))
-            # staggered points start half a step inside the domain edge, so evaluating on
-            # the grid (`sol(t, :)`) reaches half a step past the first point
-            shifted = arg -> !isequal(arg, discretespace.time) &&
-                !iszero(staggered_shift(discretespace, k.val, arg))
-            # extrapolating along the repeated time interval would divide by its width
-            bc = repeated_time ?
-                Tuple(map(a -> shifted(a) ? Interpolations.Line() : Interpolations.Throw(), args)) :
-                Interpolations.Line()
-            any(shifted, args) && (interp = Interpolations.extrapolate(interp, bc))
+            any(shifted, args) ? Interpolations.extrapolate(interp, Interpolations.Line()) : interp
+        end
+        ti = findfirst(isequal(discretespace.time), args)
+        if all(length.(nodes) .> 1)
+            interp = gridded(nodes, umap[k])
+        elseif ti !== nothing && length(nodes[ti]) == 1 && all(length.(_without(nodes, ti)) .> 1)
+            interp = SingleTimeInterpolation(
+                gridded(_without(nodes, ti), dropdims(umap[k]; dims = ti)), only(nodes[ti]), ti
+            )
         else
             i = findfirst(a -> a <= 1, length.(nodes))
             @warn "Solution has length 1 in dimension $(ivs[i]). Interpolation will not be possible for variable $k. Solution return code is $(sol.retcode)."

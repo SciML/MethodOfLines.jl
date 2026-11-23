@@ -237,6 +237,7 @@ end
         @test sol(1.0, 0.3) ≈ full(1.0, 0.3) atol = 1.0e-6
         @test sol(1.0, 0.3; dv = u(t, x)) ≈ full(1.0, 0.3; dv = u(t, x)) atol = 1.0e-6
         @test sol(1.0, :) ≈ full(1.0, :) atol = 1.0e-6
+        @test_throws ArgumentError sol(0.5, 0.3)
     end
 end
 
