@@ -19,7 +19,12 @@ function (f::SingleTimeInterpolation)(args...)
     )
     values = f.spatial(_without(args, f.ti)...)
     targ isa Number && return values
-    return stack(fill(values, length(targ)); dims = min(f.ti, ndims(values) + 1))
+    slice = values isa Number ? fill(values) : values
+    d = min(f.ti, ndims(slice) + 1)
+    return repeat(
+        reshape(slice, ntuple(j -> j == d ? 1 : size(slice, j < d ? j : j - 1), ndims(slice) + 1)),
+        outer = ntuple(j -> j == d ? length(targ) : 1, ndims(slice) + 1)
+    )
 end
 
 function build_interpolation(
@@ -52,11 +57,11 @@ function build_interpolation(
         ti = findfirst(isequal(discretespace.time), args)
         if all(length.(nodes) .> 1)
             interp = gridded(nodes, umap[k])
-        elseif ti !== nothing && length(nodes) > 1 && length(nodes[ti]) == 1 &&
-                all(length.(_without(nodes, ti)) .> 1)
-            interp = SingleTimeInterpolation(
-                gridded(_without(nodes, ti), dropdims(umap[k]; dims = ti)), only(nodes[ti]), ti
-            )
+        elseif ti !== nothing && length(nodes[ti]) == 1 && all(length.(_without(nodes, ti)) .> 1)
+            # a field of time only has no spatial interpolation to build
+            spatial = length(nodes) == 1 ? Returns(only(umap[k])) :
+                gridded(_without(nodes, ti), dropdims(umap[k]; dims = ti))
+            interp = SingleTimeInterpolation(spatial, only(nodes[ti]), ti)
         else
             i = findfirst(a -> a <= 1, length.(nodes))
             @warn "Solution has length 1 in dimension $(ivs[i]). Interpolation will not be possible for variable $k. Solution return code is $(sol.retcode)."

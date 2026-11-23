@@ -238,9 +238,25 @@ end
         @test sol(1.0, 0.3; dv = u(t, x)) ≈ full(1.0, 0.3; dv = u(t, x)) atol = 1.0e-6
         @test sol(1.0, :) ≈ full(1.0, :) atol = 1.0e-6
         @test_throws ArgumentError sol(0.5, 0.3)
+        @test size(sol(Float64[], :; dv = u(t, x))) == (0, 11)
         @test sol([1.0], :; dv = u(t, x)) ≈ full([1.0], :; dv = u(t, x)) atol = 1.0e-6
         @test sol(:, :; dv = u(t, x)) ≈ full([1.0], :; dv = u(t, x)) atol = 1.0e-6
     end
+end
+
+@testset "Test 12a: a single saved time with a field of time only" begin
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    eqs = [Dt(u(t, x)) ~ (Differential(x)^2)(u(t, x)) + v(t), Dt(v(t)) ~ -v(t)]
+    bcs = [u(0, x) ~ 0, v(0) ~ 1, u(t, 0) ~ 0, u(t, 1) ~ 0]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t)])
+    prob = ode_discretize(pdesys, MOLFiniteDifference([x => 0.1], t))
+    full = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, saveat = [1.0])
+    @test sol(1.0, 0.3) ≈ full(1.0, 0.3) atol = 1.0e-6
+    @test sol(1.0; dv = v(t)) ≈ full(1.0; dv = v(t)) atol = 1.0e-6
 end
 
 @testset "Test 12b: a single saved integer time" begin
