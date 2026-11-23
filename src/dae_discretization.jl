@@ -169,7 +169,7 @@ function _dae_operating_point(sys, u0, t)
 end
 
 _has_parameter(u0) = any(
-    vals -> any(v -> !isempty(Symbolics.get_variables(v)), vals), last.(u0)
+    vals -> any(v -> !(v isa Number) && !isempty(Symbolics.get_variables(v)), vals), last.(u0)
 )
 
 _zero_value(x) = is_array_valued(x) ? zeros(size(x)) : 0.0

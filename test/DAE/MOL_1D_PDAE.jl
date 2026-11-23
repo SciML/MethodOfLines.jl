@@ -114,10 +114,11 @@ end
     @test_logs discretize(build(1.2), disc; fallback = false, build_initializeprob = false)
     if pkgversion(MethodOfLines.ModelingToolkitBase) >= v"1.74"
         disc_init = MOLFiniteDifference([x => 0.1], t; build_initializeprob = true)
-        logs, _ = Test.collect_test_logs() do
+        logs, prob_init = Test.collect_test_logs() do
             discretize(build(1.2), disc_init; fallback = false)
         end
         @test !any(l -> occursin("build_initializeprob = true", l.message), logs)
+        @test SciMLBase.has_initialization_data(prob_init.f)
     end
     if pkgversion(MethodOfLines.ModelingToolkitBase) >= v"1.74"
         # a per-call keyword wins over the one stored on the discretization
