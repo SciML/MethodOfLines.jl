@@ -138,7 +138,8 @@ function CompleteUpwindDifference(
             for offset in L_boundary_deriv_spots
     ]
 
-    high_boundary_coefs = [
+    # Reversed so entry k belongs to the point k places from the end, as `_upwind_difference` indexes it.
+    high_boundary_coefs = reverse([
         convert(
             SVector{boundary_stencil_length, eltype(x)},
             calculate_weights(
@@ -147,7 +148,7 @@ function CompleteUpwindDifference(
             )
         )
             for offset in R_boundary_deriv_spots
-    ]
+    ])
 
     # _high_boundary_coefs    = SVector{boundary_stencil_length, T}[convert(SVector{boundary_stencil_length, T}, (1/dx^derivative_order) * calculate_weights(derivative_order, oneunit(T)*x0, reverse(right_boundary_x))) for x0 in R_boundary_deriv_spots]
 
