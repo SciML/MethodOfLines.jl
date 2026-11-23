@@ -83,12 +83,13 @@ end
     newp(prob) = setp_oop(prob, [α])(prob, [2.4])
 
     # opt-in: remake(p) recomputes the initial condition. The oldest allowed
-    # ModelingToolkitBase (the Downgrade job's floor) cannot compile the
+    # ModelingToolkitBase (1.73, the Downgrade job's floor) cannot compile the
     # initialization system ("different independent variable"); skip only on that error.
     prob = try
         discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
     catch err
-        occursin("different independent variable", sprint(showerror, err)) || rethrow()
+        (occursin("different independent variable", sprint(showerror, err)) &&
+            pkgversion(MethodOfLines.ModelingToolkitBase) < v"1.74") || rethrow()
         nothing
     end
     if prob === nothing
