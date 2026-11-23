@@ -88,8 +88,10 @@ end
     prob = try
         discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
     catch err
-        (occursin("different independent variable", sprint(showerror, err)) &&
-            pkgversion(MethodOfLines.ModelingToolkitBase) < v"1.74") || rethrow()
+        (
+            occursin("different independent variable", sprint(showerror, err)) &&
+                pkgversion(MethodOfLines.ModelingToolkitBase) < v"1.74"
+        ) || rethrow()
         nothing
     end
     if prob === nothing
