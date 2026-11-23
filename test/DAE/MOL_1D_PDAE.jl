@@ -63,7 +63,7 @@ using ModelingToolkit: Differential
     end
 end
 
-@testset "remake(prob; p) re-initializes a parameter in the initial condition" begin
+@testset "remake with a parameter in the initial condition" begin
     using SymbolicIndexingInterface: setp_oop
     import SciMLBase
     @parameters t x α
@@ -79,14 +79,25 @@ end
         name = :heat
     )
     disc = MOLFiniteDifference([x => 0.1], t)
-    prob = discretize(build(1.2), disc; fallback = false)
     fresh = discretize(build(2.4), disc; fallback = false)
-    @test prob isa SciMLBase.DAEProblem
-    prob2 = remake(prob; p = setp_oop(prob, [α])(prob, [2.4]))
+    newp(prob) = setp_oop(prob, [α])(prob, [2.4])
 
-    sol2 = solve(prob2; saveat = 0.1)
+    # opt-in: remake(p) recomputes the initial condition
+    prob = discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
+    @test prob isa SciMLBase.DAEProblem
+    sol2 = solve(remake(prob; p = newp(prob)); saveat = 0.1)
     sol_fresh = solve(fresh; saveat = 0.1)
     # `prob2.u0` is refreshed by the initialization at solve time
     @test sol2[u(t, x)][1, :] ≈ 2.4 .* cos.(sol2[x])
     @test sol2[u(t, x)] ≈ sol_fresh[u(t, x)] atol = 1.0e-6
+
+    # default: remake(u0) is honoured
+    prob = discretize(build(1.2), disc; fallback = false)
+    @test prob isa SciMLBase.DAEProblem
+    prob3 = remake(prob; u0 = fill(4.0, length(prob.u0)))
+    @test solve(prob3; saveat = 0.1)[u(t, x)][1, 2:(end - 1)] ≈ fill(4.0, 9)
+
+    # default: fully_determined still builds
+    @test discretize(build(1.2), disc; fallback = false, fully_determined = true) isa
+        SciMLBase.DAEProblem
 end
