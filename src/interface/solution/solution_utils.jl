@@ -1,9 +1,9 @@
 # TODO: Check if the grid is uniform and use the supported higher order interpolations
 
+_without(xs::Tuple, i) = ntuple(j -> xs[j < i ? j : j + 1], length(xs) - 1)
+
 # The interpolation of a solution saved at a single time (for example with `save_on = false`):
 # `spatial` interpolates the saved slice, and the time argument at position `ti` must be that time.
-_without(xs, i) = Tuple(x for (j, x) in enumerate(xs) if j != i)
-
 struct SingleTimeInterpolation{I, T}
     spatial::I
     t::T
@@ -11,12 +11,15 @@ struct SingleTimeInterpolation{I, T}
 end
 
 function (f::SingleTimeInterpolation)(args...)
-    args[f.ti] == f.t || throw(
+    targ = args[f.ti]
+    all(==(f.t), targ) || throw(
         ArgumentError(
-            "The solution was saved only at t = $(f.t), so it cannot be interpolated at t = $(args[f.ti])."
+            "The solution was saved only at t = $(f.t), so it cannot be interpolated at t = $(targ)."
         )
     )
-    return f.spatial(_without(args, f.ti)...)
+    values = f.spatial(_without(args, f.ti)...)
+    targ isa Number && return values
+    return stack(fill(values, length(targ)); dims = min(f.ti, ndims(values) + 1))
 end
 
 function build_interpolation(
@@ -49,7 +52,8 @@ function build_interpolation(
         ti = findfirst(isequal(discretespace.time), args)
         if all(length.(nodes) .> 1)
             interp = gridded(nodes, umap[k])
-        elseif ti !== nothing && length(nodes[ti]) == 1 && all(length.(_without(nodes, ti)) .> 1)
+        elseif ti !== nothing && length(nodes) > 1 && length(nodes[ti]) == 1 &&
+                all(length.(_without(nodes, ti)) .> 1)
             interp = SingleTimeInterpolation(
                 gridded(_without(nodes, ti), dropdims(umap[k]; dims = ti)), only(nodes[ti]), ti
             )
