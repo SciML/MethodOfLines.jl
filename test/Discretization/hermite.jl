@@ -577,10 +577,10 @@ end
     @test maximum(abs, sol[u(t, x, y)][end, :, :] .- E) < 8.0e-5
 end
 
-@testset "HermiteScheme rejects staggered and multidimensional edge-aligned grids" begin
-    @parameters t x y
+@testset "HermiteScheme rejects staggered and edge-aligned grids" begin
+    @parameters t x
     @variables u(..) ρ(..) ϕ(..)
-    Dt, Dx, Dy = Differential(t), Differential(x), Differential(y)
+    Dt, Dx = Differential(t), Differential(x)
 
     heat1 = PDESystem(
         Dt(u(t, x)) ~ Dx(Dx(u(t, x))),
@@ -590,22 +590,7 @@ end
     edge1 = MOLFiniteDifference(
         [x => 0.1], t; advection_scheme = HermiteScheme(), grid_align = MethodOfLines.edge_align
     )
-    @test discretize(heat1, edge1) isa DAEProblem
-
-    heat2 = PDESystem(
-        Dt(u(t, x, y)) ~ Dx(Dx(u(t, x, y))) + Dy(Dy(u(t, x, y))),
-        [
-            u(0, x, y) ~ sin(π * x) * sin(π * y), u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
-            u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
-        ],
-        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
-        [t, x, y], [u(t, x, y)]; name = :edge2
-    )
-    edge2 = MOLFiniteDifference(
-        [x => 0.25, y => 0.25], t; advection_scheme = HermiteScheme(),
-        grid_align = MethodOfLines.edge_align
-    )
-    err = @test_throws ArgumentError discretize(heat2, edge2)
+    err = @test_throws ArgumentError discretize(heat1, edge1)
     @test occursin("EdgeAlignedGrid", sprint(showerror, err.value))
 
     L = 8.0
@@ -648,7 +633,7 @@ end
             sol = solve(discretize(sys, disc); saveat = [T], abstol = 1.0e-10, reltol = 1.0e-10)
             @test successful_retcode(sol)
             e = abs.(sol[U][end, :, :] .- [uexact(a, b, T) for a in sol[x], b in sol[y]])
-            e[1, 1] = e[1, end] = e[end, 1] = e[end, end] = 0
+            name === :xy_periodic && (e[1, 1] = e[1, end] = e[end, 1] = e[end, end] = 0)
             maximum(e)
         end
         @test errs[2] < 2.0e-4
@@ -729,6 +714,11 @@ end
     @test_throws ArgumentError MethodOfLines._fused_node!(b, c)
     @test_throws ArgumentError MethodOfLines._fused_node!(b, Symbolics.unwrap(Num(c)))
     @test_throws ArgumentError MethodOfLines._fused_node!(b, 1 // 3)
+    @test_throws ArgumentError MethodOfLines._fused_node!(b, big"1.0")
+    SU = Symbolics.SymbolicUtils
+    MethodOfLines._fused_node!(b, SU.Const{SU.SymReal}(ones(3)))
+    @test b.kind[end] == :constant_array
+    @test_throws ArgumentError MethodOfLines._fused_node!(b, SU.Const{SU.SymReal}(ones(BigFloat, 3)))
 end
 
 @testset "HermiteScheme rejects invalid explicit mappings" begin
@@ -761,4 +751,104 @@ end
     @test occursin("a directional key must be (u, x)", message([(u, t) => v]))
     @test occursin("spatial variables of", message(u => z))
     @test occursin("partner of more than one", message([u => v, w => v]))
+    @test occursin("more than one partner", message([u => v, (u, x) => w]))
+    @test occursin("different variable", message(u => u))
+    @test_throws ArgumentError HermiteScheme(deriv_var = [u => v, u => w])
+end
+
+@testset "HermiteScheme coupled first-order system" begin
+    @parameters t x
+    @variables ρ(..) ϕ(..)
+    Dt, Dx = Differential(t), Differential(x)
+    T = 0.2
+    ρe(t, x) = sin(2π * x) * cos(2π * t)
+    eqs = [Dt(ρ(t, x)) ~ -Dx(ϕ(t, x)), Dt(ϕ(t, x)) ~ -Dx(ρ(t, x))]
+    bcs = [ρ(0, x) ~ ρe(0, x), ϕ(0, x) ~ 0.0, ρ(t, 0) ~ ρ(t, 1), ϕ(t, 0) ~ ϕ(t, 1)]
+    domains = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)]
+    for dvs in ([ρ(t, x), ϕ(t, x)], [ϕ(t, x), ρ(t, x)])
+        sys = PDESystem(eqs, bcs, domains, [t, x], dvs; name = :coupled)
+        e16, e32 = map((16, 32)) do N
+            disc = MOLFiniteDifference([x => 1 / N], t; approx_order = 2, advection_scheme = HermiteScheme())
+            sol = solve(discretize(sys, disc); saveat = [T], abstol = 1.0e-11, reltol = 1.0e-11)
+            @test successful_retcode(sol)
+            maximum(abs, sol[ρ(t, x)][end, :] .- ρe.(T, sol[x]))
+        end
+        @test e32 < 5.0e-6
+        @test log2(e16 / e32) > 3.5
+    end
+end
+
+@testset "HermiteScheme diffusion in flux form" begin
+    @parameters t x r
+    @variables u(..) w(..)
+    Dt, Dx, Dr = Differential(t), Differential(x), Differential(r)
+    T = 0.05
+    hermite(dxs) = MOLFiniteDifference(dxs, t; approx_order = 2, advection_scheme = HermiteScheme())
+    final(sys, dxs) = solve(discretize(sys, hermite(dxs)); saveat = [T], abstol = 1.0e-11, reltol = 1.0e-11)
+
+    U = u(t, x)
+    bcs = [u(0, x) ~ 1 + 0.2 * sin(2π * x), u(t, 0) ~ u(t, 1)]
+    domains = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)]
+    flux = PDESystem(Dt(U) ~ Dx((1 + U) * Dx(U)), bcs, domains, [t, x], [U]; name = :flux)
+    expanded = PDESystem(Dt(U) ~ Dx(U)^2 + (1 + U) * Dx(Dx(U)), bcs, domains, [t, x], [U]; name = :expanded)
+    uf, ux = (final(sys, [x => 1 / 32])[U][end, :] for sys in (flux, expanded))
+    @test maximum(abs, uf .- ux) < 1.0e-8
+
+    we(t, r) = exp(-π^2 * t) * sin(π * r) / r
+    W = w(t, r)
+    spherical = PDESystem(
+        Dt(W) ~ 1 / r^2 * Dr(r^2 * Dr(W)), [w(0, r) ~ we(0, r), w(t, 0.5) ~ we(t, 0.5), w(t, 1.0) ~ we(t, 1.0)],
+        [t ∈ Interval(0.0, T), r ∈ Interval(0.5, 1.0)], [t, r], [W]; name = :spherical
+    )
+    e11, e21 = map((11, 21)) do N
+        sol = final(spherical, [r => 0.5 / (N - 1)])
+        @test successful_retcode(sol)
+        maximum(abs, sol[W][end, :] .- we.(T, sol[r]))
+    end
+    @test log2(e11 / e21) > 3.5
+end
+
+@testset "HermiteScheme 3D heat with Dirichlet edges" begin
+    @parameters t x y z
+    @variables u(..)
+    Dt, Dx, Dy, Dz = Differential(t), Differential(x), Differential(y), Differential(z)
+    g(x, y, z) = 1 + x + y + z
+    U = u(t, x, y, z)
+    bcs = [
+        u(0, x, y, z) ~ g(x, y, z),
+        u(t, 0, y, z) ~ g(0, y, z), u(t, 1, y, z) ~ g(1, y, z),
+        u(t, x, 0, z) ~ g(x, 0, z), u(t, x, 1, z) ~ g(x, 1, z),
+        u(t, x, y, 0) ~ g(x, y, 0), u(t, x, y, 1) ~ g(x, y, 1),
+    ]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0), z ∈ Interval(0.0, 1.0)]
+    sys = PDESystem(Dt(U) ~ Dx(Dx(U)) + Dy(Dy(U)) + Dz(Dz(U)), bcs, domains, [t, x, y, z], [U]; name = :heat3d)
+    disc = MOLFiniteDifference([x => 0.2, y => 0.2, z => 0.2], t; approx_order = 2, advection_scheme = HermiteScheme())
+    sol = solve(discretize(sys, disc); saveat = [0.05], abstol = 1.0e-9, reltol = 1.0e-9)
+    @test successful_retcode(sol)
+    @test maximum(abs, sol[U][end, :, :, :] .- [g(a, b, c) for a in sol[x], b in sol[y], c in sol[z]]) < 1.0e-8
+end
+
+@testset "HermiteScheme rejects nonlinear Dirichlet data, stationary systems and fourth derivatives" begin
+    @parameters t x
+    @variables u(..)
+    Dt, Dx = Differential(t), Differential(x)
+    nonlinear = PDESystem(
+        Dt(u(t, x)) ~ Dx(Dx(u(t, x))), [u(0, x) ~ 1 + 0.5 * sin(π * x), u(t, 0)^2 ~ 1, u(t, 1) ~ 1.0],
+        [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]; name = :nonlinear_wall
+    )
+    err = @test_throws ArgumentError discretize(nonlinear, MOLFiniteDifference([x => 0.1], t; advection_scheme = HermiteScheme()))
+    @test occursin("linear in", sprint(showerror, err.value))
+    poisson = PDESystem(
+        Dx(Dx(u(x))) ~ -π^2 * sin(π * x), [u(0) ~ 0.0, u(1) ~ 0.0], [x ∈ Interval(0.0, 1.0)], [x], [u(x)];
+        name = :poisson
+    )
+    err = @test_throws ArgumentError discretize(poisson, MOLFiniteDifference([x => 0.1], nothing; advection_scheme = HermiteScheme()))
+    @test occursin("time-dependent", sprint(showerror, err.value))
+    beam = PDESystem(
+        Dt(u(t, x)) ~ -Dx(Dx(Dx(Dx(u(t, x))))),
+        [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0, Dx(Dx(u(t, 0))) ~ 0.0, Dx(Dx(u(t, 1))) ~ 0.0],
+        [t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]; name = :beam
+    )
+    err = @test_throws ArgumentError discretize(beam, MOLFiniteDifference([x => 0.1], t; advection_scheme = HermiteScheme()))
+    @test occursin("up to third order", sprint(showerror, err.value))
 end

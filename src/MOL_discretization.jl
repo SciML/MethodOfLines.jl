@@ -18,25 +18,16 @@ end
 function _hermite_interface_errors(v, discretization)
     scheme = discretization.advection_scheme
     scheme.automatic || _hermite_mapping_errors(scheme.deriv_var, v)
-    discretization.grid_align isa StaggeredGrid && throw(
-        ArgumentError("HermiteScheme does not support a StaggeredGrid; use a center-aligned grid.")
+    g = discretization.grid_align
+    g isa CenterAlignedGrid || throw(
+        ArgumentError("HermiteScheme needs a center-aligned grid; got grid_align = $(nameof(typeof(g)))().")
     )
-    if discretization.grid_align isa EdgeAlignedGrid
-        for op in v.depvar_ops
-            count(a -> !isequal(a, v.time), v.args[op]) > 1 && throw(
-                ArgumentError(
-                    "HermiteScheme supports an EdgeAlignedGrid only for variables of one " *
-                        "spatial dimension; $(op) has more. Use a center-aligned grid."
-                )
-            )
-        end
-    end
     return
 end
 
 function _hermite_mapping_errors(deriv_var, v)
     spatial(op) = filter(a -> !isequal(a, v.time), v.args[op])
-    seen = Any[]
+    seen, covered = Any[], Any[]
     for (key, partner) in deriv_var
         u = key isa Tuple ? first(key) : key
         bad(msg) = throw(ArgumentError("HermiteScheme mapping $key => $partner: $msg"))
@@ -49,6 +40,12 @@ function _hermite_mapping_errors(deriv_var, v)
             bad("a directional key must be (u, x) with x a spatial variable of u.")
         isequal(spatial(uop), spatial(pop)) ||
             bad("the partner must have the spatial variables of $u, in the same order.")
+        isequal(uop, pop) && bad("the partner must be a different variable from $u.")
+        for x in (key isa Tuple ? [key[2]] : spatial(uop))
+            any(isequal((uop, x)), covered) &&
+                bad("the derivative of $u in $x has more than one partner.")
+            push!(covered, (uop, x))
+        end
         any(isequal(pop), seen) && bad("$partner is the partner of more than one derivative.")
         push!(seen, pop)
     end

@@ -169,7 +169,10 @@ function HermiteScheme(; deriv_var = nothing)
     elseif deriv_var isa Pair
         HermiteScheme(Dict(deriv_var), false, Set{Any}())
     else
-        HermiteScheme(Dict(deriv_var...), false, Set{Any}())
+        d = Dict(deriv_var...)
+        length(d) == length(deriv_var) ||
+            throw(ArgumentError("HermiteScheme: a key appears more than once in deriv_var."))
+        HermiteScheme(d, false, Set{Any}())
     end
 end
 

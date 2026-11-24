@@ -405,7 +405,7 @@ function _hermite_evolution_rhs(eq, dt_u)
     (islinear && !isequal(Symbolics.value(a), 0)) || throw(
         ArgumentError("HermiteScheme needs $dt_u to appear linearly in its equation, got $eq.")
     )
-    return symbolic_linear_solve(eq, dt_u)
+    return expand_derivatives(symbolic_linear_solve(eq, dt_u))
 end
 
 _hermite_dt_equation_indices(eqs, dt_u) =
@@ -504,6 +504,12 @@ from `u`'s. `Dx(u)` is replaced by `uˍx` everywhere, and the mapping is recorde
 function hermite_transform!(eqs, bcs, boundarymap, v, disc)
     scheme = disc.advection_scheme
     scheme.automatic || return
+    v.time === nothing && throw(
+        ArgumentError(
+            "HermiteScheme() needs a time-dependent system: each derivative partner gets an " *
+                "evolution equation in time."
+        )
+    )
     empty!(scheme.deriv_var)
     empty!(scheme.diffusive)
 
@@ -521,11 +527,18 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
         eq = eqs[only(idxs)]
         for x in filter(!isequal(t), uargs)
             orders = _x_derivative_orders!(Set{Int}(), eq.lhs - eq.rhs, x)
+            maximum(orders; init = 0) > 3 && throw(
+                ArgumentError(
+                    "HermiteScheme() supports spatial derivatives up to third order; $eq has " *
+                        "order $(maximum(orders)) in $x."
+                )
+            )
             !isempty(orders) && all(iseven, orders) && push!(scheme.diffusive, (uop, x))
         end
         evol_rhs[uop] = _hermite_evolution_rhs(eq, dt_u)
     end
     replaced_bcs = Pair[]
+    partner_rules = Pair[]
 
     for uop in original_depvar_ops
         uargs = v.args[uop]
@@ -567,8 +580,8 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
             transformed_rhs = substitute(original_rhs, rule)
             eqs[u_eq_idx] = dt_u ~ transformed_rhs
 
-            v_rhs = expand_derivatives(Dx(original_rhs))
-            v_rhs = pde_substitute(v_rhs, Dict(rule))
+            push!(partner_rules, rule)
+            v_rhs = pde_substitute(expand_derivatives(Dx(evol_rhs[uop])), Dict(partner_rules))
             push!(eqs, Dt(newvar) ~ v_rhs)
 
             bcivmap = reduce(
@@ -629,6 +642,12 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
                                 continue
                             end
                         else
+                            Symbolics.linear_expansion(bc.eq.lhs - bc.eq.rhs, bc.u)[3] || throw(
+                                ArgumentError(
+                                    "HermiteScheme needs Dirichlet conditions linear in " *
+                                        "$(bc.u); got $(bc.eq)."
+                                )
+                            )
                             bc_val = symbolic_linear_solve(bc.eq, bc.u)
                             isempty(
                                 _hermite_dependent_terms!(

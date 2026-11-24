@@ -82,11 +82,11 @@ one-sided points `Itap`. Hermite weights on one-sided points make the semi-discr
 unstable above `approx_order = 2`, so the point `k` steps from the boundary uses the
 centred window of `2k + 1` points, clipped to the grid, with between `d + 1` and
 `length(Itap)` points. `wide = true`, for a PDE diffusive in `x`, raises the minimum to
-`cld(approx_order + d, 2) + 1` points.
+`max(d + 1, cld(approx_order + d, 2) + 1)` points.
 """
 function _hermite_boundary_stencil(D, II, s, j, x, Itap; wide = false)
     d = D.derivative_order
-    m = wide ? cld(D.approximation_order + d, 2) + 1 : d + 1
+    m = wide ? max(d + 1, cld(D.approximation_order + d, 2) + 1) : d + 1
     n = length(s, x)
     i = II[j]
     bpc = D.boundary_point_count
@@ -443,14 +443,16 @@ function array_hermite_corner_dirichlet(s, u, ranges, J, bcmap)
             b = first(dir)
             F = symbolic_linear_solve(b.eq, b.u)
             isequal(Symbolics.value(F), NaN) && return nothing
-            sub = Dict(args[k] => s.grid[args[k]][first(ranges[k])] for k in 1:length(args))
-            val = substitute(expand_derivatives(F), sub)
-            _is_corner_data(Symbolics.unwrap(val), s, args) || return nothing
+            val = map(CartesianIndices(map(length, ranges))) do I
+                sub = Dict(args[k] => s.grid[args[k]][ranges[k][I[k]]] for k in 1:length(args))
+                substitute(expand_derivatives(F), sub)
+            end
+            all(w -> _is_corner_data(Symbolics.unwrap(w), s, args), val) || return nothing
         end
     end
     val === nothing && return nothing
     arr = array_variable(u, s)
-    return arr[ranges...] ~ reshape([val], ntuple(_ -> 1, length(args)))
+    return arr[ranges...] ~ val
 end
 
 function _is_corner_data(ex, s, args)
@@ -663,7 +665,7 @@ function _fused_argument_index!(b, a)
     return p
 end
 
-_is_float64(c) = c isa Real && Float64(c) == c
+_is_float64(c) = c isa Real && promote_type(typeof(c), Float64) === Float64 && Float64(c) == c
 
 function _fused_node!(b::_FusedStencilBuilder{N}, ex) where {N}
     ex = Symbolics.unwrap(ex)

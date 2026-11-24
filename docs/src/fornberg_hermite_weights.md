@@ -1,7 +1,9 @@
 # [Hermite finite differences](@id hermite_scheme)
 
-`HermiteScheme` approximates every spatial derivative of a variable ``u`` from the values of
-``u`` and of its first derivative at the stencil points ([Fornberg 2021](@ref hermite_references)):
+`HermiteScheme` approximates every spatial derivative of a variable ``u`` in a direction where
+``u`` has a derivative partner from the values of ``u`` and of its first derivative at the
+stencil points ([Fornberg 2021](@ref hermite_references)); other derivatives use central
+differences:
 
 ```math
 \frac{\partial^d u}{\partial x^d}(x_0) \approx \sum_i a_i\, u(x_i) + \sum_i b_i\, u_x(x_i).
@@ -467,12 +469,15 @@ These throw an `ArgumentError`:
   - with `HermiteScheme()`, Dirichlet data that contain a dependent variable, such as
     `u(t, 0) ~ w(t, 0)`;
   - an automatic `HermiteScheme()` with `should_transform = false`;
+  - an automatic `HermiteScheme()` for a system without a time variable;
+  - an automatic `HermiteScheme()` for a PDE with a spatial derivative of fourth or higher
+    order;
+  - Dirichlet conditions that are not linear in ``u``, such as `u(t, 0)^2 ~ 1`;
   - an explicit mapping without a direction (`u => vx`) for a variable of more than one
     spatial dimension;
   - an explicit mapping whose variable or partner is not a dependent variable of the PDE
-    system;
-  - a `StaggeredGrid`, and an `EdgeAlignedGrid` for a variable of more than one spatial
-    dimension.
+    system, that gives one derivative two partners, or that maps a variable to itself;
+  - a `StaggeredGrid` or an `EdgeAlignedGrid`.
 
 A boundary without a condition (the free outflow of an advection equation) has a lower order
 than the interior. In the convergence study above this limits the observed order to about 5
