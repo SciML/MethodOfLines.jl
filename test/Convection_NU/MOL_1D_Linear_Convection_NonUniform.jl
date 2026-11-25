@@ -454,6 +454,7 @@ end
             free = vel > 0 ? (2:length(xgrid)) : (1:(length(xgrid) - 1))
             idxs = [variable_index(prob, nodes[i]) for i in free]
             @test all(!isnothing, idxs)
+            @test length(du) == length(free)
             @test du[idxs] ≈ -2 * vel .* xgrid[free]
         end
     end
