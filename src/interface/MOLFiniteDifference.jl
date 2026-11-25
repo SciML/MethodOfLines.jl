@@ -111,6 +111,6 @@ function supported_conditions(::MOLFiniteDifference)
     return PDEBase.SupportedConditions(;
         geometries = (:interval, :box), dirichlet = true, neumann = true, robin = true,
         periodic = true, interface = true, time_dependent = true,
-        notes = "Conditions must be supplied at the edge of the domain. Rectangle domains are lowered to box conditions by `PDEBase.to_box_bcs`. Interface conditions connect variables on adjacent intervals, which must share a step size (except `WENOScheme()` on nonuniform grids), and disable system transformation."
+        notes = "Conditions must be supplied at the edge of the domain. Rectangle domains are lowered to box conditions by `PDEBase.to_box_bcs`. Interface conditions connect variables on adjacent intervals and disable system transformation. Scalar step specifications must match across an interface. Unequal explicit node vectors are supported for first-order advection: use first-order upwinding with `UpwindScheme()` and matching physical interface coordinates, or `WENOScheme()`. Higher spatial derivative orders are not supported on unequal grids."
     )
 end

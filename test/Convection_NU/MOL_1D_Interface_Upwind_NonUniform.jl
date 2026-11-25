@@ -1,6 +1,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using OrdinaryDiffEqSSPRK: SSPRK33
 using SciMLBase
+import PDEBase
 using ModelingToolkit: Differential
 include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
@@ -516,6 +517,12 @@ end
     @test isapprox(sol_u1[end], sol_u2[1]; rtol = 0.05, atol = 0.05)
     @test rel_l2(sol_u1, u_exact(xs1, tspan[2]), xs1) < L2_RTOL
     @test rel_l2(sol_u2, u_exact(xs2, tspan[2]), xs2) < L2_RTOL
+
+    disc = MOLFiniteDifference([x1 => x1grid, x2 => x2grid], t; advection_scheme = UpwindScheme())
+    conditions = PDEBase.supported_conditions(disc)
+    @test conditions.interface === true
+    @test occursin("Unequal explicit node vectors", conditions.notes)
+    @test occursin("first-order upwinding", conditions.notes)
 end
 
 @testset "Cross-domain advection with negative wind" begin
