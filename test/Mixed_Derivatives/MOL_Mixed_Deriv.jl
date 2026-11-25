@@ -126,7 +126,7 @@ end
 
     sol = solve(prob, NewtonRaphson())
 
-    @test_broken SciMLBase.successful_retcode(sol)
+    @test SciMLBase.successful_retcode(sol)
 
     solu = sol[u(x, y)]
     solx = sol[x]
