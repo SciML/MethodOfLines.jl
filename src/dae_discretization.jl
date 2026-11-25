@@ -299,7 +299,7 @@ function _dae_problem(
     requested === nothing && _has_parameter(metadata.u0) && @warn(
         "An initial condition depends on a parameter, so `remake(prob; p = ...)` will not update it; pass `build_initializeprob = true` to `discretize` to recompute it from the new parameters (this overrides a `remake(prob; u0 = ...)`). Pass `build_initializeprob = false` to silence this warning."
     )
-    build_initializeprob = requested === true
+    build_initializeprob = something(requested, false)
     return DAEProblem(
         sys, op, tspan; initializealg, discretization.kwargs..., kwargs...,
         build_initializeprob
