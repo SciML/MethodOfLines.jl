@@ -397,3 +397,60 @@ end
         xgrid, v, tspan, u0, u_exact,
     )
 end
+
+@testset "Parameterized advection velocity on a nonuniform grid" begin
+    @parameters v
+    Dt = Differential(t)
+    Dx = Differential(x)
+    tspan = (0.0, 0.2)
+    domains = [t ∈ Interval(tspan...), x ∈ Interval(0.0, 1.0)]
+    # With a symbolic velocity the sign is unknown, so both upwind
+    # directions are generated at every point, including the free outflow end.
+    for vel in (0.5, -0.5)
+        exact(x, t) = sin(2π * (x - vel * t))
+        # Inflow boundary only, so the outflow end is a free point discretized by the scheme.
+        inflow = vel > 0 ? 0.0 : 1.0
+        bcs = [u(0.0, x) ~ exact(x, 0.0), u(t, inflow) ~ exact(inflow, t)]
+        @named pdesys_param = PDESystem(
+            Dt(u(t, x)) ~ -v * Dx(u(t, x)), bcs, domains, [t, x], [u(t, x)], [v => vel]
+        )
+        @named pdesys_const = PDESystem(
+            Dt(u(t, x)) ~ -vel * Dx(u(t, x)), bcs, domains, [t, x], [u(t, x)]
+        )
+        gridnu = chebyspace(41, domains[2])
+        disc = MOLFiniteDifference([gridnu], t; advection_scheme = UpwindScheme())
+        sols = map((pdesys_param, pdesys_const)) do sys
+            prob = ode_discretize(sys, disc)
+            solve(prob, SSPRK33(); dt = 1.0e-4, adaptive = false, saveat = [tspan[2]])
+        end
+        xs = gridnu.second
+        uparam = sols[1][u(t, x)][end, :]
+        uconst = sols[2][u(t, x)][end, :]
+        @test uparam ≈ uconst
+        @test maximum(abs.(uparam .- exact.(xs, tspan[2]))) < 0.2
+    end
+end
+
+@testset "Second order upwind is exact for quadratics on a nonuniform grid" begin
+    @parameters v
+    Dt = Differential(t)
+    Dx = Differential(x)
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    xgrid = [0.0, 0.07, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1.0]
+    for vel in (0.5, -0.5)
+        # u = (x - vel * t)^2 solves u_t = -vel * u_x; the inflow end is a boundary
+        # condition and the free end is discretized by the second order stencil.
+        exact(x, t) = (x - vel * t)^2
+        inflow = vel > 0 ? 0.0 : 1.0
+        bcs = [u(0.0, x) ~ exact(x, 0.0), u(t, inflow) ~ exact(inflow, t)]
+        for eq in (Dt(u(t, x)) ~ -v * Dx(u(t, x)), Dt(u(t, x)) ~ -vel * Dx(u(t, x)))
+            @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)], [v => vel])
+            disc = MOLFiniteDifference([x => xgrid], t; advection_scheme = UpwindScheme(2))
+            prob = ode_discretize(pdesys, disc)
+            du = similar(prob.u0)
+            prob.f(du, prob.u0, prob.p, 0.0)
+            freex = vel > 0 ? xgrid[2:end] : xgrid[1:(end - 1)]
+            @test sort(du) ≈ sort(-vel .* 2 .* freex)
+        end
+    end
+end

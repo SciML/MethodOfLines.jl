@@ -76,6 +76,9 @@ run_tests(;
             @safetestset "Missing dependent variable" begin
                 include(joinpath(@__DIR__, "Components", "missing_dependent_variable.jl"))
             end
+            @safetestset "Undiscretized derivative error" begin
+                include(joinpath(@__DIR__, "Components", "undiscretized_derivative.jl"))
+            end
             @safetestset "Zero-extent BC extrapolation on small grids" begin
                 include(joinpath(@__DIR__, "Components", "bc_extrap_zero_extent.jl"))
             end
