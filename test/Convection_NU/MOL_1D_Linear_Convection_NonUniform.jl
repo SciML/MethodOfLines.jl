@@ -1,6 +1,7 @@
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, DomainSets
 using OrdinaryDiffEqSSPRK: SSPRK33
 using SciMLBase
+using SymbolicIndexingInterface: variable_index
 using ModelingToolkit: Differential
 include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
@@ -449,8 +450,11 @@ end
             prob = ode_discretize(pdesys, disc)
             du = similar(prob.u0)
             prob.f(du, prob.u0, prob.p, 0.0)
-            freex = vel > 0 ? xgrid[2:end] : xgrid[1:(end - 1)]
-            @test sort(du) ≈ sort(-vel .* 2 .* freex)
+            nodes = get_discrete(pdesys, disc)[u(t, x)]
+            free = vel > 0 ? (2:length(xgrid)) : (1:(length(xgrid) - 1))
+            idxs = [variable_index(prob, nodes[i]) for i in free]
+            @test all(!isnothing, idxs)
+            @test du[idxs] ≈ -2 * vel .* xgrid[free]
         end
     end
 end
