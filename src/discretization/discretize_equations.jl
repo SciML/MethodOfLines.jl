@@ -2307,7 +2307,7 @@ function array_upwind_difference(
     else
         # Mirrors `_upwind_difference` for nonuniform grids, where the interior weights
         # are indexed as stencil_coefs[II[j]] (negative) / stencil_coefs[II[j] - offside]
-        # (positive, with offside == 0 for nonuniform operators).
+        # (positive).
         [
             array_weight_vals(i -> Dop.stencil_coefs[i - Dop.offside], k, rng, j, N)
                 for k in eachindex(taps)
