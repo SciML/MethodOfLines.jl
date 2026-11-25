@@ -3,6 +3,7 @@
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using ModelingToolkit: Differential
+import Logging
 
 # Tests
 @testset "Dt(u(t,x)) ~ Dxx(u(t,x)), 0 ~ Dxx(v(t,x)) + sin(x), Dirichlet BCs" begin
@@ -82,49 +83,51 @@ end
     fresh = discretize(build(2.4), disc; fallback = false)
     newp(prob) = setp_oop(prob, [α])(prob, [2.4])
 
-    # opt-in: remake(p) recomputes the initial condition. The oldest allowed
-    # ModelingToolkitBase (1.73, the Downgrade job's floor) cannot compile the
-    # initialization system ("different independent variable"); skip only on that error.
-    prob = try
-        discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
-    catch err
-        (
-            occursin("different independent variable", sprint(showerror, err)) &&
-                pkgversion(MethodOfLines.ModelingToolkitBase) < v"1.74"
-        ) || rethrow()
-        nothing
-    end
-    if prob === nothing
-        @test_skip false
-    else
+    # opt-in: remake(p) recomputes the initial condition. ModelingToolkitBase older than
+    # MIN_INITIALIZEPROB_VERSION cannot compile the initialization system, so the opt-in
+    # is refused there with a clear error instead of an opaque failure or a silent
+    # switch to an ODEProblem.
+    min_init = MethodOfLines.MIN_INITIALIZEPROB_VERSION
+    supported = pkgversion(MethodOfLines.ModelingToolkitBase) >= min_init
+    if supported
+        prob = discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
         @test prob isa SciMLBase.DAEProblem
         sol2 = solve(remake(prob; p = newp(prob)); saveat = 0.1)
         sol_fresh = solve(fresh; saveat = 0.1)
         # `prob2.u0` is refreshed by the initialization at solve time
         @test sol2[u(t, x)][1, :] ≈ 2.4 .* cos.(sol2[x])
         @test sol2[u(t, x)] ≈ sol_fresh[u(t, x)] atol = 1.0e-6
+    else
+        @test_throws ArgumentError discretize(
+            build(1.2), disc; fallback = false, build_initializeprob = true
+        )
+        @test_throws ArgumentError discretize(build(1.2), disc; build_initializeprob = true)
+        @test_throws ArgumentError SciMLBase.DAEProblem(
+            build(1.2), disc; build_initializeprob = true
+        )
     end
 
     # default: a stale parameter-dependent initial condition is warned about, once per
-    # discretize, naming the opt-in; an explicit `build_initializeprob = false` and an
-    # initial condition without a parameter stay quiet
+    # discretize, naming the opt-in; an explicit `build_initializeprob = false`, per call
+    # or stored, and an initial condition without a parameter stay quiet
     @test_logs (:warn, r"build_initializeprob = true") discretize(
         build(1.2), disc; fallback = false
     )
     @test_logs discretize(build(1.2), disc; fallback = false, build_initializeprob = false)
-    if pkgversion(MethodOfLines.ModelingToolkitBase) >= v"1.74"
+    disc_stored_off = MOLFiniteDifference([x => 0.1], t; build_initializeprob = false)
+    @test_logs discretize(build(1.2), disc_stored_off; fallback = false)
+    if supported
         disc_init = MOLFiniteDifference([x => 0.1], t; build_initializeprob = true)
-        logs, prob_init = Test.collect_test_logs() do
+        io = IOBuffer()
+        prob_init = Logging.with_logger(Logging.SimpleLogger(io)) do
             discretize(build(1.2), disc_init; fallback = false)
         end
-        @test !any(l -> occursin("build_initializeprob = true", l.message), logs)
+        @test !occursin("build_initializeprob", String(take!(io)))
         @test SciMLBase.has_initialization_data(prob_init.f)
-    end
-    if pkgversion(MethodOfLines.ModelingToolkitBase) >= v"1.74"
+
         # a per-call keyword wins over the one stored on the discretization
-        disc_off = MOLFiniteDifference([x => 0.1], t; build_initializeprob = false)
         probo = discretize(
-            build(1.2), disc_off; fallback = false, build_initializeprob = true
+            build(1.2), disc_stored_off; fallback = false, build_initializeprob = true
         )
         @test SciMLBase.has_initialization_data(probo.f)
     end

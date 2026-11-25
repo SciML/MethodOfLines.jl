@@ -189,15 +189,18 @@ system's initialization equations are ones it honors; otherwise a
 [`BrownFullBasicInitUnsafeError`](@ref) is raised naming the offending equations. Passing
 `initializealg` explicitly overrides both the default and that check.
 
-`build_initializeprob` defaults to `false`. When an initial condition depends on a
+`build_initializeprob` defaults to `false`, and can also be stored on the
+discretization; a per-call value wins. When an initial condition depends on a
 parameter, `remake(prob; p = ...)` does not update `prob.u0` unless
-`build_initializeprob = true` was passed when the problem was built. Even then `remake`
+`build_initializeprob = true` was given when the problem was built. Even then `remake`
 leaves `u0` alone under the default lazy initialization: the updated state appears once
-the problem is initialized, which `solve` does. With the
-default, discretizing such a system emits a warning naming the opt-in. The initialization
-problem overrides a `remake(prob; u0 = ...)`, which is why it is not on by default. The
-opt-in needs a recent ModelingToolkitBase: the oldest supported release fails to compile
-the initialization system for some problems.
+the problem is initialized, which `solve` does. When the option is left unspecified,
+discretizing such a system emits a warning naming the opt-in; passing
+`build_initializeprob = false` explicitly opts out and silences it. The initialization
+problem overrides a `remake(prob; u0 = ...)`, which is why it is not on by default.
+`build_initializeprob = true` requires ModelingToolkitBase >= 1.77.1 (checked against
+1.73.0 to 1.81.0; earlier releases cannot compile the initialization system), and
+raises an `ArgumentError` on older ones.
 
 The solution is a `PDETimeSeriesSolution`, the same wrapper [`discretize`](@ref)
 produces, so it is indexed and interpolated by the `PDESystem`'s own variables:
@@ -219,6 +222,34 @@ function SciMLBase.DAEProblem(
     return _dae_problem(
         sys, tspan, discretization; initializealg, build_initializeprob, kwargs...
     )
+end
+
+"""
+    MIN_INITIALIZEPROB_VERSION
+
+First `ModelingToolkitBase` release whose initialization system compiles for the
+`DAEProblem`s MethodOfLines builds, so that `build_initializeprob = true` yields a
+`DAEProblem` whose `remake(prob; p = ...)` re-solves the initial condition. Verified
+against 1.73.0, 1.74.0, 1.76.0 and 1.77.0 (all raise `OperatorIndepvarMismatchError`)
+and 1.77.1, 1.77.3, 1.78.0 and 1.81.0 (all work).
+"""
+const MIN_INITIALIZEPROB_VERSION = v"1.77.1"
+
+# A per-call keyword takes precedence over the one stored on the discretization;
+# `nothing` means neither was given.
+function _requested_initializeprob(discretization::MOLDiscretization, per_call)
+    return per_call === nothing ?
+        get(discretization.kwargs, :build_initializeprob, nothing) : per_call
+end
+
+function _check_initializeprob_support(requested)
+    requested === true && pkgversion(ModelingToolkitBase) < MIN_INITIALIZEPROB_VERSION &&
+        throw(
+        ArgumentError(
+            "`build_initializeprob = true` requires ModelingToolkitBase >= $MIN_INITIALIZEPROB_VERSION; this environment has $(pkgversion(ModelingToolkitBase)). Update ModelingToolkitBase, or drop the option."
+        )
+    )
+    return nothing
 end
 
 """
@@ -252,13 +283,12 @@ function _dae_problem(
     end
     metadata = getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing)
     op = _dae_operating_point(sys, metadata.u0, t)
-    # A per-call keyword takes precedence over the one stored on the discretization.
-    if build_initializeprob === nothing
-        build_initializeprob = get(discretization.kwargs, :build_initializeprob, false)
-        build_initializeprob || !_has_parameter(metadata.u0) || @warn(
-            "An initial condition depends on a parameter, so `remake(prob; p = ...)` will not update it; pass `build_initializeprob = true` to `discretize` to recompute it from the new parameters (this overrides a `remake(prob; u0 = ...)`)."
-        )
-    end
+    requested = _requested_initializeprob(discretization, build_initializeprob)
+    _check_initializeprob_support(requested)
+    requested === nothing && _has_parameter(metadata.u0) && @warn(
+        "An initial condition depends on a parameter, so `remake(prob; p = ...)` will not update it; pass `build_initializeprob = true` to `discretize` to recompute it from the new parameters (this overrides a `remake(prob; u0 = ...)`). Pass `build_initializeprob = false` to silence this warning."
+    )
+    build_initializeprob = requested === true
     return DAEProblem(
         sys, op, tspan; initializealg, discretization.kwargs..., kwargs...,
         build_initializeprob
