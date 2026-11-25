@@ -133,9 +133,7 @@ end
     @test all(fd)
 end
 
-# ModelingToolkit 11.47 no longer tears large linear blocks of stationary systems,
-# so every interior node stays an unknown.
-@testset "2D Laplace Dirichlet keeps all interior unknowns, n = $n" for n in (8, 9)
+@testset "2D Laplace Dirichlet keeps all interior unknowns, n = $n" for n in (8, 9, 31)
     @parameters x y
     @variables u(..)
     Dxx = Differential(x)^2
@@ -151,13 +149,16 @@ end
     prob = discretize(pdesys, discretization)
     @test length(prob.u0) == (n - 2)^2
 
-    sol = NonlinearSolve.solve(prob, NewtonRaphson())
-    @test sol.retcode == ReturnCode.Success
+    # Default tolerances report Stalled at n = 31, so only the unknown count is checked there.
+    if n < 31
+        sol = NonlinearSolve.solve(prob, NewtonRaphson())
+        @test sol.retcode == ReturnCode.Success
 
-    # The Dirichlet conditions do not set the corner nodes, so compare the interior only.
-    xs = sol[x]
-    ys = sol[y]
-    @test sol[u(x, y)][2:(end - 1), 2:(end - 1)] ≈ [xi * yi for xi in xs[2:(end - 1)], yi in ys[2:(end - 1)]] atol = 1.0e-8
+        # The Dirichlet conditions do not set the corner nodes, so compare the interior only.
+        xs = sol[x]
+        ys = sol[y]
+        @test sol[u(x, y)][2:(end - 1), 2:(end - 1)] ≈ [xi * yi for xi in xs[2:(end - 1)], yi in ys[2:(end - 1)]] atol = 1.0e-8
+    end
 end
 
 @testset "2D Laplace Neumann keeps all unknowns" begin
@@ -182,20 +183,4 @@ end
     xs = sol[x]
     ys = sol[y]
     @test sol[u(x, y)][2:(end - 1), 2:(end - 1)] ≈ [xi * yi for xi in xs[2:(end - 1)], yi in ys[2:(end - 1)]] atol = 1.0e-8
-end
-
-# Default tolerances report Stalled on this size, so only the unknown count is checked.
-@testset "2D Laplace Dirichlet n = 31 unknown count" begin
-    @parameters x y
-    @variables u(..)
-    Dxx = Differential(x)^2
-    Dyy = Differential(y)^2
-
-    eq = Dxx(u(x, y)) + Dyy(u(x, y)) ~ 0
-    bcs = [u(0, y) ~ 0, u(1, y) ~ y, u(x, 0) ~ 0, u(x, 1) ~ x]
-    domains = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
-
-    @named pdesys = PDESystem([eq], bcs, domains, [x, y], [u(x, y)])
-    prob = discretize(pdesys, MOLFiniteDifference([x => 1 / 30, y => 1 / 30], nothing, approx_order = 2))
-    @test length(prob.u0) == 29^2
 end
