@@ -16,7 +16,7 @@ end
 
 (f::TimeOnlyValue)() = f.value
 
-function (f::SingleTimeInterpolation)(args...)
+function (f::SingleTimeInterpolation)(args::Vararg{Union{Number, AbstractVector}})
     targ = args[f.ti]
     all(==(f.t), targ) || throw(
         ArgumentError(

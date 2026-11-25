@@ -241,6 +241,8 @@ end
         @test size(sol(Float64[], :; dv = u(t, x))) == (0, 11)
         @test sol([1.0], :; dv = u(t, x)) ≈ full([1.0], :; dv = u(t, x)) atol = 1.0e-6
         @test sol(:, :; dv = u(t, x)) ≈ full([1.0], :; dv = u(t, x)) atol = 1.0e-6
+        @test_throws MethodError sol(fill(1.0, 2, 3), 0.3; dv = u(t, x))
+        @test_throws MethodError sol(fill(1.0), 0.3; dv = u(t, x))
     end
 end
 
