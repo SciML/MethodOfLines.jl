@@ -98,11 +98,13 @@ end
         @test sol2[u(t, x)][1, :] ≈ 2.4 .* cos.(sol2[x])
         @test sol2[u(t, x)] ≈ sol_fresh[u(t, x)] atol = 1.0e-6
     else
-        @test_throws ArgumentError discretize(
+        @test_throws MethodOfLines.InitializeprobSupportError discretize(
             build(1.2), disc; fallback = false, build_initializeprob = true
         )
-        @test_throws ArgumentError discretize(build(1.2), disc; build_initializeprob = true)
-        @test_throws ArgumentError SciMLBase.DAEProblem(
+        @test_throws MethodOfLines.InitializeprobSupportError discretize(
+            build(1.2), disc; build_initializeprob = true
+        )
+        @test_throws MethodOfLines.InitializeprobSupportError SciMLBase.DAEProblem(
             build(1.2), disc; build_initializeprob = true
         )
     end

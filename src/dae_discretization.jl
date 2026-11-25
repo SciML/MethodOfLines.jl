@@ -200,7 +200,7 @@ discretizing such a system emits a warning naming the opt-in; passing
 problem overrides a `remake(prob; u0 = ...)`, which is why it is not on by default.
 `build_initializeprob = true` requires ModelingToolkitBase >= 1.77.1 (checked against
 1.73.0 to 1.81.0; earlier releases cannot compile the initialization system), and
-raises an `ArgumentError` on older ones.
+raises an `InitializeprobSupportError` on older ones when the DAE path is taken.
 
 The solution is a `PDETimeSeriesSolution`, the same wrapper [`discretize`](@ref)
 produces, so it is indexed and interpolated by the `PDESystem`'s own variables:
@@ -242,13 +242,24 @@ function _requested_initializeprob(discretization::MOLDiscretization, per_call)
         get(discretization.kwargs, :build_initializeprob, nothing) : per_call
 end
 
-function _check_initializeprob_support(requested)
-    requested === true && pkgversion(ModelingToolkitBase) < MIN_INITIALIZEPROB_VERSION &&
-        throw(
-        ArgumentError(
-            "`build_initializeprob = true` requires ModelingToolkitBase >= $MIN_INITIALIZEPROB_VERSION; this environment has $(pkgversion(ModelingToolkitBase)). Update ModelingToolkitBase, or drop the option."
-        )
+# Distinct from `ArgumentError` so `discretize` never mistakes it for a system that
+# merely cannot be posed as a DAE and falls back to an `ODEProblem`.
+struct InitializeprobSupportError <: Exception
+    installed::VersionNumber
+end
+
+function Base.showerror(io::IO, e::InitializeprobSupportError)
+    return print(
+        io, "InitializeprobSupportError: `build_initializeprob = true` requires ",
+        "ModelingToolkitBase >= $MIN_INITIALIZEPROB_VERSION; this environment has ",
+        "$(e.installed). Update ModelingToolkitBase, or drop the option."
     )
+end
+
+function _check_initializeprob_support(requested)
+    installed = pkgversion(ModelingToolkitBase)
+    requested === true && installed < MIN_INITIALIZEPROB_VERSION &&
+        throw(InitializeprobSupportError(installed))
     return nothing
 end
 

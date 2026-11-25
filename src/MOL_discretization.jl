@@ -250,7 +250,7 @@ back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations 
 Pass `build_initializeprob = true` (here or on the discretization) so that
 `remake(prob; p = ...)` recomputes initial conditions that depend on parameters;
 `false` opts out explicitly, and leaving it unspecified warns when such a condition
-exists. `true` requires ModelingToolkitBase >= 1.77.1 and throws an `ArgumentError` on
+exists. `true` requires ModelingToolkitBase >= 1.77.1 and throws an `InitializeprobSupportError` on
 older releases; see [`DAEProblem`](@ref).
 
 Supplying `analytic` selects the compiled `ODEProblem` path because analytic solutions
@@ -280,13 +280,11 @@ function SciMLBase.discretize(
     end
     ode_path = analytic !== nothing
     if !ode_path
-        _check_initializeprob_support(
-            _requested_initializeprob(discretization, get(kwargs, :build_initializeprob, nothing))
-        )
         try
             return _dae_problem(sys, tspan, discretization; kwargs...)
         catch e
             e isa InterruptException && rethrow(e)
+            e isa InitializeprobSupportError && rethrow(e)
             fallback || rethrow(e)
             @debug "Falling back to `mtkcompile` and an `ODEProblem`: $(sprint(showerror, e))"
         end
