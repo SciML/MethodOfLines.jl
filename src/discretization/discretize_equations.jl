@@ -137,7 +137,8 @@ function PDEBase.discretize_equation!(
     generate_extrap_eqs!(disc_state, pde, eqvar, s, derivweights, interiormap, bcmap)
     array_lift_bceqs!(disc_state, nbceqs, s)
     # corner values are only read by mixed derivative stencils
-    cornerweights = has_mixed_derivative(interiormap, s) ? derivweights : nothing
+    cornerweights = derivweights.advection_scheme isa HermiteScheme ||
+        has_mixed_derivative(interiormap, s) ? derivweights : nothing
     try
         vcat!(
             disc_state.bceqs,

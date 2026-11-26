@@ -468,22 +468,22 @@ end
 const _fused_operations = (+, -, *, /)
 
 """
-    FusedStencil{N, S, K}
+    FusedStencil{N, S, K, C}
 
 One elementwise expression tree over a box of size `S`, evaluated by a compiled loop
 (`kernel`) instead of nested broadcasts over slice copies. The loop applies the same
-operations in the same order, so the values are bit-for-bit those of the broadcasts. The
-node list is kept for scalarization.
+operations in the same order to the constants as given, and takes its element type from
+the value at the first point, so the values and the element type are those of the
+broadcasts. The node list is kept for scalarization.
 """
-struct FusedStencil{N, S, K} <: Function
+struct FusedStencil{N, S, K, C} <: Function
     kind::Vector{Symbol}
     operation_index::Vector{Int}
     children::Vector{Vector{Int}}
     source::Vector{Int}
     ranges::Vector{NTuple{N, UnitRange{Int}}}
-    value::Vector{Float64}
     symbolic_value::Vector{Any}
-    constant_arrays::Vector{Array{Float64, N}}
+    constant_arrays::C
     kernel::K
 end
 Base.size(::FusedStencil{N, S}) where {N, S} = S
@@ -496,7 +496,7 @@ function _fused_loop_expr(b, N, S, nargs)
     for n in eachindex(b.kind)
         k = b.kind[n]
         rhs = if k == :constant
-            b.value[n]
+            b.symbolic_value[n]
         elseif k == :shifted
             ix = b.ranges[n]
             Expr(:ref, A[b.source[n]], [:($(first(ix[d]) - 1) + $(is[d])) for d in 1:N]...)
@@ -521,6 +521,10 @@ function _fused_loop_expr(b, N, S, nargs)
         end
         push!(stmts, :($(v(n)) = $rhs))
     end
+    first_point = Expr(
+        :block, [:($(is[d]) = 1) for d in 1:N]..., stmts...,
+        :(out = Array{typeof($(v(length(b.kind)))), $N}(undef, $S))
+    )
     inner = Expr(:block, stmts..., :(out[$(is...)] = $(v(length(b.kind)))))
     loop = inner
     for d in 1:N
@@ -531,7 +535,8 @@ function _fused_loop_expr(b, N, S, nargs)
         )
     end
     return :(
-        function (out, C, $(A...))
+        function (C, $(A...))
+            $first_point
             @inbounds $loop
             return out
         end
@@ -539,9 +544,9 @@ function _fused_loop_expr(b, N, S, nargs)
 end
 
 function (op::FusedStencil{N, S})(As::Vararg{Any, K}) where {N, S, K}
-    T = promote_type(Float64, map(eltype, As)...)
-    out = Array{T, N}(undef, S)
-    return op.kernel(out, op.constant_arrays, As...)
+    all(a -> isconcretetype(eltype(a)), (As..., op.constant_arrays...)) &&
+        return op.kernel(op.constant_arrays, As...)
+    return map(I -> _fused_node_symbolic(op, As, length(op.kind), I), CartesianIndices(S))
 end
 
 SymbolicUtils.promote_symtype(::FusedStencil{N}, ::Type...) where {N} = Array{Real, N}
@@ -636,26 +641,23 @@ mutable struct _FusedStencilBuilder{N}
     children::Vector{Vector{Int}}
     source::Vector{Int}
     ranges::Vector{NTuple{N, UnitRange{Int}}}
-    value::Vector{Float64}
     symbolic_value::Vector{Any}
-    constant_arrays::Vector{Array{Float64, N}}
+    constant_arrays::Vector{Any}
     args::Vector{Any}
 end
 _FusedStencilBuilder(S::NTuple{N, Int}) where {N} = _FusedStencilBuilder{N}(
-    S, Symbol[], Int[], Vector{Int}[], Int[],
-    NTuple{N, UnitRange{Int}}[], Float64[], Any[], Array{Float64, N}[], Any[]
+    S, Symbol[], Int[], Vector{Int}[], Int[], NTuple{N, UnitRange{Int}}[], Any[], Any[], Any[]
 )
 
 function _push_fused_node!(
         b::_FusedStencilBuilder{N}, kind; operation_index = 0, children = Int[], source = 0,
-        ranges = ntuple(_ -> 1:0, N), value = 0.0, symbolic_value = value
+        ranges = ntuple(_ -> 1:0, N), symbolic_value = nothing
     ) where {N}
     push!(b.kind, kind)
     push!(b.operation_index, operation_index)
     push!(b.children, children)
     push!(b.source, source)
     push!(b.ranges, ranges)
-    push!(b.value, Float64(value))
     push!(b.symbolic_value, symbolic_value)
     return length(b.kind)
 end
@@ -665,19 +667,17 @@ function _fused_argument_index!(b, a)
     return p
 end
 
-_is_float64(c) = c isa Real && promote_type(typeof(c), Float64) === Float64 && Float64(c) == c
-
 function _fused_node!(b::_FusedStencilBuilder{N}, ex) where {N}
     ex = Symbolics.unwrap(ex)
     if !(ex isa SymbolicUtils.BasicSymbolic)
-        _is_float64(ex) || throw(ArgumentError("FusedStencil: constant $ex is not a Float64"))
-        return _push_fused_node!(b, :constant; value = ex, symbolic_value = ex)
+        ex isa Real || throw(ArgumentError("FusedStencil: constant $ex is not real"))
+        return _push_fused_node!(b, :constant; symbolic_value = ex)
     end
     if SymbolicUtils.isconst(ex)
         v = unwrap_const(ex)
-        _is_float64(v) && return _push_fused_node!(b, :constant; value = v, symbolic_value = v)
-        if v isa AbstractArray{<:Real} && size(v) == b.S && all(_is_float64, v)
-            push!(b.constant_arrays, Array{Float64, N}(v))
+        v isa Real && return _push_fused_node!(b, :constant; symbolic_value = v)
+        if v isa AbstractArray{<:Real} && size(v) == b.S
+            push!(b.constant_arrays, Array(v))
             return _push_fused_node!(b, :constant_array; source = length(b.constant_arrays))
         end
         throw(ArgumentError("FusedStencil: unsupported constant"))
@@ -721,13 +721,14 @@ function fuse_stencils(ex)
                 e isa ArgumentError || rethrow(e)
                 false
             end
-            if ok && count(==(:operation), b.kind) >= 1
+            if ok && count(==(:operation), b.kind) >= 1 && all(>(0), S)
                 N = length(S)
                 kern = RuntimeGeneratedFunctions.RuntimeGeneratedFunction(
                     @__MODULE__, @__MODULE__, _fused_loop_expr(b, N, S, length(b.args))
                 )
-                op = FusedStencil{N, S, typeof(kern)}(
-                    b.kind, b.operation_index, b.children, b.source, b.ranges, b.value, b.symbolic_value, b.constant_arrays, kern
+                C = Tuple(b.constant_arrays)
+                op = FusedStencil{N, S, typeof(kern), typeof(C)}(
+                    b.kind, b.operation_index, b.children, b.source, b.ranges, b.symbolic_value, C, kern
                 )
                 sh = SymbolicUtils.ShapeVecT(map(Base.UnitRange{Int} ∘ Base.OneTo, S))
                 return SymbolicUtils.term(op, b.args...; type = Array{Real, N}, shape = sh)

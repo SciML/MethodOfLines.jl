@@ -189,9 +189,10 @@ E_N = \max_i \left| u_i(T) - u^*(x_i, T) \right|,
 ```
 
 the maximum over the grid points ``x_i`` of a grid with ``N`` points per direction, including
-the boundary points. In 2D the four corner points are left out: no equation holds there (see
-[What values do the corners of my domain take?](@ref)). The observed order between two
-grids is
+the boundary points. The reported two-dimensional convergence errors exclude the four
+corners. For `HermiteScheme`, corners and edges shared by Dirichlet faces take the prescribed
+values where the boundary data can be evaluated (see [What values do the corners of my
+domain take?](@ref)). The observed order between two grids is
 
 ```math
 p = \frac{\log(E_{N_1} / E_{N_2})}{\log(h_1 / h_2)}, \qquad h = \frac{1}{N - 1}.
@@ -470,9 +471,12 @@ These throw an `ArgumentError`:
     `u(t, 0) ~ w(t, 0)`;
   - an automatic `HermiteScheme()` with `should_transform = false`;
   - an automatic `HermiteScheme()` for a system without a time variable;
-  - an automatic `HermiteScheme()` for a PDE with a spatial derivative of fourth or higher
-    order;
+  - an automatic `HermiteScheme()` for a PDE with a spatial derivative of a dependent
+    variable of fourth or higher order after symbolic expansion, such as
+    `Dx((1 + x) * Dx(Dx(Dx(u))))`;
   - Dirichlet conditions that are not linear in ``u``, such as `u(t, 0)^2 ~ 1`;
+  - a Dirichlet wall of ``u`` whose evolution equation has a second or higher derivative of
+    another variable that is periodic in that direction;
   - an explicit mapping without a direction (`u => vx`) for a variable of more than one
     spatial dimension;
   - an explicit mapping whose variable or partner is not a dependent variable of the PDE

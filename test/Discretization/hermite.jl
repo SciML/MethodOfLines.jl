@@ -2,6 +2,7 @@ using Test
 using DomainSets
 using ModelingToolkit
 using Symbolics
+using ForwardDiff
 using MethodOfLines
 using OrdinaryDiffEq
 using SciMLBase: DAEProblem, successful_retcode
@@ -705,20 +706,37 @@ end
     @test isapprox(werr(system, 41), e41; rtol = 1.0e-3)
 end
 
-@testset "FusedStencil keeps only exact Float64 constants" begin
-    b = MethodOfLines._FusedStencilBuilder((3,))
-    MethodOfLines._fused_node!(b, 2.0)
-    @test b.value[end] == 2.0
-    @test_throws ArgumentError MethodOfLines._fused_node!(b, π)
-    c = big"1.0000000000000000000000001"
-    @test_throws ArgumentError MethodOfLines._fused_node!(b, c)
-    @test_throws ArgumentError MethodOfLines._fused_node!(b, Symbolics.unwrap(Num(c)))
-    @test_throws ArgumentError MethodOfLines._fused_node!(b, 1 // 3)
-    @test_throws ArgumentError MethodOfLines._fused_node!(b, big"1.0")
+@testset "FusedStencil matches broadcast in value and element type" begin
     SU = Symbolics.SymbolicUtils
-    MethodOfLines._fused_node!(b, SU.Const{SU.SymReal}(ones(3)))
-    @test b.kind[end] == :constant_array
-    @test_throws ArgumentError MethodOfLines._fused_node!(b, SU.Const{SU.SymReal}(ones(BigFloat, 3)))
+    @variables A[1:3]
+    fused(g) = SU.operation(Symbolics.unwrap(MethodOfLines.fuse_stencils(Symbolics.unwrap(g(A)))))
+    c = Float32(2^25)
+    b = big"1.0000000000000000000000001"
+    dual = [ForwardDiff.Dual{Nothing}(1.0, 1.0) for _ in 1:3]
+    for (a, g) in (
+            (ones(Float32, 3), A -> (A .+ c) .- c),
+            (ones(Float32, 3), A -> (A .+ fill(c, 3)) .- fill(c, 3)),
+            (Float32[1, 2, 3], A -> 2 .* A .+ 1),
+            (ones(3), A -> (A .+ c) .- c),
+            (ones(3), A -> (A .+ fill(2.0^60, 3)) .- 2.0^60),
+            (dual, A -> (A .+ 2.0^60) .- 2.0^60),
+            (ones(BigFloat, 3), A -> (A .+ b) .- 1),
+            (ones(BigFloat, 3), A -> (A .+ ones(BigFloat, 3)) .- 1),
+        )
+        op = fused(g)
+        @test op isa MethodOfLines.FusedStencil
+        r = @inferred op(a)
+        @test isequal(r, g(a))
+        @test eltype(r) == eltype(g(a))
+    end
+    r = fused(A -> 2 .* A .+ 1)(Real[1.0f0, 2.0f0, 3.0f0])
+    @test r == Float32[3, 5, 7] && eltype(r) == Float32
+    mixed = Real[1, big"2.1", 1 // 3]
+    for a in (ones(Int, 3), ones(Float32, 3))
+        r = fused(A -> A .+ mixed)(a)
+        @test isequal(r, a .+ mixed) && eltype(r) == eltype(a .+ mixed)
+    end
+    @test_throws ArgumentError MethodOfLines._fused_node!(MethodOfLines._FusedStencilBuilder((3,)), 1 + 2im)
 end
 
 @testset "HermiteScheme rejects invalid explicit mappings" begin
@@ -844,11 +862,87 @@ end
     )
     err = @test_throws ArgumentError discretize(poisson, MOLFiniteDifference([x => 0.1], nothing; advection_scheme = HermiteScheme()))
     @test occursin("time-dependent", sprint(showerror, err.value))
-    beam = PDESystem(
-        Dt(u(t, x)) ~ -Dx(Dx(Dx(Dx(u(t, x))))),
-        [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0, Dx(Dx(u(t, 0))) ~ 0.0, Dx(Dx(u(t, 1))) ~ 0.0],
-        [t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]; name = :beam
+    D2(f) = Dx(Dx(f))
+    for rhs in (-D2(D2(u(t, x))), -Dx((1 + x) * Dx(D2(u(t, x)))), -D2((1 + t) * D2(u(t, x))))
+        beam = PDESystem(
+            Dt(u(t, x)) ~ rhs,
+            [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0, Dx(Dx(u(t, 0))) ~ 0.0, Dx(Dx(u(t, 1))) ~ 0.0],
+            [t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]; name = :beam
+        )
+        err = @test_throws ArgumentError discretize(beam, MOLFiniteDifference([x => 0.1], t; advection_scheme = HermiteScheme()))
+        @test occursin("up to third order", sprint(showerror, err.value))
+    end
+end
+
+@testset "HermiteScheme results do not depend on the written form of the PDE" begin
+    @parameters t x
+    @variables u(..)
+    Dt, Dx = Differential(t), Differential(x)
+    D2(f) = Dx(Dx(f))
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
+    walls = [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    function solved(rhs, ao)
+        @named sys = PDESystem(Dt(u(t, x)) ~ rhs, walls, domains, [t, x], [u(t, x)])
+        disc = MOLFiniteDifference([x => 1 / 16], t; approx_order = ao, advection_scheme = HermiteScheme())
+        sol = solve(discretize(sys, disc); saveat = [0.05], abstol = 1.0e-13, reltol = 1.0e-13)
+        @test successful_retcode(sol)
+        return sol, collect(disc.advection_scheme.diffusive)
+    end
+    forced(t, x) = (π^2 + (1 - π^2) * exp(-π^2 * t)) * sin(π * x)
+    for rhs in (D2(u(t, x)) + D2(D2(sin(π * x))), D2(u(t, x)) + π^4 * sin(π * x))
+        sol, _ = solved(rhs, 2)
+        @test maximum(abs, sol[u(t, x)][end, :] .- forced.(0.05, sol[x])) < 1.0e-5
+    end
+    uexact(t, x) = exp(-π^2 * (t + t^2 / 2)) * sin(π * x)
+    (fsol, ftag), (esol, etag) = solved(Dx((1 + t) * Dx(u(t, x))), 6), solved((1 + t) * D2(u(t, x)), 6)
+    @test isequal(ftag, etag)
+    ferr = maximum(abs, fsol[u(t, x)][end, :] .- uexact.(0.05, fsol[x]))
+    eerr = maximum(abs, esol[u(t, x)][end, :] .- uexact.(0.05, esol[x]))
+    @test max(ferr, eerr) < 1.0e-10
+    @test isapprox(ferr, eerr; rtol = 1.0e-3)
+end
+
+@testset "HermiteScheme explicit 2D partners take Dirichlet corners" begin
+    @parameters t x y
+    @variables u(..) v(..) w(..)
+    Dt, Dy = Differential(t), Differential(y)
+    walls(f, c) = [f(t, 0, y) ~ c, f(t, 1, y) ~ c, f(t, x, 0) ~ c, f(t, x, 1) ~ c]
+    @named sys = PDESystem(
+        [Dt(u(t, x, y)) ~ Dy(v(t, x, y)), Dt(v(t, x, y)) ~ 0, Dt(w(t, x, y)) ~ 0],
+        [u(0, x, y) ~ 1; v(0, x, y) ~ 0; w(0, x, y) ~ 0; walls(u, 1); walls(v, 0); walls(w, 0)],
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+        [t, x, y], [u(t, x, y), v(t, x, y), w(t, x, y)]
     )
-    err = @test_throws ArgumentError discretize(beam, MOLFiniteDifference([x => 0.1], t; advection_scheme = HermiteScheme()))
-    @test occursin("up to third order", sprint(showerror, err.value))
+    disc = MOLFiniteDifference(
+        [x => 0.125, y => 0.125], t; advection_scheme = HermiteScheme(deriv_var = [(u, x) => v, (u, y) => w])
+    )
+    sol = solve(discretize(sys, disc); saveat = [0.1], abstol = 1.0e-10, reltol = 1.0e-10)
+    @test successful_retcode(sol)
+    @test maximum(abs, sol[u(t, x, y)][end, :, :] .- 1) < 1.0e-10
+end
+
+@testset "HermiteScheme wall conditions with derivatives of another variable" begin
+    @parameters t x
+    @variables u(..) p(..)
+    Dt, Dx = Differential(t), Differential(x)
+    pexact(t, x) = exp(-π^2 * t) * cos(π * x)
+    ueq = Dt(u(t, x)) ~ Dx(Dx(u(t, x))) + Dx(Dx(p(t, x))) + π^2 * exp(-π^2 * t) * cos(π * x)
+    peq = Dt(p(t, x)) ~ Dx(Dx(p(t, x)))
+    bcs = [
+        u(0, x) ~ 0, p(0, x) ~ cos(π * x), u(t, 0) ~ 0, u(t, 1) ~ 0,
+        Dx(p(t, 0)) ~ 0, Dx(p(t, 1)) ~ 0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)]
+    disc() = MOLFiniteDifference([x => 1 / 16], t; advection_scheme = HermiteScheme())
+    for (eqs, dvs) in (([ueq, peq], [u(t, x), p(t, x)]), ([peq, ueq], [p(t, x), u(t, x)]))
+        @named sys = PDESystem(eqs, bcs, domains, [t, x], dvs)
+        sol = solve(discretize(sys, disc()); saveat = [0.05], abstol = 1.0e-10, reltol = 1.0e-10)
+        @test successful_retcode(sol)
+        @test maximum(abs, sol[u(t, x)][end, :]) < 1.0e-5
+        @test maximum(abs, sol[p(t, x)][end, :] .- pexact.(0.05, sol[x])) < 1.0e-5
+    end
+    pbcs = [u(0, x) ~ 0, p(0, x) ~ cos(2π * x), u(t, 0) ~ 0, u(t, 1) ~ 0, p(t, 0) ~ p(t, 1)]
+    @named periodic = PDESystem([ueq, peq], pbcs, domains, [t, x], [u(t, x), p(t, x)])
+    err = @test_throws ArgumentError discretize(periodic, disc())
+    @test occursin("no condition on that wall", sprint(showerror, err.value))
 end
