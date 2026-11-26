@@ -15,8 +15,16 @@ function PDEBase.interface_errors(
 end
 
 # Single predicate shared by check_boundarymap and validate_interface_orders.
-function mismatched_interface_dxs(b, discretization::MOLFiniteDifference)
-    return discretization.dxs[Num(b.x)] != discretization.dxs[Num(b.x2)]
+# Integer point counts are compared through the steps they imply on each domain, so equal
+# counts on domains of different length are mismatched.
+# Without `intervals` (the legacy 2-arg `check_boundarymap`) the raw values are compared.
+function mismatched_interface_dxs(b, intervals, discretization::MOLFiniteDifference)
+    dx1 = discretization.dxs[Num(b.x)]
+    dx2 = discretization.dxs[Num(b.x2)]
+    (intervals === nothing || dx1 isa AbstractVector || dx2 isa AbstractVector) && return dx1 != dx2
+    step1 = prepare_dx(dx1, intervals[b.x], discretization.grid_align)
+    step2 = prepare_dx(dx2, intervals[b.x2], discretization.grid_align)
+    return !isapprox(step1, step2; rtol = 1.0e-8)
 end
 
 function _interface_physical_coords(b, grid1, grid2)
@@ -35,16 +43,16 @@ end
 function PDEBase.check_boundarymap(
         boundarymap, v::PDEBase.VariableMap, discretization::MOLFiniteDifference
     )
-    return _check_interface_boundarymap(boundarymap, discretization)
+    return _check_interface_boundarymap(boundarymap, v.intervals, discretization)
 end
 
 # Kept for backwards compatibility with direct 2-arg calls; the PDEBase
 # discretization pipeline invokes the 3-arg hook above.
 function PDEBase.check_boundarymap(boundarymap, discretization::MOLFiniteDifference)
-    return _check_interface_boundarymap(boundarymap, discretization)
+    return _check_interface_boundarymap(boundarymap, nothing, discretization)
 end
 
-function _check_interface_boundarymap(boundarymap, discretization::MOLFiniteDifference)
+function _check_interface_boundarymap(boundarymap, intervals, discretization::MOLFiniteDifference)
     bs = filter_interfaces(flatten_vardict(boundarymap))
     ascheme = discretization.advection_scheme
     for b in bs
@@ -57,7 +65,7 @@ function _check_interface_boundarymap(boundarymap, discretization::MOLFiniteDiff
                 (dx1 isa AbstractVector || dx2 isa AbstractVector)
             throw(ArgumentError("UpwindScheme(order=$(ascheme.order)) is not yet supported with interface or periodic boundary conditions on nonuniform grids, please use the default first order `UpwindScheme()`."))
         end
-        mismatched_interface_dxs(b, discretization) || continue
+        mismatched_interface_dxs(b, intervals, discretization) || continue
         if dx1 isa AbstractVector && dx2 isa AbstractVector
             # NU FunctionalScheme uses exact interface coordinates (bcoord) for advection;
             # dx match waived. Non-advection orders are rejected by validate_interface_orders.

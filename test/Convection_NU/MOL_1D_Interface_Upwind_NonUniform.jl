@@ -748,3 +748,51 @@ end
     outflow_slope = (sol_u2[end] - sol_u2[end - 1]) / (xs2[end] - xs2[end - 1])
     @test abs(outflow_slope) < 5.0
 end
+
+function build_linear_advection_interface_system(x2hi)
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+    eqs = [
+        Dt(u1(t, x1)) ~ -Dx1(u1(t, x1)),
+        Dt(u2(t, x2)) ~ -Dx2(u2(t, x2)),
+    ]
+    xm = 0.5
+    bcs = [
+        u1(0.0, x1) ~ x1,
+        u2(0.0, x2) ~ x2,
+        u1(t, 0.0) ~ -t,
+        u1(t, xm) ~ u2(t, xm),
+        u2(t, x2hi) ~ x2hi - t,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.2),
+        x1 ∈ Interval(0.0, xm),
+        x2 ∈ Interval(xm, x2hi),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)],
+    )
+    return pdesys
+end
+
+@testset "Equal integer point counts on unequal-length domains are mismatched" begin
+    pdesys = build_linear_advection_interface_system(1.5)
+    disc = MOLFiniteDifference(
+        [x1 => 9, x2 => 9], t; advection_scheme = UpwindScheme(),
+    )
+    @test_throws ArgumentError get_discrete(pdesys, disc)
+    @test_throws ArgumentError ode_discretize(pdesys, disc)
+end
+
+@testset "Equal integer point counts on equal-length domains solve exactly" begin
+    pdesys = build_linear_advection_interface_system(1.0)
+    disc = MOLFiniteDifference(
+        [x1 => 11, x2 => 11], t; advection_scheme = UpwindScheme(),
+    )
+    prob = ode_discretize(pdesys, disc)
+    sol = solve(prob, SSPRK33(); dt = 0.005, saveat = [0.2])
+    for (u, x) in ((u1(t, x1), x1), (u2(t, x2), x2))
+        @test maximum(abs.(sol[u][end, :] .- (sol[x] .- 0.2))) < 1.0e-8
+    end
+end
