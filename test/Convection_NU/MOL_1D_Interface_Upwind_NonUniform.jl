@@ -831,3 +831,73 @@ end
     intervals = Dict(x1 => (1.0, 1.001), x2 => (1.001, 1.002))
     @test !MethodOfLines.mismatched_interface_dxs(b, intervals, narrowdisc)
 end
+
+function build_heat_interface_system(x2hi)
+    Dt = Differential(t)
+    Dxx1 = Differential(x1)^2
+    Dxx2 = Differential(x2)^2
+    eqs = [
+        Dt(u1(t, x1)) ~ Dxx1(u1(t, x1)),
+        Dt(u2(t, x2)) ~ Dxx2(u2(t, x2)),
+    ]
+    bcs = [
+        u1(0.0, x1) ~ x1,
+        u2(0.0, x2) ~ x2,
+        u1(t, 0.0) ~ 0.0,
+        u1(t, 0.5) ~ u2(t, 0.5),
+        u2(t, x2hi) ~ x2hi,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.2),
+        x1 ∈ Interval(0.0, 0.5),
+        x2 ∈ Interval(0.5, x2hi),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)],
+    )
+    return pdesys
+end
+
+@testset "Unequal integer-derived steps are rejected beyond endpoint rounding" begin
+    counts = Pair[x1 => 9, x2 => 17]
+    for hi in (1.5 + 2.0^-18, 1.5 + 2.0^-30)
+        disc = MOLFiniteDifference(counts, t)
+        pdesys = build_heat_interface_system(hi)
+        @test_throws ArgumentError get_discrete(pdesys, disc)
+        @test_throws ArgumentError symbolic_discretize(pdesys, disc)
+    end
+    pdesys = build_heat_interface_system(1.5)
+    disc = MOLFiniteDifference(counts, t)
+    @test get_discrete(pdesys, disc) isa Dict
+    @test symbolic_discretize(pdesys, disc) isa Tuple
+end
+
+@testset "Step that leaves a short final interval is rejected early" begin
+    steps = Pair[x1 => 9, x2 => 0.0625]
+    pdesys = build_heat_interface_system(1.5 + 2.0^-18)
+    disc = MOLFiniteDifference(steps, t)
+    @test_throws ArgumentError get_discrete(pdesys, disc)
+    @test_throws ArgumentError symbolic_discretize(pdesys, disc)
+    err = try
+        get_discrete(pdesys, disc)
+    catch e
+        e
+    end
+    @test occursin("x2", sprint(showerror, err)) && occursin("final interval", sprint(showerror, err))
+
+    pdesys = build_heat_interface_system(1.5)
+    @test get_discrete(pdesys, disc) isa Dict
+    @test symbolic_discretize(pdesys, disc) isa Tuple
+end
+
+@testset "Float32 and Float16 endpoint rounding keeps equal counts matched" begin
+    b = (x = x1, x2 = x2)
+    discs = MOLFiniteDifference([x1 => 9, x2 => 9], t)
+    for (iv1, iv2) in (
+            ((1000.0f0, 1000.1f0), (1000.1f0, 1000.2f0)),
+            ((Float16(0.1), Float16(0.2)), (Float16(0.2), Float16(0.3))),
+        )
+        intervals = Dict(x1 => iv1, x2 => iv2)
+        @test !MethodOfLines.mismatched_interface_dxs(b, intervals, discs)
+    end
+end

@@ -168,3 +168,5 @@ domains = [t ∈ Interval(0.0, 0.15),
 Note that if you want to use a higher order interface condition, this may not work if you have no simple condition of the form `c1(t, 0.5) ~ c2(t, 0.5)`.
 
 Interfaces require the connected variables to use the same step size, except when `WENOScheme()` is used with nonuniform grid vectors supplied for both connected variables, in which case the grids may differ: advection stencils that cross the interface are evaluated with the exact physical coordinates of the neighbouring grid. This exception covers first-order (advection) derivatives only — systems containing higher-order spatial derivatives (e.g. diffusion) in the connected variables are rejected with an error at discretization time.
+
+Numeric grid specifications of connected variables must describe uniform grids. Two integer point counts are compared through the steps they imply on each domain (equal counts on domains of different length are rejected), and a scalar step must divide its domain exactly: a step that would leave a short final interval is rejected with an `ArgumentError` naming the variable.

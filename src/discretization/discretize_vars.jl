@@ -260,13 +260,19 @@ function Base.getproperty(s::DiscreteSpace, p::Symbol)
 end
 
 """
+The numeric grid specification `dx` (a step or a node vector, after `prepare_dx`) on `xdomain`.
+`discretize_space` appends the upper end of the domain when this grid stops short of it.
+"""
+numeric_grid(dx, xdomain) = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
+
+"""
 Discretize space
 """
 @inline function discretize_space(x̄, vars, discretization)
     axies = map(x̄) do x
         xdomain = vars.intervals[x]
         dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
-        discx = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
+        discx = numeric_grid(dx, xdomain)
         xhigh = xdomain[2]
         if discx[end] != xhigh
             @warn "d$x for $x does not divide domain exactly, adding grid point at $x = $(xhigh))."

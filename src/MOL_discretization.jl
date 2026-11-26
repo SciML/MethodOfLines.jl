@@ -14,10 +14,18 @@ function PDEBase.interface_errors(
     return
 end
 
+# Steps implied by an integer point count carry the rounding of both endpoints, the span
+# subtraction, the division by the number of intervals and the step itself.
+function derived_step_uncertainty(step, xdomain)
+    lo, hi = float.(xdomain)
+    intervals = round(Int, (hi - lo) / step)
+    return (eps(lo) + eps(hi)) / intervals + eps(float(step))
+end
+
 # Single predicate shared by check_boundarymap and validate_interface_orders.
 # Integer point counts are compared through the steps they imply on each domain, so equal
-# counts on domains of different length are mismatched. Only two derived steps get a tolerance
-# (1e-5, covering Float32 and endpoint round-off); a user-supplied scalar step must match exactly.
+# counts on domains of different length are mismatched. Two derived steps may differ by
+# their rounding uncertainty; a user-supplied scalar step must match exactly.
 # Without `intervals` (the legacy 2-arg `check_boundarymap`) the raw values are compared.
 function mismatched_interface_dxs(b, intervals, discretization::MOLFiniteDifference)
     dx1 = discretization.dxs[Num(b.x)]
@@ -26,7 +34,30 @@ function mismatched_interface_dxs(b, intervals, discretization::MOLFiniteDiffere
     step1 = prepare_dx(dx1, intervals[b.x], discretization.grid_align)
     step2 = prepare_dx(dx2, intervals[b.x2], discretization.grid_align)
     (dx1 isa Integer && dx2 isa Integer) || return step1 != step2
-    return !isapprox(step1, step2; rtol = 1.0e-5)
+    tolerance = derived_step_uncertainty(step1, intervals[b.x]) +
+        derived_step_uncertainty(step2, intervals[b.x2])
+    return abs(step1 - step2) > tolerance
+end
+
+# A uniform step that stops short of the upper end makes `discretize_space` append a point,
+# leaving a short final interval that the uniform interface stencils cannot represent. A
+# shortfall within endpoint rounding is the same grid, so it is left alone.
+function check_interface_grid_fill(b, intervals, discretization::MOLFiniteDifference)
+    (intervals === nothing || isequal(b.x, b.x2)) && return
+    for x in (b.x, b.x2)
+        dx = discretization.dxs[Num(x)]
+        dx isa AbstractVector && continue
+        xdomain = intervals[x]
+        step = prepare_dx(dx, xdomain, discretization.grid_align)
+        short = xdomain[2] - numeric_grid(step, xdomain)[end]
+        short > 8 * eps(float(max(abs(xdomain[1]), abs(xdomain[2])))) || continue
+        throw(
+            ArgumentError(
+                "The step size $step of $x does not divide its domain $(xdomain) exactly, so the grid would gain a final interval of length $short at the interface with $(x === b.x ? b.x2 : b.x). Please choose a step that divides the domain, or an integer point count."
+            )
+        )
+    end
+    return
 end
 
 function _interface_physical_coords(b, grid1, grid2)
@@ -67,6 +98,7 @@ function _check_interface_boundarymap(boundarymap, intervals, discretization::MO
                 (dx1 isa AbstractVector || dx2 isa AbstractVector)
             throw(ArgumentError("UpwindScheme(order=$(ascheme.order)) is not yet supported with interface or periodic boundary conditions on nonuniform grids, please use the default first order `UpwindScheme()`."))
         end
+        check_interface_grid_fill(b, intervals, discretization)
         mismatched_interface_dxs(b, intervals, discretization) || continue
         if dx1 isa AbstractVector && dx2 isa AbstractVector
             # NU FunctionalScheme uses exact interface coordinates (bcoord) for advection;
