@@ -3,6 +3,7 @@ using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, Nonli
     DomainSets
 using ModelingToolkit: Differential
 using SciMLBase
+using OrdinaryDiffEqLowOrderRK: Euler
 include(joinpath(@__DIR__, "..", "shared", "ode_discretize.jl"))
 
 @testset "Test 00a: Test solution interface, time dependent" begin
@@ -217,4 +218,91 @@ end
     sol = SciMLBase.wrap_sol(raw)
     discu = sol.disc_data.discretespace.discvars[sol.disc_data.discretespace.ū[1]]
     @test [raw[discu[I]] for I in CartesianIndices(discu)] ≈ sol[u(x, y)] atol = 1.0e-12
+end
+
+@testset "Test 12: interpolation when only the final time is saved" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ cos(x), u(t, 0) ~ exp(-t), u(t, 1) ~ exp(-t) * cos(1)]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    prob = ode_discretize(pdesys, MOLFiniteDifference([x => 0.1], t))
+    full = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    for kwargs in ((; save_on = false, save_start = false), (; saveat = [1.0]), (; save_everystep = false, save_start = false))
+        sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, kwargs...)
+        @test length(sol.t) == 1
+        @test sol(1.0, 0.3) ≈ full(1.0, 0.3) atol = 1.0e-6
+        @test sol(1.0, 0.3; dv = u(t, x)) ≈ full(1.0, 0.3; dv = u(t, x)) atol = 1.0e-6
+        @test sol(1.0, :) ≈ full(1.0, :) atol = 1.0e-6
+        @test_throws ArgumentError sol(0.5, 0.3)
+        @test size(sol(Float64[], :; dv = u(t, x))) == (0, 11)
+        @test sol([1.0], :; dv = u(t, x)) ≈ full([1.0], :; dv = u(t, x)) atol = 1.0e-6
+        @test sol(:, :; dv = u(t, x)) ≈ full([1.0], :; dv = u(t, x)) atol = 1.0e-6
+        @test_throws MethodError sol(fill(1.0, 2, 3), 0.3; dv = u(t, x))
+        @test_throws MethodError sol(fill(1.0), 0.3; dv = u(t, x))
+    end
+end
+
+@testset "Test 12a: a single saved time with a field of time only" begin
+    @parameters t x
+    @variables u(..) v(..)
+    Dt = Differential(t)
+    eqs = [Dt(u(t, x)) ~ (Differential(x)^2)(u(t, x)) + v(t), Dt(v(t)) ~ -v(t)]
+    bcs = [u(0, x) ~ 0, v(0) ~ 1, u(t, 0) ~ 0, u(t, 1) ~ 0]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x], [u(t, x), v(t)])
+    prob = ode_discretize(pdesys, MOLFiniteDifference([x => 0.1], t))
+    full = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10)
+    sol = solve(prob, Tsit5(); abstol = 1.0e-10, reltol = 1.0e-10, saveat = [1.0])
+    @test sol(1.0, 0.3) ≈ full(1.0, 0.3) atol = 1.0e-6
+    @test sol(1.0; dv = v(t)) ≈ full(1.0; dv = v(t)) atol = 1.0e-6
+    @test_throws MethodError sol(1.0, 0.3; dv = v(t))
+end
+
+@testset "Test 12b: a single saved integer time" begin
+    @parameters t x
+    @variables u(..)
+    eq = Differential(t)(u(t, x)) ~ (Differential(x)^2)(u(t, x))
+    bcs = [u(0, x) ~ 1, u(t, 0) ~ 1, u(t, 1) ~ 1]
+    domains = [t ∈ Interval(0, 1), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    prob = ode_discretize(pdesys, MOLFiniteDifference([x => 0.1], t))
+    sol = solve(prob, Euler(); dt = 1, save_start = false, save_everystep = false)
+    @test eltype(sol.t) <: Integer
+    @test sol(1, 0.3) ≈ [1.0]
+end
+
+@testset "Test 13: a single saved time on a staggered grid extrapolates in space only" begin
+    @parameters t x y
+    @variables Ez(..) Hx(..) Hy(..)
+    Dt, Dx, Dy = Differential(t), Differential(x), Differential(y)
+    X = (t, x, y)
+    eqs = [
+        Dt(Ez(X...)) ~ Dx(Hy(X...)) - Dy(Hx(X...)), Dt(Hx(X...)) ~ -Dy(Ez(X...)),
+        Dt(Hy(X...)) ~ Dx(Ez(X...)),
+    ]
+    bcs = [
+        Ez(0, x, y) ~ sin(pi * x) * sin(pi * y), Hx(0, x, y) ~ 0, Hy(0, x, y) ~ 0,
+        Ez(t, 0, y) ~ 0, Ez(t, 1, y) ~ 0, Ez(t, x, 0) ~ 0, Ez(t, x, 1) ~ 0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.01), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+    @named tm = PDESystem(eqs, bcs, domains, [t, x, y], [Ez(X...), Hx(X...), Hy(X...)])
+    disc = MOLFiniteDifference(
+        [x => 0.125, y => 0.125], t; grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = [Hx(X...) => y, Hy(X...) => x]
+    )
+    prob = DAEProblem(tm, disc)
+    full = solve(prob; saveat = [0.0, 0.002])
+    for t0 in (0.0, 0.002)
+        sol = solve(prob; saveat = [t0])
+        for dv in (Ez(X...), Hx(X...), Hy(X...))
+            for (xp, yp) in ((0.0, 0.0), (0.3, 0.0), (1.0, 1.0), (0.5, 0.3))
+                @test isfinite(sol(t0, xp, yp; dv))
+                @test sol(t0, xp, yp; dv) ≈ full(t0, xp, yp; dv) atol = 1.0e-6
+            end
+        end
+    end
 end
