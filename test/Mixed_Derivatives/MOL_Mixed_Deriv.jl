@@ -96,7 +96,7 @@ end
     Dyy = Differential(y)^2
     Dxy = Differential(x) * Differential(y)
 
-    eq = [Dxx(u(x, y)) + Dyy(u(x, y)) + Dxy(u(x, y)) ~ 0]
+    eq = [Dxx(u(x, y)) + Dyy(u(x, y)) + Dxy(u(x, y)) ~ 1]
 
     bcs = [
         u(0, y) ~ 0,
@@ -120,21 +120,21 @@ end
     dx = 0.1
     dy = 0.08
 
-    disc = MOLFiniteDifference([x => 20, y => 20], order = 4)
+    disc = MOLFiniteDifference([x => 20, y => 20], approx_order = 2)
 
     prob = discretize(pdesys, disc)
 
     sol = solve(prob, NewtonRaphson())
 
-    @test_broken SciMLBase.successful_retcode(sol)
+    @test SciMLBase.successful_retcode(sol)
+
+    grid = range(0.0, 1.0, length = 20)
+    @test sol[x] ≈ grid
+    @test sol[y] ≈ grid
 
     solu = sol[u(x, y)]
-    solx = sol[x]
-    soly = sol[y]
-
-    asol = [analytic_u(x, y) for x in solx[1:(end - 1)], y in soly[1:(end - 1)]]
-
-    @test_broken solu[1:(end - 1), 1:(end - 1)] ≈ asol atol = 1.0e-3
+    exact = [analytic_u(xi, yi) for xi in grid, yi in grid]
+    @test maximum(abs, (solu .- exact)[2:(end - 1), 2:(end - 1)]) < sqrt(eps(Float64))
 end
 
 @testset "Wave Equation u_tt ~ u_xx" begin
