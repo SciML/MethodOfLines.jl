@@ -26,7 +26,7 @@ function mismatched_interface_dxs(b, intervals, discretization::MOLFiniteDiffere
     step1 = prepare_dx(dx1, intervals[b.x], discretization.grid_align)
     step2 = prepare_dx(dx2, intervals[b.x2], discretization.grid_align)
     (dx1 isa Integer && dx2 isa Integer) || return step1 != step2
-    return !isapprox(step1, step2; rtol = 100 * max(eps(float(typeof(step1))), eps(float(typeof(step2)))))
+    return !isapprox(step1, step2; rtol = min(100 * max(eps(float(typeof(step1))), eps(float(typeof(step2)))), 1.0e-4))
 end
 
 function _interface_physical_coords(b, grid1, grid2)
