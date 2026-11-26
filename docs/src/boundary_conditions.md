@@ -167,7 +167,7 @@ domains = [t ∈ Interval(0.0, 0.15),
 
 Note that if you want to use a higher order interface condition, this may not work if you have no simple condition of the form `c1(t, 0.5) ~ c2(t, 0.5)`.
 
-Interfaces require both connected variables to use the same grid representation. Use matching scalar grid specifications (equal step sizes or equal integer point counts), or supply explicit node vectors on both sides. Unequal explicit node vectors are supported for first-order (advection) derivatives: with `UpwindScheme()` use first-order upwinding and matching physical interface coordinates, and `WENOScheme()` is supported as well. Advection stencils that cross the interface are evaluated with the exact physical coordinates of the neighbouring grid. Systems containing higher-order spatial derivatives (e.g. diffusion) in the connected variables are rejected with an error at discretization time when the grids are unequal.
+Interfaces require both connected variables to use the same grid representation. Use matching scalar grid specifications (equal step sizes, or equal integer point counts on intervals of equal length so that the resulting steps match), or supply explicit node vectors on both sides. Unequal explicit node vectors are supported for first-order (advection) derivatives: with `UpwindScheme()` use first-order upwinding and matching physical interface coordinates, and `WENOScheme()` is supported as well. Advection stencils that cross the interface are evaluated with the exact physical coordinates of the neighbouring grid. Systems containing higher-order spatial derivatives (e.g. diffusion) in the connected variables are rejected with an error at discretization time when the grids are unequal.
 
 ## Supported conditions
 
