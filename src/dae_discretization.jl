@@ -198,9 +198,6 @@ the problem is initialized, which `solve` does. When the option is left unspecif
 discretizing such a system emits a warning naming the opt-in; passing
 `build_initializeprob = false` explicitly opts out and silences it. The initialization
 problem overrides a `remake(prob; u0 = ...)`, which is why it is not on by default.
-`build_initializeprob = true` requires ModelingToolkitBase >= 1.77.1 (checked against
-1.73.0 to 1.81.0; earlier releases cannot compile the initialization system), and
-raises an `InitializeprobSupportError` on older ones when the DAE path is taken.
 
 The solution is a `PDETimeSeriesSolution`, the same wrapper [`discretize`](@ref)
 produces, so it is indexed and interpolated by the `PDESystem`'s own variables:
@@ -224,43 +221,11 @@ function SciMLBase.DAEProblem(
     )
 end
 
-"""
-    MIN_INITIALIZEPROB_VERSION
-
-First `ModelingToolkitBase` release whose initialization system compiles for the
-`DAEProblem`s MethodOfLines builds, so that `build_initializeprob = true` yields a
-`DAEProblem` whose `remake(prob; p = ...)` re-solves the initial condition. Verified
-against 1.73.0, 1.74.0, 1.76.0 and 1.77.0 (all raise `OperatorIndepvarMismatchError`)
-and 1.77.1, 1.77.3, 1.78.0 and 1.81.0 (all work).
-"""
-const MIN_INITIALIZEPROB_VERSION = v"1.77.1"
-
 # A per-call keyword takes precedence over the one stored on the discretization;
 # `nothing` means neither was given.
 function _requested_initializeprob(discretization::MOLDiscretization, per_call)
     return per_call === nothing ?
         get(discretization.kwargs, :build_initializeprob, nothing) : per_call
-end
-
-# Distinct from `ArgumentError` so `discretize` never mistakes it for a system that
-# merely cannot be posed as a DAE and falls back to an `ODEProblem`.
-struct InitializeprobSupportError <: Exception
-    installed::VersionNumber
-end
-
-function Base.showerror(io::IO, e::InitializeprobSupportError)
-    return print(
-        io, "InitializeprobSupportError: `build_initializeprob = true` requires ",
-        "ModelingToolkitBase >= $MIN_INITIALIZEPROB_VERSION; this environment has ",
-        "$(e.installed). Update ModelingToolkitBase, or drop the option."
-    )
-end
-
-function _check_initializeprob_support(requested)
-    installed = pkgversion(ModelingToolkitBase)
-    requested === true && installed < MIN_INITIALIZEPROB_VERSION &&
-        throw(InitializeprobSupportError(installed))
-    return nothing
 end
 
 """
@@ -295,7 +260,6 @@ function _dae_problem(
     metadata = getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing)
     op = _dae_operating_point(sys, metadata.u0, t)
     requested = _requested_initializeprob(discretization, build_initializeprob)
-    _check_initializeprob_support(requested)
     requested === nothing && _has_parameter(metadata.u0) && @warn(
         "An initial condition depends on a parameter, so `remake(prob; p = ...)` will not update it; pass `build_initializeprob = true` to `discretize` to recompute it from the new parameters (this overrides a `remake(prob; u0 = ...)`). Pass `build_initializeprob = false` to silence this warning."
     )

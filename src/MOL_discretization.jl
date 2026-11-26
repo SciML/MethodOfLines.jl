@@ -247,11 +247,7 @@ those whose initialization equations `BrownFullBasicInit` would not honour. Thos
 back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations at the
 `System` level. Pass `fallback = false` to make that an error instead.
 
-Pass `build_initializeprob = true` (here or on the discretization) so that
-`remake(prob; p = ...)` recomputes initial conditions that depend on parameters;
-`false` opts out explicitly, and leaving it unspecified warns when such a condition
-exists. `true` requires ModelingToolkitBase >= 1.77.1 and throws an `InitializeprobSupportError` on
-older releases; see [`DAEProblem`](@ref).
+On the DAE path, pass `build_initializeprob = true` here or on the discretization to recompute parameter-dependent initial conditions when the remade problem is initialized. If `fully_determined = true` rejects an overdetermined initialization system, `discretize` can fall back to an `ODEProblem`. Pass `fallback = false` to surface the error.
 
 Supplying `analytic` selects the compiled `ODEProblem` path because analytic solutions
 are attached through the compiled `ODEFunction`.
@@ -284,7 +280,6 @@ function SciMLBase.discretize(
             return _dae_problem(sys, tspan, discretization; kwargs...)
         catch e
             e isa InterruptException && rethrow(e)
-            e isa InitializeprobSupportError && rethrow(e)
             fallback || rethrow(e)
             @debug "Falling back to `mtkcompile` and an `ODEProblem`: $(sprint(showerror, e))"
         end

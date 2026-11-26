@@ -83,31 +83,15 @@ end
     fresh = discretize(build(2.4), disc; fallback = false)
     newp(prob) = setp_oop(prob, [α])(prob, [2.4])
 
-    # opt-in: remake(p) recomputes the initial condition. ModelingToolkitBase older than
-    # MIN_INITIALIZEPROB_VERSION cannot compile the initialization system, so the opt-in
-    # is refused there with a clear error instead of an opaque failure or a silent
-    # switch to an ODEProblem.
-    min_init = MethodOfLines.MIN_INITIALIZEPROB_VERSION
-    supported = pkgversion(MethodOfLines.ModelingToolkitBase) >= min_init
-    if supported
-        prob = discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
-        @test prob isa SciMLBase.DAEProblem
-        sol2 = solve(remake(prob; p = newp(prob)); saveat = 0.1)
-        sol_fresh = solve(fresh; saveat = 0.1)
-        # `prob2.u0` is refreshed by the initialization at solve time
-        @test sol2[u(t, x)][1, :] ≈ 2.4 .* cos.(sol2[x])
-        @test sol2[u(t, x)] ≈ sol_fresh[u(t, x)] atol = 1.0e-6
-    else
-        @test_throws MethodOfLines.InitializeprobSupportError discretize(
-            build(1.2), disc; fallback = false, build_initializeprob = true
-        )
-        @test_throws MethodOfLines.InitializeprobSupportError discretize(
-            build(1.2), disc; build_initializeprob = true
-        )
-        @test_throws MethodOfLines.InitializeprobSupportError SciMLBase.DAEProblem(
-            build(1.2), disc; build_initializeprob = true
-        )
-    end
+    # opt-in: remake(p) recomputes the initial condition
+    prob = discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
+    @test prob isa SciMLBase.DAEProblem
+    sol2 = solve(remake(prob; p = newp(prob)); saveat = 0.1)
+    sol_fresh = solve(fresh; saveat = 0.1)
+    @test sol2.t[end] ≈ 1.0
+    # `prob2.u0` is refreshed by the initialization at solve time
+    @test sol2[u(t, x)][1, :] ≈ 2.4 .* cos.(sol2[x])
+    @test sol2[u(t, x)] ≈ sol_fresh[u(t, x)] atol = 1.0e-6
 
     # default: a stale parameter-dependent initial condition is warned about, once per
     # discretize, naming the opt-in; an explicit `build_initializeprob = false`, per call
@@ -118,21 +102,33 @@ end
     @test_logs discretize(build(1.2), disc; fallback = false, build_initializeprob = false)
     disc_stored_off = MOLFiniteDifference([x => 0.1], t; build_initializeprob = false)
     @test_logs discretize(build(1.2), disc_stored_off; fallback = false)
-    if supported
-        disc_init = MOLFiniteDifference([x => 0.1], t; build_initializeprob = true)
-        io = IOBuffer()
-        prob_init = Logging.with_logger(Logging.SimpleLogger(io)) do
-            discretize(build(1.2), disc_init; fallback = false)
-        end
-        @test !occursin("build_initializeprob", String(take!(io)))
-        @test SciMLBase.has_initialization_data(prob_init.f)
-
-        # a per-call keyword wins over the one stored on the discretization
-        probo = discretize(
-            build(1.2), disc_stored_off; fallback = false, build_initializeprob = true
-        )
-        @test SciMLBase.has_initialization_data(probo.f)
+    disc_init = MOLFiniteDifference([x => 0.1], t; build_initializeprob = true)
+    io = IOBuffer()
+    prob_init = Logging.with_logger(Logging.SimpleLogger(io)) do
+        discretize(build(1.2), disc_init; fallback = false)
     end
+    @test !occursin("build_initializeprob", String(take!(io)))
+    @test SciMLBase.has_initialization_data(prob_init.f)
+
+    # a per-call keyword wins over the one stored on the discretization, both ways
+    probo = discretize(
+        build(1.2), disc_stored_off; fallback = false, build_initializeprob = true
+    )
+    @test SciMLBase.has_initialization_data(probo.f)
+    prob_off = discretize(
+        build(1.2), disc_init; fallback = false, build_initializeprob = false
+    )
+    @test !SciMLBase.has_initialization_data(prob_off.f)
+
+    # the stored opt-in reaches a directly constructed DAEProblem, and a per-call
+    # `false` overrides it
+    dae_init = SciMLBase.DAEProblem(build(1.2), disc_init)
+    @test SciMLBase.has_initialization_data(dae_init.f)
+    solp = solve(remake(dae_init; p = newp(dae_init)); saveat = 0.1)
+    @test solp[u(t, x)][1, :] ≈ 2.4 .* cos.(solp[x])
+    @test !SciMLBase.has_initialization_data(
+        SciMLBase.DAEProblem(build(1.2), disc_init; build_initializeprob = false).f
+    )
     bcs_const = [u(0, x) ~ cos(x), u(t, 0) ~ α * exp(-t), u(t, 1) ~ α * exp(-t) * cos(1)]
     @test_logs discretize(
         PDESystem(
