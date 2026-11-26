@@ -71,6 +71,23 @@ compile of `prob.f` grow with the resolution
 [ModelingToolkit.jl#5139](https://github.com/SciML/ModelingToolkit.jl/issues/5139)).
 Calling `solve(prob)` lets OrdinaryDiffEq select its default DAE algorithm.
 
+`discretize` passes keyword arguments such as `fuse_broadcasts` through to ModelingToolkit's
+code generation. `fuse_broadcasts = true` generates each array expression of the residual
+as one fused broadcast, which lowers the cost of every call of `prob.f` but makes the first
+call compile much longer. It is off by default, so that a short solve does not pay for it.
+On the two-dimensional Brusselator at `dx = 1/8` it measured as follows (Julia 1.12.1,
+ModelingToolkit 11.47.0, Symbolics 7.49.0, SymbolicUtils 4.56.4):
+
+| `fuse_broadcasts` | first `prob.f` call | `prob.f` per call | allocations per call |
+|:----------------- | -------------------:| -----------------:| --------------------:|
+| `false` (default) | 3.5 s               | 168 μs            | 1494                 |
+| `true`            | 12.9 s (7.9 GiB)    | 11 μs             | 81                   |
+
+The extra compile time was about the same, 10 to 13 s, at `dx = 1/4`, `1/8` and `1/16`, since
+it depends on the form of the equations and not the number of grid points. Pass
+`fuse_broadcasts = true` when the same problem is solved for many residual evaluations, tens
+of thousands or more here, or repeatedly in one session, and leave it off otherwise.
+
 `initializealg` defaults to `BrownFullBasicInit()`, chosen only when the discretized
 system's initialization equations are ones that algorithm preserves.
 
