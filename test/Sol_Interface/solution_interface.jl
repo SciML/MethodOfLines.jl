@@ -306,3 +306,33 @@ end
         end
     end
 end
+
+@testset "Test 14: the integrator's solution is wrapped with SciMLBase.wrap_sol" begin
+    @parameters t x
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    eq = Dt(u(t, x)) ~ Dxx(u(t, x))
+    bcs = [u(0, x) ~ sin(pi * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    @named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+    prob = discretize(pdesys, MOLFiniteDifference([x => 10], t))
+
+    integ = init(prob)
+    step!(integ, 0.1, true)
+    # `init` leaves the unwrapped solution in `integ.sol`, which knows nothing of the PDE variables.
+    @test integ.sol isa SciMLBase.AbstractDAESolution
+    @test_throws "not present in the system" integ.sol[u(t, x)]
+    @test_throws "not present in the system" integ.sol[x]
+
+    wrapped = SciMLBase.wrap_sol(integ.sol)
+    @test wrapped isa SciMLBase.PDETimeSeriesSolution
+    @test size(wrapped[u(t, x)]) == (length(integ.sol.t), 10)
+    @test wrapped[x] == solve(prob)[x]
+    @test wrapped[t] == integ.sol.t
+
+    # Run to the end: the wrapped solution equals the one `solve` returns.
+    full = init(prob)
+    solve!(full)
+    @test SciMLBase.wrap_sol(full.sol)[u(t, x)] == solve(prob)[u(t, x)]
+end
