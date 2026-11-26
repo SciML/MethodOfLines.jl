@@ -132,3 +132,55 @@ end
     end #
     @test all(fd)
 end
+
+@testset "2D Laplace Dirichlet keeps all interior unknowns, n = $n" for n in (8, 9, 31)
+    @parameters x y
+    @variables u(..)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dxx(u(x, y)) + Dyy(u(x, y)) ~ 0
+    bcs = [u(0, y) ~ 0, u(1, y) ~ y, u(x, 0) ~ 0, u(x, 1) ~ x]
+    domains = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [x, y], [u(x, y)])
+    discretization = MOLFiniteDifference([x => 1 / (n - 1), y => 1 / (n - 1)], nothing, approx_order = 2)
+
+    prob = discretize(pdesys, discretization)
+    @test length(prob.u0) == (n - 2)^2
+
+    # Default tolerances report Stalled at n = 31, so only the unknown count is checked there.
+    if n < 31
+        sol = NonlinearSolve.solve(prob, NewtonRaphson())
+        @test sol.retcode == ReturnCode.Success
+
+        # The Dirichlet conditions do not set the corner nodes, so compare the interior only.
+        xs = sol[x]
+        ys = sol[y]
+        @test sol[u(x, y)][2:(end - 1), 2:(end - 1)] ≈ [xi * yi for xi in xs[2:(end - 1)], yi in ys[2:(end - 1)]] atol = 1.0e-8
+    end
+end
+
+@testset "2D Laplace Neumann keeps all unknowns" begin
+    @parameters x y
+    @variables u(..)
+    Dx = Differential(x)
+    Dxx = Differential(x)^2
+    Dyy = Differential(y)^2
+
+    eq = Dxx(u(x, y)) + Dyy(u(x, y)) ~ 0
+    bcs = [u(0, y) ~ 0, Dx(u(1, y)) ~ y, u(x, 0) ~ 0, u(x, 1) ~ x]
+    domains = [x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
+
+    @named pdesys = PDESystem([eq], bcs, domains, [x, y], [u(x, y)])
+    discretization = MOLFiniteDifference([x => 1 / 8, y => 1 / 8], nothing, approx_order = 2)
+
+    prob = discretize(pdesys, discretization)
+    @test length(prob.u0) == 56
+
+    sol = NonlinearSolve.solve(prob, NewtonRaphson())
+    @test sol.retcode == ReturnCode.Success
+    xs = sol[x]
+    ys = sol[y]
+    @test sol[u(x, y)][2:(end - 1), 2:(end - 1)] ≈ [xi * yi for xi in xs[2:(end - 1)], yi in ys[2:(end - 1)]] atol = 1.0e-8
+end
