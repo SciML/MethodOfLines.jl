@@ -813,3 +813,12 @@ end
     intervals = Dict(x1 => (0.1f0, 0.2f0), x2 => (0.2f0, 0.3f0))
     @test !MethodOfLines.mismatched_interface_dxs(b, intervals, f32disc)
 end
+
+@testset "Mixed Float32 and Float64 equal-step domains are matched" begin
+    b = (x = x1, x2 = x2)
+    mixeddisc = MOLFiniteDifference(
+        [x1 => 11, x2 => 11], t; advection_scheme = UpwindScheme(),
+    )
+    intervals = Dict(x1 => (0.0f0, 0.5f0), x2 => (0.5, 1.0))
+    @test !MethodOfLines.mismatched_interface_dxs(b, intervals, mixeddisc)
+end
