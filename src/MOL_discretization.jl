@@ -17,7 +17,7 @@ end
 # Single predicate shared by check_boundarymap and validate_interface_orders.
 # Integer point counts are compared through the steps they imply on each domain, so equal
 # counts on domains of different length are mismatched. Only two derived steps get a tolerance
-# (a few hundred ulps, for round-off); a user-supplied scalar step must match exactly.
+# (1e-5, covering Float32 and endpoint round-off); a user-supplied scalar step must match exactly.
 # Without `intervals` (the legacy 2-arg `check_boundarymap`) the raw values are compared.
 function mismatched_interface_dxs(b, intervals, discretization::MOLFiniteDifference)
     dx1 = discretization.dxs[Num(b.x)]
@@ -26,7 +26,7 @@ function mismatched_interface_dxs(b, intervals, discretization::MOLFiniteDiffere
     step1 = prepare_dx(dx1, intervals[b.x], discretization.grid_align)
     step2 = prepare_dx(dx2, intervals[b.x2], discretization.grid_align)
     (dx1 isa Integer && dx2 isa Integer) || return step1 != step2
-    return !isapprox(step1, step2; rtol = min(100 * max(eps(float(typeof(step1))), eps(float(typeof(step2)))), 1.0e-4))
+    return !isapprox(step1, step2; rtol = 1.0e-5)
 end
 
 function _interface_physical_coords(b, grid1, grid2)

@@ -819,6 +819,15 @@ end
     mixeddisc = MOLFiniteDifference(
         [x1 => 11, x2 => 11], t; advection_scheme = UpwindScheme(),
     )
-    intervals = Dict(x1 => (0.0f0, 0.5f0), x2 => (0.5, 1.0))
+    intervals = Dict(x1 => (0.1f0, 0.2f0), x2 => (0.2, 0.3))
     @test !MethodOfLines.mismatched_interface_dxs(b, intervals, mixeddisc)
+end
+
+@testset "Equal point counts on narrow offset Float64 domains are matched" begin
+    b = (x = x1, x2 = x2)
+    narrowdisc = MOLFiniteDifference(
+        [x1 => 9, x2 => 9], t; advection_scheme = UpwindScheme(),
+    )
+    intervals = Dict(x1 => (1.0, 1.001), x2 => (1.001, 1.002))
+    @test !MethodOfLines.mismatched_interface_dxs(b, intervals, narrowdisc)
 end
