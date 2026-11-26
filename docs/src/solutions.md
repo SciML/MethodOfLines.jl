@@ -59,7 +59,7 @@ uv_interp = sol(0.4, 1.7, 2.6)
 ## Stepping with the integrator interface
 
 `init` and `step!` do not wrap the solution they accumulate: `integ.sol` is the plain `DAESolution`
-(or `ODESolution`), which knows only the discretized unknowns, so `integ.sol[u(t, x)]` and
+(or `ODESolution`), which knows only the discretized unknowns, so `integ.sol[u(t, x, y)]` and
 `integ.sol[x]` throw `Symbol ... is not present in the system`. Wrap the accumulated solution
 with `SciMLBase.wrap_sol` whenever the PDE-level interface is wanted:
 
@@ -68,12 +68,12 @@ integ = init(prob)
 step!(integ, 0.1, true)
 
 sol = SciMLBase.wrap_sol(integ.sol)
-sol[u(t, x)]   # the saved states so far, as an array over time and the grid
+sol[u(t, x, y)]   # the saved states so far, as an array over time and the grid
 sol[x]
 ```
 
-The result is a snapshot of the states saved up to that point, so call `wrap_sol` again after
-further steps.
+The wrapped fields hold the states saved up to that point and are not updated by further steps, so
+call `wrap_sol` again after stepping and discard the earlier wrapper.
 
 ## Original solution
 
