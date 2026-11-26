@@ -755,3 +755,58 @@ end
     outflow_slope = (sol_u2[end] - sol_u2[end - 1]) / (xs2[end] - xs2[end - 1])
     @test abs(outflow_slope) < 5.0
 end
+
+@testset "Periodic nonuniform grids need seven nodes at the default order" begin
+    L = 1.0
+    v = 1.0
+    tspan = (0.0, 0.05)
+    u0 = x -> sin(2π * x / L)
+    u_exact = (x, t) -> translating_sine_exact(x, t, v, L)
+    six = [0.0, 0.1, 0.3, 0.55, 0.8, 1.0]
+    seven = [0.0, 0.1, 0.25, 0.45, 0.65, 0.85, 1.0]
+
+    for scheme in (UpwindScheme(), WENOScheme())
+        @test_throws ArgumentError solve_periodic_advection(;
+            xgrid = six, v, tspan, u0, u_exact, advection_scheme = scheme,
+        )
+        sol, = solve_periodic_advection(;
+            xgrid = seven, v, tspan, u0, u_exact, advection_scheme = scheme,
+        )
+        @test SciMLBase.successful_retcode(sol)
+        @test sol.t[end] == tspan[2]
+        @test length(sol[x]) == length(seven)
+        @test all(isfinite, sol[u(t, x)][end, :])
+    end
+end
+
+@testset "Matching integer point counts on both sides of an interface" begin
+    n = 11
+    tf = 0.1
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+    eqs = [
+        Dt(u1(t, x1)) ~ -Dx1(u1(t, x1)),
+        Dt(u2(t, x2)) ~ -Dx2(u2(t, x2)),
+    ]
+    bcs = [
+        u1(0.0, x1) ~ x1,
+        u2(0.0, x2) ~ x2,
+        u1(t, 0.0) ~ -t,
+        u1(t, 0.5) ~ u2(t, 0.5),
+        Dx2(u2(t, 1.0)) ~ 1.0,
+    ]
+    domains = [t ∈ Interval(0.0, tf), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.0)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)])
+    disc = MOLFiniteDifference([x1 => n, x2 => n], t; advection_scheme = UpwindScheme())
+    sol = solve(
+        ode_discretize(pdesys, disc), SSPRK33(); dt = 0.25 * 0.5 / (n - 1), saveat = [tf], adaptive = false,
+    )
+
+    @test SciMLBase.successful_retcode(sol)
+    @test sol.t[end] ≈ tf
+    for (xi, ui) in ((x1, u1(t, x1)), (x2, u2(t, x2)))
+        @test length(sol[xi]) == n
+        @test maximum(abs, sol[ui][end, :] .- (sol[xi] .- tf)) < 1.0e-6
+    end
+end

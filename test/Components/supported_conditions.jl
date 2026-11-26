@@ -1,5 +1,4 @@
 using MethodOfLines, ModelingToolkit, DomainSets, OrdinaryDiffEq, Test
-import Markdown
 import PDEBase
 
 @parameters t x
@@ -60,14 +59,19 @@ end
 end
 
 @testset "documentation tables render" begin
-    # The same expressions as the `@eval` blocks in docs/src/boundary_conditions.md
-    cell_text(cell) = strip(sprint(Markdown.plaininline, cell))
-    function interface_cell(disc)
-        md = Markdown.parse(sprint(show, MIME"text/markdown"(), PDEBase.supported_conditions(disc)))
-        table = only(filter(block -> block isa Markdown.Table, md.content))
-        row = only(filter(r -> cell_text(first(r)) == "Interface", table.rows))
-        return cell_text(row[2])
+    # Evaluate the `@eval` blocks of the docs page itself, each in its own module
+    docs = read(joinpath(@__DIR__, "..", "..", "docs", "src", "boundary_conditions.md"), String)
+    blocks = [m.captures[1] for m in eachmatch(r"```@eval\n(.*?)```"s, docs)]
+    function interface_row(block)
+        md = Core.eval(Module(), Meta.parseall(block))
+        html = sprint(show, MIME"text/html"(), md)
+        return only(m.match for m in eachmatch(r"<tr>(?:(?!</tr>).)*Interface(?:(?!</tr>).)*</tr>"s, html))
     end
-    @test interface_cell(MOLFiniteDifference([x => 0.1], t)) == "yes"
-    @test interface_cell(PseudospectralDiscretization([x => 8], t)) == "no"
+    fd_blocks = filter(b -> occursin("MOLFiniteDifference(", b), blocks)
+    ps_blocks = filter(b -> occursin("PseudospectralDiscretization(", b), blocks)
+    @test length(blocks) == 2
+    @test length(fd_blocks) == 1
+    @test length(ps_blocks) == 1
+    @test occursin("yes", interface_row(only(fd_blocks)))
+    @test occursin("no", interface_row(only(ps_blocks)))
 end
