@@ -796,3 +796,11 @@ end
         @test maximum(abs.(sol[u][end, :] .- (sol[x] .- 0.2))) < 1.0e-8
     end
 end
+
+@testset "Nearly equal scalar steps are still mismatched" begin
+    pdesys = build_linear_advection_interface_system(1.0)
+    disc = MOLFiniteDifference(
+        [x1 => 0.0624999999, x2 => 0.0625], t; advection_scheme = UpwindScheme(),
+    )
+    @test_throws ArgumentError get_discrete(pdesys, disc)
+end
