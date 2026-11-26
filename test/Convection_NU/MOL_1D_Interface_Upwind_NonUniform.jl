@@ -804,3 +804,12 @@ end
     )
     @test_throws ArgumentError get_discrete(pdesys, disc)
 end
+
+@testset "Equal point counts on equal-length Float32 domains are matched" begin
+    b = (x = x1, x2 = x2)
+    f32disc = MOLFiniteDifference(
+        [x1 => 9, x2 => 9], t; advection_scheme = UpwindScheme(),
+    )
+    intervals = Dict(x1 => (0.1f0, 0.2f0), x2 => (0.2f0, 0.3f0))
+    @test !MethodOfLines.mismatched_interface_dxs(b, intervals, f32disc)
+end
