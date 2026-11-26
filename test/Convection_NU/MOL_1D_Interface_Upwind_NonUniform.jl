@@ -885,6 +885,9 @@ end
     end
     @test occursin("x2", sprint(showerror, err)) && occursin("final interval", sprint(showerror, err))
 
+    pdesys = build_heat_interface_system(nextfloat(1.5))
+    @test_throws ArgumentError get_discrete(pdesys, disc)
+
     pdesys = build_heat_interface_system(1.5)
     @test get_discrete(pdesys, disc) isa Dict
     @test symbolic_discretize(pdesys, disc) isa Tuple
