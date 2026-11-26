@@ -85,8 +85,9 @@ ModelingToolkit 11.47.0, Symbolics 7.49.0, SymbolicUtils 4.56.4):
 
 The extra compile time was about the same, 10 to 13 s, at `dx = 1/4`, `1/8` and `1/16`, since
 it depends on the form of the equations and not the number of grid points. Pass
-`fuse_broadcasts = true` when the same problem is solved for many residual evaluations, tens
-of thousands or more here, or repeatedly in one session, and leave it off otherwise.
+`fuse_broadcasts = true` when the compiled residual is reused for many evaluations, more than
+about 60,000 in total for the Brusselator at `dx = 1/8` (the extra 9.4 s divided by the
+157 μs saved per call), and leave it off otherwise.
 
 `initializealg` defaults to `BrownFullBasicInit()`, chosen only when the discretized
 system's initialization equations are ones that algorithm preserves.
