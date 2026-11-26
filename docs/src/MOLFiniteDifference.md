@@ -72,7 +72,7 @@ compile of `prob.f` grow with the resolution
 Calling `solve(prob)` lets OrdinaryDiffEq select its default DAE algorithm.
 
 `discretize` passes keyword arguments such as `fuse_broadcasts` through to ModelingToolkit's
-code generation. `fuse_broadcasts = true` generates each array expression of the residual
+code generation. With a Symbolics release that supports it, `fuse_broadcasts = true` generates each array expression of the residual
 as one fused broadcast, which lowers the cost of every call of `prob.f` but makes the first
 call compile much longer. It is off by default, so that a short solve does not pay for it.
 On the two-dimensional Brusselator at `dx = 1/8` it measured as follows (Julia 1.12.1,
