@@ -832,6 +832,68 @@ end
     @test all(≈(-1.0; atol = 1.0e-12), du)
 end
 
+# u_t = c u_x on [0, 0.5] and [0.5, 1.5] with 9 points each (gaps 0.0625 and 0.125); `ring` also joins
+# x = 0 to x = 1.5.
+function wind_seam_system(c, f; ring = false)
+    Dt, Dx1, Dx2 = Differential(t), Differential(x1), Differential(x2)
+    eqs = [Dt(u1(t, x1)) ~ c * Dx1(u1(t, x1)), Dt(u2(t, x2)) ~ c * Dx2(u2(t, x2))]
+    bcs = [u1(0.0, x1) ~ f(x1), u2(0.0, x2) ~ f(x2), u1(t, 0.5) ~ u2(t, 0.5)]
+    append!(bcs, ring ? [u1(t, 0.0) ~ u2(t, 1.5)] : [u1(t, 0.0) ~ f(0.0), u2(t, 1.5) ~ f(1.5)])
+    domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.5)]
+    @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)])
+    return pdesys
+end
+
+@testset "First-order upwind across unequal seam gaps is exact in both wind directions" begin
+    disc = MOLFiniteDifference([x1 => 9, x2 => 9], t; advection_scheme = UpwindScheme())
+    for c in (1.0, -1.0)
+        du, = seam_rhs(wind_seam_system(c, x -> x), disc)
+        @test all(≈(c; atol = 1.0e-12), du)
+    end
+
+    # In two dimensions the interface rows are a slice of the array form, which defers to the same stencil.
+    @parameters y
+    @variables v1(..) v2(..)
+    Dt, Dx1, Dx2 = Differential(t), Differential(x1), Differential(x2)
+    for c in (1.0, -1.0)
+        eqs = [Dt(v1(t, x1, y)) ~ c * Dx1(v1(t, x1, y)), Dt(v2(t, x2, y)) ~ c * Dx2(v2(t, x2, y))]
+        bcs = [
+            v1(0.0, x1, y) ~ x1, v2(0.0, x2, y) ~ x2, v1(t, 0.5, y) ~ v2(t, 0.5, y),
+            v1(t, 0.0, y) ~ 0.0, v2(t, 1.5, y) ~ 1.5,
+            v1(t, x1, 0.0) ~ x1, v1(t, x1, 1.0) ~ x1, v2(t, x2, 0.0) ~ x2, v2(t, x2, 1.0) ~ x2,
+        ]
+        domains = [
+            t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.5),
+            y ∈ Interval(0.0, 1.0),
+        ]
+        @named plane = PDESystem(eqs, bcs, domains, [t, x1, x2, y], [v1(t, x1, y), v2(t, x2, y)])
+        du, = seam_rhs(plane, MOLFiniteDifference([x1 => 9, x2 => 9, y => 5], t))
+        @test length(du) == 45
+        @test all(≈(c; atol = 1.0e-12), du)
+    end
+
+    # On a ring every state is differenced with the coordinates of its upwind neighbour.
+    f(x) = sinpi(2x / 1.5)
+    for c in (1.0, -1.0)
+        pdesys = wind_seam_system(c, f; ring = true)
+        grids = get_discrete(pdesys, disc)
+        nodes = vcat(grids[x1], grids[x2][2:end])
+        vars = vcat(grids[u1(t, x1)], grids[u2(t, x2)][2:end])
+        sys, tspan = symbolic_discretize(pdesys, disc)
+        simp = mtkcompile(sys)
+        prob = ODEProblem(simp, nothing, tspan)
+        du = similar(prob.u0)
+        prob.f(du, prob.u0, prob.p, 0.0)
+        @test length(du) == 16
+        for (k, v) in enumerate(unknowns(simp))
+            i = findfirst(isequal(v), vars)
+            # x = 1.5 is x = 0, whose upper neighbour is the second node shifted by the period.
+            other = c > 0 ? (i == length(nodes) ? nodes[2] + 1.5 : nodes[i + 1]) : nodes[i - 1]
+            @test du[k] ≈ c * (f(other) - f(nodes[i])) / (other - nodes[i]) atol = 1.0e-12
+        end
+    end
+end
+
 @testset "Equal-count and scalar-step first-order advection stay accepted" begin
     for (specs, mid, hi) in (((12, 12), 0.1, 0.2), ((0.06, 0.06), 0.5, 1.0))
         pdesys = build_seam_system(:advection, 0.0, mid, hi)
@@ -1013,7 +1075,16 @@ end
     )
     disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
     @test get_discrete(pdesys, disc) isa Dict
-    @test symbolic_discretize(pdesys, disc) isa Tuple
+    # The affine heat field is steady and the advected fields move at unit speed.
+    sys, tspan = symbolic_discretize(pdesys, disc)
+    simp = mtkcompile(sys)
+    prob = ODEProblem(simp, nothing, tspan)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    wstates = [any(isequal(v), get_discrete(pdesys, disc)[w(t, x2)]) for v in unknowns(simp)]
+    @test count(wstates) == 7
+    @test maximum(abs, du[wstates]) < 1.0e-12
+    @test maximum(abs.(du[.!wstates] .+ 1.0)) < 1.0e-12
 
     # A pointwise source from a connected field does not put a stencil on the interface.
     eqs[3] = Dt(w(t, x2)) ~ Dx2(Dx2(w(t, x2))) + u2(t, x2)
@@ -1023,11 +1094,27 @@ end
     @test get_discrete(sourced, disc) isa Dict
     @test symbolic_discretize(sourced, disc) isa Tuple
 
-    # The same fields on explicit node vectors with different gaps.
+    # On node vectors the centered stencils of every field on the axis reject interfaces, so both
+    # entry points name the axis instead of failing an assertion during discretization.
     vectors = MOLFiniteDifference(
         [x1 => collect(range(0.0, 0.5; length = 9)), x2 => collect(range(0.5, 1.5; length = 9))], t,
     )
-    @test get_discrete(pdesys, vectors) isa Dict
+    for entry in (get_discrete, ode_discretize)
+        err = thrown(() -> entry(pdesys, vectors))
+        @test err isa ArgumentError
+        err isa ArgumentError && @test occursin("the grid of x2 is a node vector", err.msg)
+    end
+end
+
+@testset "Different node vectors with equal gaps at the interface name the actual reason" begin
+    pdesys = build_seam_system(:heat, 0.0, 0.5, 1.0)
+    left = vcat([0.0, 0.05], collect(0.125:0.0625:0.5))
+    disc = MOLFiniteDifference([x1 => left, x2 => collect(0.5:0.0625:1.0)], t)
+    for entry in (get_discrete, ode_discretize)
+        err = thrown(() -> entry(pdesys, disc))
+        @test err isa ArgumentError
+        @test occursin("node vectors differ although the grid gaps next to the interface agree", err.msg)
+    end
 end
 
 @testset "Coordinate-aware first-order schemes on explicit vectors are not rejected" begin
@@ -1035,11 +1122,37 @@ end
     pdesys = build_seam_system(:advection, 0.0, 0.5, 1.0)
     disc = MOLFiniteDifference([x1 => 0.06, x2 => 0.06], t; advection_scheme = WENOScheme())
     @test get_discrete(pdesys, disc) isa Dict
+    du, = seam_rhs(pdesys, disc)
+    @test maximum(abs.(du .+ 1.0)) < 1.0e-12
+
+    # Short end cells on both sides (0.03125 next to the interface and at the outflow).
+    pdesys = build_seam_system(:advection, 0.0, 0.53125, 1.0625)
+    disc = MOLFiniteDifference([x1 => 0.0625, x2 => 0.0625], t; advection_scheme = WENOScheme())
+    du, = seam_rhs(pdesys, disc)
+    @test maximum(abs.(du .+ 1.0)) < 1.0e-12
+    # Wider upwind stencils do not read the coordinates, whether the grid is uniform or not.
+    disc = MOLFiniteDifference([x1 => 0.0625, x2 => 0.0625], t; advection_scheme = UpwindScheme(2))
+    test_seam_rejected(pdesys, disc, "UpwindScheme(2)")
 
     # One vector and one uniform axis: the uniform side runs scalar-step WENO across the short gap.
     pdesys = build_seam_system(:advection, 0.0, 0.53125, 1.03125)
     disc = MOLFiniteDifference([x1 => 0.0625, x2 => 0.0625], t; advection_scheme = WENOScheme())
     test_seam_rejected(pdesys, disc, "WENO advection")
+end
+
+# A user scheme that differences its outer taps by their coordinates.
+coordinate_secant(u, p, t, x, dx) = (u[end] - u[1]) / (x[end] - x[1])
+
+@testset "User functional schemes that read the coordinates stay accepted" begin
+    scheme = FunctionalScheme{3, 3}(
+        coordinate_secant, [coordinate_secant], [coordinate_secant], false, [];
+        name = "coordinate_secant",
+    )
+    pdesys = build_seam_system(:advection, 0.0, 0.5, 1.5)
+    disc = MOLFiniteDifference([x1 => 9, x2 => 9], t; advection_scheme = scheme)
+    @test get_discrete(pdesys, disc) isa Dict
+    du, = seam_rhs(pdesys, disc)
+    @test all(≈(-1.0; atol = 1.0e-12), du)
 end
 
 # A user scheme that reads only the upwind taps of its three-point stencil.
@@ -1058,18 +1171,6 @@ upwind_taps(u, p, t, x, dx) = (u[2] - u[1]) / dx
             i = argmin(abs.((nodes .- lo) .^ 2 .- uk))
             @test du[k] ≈ -((nodes[i] - lo) + (nodes[i - 1] - lo)) atol = 1.0e-9
         end
-    end
-end
-
-@testset "Integer-count axes that the colon range builds cleanly are unchanged" begin
-    for (lo, hi, n) in ((0.0, 0.5, 11), (0.0, 1.0, 11), (0.1, 0.2, 11), (0.0, 0.5, 9), (0.5, 1.5, 9))
-        dx = (hi - lo) / (n - 1)
-        colon = lo:dx:hi
-        @test length(colon) == n && colon[end] == hi
-        pdesys = build_seam_system(:heat, lo, hi, 2hi - lo)
-        disc = MOLFiniteDifference([x1 => n, x2 => n], t)
-        @test get_discrete(pdesys, disc)[x1] == collect(colon)
-        @test get_discrete(pdesys, disc)[x1] isa StepRangeLen
     end
 end
 

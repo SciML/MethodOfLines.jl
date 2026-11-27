@@ -90,12 +90,6 @@ function clip_interior!!(
     return nothing
 end
 
-function validate_interface_orders(
-        pdes, boundarymap, discretization::PseudospectralDiscretization
-    )
-    return nothing
-end
-
 """
 No stencil extents: spectral rows always span the entire direction, so no
 ghost-point padding is ever required.

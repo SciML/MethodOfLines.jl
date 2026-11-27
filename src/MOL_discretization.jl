@@ -14,7 +14,7 @@ function PDEBase.interface_errors(
     return
 end
 
-# Single predicate shared by check_boundarymap and validate_interface_orders.
+# Single predicate shared by check_boundarymap and validate_interface_seams.
 function mismatched_interface_dxs(b, discretization::MOLFiniteDifference)
     return discretization.dxs[Num(b.x)] != discretization.dxs[Num(b.x2)]
 end
@@ -60,7 +60,7 @@ function _check_interface_boundarymap(boundarymap, discretization::MOLFiniteDiff
         mismatched_interface_dxs(b, discretization) || continue
         if dx1 isa AbstractVector && dx2 isa AbstractVector
             # NU FunctionalScheme uses exact interface coordinates (bcoord) for advection;
-            # dx match waived. Non-advection orders are rejected by validate_interface_orders.
+            # dx match waived. Non-advection orders are rejected by validate_interface_seams.
             if ascheme isa FunctionalScheme && ascheme.is_nonuniform
                 continue
             end

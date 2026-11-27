@@ -27,29 +27,6 @@ PDEBase.get_eqvar(im::InteriorMap, pde) = im.var[pde]
 # then we assign v to it because u is already assigned somewhere else.
 # and use the interior based on the assignment
 
-# Mismatched-grid interfaces are only coordinate-aware on the first-order (advection)
-# path via bcoord; centered/half-offset paths are not. Reject orders > 1 up front.
-function validate_interface_orders(pdes, boundarymap, discretization)
-    for b in filter_interfaces(flatten_vardict(boundarymap))
-        mismatched_interface_dxs(b, discretization) || continue
-        orders = union(d_orders(b.x, pdes), d_orders(b.x2, pdes))
-        higher = filter(>(1), orders)
-        if !isempty(higher)
-            throw(
-                ArgumentError(
-                    "Interface $(b.eq) connects $(b.x) and $(b.x2) with mismatched nonuniform grids, " *
-                        "but the system contains spatial derivative orders $(sort(higher)) in these variables. " *
-                        "Only first-order (advection) derivatives are supported across mismatched grids: " *
-                        "higher-order stencils are not coordinate-aware at the interface and would be " *
-                        "silently inaccurate. Use identical step sizes for the connected variables, or " *
-                        "post an issue on GitHub if you need this feature."
-                )
-            )
-        end
-    end
-    return
-end
-
 # The (at most `n`) nodes of `grid` next to the seam of an interface, ordered away from the seam.
 function _seam_nodes(grid, n, atupper)
     m = min(n, length(grid) - 1)
@@ -111,19 +88,41 @@ function seam_unsafe_derivative(pdes, xs, ops, scheme, vectors)
     higher = filter(>(1), orders)
     isempty(higher) || return "derivative order $(join(higher, ", "))"
     isempty(orders) && return nothing
-    # User-written functional schemes are not classified and behave as on master.
-    unsafe = (scheme isa UpwindScheme && scheme.order > 1) ||
-        (scheme isa FunctionalScheme && scheme.interior === weno_f)
-    (vectors || !unsafe) && return nothing
+    # User-written functional schemes are not classified and behave as on master. WENO reads the
+    # tap coordinates when both grids are node vectors; wider upwind stencils never do.
+    weno = scheme isa FunctionalScheme && scheme.interior === weno_f
+    upwind = scheme isa UpwindScheme && scheme.order > 1
+    (upwind || (weno && !vectors)) || return nothing
     label = scheme isa UpwindScheme ? "UpwindScheme($(scheme.order))" : "$(scheme.name) advection"
     return "first-order derivatives discretized with $label"
 end
 
 validate_interface_seams(pdes, boundarymap, s, discretization) = nothing
 
-# Connected axes may have unequal grid spacings at the seam only for first-order `UpwindScheme()`,
-# whose stencils use the actual coordinates (src/discretization/schemes/upwind_difference). Every
-# other stencil that straddles the seam would use one spacing and be silently wrong.
+# The centered and wider upwind stencils of a node-vector axis do not support interface boundaries,
+# and they are built for every variable on the axis, so an order above one in any field is rejected.
+function validate_node_vector_orders(b, pdes, s)
+    for x in (b.x, b.x2)
+        s.dxs[x] isa AbstractVector || continue
+        higher = sort(filter(>(1), d_orders(x, pdes)))
+        isempty(higher) && continue
+        throw(
+            ArgumentError(
+                "Interface $(b.eq) connects $(b.x) and $(b.x2), and the grid of $x is a node vector, but the " *
+                    "system contains derivative order $(join(higher, ", ")) along $x (in any field). Derivatives " *
+                    "of order above one are not supported along a node-vector axis with an interface, whatever " *
+                    "the gaps at the interface. Use a uniform grid on both sides (equal step sizes that divide " *
+                    "the intervals)."
+            )
+        )
+    end
+    return
+end
+
+# Connected axes may have unequal grid spacings at the seam, or different node vectors, only for
+# first-order `UpwindScheme()`, whose stencils use the actual coordinates
+# (src/discretization/schemes/upwind_difference), and for WENO on node vectors. Every other stencil
+# that straddles the seam would use one spacing and be silently wrong.
 function validate_interface_seams(
         pdes, boundarymap, s, discretization::MOLFiniteDifference
     )
@@ -139,21 +138,28 @@ function validate_interface_seams(
         scale = maximum(abs, stepped ? vcat(extrema(s.grid[b.x])..., extrema(s.grid[b.x2])...) : vcat(nodes1, nodes2))
         spacings_match = _spacings_match(vcat(spacings1, spacings2), scale, cells, stepped)
         # Different step specifications (node vectors) keep the derivative checks but have no spacing test.
-        spacings_match && !mismatched_interface_dxs(b, discretization) && continue
-        ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
-        vectors = !(s.grid[b.x] isa StepRangeLen) && !(s.grid[b.x2] isa StepRangeLen)
-        what = seam_unsafe_derivative(
-            pdes, (b.x, b.x2), ops, discretization.advection_scheme, vectors
-        )
-        what === nothing && continue
+        what = if spacings_match && !mismatched_interface_dxs(b, discretization)
+            nothing
+        else
+            ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
+            vectors = !(s.grid[b.x] isa StepRangeLen) && !(s.grid[b.x2] isa StepRangeLen)
+            seam_unsafe_derivative(pdes, (b.x, b.x2), ops, discretization.advection_scheme, vectors)
+        end
+        if what === nothing
+            validate_node_vector_orders(b, pdes, s)
+            continue
+        end
+        gaps = "(nearest first: $spacings1 in $(b.x), $spacings2 in $(b.x2))"
+        grids = spacings_match ?
+            "whose node vectors differ although the grid gaps next to the interface agree $gaps" :
+            "whose grid gaps next to the interface differ $gaps"
         throw(
             ArgumentError(
-                "Interface $(b.eq) connects $(b.x) and $(b.x2), whose grid gaps next to the interface " *
-                    "differ (nearest first: $spacings1 in $(b.x), $spacings2 in $(b.x2)), but the system contains " *
-                    "$what in these variables. Only first-order `UpwindScheme()` derivatives are " *
-                    "coordinate-aware across such an interface; the other stencils would use a single " *
-                    "spacing and be silently inaccurate. Use equal gaps on both sides of the interface " *
-                    "(for example equal step sizes on intervals of equal length)."
+                "Interface $(b.eq) connects $(b.x) and $(b.x2), $grids, but the system contains " *
+                    "$what in these variables. Only first-order `UpwindScheme()` derivatives, and " *
+                    "`WENOScheme()` when both grids are node vectors, are coordinate-aware across such an " *
+                    "interface; the other stencils would be silently inaccurate. Use the same spacing on both " *
+                    "sides of the interface (for example equal step sizes on intervals of equal length)."
             )
         )
     end
@@ -165,7 +171,6 @@ function PDEBase.construct_var_equation_mapping(
         discretization::MOLDiscretization
     ) where {N, M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
-    validate_interface_orders(pdes, boundarymap, discretization)
     validate_interface_seams(pdes, boundarymap, s, discretization)
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
