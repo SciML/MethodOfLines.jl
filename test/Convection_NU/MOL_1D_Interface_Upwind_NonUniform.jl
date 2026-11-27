@@ -832,7 +832,7 @@ end
     @test !MethodOfLines.mismatched_interface_dxs(b, intervals, narrowdisc)
 end
 
-function build_heat_interface_system(x2hi)
+function build_heat_interface_system(x2hi; xm = 0.5)
     Dt = Differential(t)
     Dxx1 = Differential(x1)^2
     Dxx2 = Differential(x2)^2
@@ -844,13 +844,13 @@ function build_heat_interface_system(x2hi)
         u1(0.0, x1) ~ x1,
         u2(0.0, x2) ~ x2,
         u1(t, 0.0) ~ 0.0,
-        u1(t, 0.5) ~ u2(t, 0.5),
+        u1(t, xm) ~ u2(t, xm),
         u2(t, x2hi) ~ x2hi,
     ]
     domains = [
         t ∈ Interval(0.0, 0.2),
-        x1 ∈ Interval(0.0, 0.5),
-        x2 ∈ Interval(0.5, x2hi),
+        x1 ∈ Interval(0.0, xm),
+        x2 ∈ Interval(xm, x2hi),
     ]
     @named pdesys = PDESystem(
         eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)],
@@ -889,6 +889,26 @@ end
     @test_throws ArgumentError get_discrete(pdesys, disc)
 
     pdesys = build_heat_interface_system(1.5)
+    @test get_discrete(pdesys, disc) isa Dict
+    @test symbolic_discretize(pdesys, disc) isa Tuple
+end
+
+@testset "Count-derived grids that gain a short final interval are rejected early" begin
+    counts = Pair[x1 => 6, x2 => 6]
+    xm = sqrt(2.0)
+    pdesys = build_heat_interface_system(2 * xm; xm)
+    disc = MOLFiniteDifference(counts, t)
+    @test_throws ArgumentError get_discrete(pdesys, disc)
+    @test_throws ArgumentError symbolic_discretize(pdesys, disc)
+
+    # A count-derived range that omits its last point to rounding is rejected too.
+    pdesys = build_heat_interface_system(0.2; xm = 0.1)
+    disc = MOLFiniteDifference(Pair[x1 => 12, x2 => 12], t)
+    @test_throws ArgumentError get_discrete(pdesys, disc)
+
+    # A range that ends on the endpoint is unchanged.
+    pdesys = build_heat_interface_system(1.0)
+    disc = MOLFiniteDifference(Pair[x1 => 9, x2 => 9], t)
     @test get_discrete(pdesys, disc) isa Dict
     @test symbolic_discretize(pdesys, disc) isa Tuple
 end

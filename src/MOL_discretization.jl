@@ -40,20 +40,20 @@ function mismatched_interface_dxs(b, intervals, discretization::MOLFiniteDiffere
 end
 
 # A uniform step that stops short of the upper end makes `discretize_space` append a point,
-# leaving a short final interval that the uniform interface stencils cannot represent. A
-# scalar step must reach the upper end exactly. Point counts are not checked here: their
-# steps are derived from the endpoints, so the grid is built from them as before.
+# leaving a short final interval that the uniform interface stencils cannot represent.
+# A step, scalar or derived from a point count, must reach the upper end exactly.
 function check_interface_grid_fill(b, intervals, discretization::MOLFiniteDifference)
     (intervals === nothing || isequal(b.x, b.x2)) && return
     for x in (b.x, b.x2)
         dx = discretization.dxs[Num(x)]
-        dx isa Number && !(dx isa Integer) || continue
+        dx isa AbstractVector && continue
         xdomain = intervals[x]
-        short = xdomain[2] - numeric_grid(dx, xdomain)[end]
+        step = prepare_dx(dx, xdomain, discretization.grid_align)
+        short = xdomain[2] - numeric_grid(step, xdomain)[end]
         short > 0 || continue
         throw(
             ArgumentError(
-                "The step size $dx of $x does not divide its domain $(xdomain) exactly, so the grid would gain a final interval of length $short at the interface with $(x === b.x ? b.x2 : b.x). Please choose a step that divides the domain, or an integer point count."
+                "The step size $step of $x does not divide its domain $(xdomain) exactly, so the grid would gain a final interval of length $short at the interface with $(x === b.x ? b.x2 : b.x). Please choose a step that divides the domain, or an integer point count."
             )
         )
     end
