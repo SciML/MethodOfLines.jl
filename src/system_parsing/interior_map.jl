@@ -96,8 +96,8 @@ end
 
 # What, in the equations `pdes`, discretizes with a stencil that is not coordinate-aware across a
 # seam with unequal gaps; `nothing` when only first-order `UpwindScheme()` derivatives occur.
-# Explicit node vectors keep their coordinate-aware first-order schemes (nonuniform upwind and WENO).
-function seam_unsafe_derivative(pdes, xs, ops, scheme, uniform)
+# Node vectors on both sides keep their coordinate-aware first-order schemes (nonuniform upwind and WENO).
+function seam_unsafe_derivative(pdes, xs, ops, scheme, vectors)
     sides = [side for pde in pdes for side in (pde.lhs, pde.rhs)]
     found = [o for x in safe_unwrap.(xs) for side in sides for o in connected_derivative_orders(x, side, ops)]
     :mixed in found && return "a mixed derivative"
@@ -105,7 +105,7 @@ function seam_unsafe_derivative(pdes, xs, ops, scheme, uniform)
     higher = filter(>(1), orders)
     isempty(higher) || return "derivative order $(join(higher, ", "))"
     isempty(orders) && return nothing
-    (uniform && !(scheme isa UpwindScheme && scheme.order == 1)) || return nothing
+    (vectors || (scheme isa UpwindScheme && scheme.order == 1)) && return nothing
     label = scheme isa UpwindScheme ? "UpwindScheme($(scheme.order))" :
         scheme isa FunctionalScheme ? "$(scheme.name) advection" : string(typeof(scheme))
     return "first-order derivatives discretized with $label"
@@ -129,9 +129,9 @@ function validate_interface_seams(
         gaps2 = abs.(diff(nodes2))
         _gaps_match(vcat(gaps1, gaps2), vcat(nodes1, nodes2)) && continue
         ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
-        uniform = s.grid[b.x] isa StepRangeLen && s.grid[b.x2] isa StepRangeLen
+        vectors = !(s.grid[b.x] isa StepRangeLen) && !(s.grid[b.x2] isa StepRangeLen)
         what = seam_unsafe_derivative(
-            pdes, (b.x, b.x2), ops, discretization.advection_scheme, uniform
+            pdes, (b.x, b.x2), ops, discretization.advection_scheme, vectors
         )
         what === nothing && continue
         throw(

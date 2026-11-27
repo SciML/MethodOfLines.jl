@@ -1040,4 +1040,9 @@ end
     pdesys = build_seam_system(:advection, 0.0, 0.5, 1.0)
     disc = MOLFiniteDifference([x1 => 0.06, x2 => 0.06], t; advection_scheme = WENOScheme())
     @test get_discrete(pdesys, disc) isa Dict
+
+    # One vector and one uniform axis: the uniform side runs scalar-step WENO across the short gap.
+    pdesys = build_seam_system(:advection, 0.0, 0.53125, 1.03125)
+    disc = MOLFiniteDifference([x1 => 0.0625, x2 => 0.0625], t; advection_scheme = WENOScheme())
+    test_seam_rejected(pdesys, disc, "WENO advection")
 end
