@@ -57,52 +57,58 @@ function _seam_nodes(grid, n, atupper)
 end
 
 # Gaps of equal nominal steps differ by at most one unit in the last place of the node coordinates
-# (nodes are correctly rounded), and the rounded interval endpoints add at most half of one more.
-# Anything beyond that is a real difference, however large the coordinates are.
+# (nodes are correctly rounded), and the rounded endpoints add at most half of one more. The gaps
+# must also agree to sqrt(eps) of a gap, which is where the rounding bound alone stops separating
+# rounding from a real difference (coordinates a few gaps from overflowing the significand).
 function _gaps_match(gaps, nodes)
     lo, hi = extrema(gaps)
-    return hi - lo <= 3 * eps(float(maximum(abs, nodes))) / 2
+    T = float(typeof(hi))
+    return hi - lo <= min(3 * eps(float(maximum(abs, nodes))) / 2, sqrt(eps(T)) * hi)
 end
 
-# d_orders reports Dx(Dy(u)) as first order in x, but the cross-derivative stencil is centered in x.
-function mixes_derivative_in(x, term)
+function _mentions(term, ops)
     iscall(term) || return false
-    op = operation(term)
-    args = arguments(term)
-    if op isa Differential
-        inner = reduce(vcat, differential_variables.(args); init = [])
-        isequal(op.x, x) && any(!isequal(x), inner) && return true
-        !isequal(op.x, x) && any(isequal(x), inner) && return true
-    end
-    return any(a -> mixes_derivative_in(x, a), args)
+    return any(op -> isequal(operation(term), op), ops) || any(a -> _mentions(a, ops), arguments(term))
 end
 
+# Variables of the `Differential`s inside `term`.
 function differential_variables(term)
     iscall(term) || return []
     inner = reduce(vcat, differential_variables.(arguments(term)); init = [])
     return operation(term) isa Differential ? push!(inner, operation(term).x) : inner
 end
 
-# What, in the equations `pdes`, discretizes with a stencil that is not coordinate-aware across
-# a seam with unequal gaps; `nothing` when only first-order `UpwindScheme()` derivatives occur.
-function seam_unsafe_derivative(pdes, xs, scheme)
-    xs = safe_unwrap.(xs)
-    orders = sort(union((d_orders(x, pdes) for x in xs)...))
+# Orders in `x` of the derivatives whose argument holds one of the connected variables `ops`; a
+# mixed derivative such as Dx(Dy(u)) is `:mixed`, which d_orders reports as first order in x
+# although its stencil is centered in x. Derivatives of other fields in the same equation have no
+# stencil across the interface.
+function connected_derivative_orders(x, term, ops)
+    term = safe_unwrap(term)
+    iscall(term) || return []
+    op = operation(term)
+    if op isa Differential && _mentions(term, ops)
+        inner = differential_variables(term)
+        mixed = any(w -> !isequal(w, x), inner) && any(w -> isequal(w, x), inner)
+        return Any[mixed ? :mixed : PDEBase.count_differentials(term, x)]
+    end
+    return reduce(vcat, (connected_derivative_orders(x, a, ops) for a in arguments(term)); init = [])
+end
+
+# What, in the equations `pdes`, discretizes with a stencil that is not coordinate-aware across a
+# seam with unequal gaps; `nothing` when only first-order `UpwindScheme()` derivatives occur.
+# Explicit node vectors keep their coordinate-aware first-order schemes (nonuniform upwind and WENO).
+function seam_unsafe_derivative(pdes, xs, ops, scheme, uniform)
+    sides = [side for pde in pdes for side in (pde.lhs, pde.rhs)]
+    found = [o for x in safe_unwrap.(xs) for side in sides for o in connected_derivative_orders(x, side, ops)]
+    :mixed in found && return "a mixed derivative"
+    orders = sort(unique(filter(>(0), found)))
     higher = filter(>(1), orders)
     isempty(higher) || return "derivative order $(join(higher, ", "))"
-    sides = [safe_unwrap(side) for pde in pdes for side in (pde.lhs, pde.rhs)]
-    any(x -> any(side -> mixes_derivative_in(x, side), sides), xs) && return "a mixed derivative"
     isempty(orders) && return nothing
-    scheme isa UpwindScheme && scheme.order == 1 && return nothing
+    (uniform && !(scheme isa UpwindScheme && scheme.order == 1)) || return nothing
     label = scheme isa UpwindScheme ? "UpwindScheme($(scheme.order))" :
         scheme isa FunctionalScheme ? "$(scheme.name) advection" : string(typeof(scheme))
     return "first-order derivatives discretized with $label"
-end
-
-mentions_operation(eq::Equation, op) = mentions_operation(eq.lhs, op) || mentions_operation(eq.rhs, op)
-function mentions_operation(term, op)
-    term = safe_unwrap(term)
-    return iscall(term) && (isequal(operation(term), op) || any(a -> mentions_operation(a, op), arguments(term)))
 end
 
 validate_interface_seams(pdes, boundarymap, s, discretization) = nothing
@@ -122,10 +128,11 @@ function validate_interface_seams(
         gaps1 = abs.(diff(nodes1))
         gaps2 = abs.(diff(nodes2))
         _gaps_match(vcat(gaps1, gaps2), vcat(nodes1, nodes2)) && continue
-        # Only the equations of the connected variables have stencils across the seam.
         ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
-        connected = filter(pde -> any(op -> mentions_operation(pde, op), ops), pdes)
-        what = seam_unsafe_derivative(connected, (b.x, b.x2), discretization.advection_scheme)
+        uniform = s.grid[b.x] isa StepRangeLen && s.grid[b.x2] isa StepRangeLen
+        what = seam_unsafe_derivative(
+            pdes, (b.x, b.x2), ops, discretization.advection_scheme, uniform
+        )
         what === nothing && continue
         throw(
             ArgumentError(

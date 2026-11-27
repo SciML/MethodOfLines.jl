@@ -990,6 +990,12 @@ end
     disc = MOLFiniteDifference([x1 => 513, x2 => 513], t)
     test_seam_rejected(pdesys, disc, "derivative order 2")
 
+    # Exactly representable gaps 1 and 2 at a coordinate scale where a gap is a unit in the last place.
+    a = 2.0^52
+    pdesys = build_seam_system(:heat, a, a + 8, a + 24; f = x -> x - a)
+    disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
+    test_seam_rejected(pdesys, disc, "derivative order 2")
+
     # Equal nominal widths typed as decimals pick up rounding differences between the two gaps.
     for (lo, mid, hi) in ((0.1, 0.2, 0.3), (0.7, 1.4, 2.1), (3.3, 4.4, 5.5))
         pdesys = build_seam_system(:heat, lo, mid, hi; f = x -> x - lo)
@@ -1019,4 +1025,19 @@ end
     disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
     @test get_discrete(pdesys, disc) isa Dict
     @test symbolic_discretize(pdesys, disc) isa Tuple
+
+    # A pointwise source from a connected field does not put a stencil on the interface.
+    eqs[3] = Dt(w(t, x2)) ~ Dx2(Dx2(w(t, x2))) + u2(t, x2)
+    @named sourced = PDESystem(
+        eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2), w(t, x2)],
+    )
+    @test get_discrete(sourced, disc) isa Dict
+    @test symbolic_discretize(sourced, disc) isa Tuple
+end
+
+@testset "Coordinate-aware first-order schemes on explicit vectors are not rejected" begin
+    # Steps of 0.06 on [0, 0.5] end in a short cell, so the axes are vectors with unequal seam gaps.
+    pdesys = build_seam_system(:advection, 0.0, 0.5, 1.0)
+    disc = MOLFiniteDifference([x1 => 0.06, x2 => 0.06], t; advection_scheme = WENOScheme())
+    @test get_discrete(pdesys, disc) isa Dict
 end
