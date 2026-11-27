@@ -73,20 +73,22 @@
             @named pdesys = PDESystem(eq, bcs, domains, [t, x, y, z], [u(t, x, y, z)])
             precompile_discretize(pdesys, MOLFiniteDifference([x => 0.25, y => 0.25, z => 0.25], t))
         end
-        # 2D third-order mixed derivative, Dirichlet.
+        # 2D third-order mixed derivative, Dirichlet, with data from g = x^2 y + 2t, which solves the
+        # equation. Nine points per axis leave enough interior points for corner extrapolation.
         let
             @parameters t x y
             @variables u(..)
             Dt = Differential(t)
             eq = [Dt(u(t, x, y)) ~ (Differential(x)^2 * Differential(y))(u(t, x, y))]
+            g(t, x, y) = x^2 * y + 2t
             bcs = [
-                u(0, x, y) ~ sin(pi * (x + y)),
-                u(t, 0, y) ~ sin(pi * y), u(t, 1, y) ~ sin(pi * (1 + y)),
-                u(t, x, 0) ~ sin(pi * x), u(t, x, 1) ~ sin(pi * (x + 1)),
+                u(0, x, y) ~ g(0, x, y),
+                u(t, 0, y) ~ g(t, 0, y), u(t, 1, y) ~ g(t, 1, y),
+                u(t, x, 0) ~ g(t, x, 0), u(t, x, 1) ~ g(t, x, 1),
             ]
             domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)]
             @named pdesys = PDESystem(eq, bcs, domains, [t, x, y], [u(t, x, y)])
-            precompile_discretize(pdesys, MOLFiniteDifference([x => 0.2, y => 0.2], t))
+            precompile_discretize(pdesys, MOLFiniteDifference([x => 9, y => 9], t))
         end
         # 2D reaction-diffusion with two variables, Neumann.
         let
