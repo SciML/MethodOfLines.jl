@@ -56,14 +56,20 @@ function _seam_nodes(grid, n, atupper)
     return atupper ? [grid[end - i] for i in 0:m] : [grid[1 + i] for i in 0:m]
 end
 
-# Gaps of equal nominal steps differ by at most one unit in the last place of the node coordinates
-# (nodes are correctly rounded), and the rounded endpoints add at most half of one more. The gaps
-# must also agree to sqrt(eps) of a gap, which is where the rounding bound alone stops separating
-# rounding from a real difference (coordinates a few gaps from overflowing the significand).
-function _gaps_match(gaps, nodes)
-    lo, hi = extrema(gaps)
-    T = float(typeof(hi))
-    return hi - lo <= min(3 * eps(float(maximum(abs, nodes))) / 2, sqrt(eps(T)) * hi)
+# The spacing a stencil sees next to the seam of one axis: its step when the axis is uniform,
+# otherwise the actual gaps between its nodes.
+_seam_spacings(step::Number, nodes) = [step]
+_seam_spacings(step, nodes) = abs.(diff(nodes))
+
+# Spacings of equal nominal width differ by at most the rounding of the endpoints (two units in the
+# last place of the largest endpoint, shared over the cells of a step) or, between node gaps, of the nodes
+# (one unit plus half of one). Beyond that, and beyond sqrt(eps) of the spacing, the difference is
+# real however large the coordinates are.
+function _spacings_match(spacings, scale, cells, stepped)
+    lo, hi = extrema(spacings)
+    ulp = eps(float(scale))
+    rounding = stepped ? 2 * ulp / cells : 3 * ulp / 2
+    return hi - lo <= min(rounding, sqrt(eps(float(typeof(hi)))) * hi)
 end
 
 function _mentions(term, ops)
@@ -124,13 +130,14 @@ function validate_interface_seams(
         n = discretization.approx_order
         nodes1 = _seam_nodes(s.grid[b.x], n, isupper(b))
         nodes2 = _seam_nodes(s.grid[b.x2], n, !isupper(b))
-        gaps1 = abs.(diff(nodes1))
-        gaps2 = abs.(diff(nodes2))
-        # The stencils on a uniform axis use its step, which rounded node gaps can hide at large offsets.
-        steps = filter(d -> d isa Number, [s.dxs[b.x], s.dxs[b.x2]])
-        gaps_match = _gaps_match(vcat(gaps1, gaps2, steps), vcat(nodes1, nodes2))
-        # Different step specifications (node vectors) keep the derivative checks but have no gap test.
-        gaps_match && !mismatched_interface_dxs(b, discretization) && continue
+        spacings1 = _seam_spacings(s.dxs[b.x], nodes1)
+        spacings2 = _seam_spacings(s.dxs[b.x2], nodes2)
+        stepped = s.dxs[b.x] isa Number && s.dxs[b.x2] isa Number
+        cells = min(length(s.grid[b.x]), length(s.grid[b.x2])) - 1
+        scale = maximum(abs, stepped ? vcat(extrema(s.grid[b.x])..., extrema(s.grid[b.x2])...) : vcat(nodes1, nodes2))
+        spacings_match = _spacings_match(vcat(spacings1, spacings2), scale, cells, stepped)
+        # Different step specifications (node vectors) keep the derivative checks but have no spacing test.
+        spacings_match && !mismatched_interface_dxs(b, discretization) && continue
         ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
         vectors = !(s.grid[b.x] isa StepRangeLen) && !(s.grid[b.x2] isa StepRangeLen)
         what = seam_unsafe_derivative(
@@ -140,7 +147,7 @@ function validate_interface_seams(
         throw(
             ArgumentError(
                 "Interface $(b.eq) connects $(b.x) and $(b.x2), whose grid gaps next to the interface " *
-                    "differ (nearest first: $gaps1 in $(b.x), $gaps2 in $(b.x2); step sizes $(steps)), but the system contains " *
+                    "differ (nearest first: $spacings1 in $(b.x), $spacings2 in $(b.x2)), but the system contains " *
                     "$what in these variables. Only first-order `UpwindScheme()` derivatives are " *
                     "coordinate-aware across such an interface; the other stencils would use a single " *
                     "spacing and be silently inaccurate. Use equal gaps on both sides of the interface " *

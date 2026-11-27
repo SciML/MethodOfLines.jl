@@ -855,8 +855,8 @@ end
     disc = MOLFiniteDifference([x1 => 5, x2 => 5], t)
     test_seam_rejected(pdesys, disc, "derivative order 2")
     err = thrown(() -> get_discrete(pdesys, disc))
-    @test occursin("[1.0, 1.0]", err.msg)
-    @test occursin("[1.125, 1.125]", err.msg)
+    @test occursin("[1.0] in x1", err.msg)
+    @test occursin("[1.125] in x2", err.msg)
 
     # Equal gaps at the same offset: accepted, and the steady affine profile has a zero RHS.
     pdesys = build_seam_system(:heat, a, a + 4, a + 8; f = x -> x - a)
@@ -1008,6 +1008,12 @@ end
     pdesys = build_seam_system(:heat, a, a + 8, a + 17; f = x -> x - a)
     test_seam_rejected(pdesys, disc, "derivative order 2")
 
+    # The same scalar step on both sides is accepted although rounded node gaps at this offset differ.
+    a40 = 2.0^40
+    pdesys = build_seam_system(:heat, a40, a40 + 9, a40 + 18; f = x -> x - a40)
+    disc = MOLFiniteDifference([x1 => 0.9, x2 => 0.9], t)
+    @test get_discrete(pdesys, disc) isa Dict
+
     # Equal nominal widths typed as decimals pick up rounding differences between the two gaps.
     for (lo, mid, hi) in ((0.1, 0.2, 0.3), (0.7, 1.4, 2.1), (3.3, 4.4, 5.5))
         pdesys = build_seam_system(:heat, lo, mid, hi; f = x -> x - lo)
@@ -1045,6 +1051,12 @@ end
     )
     @test get_discrete(sourced, disc) isa Dict
     @test symbolic_discretize(sourced, disc) isa Tuple
+
+    # The same fields on explicit node vectors with different gaps.
+    vectors = MOLFiniteDifference(
+        [x1 => collect(range(0.0, 0.5; length = 9)), x2 => collect(range(0.5, 1.5; length = 9))], t,
+    )
+    @test get_discrete(pdesys, vectors) isa Dict
 end
 
 @testset "Coordinate-aware first-order schemes on explicit vectors are not rejected" begin
