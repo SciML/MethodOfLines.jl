@@ -1,10 +1,7 @@
 # Whether the first gap of `x2`, which a forward stencil of the uniform axis `x` reaches across an
-# upper interface, differs from the step of `x` (equal point counts on intervals of different length).
-function _upper_seam_gap_differs(s, x, x2)
-    dx2 = s.dxs[x2]
-    gap = dx2 isa Number ? dx2 : dx2[1]
-    return !isapprox(gap, s.dxs[x]; rtol = sqrt(eps(float(typeof(s.dxs[x])))))
-end
+# upper interface, differs from the step of `x` (equal point counts on intervals of different length),
+# by the same comparison as the interface grid validation.
+_upper_seam_gap_differs(s, x, x2) = !last(seam_spacings(s, x, x2, true, 1))
 
 @inline function _upper_seam_gap_differs(D, II, s, bs, jx)
     j, x = jx

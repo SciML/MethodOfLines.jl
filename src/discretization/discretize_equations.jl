@@ -2294,11 +2294,6 @@ function array_upwind_difference(
     haskey(periodic, x) && !(Dop.dx isa Number) && throw(
         ArrayFormFallback("upwind derivative in a periodic nonuniform direction")
     )
-    # The pointwise path differences the interface row with the tap coordinates.
-    haskey(periodic, x) && periodic[x].upper isa NamedTuple &&
-        _upper_seam_gap_differs(s, x, periodic[x].upper.x) && throw(
-        ArrayFormFallback("upwind derivative across an interface onto an axis with another spacing")
-    )
     N = length(ranges)
     j = indexmap[x]
     rng = ranges[j]
@@ -2307,6 +2302,20 @@ function array_upwind_difference(
         array_slice(u, s, ranges, indexmap; shiftx = x, offset = k, periodic = periodic)
             for k in taps
     ]
+    # Mirrors the coordinate branch of `_upwind_difference`: a forward stencil that reaches across an
+    # upper interface onto an axis with another first gap. `array_bands` gives such points a band each.
+    crossing = Dop.dx isa Number && !ispositive && haskey(periodic, x) &&
+        periodic[x].upper isa NamedTuple && last(rng) + last(taps) > length(s, x) &&
+        _upper_seam_gap_differs(s, x, periodic[x].upper.x)
+    if crossing
+        length(rng) == 1 || throw(
+            ArrayFormFallback("upwind stencil across an interface onto an axis with another spacing")
+        )
+        grid = s.grid[x]
+        i = only(rng)
+        coords = [array_wrap_coord(grid, i + k, periodic[x], s) for k in taps]
+        return array_stencil(calculate_weights(Dop.derivative_order, grid[i], coords), slices)
+    end
     weights = if Dop.dx isa Number
         collect(Dop.stencil_coefs)
     else

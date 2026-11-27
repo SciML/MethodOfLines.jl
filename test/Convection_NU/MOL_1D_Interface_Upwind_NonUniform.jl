@@ -851,7 +851,22 @@ end
         @test all(≈(c; atol = 1.0e-12), du)
     end
 
-    # In two dimensions the interface rows are a slice of the array form, which defers to the same stencil.
+    # Float32 steps 0.0625 and 0.0625 + 2^-17 differ by far more than rounding, though by less than
+    # sqrt(eps) relative: the stencil and the grid validation must agree that they differ.
+    plane32 = let Dt = Differential(t), Dx1 = Differential(x1), Dx2 = Differential(x2)
+        hi = 1.00006103515625f0
+        eqs = [Dt(u1(t, x1)) ~ Dx1(u1(t, x1)), Dt(u2(t, x2)) ~ Dx2(u2(t, x2))]
+        bcs = [
+            u1(0.0, x1) ~ x1, u2(0.0, x2) ~ x2, u1(t, 0.5f0) ~ u2(t, 0.5f0),
+            u1(t, 0.0f0) ~ 0.0f0, u2(t, hi) ~ hi,
+        ]
+        domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0f0, 0.5f0), x2 ∈ Interval(0.5f0, hi)]
+        @named line32 = PDESystem(eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)])
+    end
+    du, = seam_rhs(plane32, disc)
+    @test all(≈(1.0; atol = 1.0e-5), du)
+
+    # In two dimensions the interface rows are a slice of the array form, which uses the same weights.
     @parameters y
     @variables v1(..) v2(..)
     Dt, Dx1, Dx2 = Differential(t), Differential(x1), Differential(x2)

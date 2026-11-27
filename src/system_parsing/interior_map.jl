@@ -49,6 +49,20 @@ function _spacings_match(spacings, scale, cells, stepped)
     return hi - lo <= min(rounding, sqrt(eps(float(typeof(hi)))) * hi)
 end
 
+# The spacings next to the interface between axis `x` (at its upper end when `atupper`) and `x2`
+# (at the other end), `n` gaps at most on each side, and whether they agree up to rounding.
+# The upwind stencils use the same comparison to decide when to read the tap coordinates.
+function seam_spacings(s, x, x2, atupper, n)
+    nodes1 = _seam_nodes(s.grid[x], n, atupper)
+    nodes2 = _seam_nodes(s.grid[x2], n, !atupper)
+    spacings1 = _seam_spacings(s.dxs[x], nodes1)
+    spacings2 = _seam_spacings(s.dxs[x2], nodes2)
+    stepped = s.dxs[x] isa Number && s.dxs[x2] isa Number
+    cells = min(length(s.grid[x]), length(s.grid[x2])) - 1
+    scale = maximum(abs, stepped ? vcat(extrema(s.grid[x])..., extrema(s.grid[x2])...) : vcat(nodes1, nodes2))
+    return spacings1, spacings2, _spacings_match(vcat(spacings1, spacings2), scale, cells, stepped)
+end
+
 function _mentions(term, ops)
     iscall(term) || return false
     return any(op -> isequal(operation(term), op), ops) || any(a -> _mentions(a, ops), arguments(term))
@@ -128,15 +142,9 @@ function validate_interface_seams(
     )
     for b in filter_interfaces(flatten_vardict(boundarymap))
         isequal(b.x, b.x2) && continue
-        n = discretization.approx_order
-        nodes1 = _seam_nodes(s.grid[b.x], n, isupper(b))
-        nodes2 = _seam_nodes(s.grid[b.x2], n, !isupper(b))
-        spacings1 = _seam_spacings(s.dxs[b.x], nodes1)
-        spacings2 = _seam_spacings(s.dxs[b.x2], nodes2)
-        stepped = s.dxs[b.x] isa Number && s.dxs[b.x2] isa Number
-        cells = min(length(s.grid[b.x]), length(s.grid[b.x2])) - 1
-        scale = maximum(abs, stepped ? vcat(extrema(s.grid[b.x])..., extrema(s.grid[b.x2])...) : vcat(nodes1, nodes2))
-        spacings_match = _spacings_match(vcat(spacings1, spacings2), scale, cells, stepped)
+        spacings1, spacings2, spacings_match = seam_spacings(
+            s, b.x, b.x2, isupper(b), discretization.approx_order
+        )
         # Different step specifications (node vectors) keep the derivative checks but have no spacing test.
         what = if spacings_match && !mismatched_interface_dxs(b, discretization)
             nothing
