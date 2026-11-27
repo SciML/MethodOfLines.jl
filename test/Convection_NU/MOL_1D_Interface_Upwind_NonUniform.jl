@@ -748,3 +748,115 @@ end
     outflow_slope = (sol_u2[end] - sol_u2[end - 1]) / (xs2[end] - xs2[end - 1])
     @test abs(outflow_slope) < 5.0
 end
+
+function build_linear_advection_interface_system(x2hi; xm = 0.5)
+    Dt = Differential(t)
+    Dx1 = Differential(x1)
+    Dx2 = Differential(x2)
+    eqs = [
+        Dt(u1(t, x1)) ~ -Dx1(u1(t, x1)),
+        Dt(u2(t, x2)) ~ -Dx2(u2(t, x2)),
+    ]
+    bcs = [
+        u1(0.0, x1) ~ x1,
+        u2(0.0, x2) ~ x2,
+        u1(t, 0.0) ~ -t,
+        u1(t, xm) ~ u2(t, xm),
+        u2(t, x2hi) ~ x2hi - t,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.2),
+        x1 ∈ Interval(0.0, xm),
+        x2 ∈ Interval(xm, x2hi),
+    ]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)],
+    )
+    return pdesys
+end
+
+@testset "Equal integer point counts on unequal-length domains are mismatched" begin
+    pdesys = build_linear_advection_interface_system(1.5)
+    disc = MOLFiniteDifference(
+        [x1 => 9, x2 => 9], t; advection_scheme = UpwindScheme(),
+    )
+    @test_throws ArgumentError get_discrete(pdesys, disc)
+    @test_throws ArgumentError ode_discretize(pdesys, disc)
+end
+
+@testset "Equal integer point counts on equal-length domains solve exactly" begin
+    pdesys = build_linear_advection_interface_system(1.0)
+    disc = MOLFiniteDifference(
+        [x1 => 11, x2 => 11], t; advection_scheme = UpwindScheme(),
+    )
+    prob = ode_discretize(pdesys, disc)
+    sol = solve(prob, SSPRK33(); dt = 0.005, saveat = [0.2])
+    for (u, x) in ((u1(t, x1), x1), (u2(t, x2), x2))
+        @test maximum(abs.(sol[u][end, :] .- (sol[x] .- 0.2))) < 1.0e-8
+    end
+end
+
+@testset "Nearly equal scalar steps are still mismatched" begin
+    pdesys = build_linear_advection_interface_system(1.0)
+    disc = MOLFiniteDifference(
+        [x1 => 0.0624999999, x2 => 0.0625], t; advection_scheme = UpwindScheme(),
+    )
+    @test_throws ArgumentError get_discrete(pdesys, disc)
+end
+
+@testset "Equal point counts on equal-length Float32 domains are matched" begin
+    b = (x = x1, x2 = x2)
+    f32disc = MOLFiniteDifference(
+        [x1 => 9, x2 => 9], t; advection_scheme = UpwindScheme(),
+    )
+    intervals = Dict(x1 => (0.1f0, 0.2f0), x2 => (0.2f0, 0.3f0))
+    @test !MethodOfLines.mismatched_interface_dxs(b, intervals, f32disc)
+end
+
+@testset "Mixed Float32 and Float64 equal-step domains are matched" begin
+    b = (x = x1, x2 = x2)
+    mixeddisc = MOLFiniteDifference(
+        [x1 => 11, x2 => 11], t; advection_scheme = UpwindScheme(),
+    )
+    intervals = Dict(x1 => (0.1f0, 0.2f0), x2 => (0.2, 0.3))
+    @test !MethodOfLines.mismatched_interface_dxs(b, intervals, mixeddisc)
+end
+
+@testset "Equal point counts on narrow offset Float64 domains are matched" begin
+    b = (x = x1, x2 = x2)
+    narrowdisc = MOLFiniteDifference(
+        [x1 => 9, x2 => 9], t; advection_scheme = UpwindScheme(),
+    )
+    intervals = Dict(x1 => (1.0, 1.001), x2 => (1.001, 1.002))
+    @test !MethodOfLines.mismatched_interface_dxs(b, intervals, narrowdisc)
+end
+
+# Error of the right-hand side of the manufactured solution u = x - t, whose exact value is -1.
+function advection_rhs_error(pdesys, disc)
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    return maximum(abs.(du .+ 1))
+end
+
+@testset "Equal specifications whose grids end short of the interface keep working" begin
+    pdesys = build_linear_advection_interface_system(0.2; xm = 0.1)
+    disc = MOLFiniteDifference(Pair[x1 => 12, x2 => 12], t; advection_scheme = UpwindScheme())
+    @test advection_rhs_error(pdesys, disc) < 1.0e-10
+
+    pdesys = build_linear_advection_interface_system(1.0)
+    disc = MOLFiniteDifference([x1 => 0.06, x2 => 0.06], t; advection_scheme = UpwindScheme())
+    @test advection_rhs_error(pdesys, disc) < 1.0e-10
+end
+
+@testset "Float32 and Float16 endpoint rounding keeps equal counts matched" begin
+    b = (x = x1, x2 = x2)
+    discs = MOLFiniteDifference([x1 => 9, x2 => 9], t)
+    for (iv1, iv2) in (
+            ((1000.0f0, 1000.1f0), (1000.1f0, 1000.2f0)),
+            ((Float16(0.1), Float16(0.2)), (Float16(0.2), Float16(0.3))),
+        )
+        intervals = Dict(x1 => iv1, x2 => iv2)
+        @test !MethodOfLines.mismatched_interface_dxs(b, intervals, discs)
+    end
+end

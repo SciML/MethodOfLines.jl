@@ -29,9 +29,9 @@ PDEBase.get_eqvar(im::InteriorMap, pde) = im.var[pde]
 
 # Mismatched-grid interfaces are only coordinate-aware on the first-order (advection)
 # path via bcoord; centered/half-offset paths are not. Reject orders > 1 up front.
-function validate_interface_orders(pdes, boundarymap, discretization)
+function validate_interface_orders(pdes, boundarymap, intervals, discretization)
     for b in filter_interfaces(flatten_vardict(boundarymap))
-        mismatched_interface_dxs(b, discretization) || continue
+        mismatched_interface_dxs(b, intervals, discretization) || continue
         orders = union(d_orders(b.x, pdes), d_orders(b.x2, pdes))
         higher = filter(>(1), orders)
         if !isempty(higher)
@@ -55,7 +55,7 @@ function PDEBase.construct_var_equation_mapping(
         discretization::MOLDiscretization
     ) where {N, M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
-    validate_interface_orders(pdes, boundarymap, discretization)
+    validate_interface_orders(pdes, boundarymap, s.vars.intervals, discretization)
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
 

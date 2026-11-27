@@ -91,7 +91,7 @@ function clip_interior!!(
 end
 
 function validate_interface_orders(
-        pdes, boundarymap, discretization::PseudospectralDiscretization
+        pdes, boundarymap, intervals, discretization::PseudospectralDiscretization
     )
     return nothing
 end
