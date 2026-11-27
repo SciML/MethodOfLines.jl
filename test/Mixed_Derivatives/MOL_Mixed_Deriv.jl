@@ -87,7 +87,7 @@ end
     @test SciMLBase.successful_retcode(sol)
 end
 
-# g = x^2 y + 2t solves Dt(u) = Dxxy(u) exactly (Dxxy g = 2), so every discrete right-hand side at
+# g = x^2 y + 2t + 1 solves Dt(u) = Dxxy(u) exactly (Dxxy g = 2), so every discrete right-hand side at
 # the initial condition is 2 up to roundoff. Nine points per axis give seven interior points, enough for
 # the five interior taps that corner extrapolation needs; the precompile workload uses this same fixture.
 @testset "Dt(u) ~ Dxxy(u) manufactured solution, corner extrapolation" begin
@@ -96,7 +96,7 @@ end
     Dt = Differential(t)
     Dxxy = Differential(x)^2 * Differential(y)
 
-    g(t, x, y) = x^2 * y + 2t
+    g(t, x, y) = x^2 * y + 2t + 1
     eq = [Dt(u(t, x, y)) ~ Dxxy(u(t, x, y))]
     bcs = [
         u(0, x, y) ~ g(0, x, y),
