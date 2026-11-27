@@ -94,7 +94,7 @@ end
 # What, in the equations `pdes`, discretizes with a stencil that is not coordinate-aware across a
 # seam with unequal gaps; `nothing` when only first-order `UpwindScheme()` derivatives occur.
 # Node vectors on both sides keep their coordinate-aware first-order schemes (nonuniform upwind and WENO).
-function seam_unsafe_derivative(pdes, xs, ops, scheme, vectors)
+function seam_unsafe_derivative(pdes, xs, ops, scheme, vectors, staggered = false)
     sides = [side for pde in pdes for side in (pde.lhs, pde.rhs)]
     found = [o for x in safe_unwrap.(xs) for side in sides for o in connected_derivative_orders(x, side, ops)]
     :mixed in found && return "a mixed derivative"
@@ -102,6 +102,8 @@ function seam_unsafe_derivative(pdes, xs, ops, scheme, vectors)
     higher = filter(>(1), orders)
     isempty(higher) || return "derivative order $(join(higher, ", "))"
     isempty(orders) && return nothing
+    # Staggered stencils wrap their taps with the uniform weights of the axis they start on.
+    staggered && return "first-order derivatives on a `StaggeredGrid`"
     # User-written functional schemes are not classified and behave as on master. WENO reads the
     # tap coordinates when both grids are node vectors; wider upwind stencils never do.
     weno = scheme isa FunctionalScheme && scheme.interior === weno_f
@@ -134,7 +136,7 @@ function validate_node_vector_orders(b, pdes, s)
 end
 
 # Connected axes may have unequal grid spacings at the seam, or different node vectors, only for
-# first-order `UpwindScheme()`, whose stencils use the actual coordinates
+# first-order `UpwindScheme()` off staggered grids, whose stencils use the actual coordinates
 # (src/discretization/schemes/upwind_difference), and for WENO on node vectors. Every other stencil
 # that straddles the seam would use one spacing and be silently wrong.
 function validate_interface_seams(
@@ -151,7 +153,10 @@ function validate_interface_seams(
         else
             ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
             vectors = !(s.grid[b.x] isa StepRangeLen) && !(s.grid[b.x2] isa StepRangeLen)
-            seam_unsafe_derivative(pdes, (b.x, b.x2), ops, discretization.advection_scheme, vectors)
+            staggered = discretization.grid_align isa StaggeredGrid
+            seam_unsafe_derivative(
+                pdes, (b.x, b.x2), ops, discretization.advection_scheme, vectors, staggered
+            )
         end
         if what === nothing
             validate_node_vector_orders(b, pdes, s)
@@ -164,7 +169,7 @@ function validate_interface_seams(
         throw(
             ArgumentError(
                 "Interface $(b.eq) connects $(b.x) and $(b.x2), $grids, but the system contains " *
-                    "$what in these variables. Only first-order `UpwindScheme()` derivatives, and " *
+                    "$what in these variables. Only first-order `UpwindScheme()` derivatives (not on a `StaggeredGrid`), and " *
                     "`WENOScheme()` when both grids are node vectors, are coordinate-aware across such an " *
                     "interface; the other stencils would be silently inaccurate. Use the same spacing on both " *
                     "sides of the interface (for example equal step sizes on intervals of equal length)."

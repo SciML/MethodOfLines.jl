@@ -866,6 +866,25 @@ end
     du, = seam_rhs(plane32, disc)
     @test all(≈(1.0; atol = 1.0e-5), du)
 
+    # A ring whose second interval sits at 2^53: the wrapped tap is one unit past the seam, which an
+    # absolute coordinate there cannot represent.
+    let Dt = Differential(t), Dx1 = Differential(x1), Dx2 = Differential(x2), hi = 2.0^53 + 4
+        eqs = [Dt(u1(t, x1)) ~ Dx1(u1(t, x1)), Dt(u2(t, x2)) ~ Dx2(u2(t, x2))]
+        bcs = [u1(0.0, x1) ~ x1, u2(0.0, x2) ~ 0.0, u1(t, 4.0) ~ u2(t, 4.0), u1(t, 0.0) ~ u2(t, hi)]
+        domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0, 4.0), x2 ∈ Interval(4.0, hi)]
+        @named farring = PDESystem(eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)])
+        ringdisc = MOLFiniteDifference([x1 => 5, x2 => 5], t)
+        grids = get_discrete(farring, ringdisc)
+        sys, tspan = symbolic_discretize(farring, ringdisc)
+        simp = mtkcompile(sys)
+        prob = ODEProblem(simp, nothing, tspan)
+        du = similar(prob.u0)
+        prob.f(du, prob.u0, prob.p, 0.0)
+        @test all(isfinite, du)
+        seam = findfirst(isequal(grids[u2(t, x2)][end]), unknowns(simp))
+        @test du[seam] ≈ 1.0
+    end
+
     # In two dimensions the interface rows are a slice of the array form, which uses the same weights.
     @parameters y
     @variables v1(..) v2(..)
@@ -1153,6 +1172,36 @@ end
     pdesys = build_seam_system(:advection, 0.0, 0.53125, 1.03125)
     disc = MOLFiniteDifference([x1 => 0.0625, x2 => 0.0625], t; advection_scheme = WENOScheme())
     test_seam_rejected(pdesys, disc, "WENO advection")
+end
+
+@testset "Staggered grids reject unequal seam gaps" begin
+    # u center aligned and v edge aligned, u_t = v_x and v_t = u_x, with u = v = x.
+    @variables v1(..) v2(..)
+    Dt, Dx1, Dx2 = Differential(t), Differential(x1), Differential(x2)
+    function staggered_pair(mid, hi)
+        eqs = [
+            Dt(u1(t, x1)) ~ Dx1(v1(t, x1)), Dt(v1(t, x1)) ~ Dx1(u1(t, x1)),
+            Dt(u2(t, x2)) ~ Dx2(v2(t, x2)), Dt(v2(t, x2)) ~ Dx2(u2(t, x2)),
+        ]
+        bcs = [
+            u1(0.0, x1) ~ x1, v1(0.0, x1) ~ x1, u2(0.0, x2) ~ x2, v2(0.0, x2) ~ x2,
+            u1(t, mid) ~ u2(t, mid), v1(t, mid) ~ v2(t, mid), u1(t, 0.0) ~ 0.0, u2(t, hi) ~ hi,
+        ]
+        domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0, mid), x2 ∈ Interval(mid, hi)]
+        @named pair = PDESystem(
+            eqs, bcs, domains, [t, x1, x2], [u1(t, x1), v1(t, x1), u2(t, x2), v2(t, x2)],
+        )
+        return pair
+    end
+    staggered(specs) = MOLFiniteDifference(
+        [x1 => specs[1], x2 => specs[2]], t; grid_align = MethodOfLines.StaggeredGrid(),
+        edge_aligned_var = [v1(t, x1) => x1, v2(t, x2) => x2],
+    )
+    du, = seam_rhs(staggered_pair(0.5, 1.0), staggered((0.0625, 0.0625)))
+    @test all(≈(1.0; atol = 1.0e-12), du)
+    test_seam_rejected(staggered_pair(0.53125, 1.0625), staggered((0.0625, 0.0625)), "StaggeredGrid")
+    vectors = (collect(range(0.0, 0.5; length = 9)), collect(range(0.5, 1.5; length = 9)))
+    test_seam_rejected(staggered_pair(0.5, 1.5), staggered(vectors), "StaggeredGrid")
 end
 
 # A user scheme that differences its outer taps by their coordinates.
