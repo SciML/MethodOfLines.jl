@@ -1070,3 +1070,34 @@ end
     disc = MOLFiniteDifference([x1 => 0.0625, x2 => 0.0625], t; advection_scheme = WENOScheme())
     test_seam_rejected(pdesys, disc, "WENO advection")
 end
+
+# A user scheme that reads only the upwind taps of its three-point stencil.
+upwind_taps(u, p, t, x, dx) = (u[2] - u[1]) / dx
+
+@testset "User functional schemes are not classified and behave as without the check" begin
+    scheme = FunctionalScheme{3, 1}(upwind_taps, [nothing], [nothing], false, []; name = "upwind_taps")
+    a = 2.0^48
+    for (lo, mid, hi, n) in ((0.0, 0.5, 1.5, 9), (0.0, 0.5, 1.5, 17), (a, a + 4, a + 8.5, 5))
+        pdesys = build_seam_system(:advection, lo, mid, hi; f = x -> (x - lo)^2)
+        disc = MOLFiniteDifference([x1 => n, x2 => n], t; advection_scheme = scheme)
+        grids = get_discrete(pdesys, disc)
+        nodes = sort(unique(vcat(grids[x1], grids[x2])))
+        du, u0 = seam_rhs(pdesys, disc)
+        for (k, uk) in enumerate(u0)
+            i = argmin(abs.((nodes .- lo) .^ 2 .- uk))
+            @test du[k] ≈ -((nodes[i] - lo) + (nodes[i - 1] - lo)) atol = 1.0e-9
+        end
+    end
+end
+
+@testset "Integer-count axes that the colon range builds cleanly are unchanged" begin
+    for (lo, hi, n) in ((0.0, 0.5, 11), (0.0, 1.0, 11), (0.1, 0.2, 11), (0.0, 0.5, 9), (0.5, 1.5, 9))
+        dx = (hi - lo) / (n - 1)
+        colon = lo:dx:hi
+        @test length(colon) == n && colon[end] == hi
+        pdesys = build_seam_system(:heat, lo, hi, 2hi - lo)
+        disc = MOLFiniteDifference([x1 => n, x2 => n], t)
+        @test get_discrete(pdesys, disc)[x1] == collect(colon)
+        @test get_discrete(pdesys, disc)[x1] isa StepRangeLen
+    end
+end

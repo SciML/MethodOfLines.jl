@@ -111,9 +111,11 @@ function seam_unsafe_derivative(pdes, xs, ops, scheme, vectors)
     higher = filter(>(1), orders)
     isempty(higher) || return "derivative order $(join(higher, ", "))"
     isempty(orders) && return nothing
-    (vectors || (scheme isa UpwindScheme && scheme.order == 1)) && return nothing
-    label = scheme isa UpwindScheme ? "UpwindScheme($(scheme.order))" :
-        scheme isa FunctionalScheme ? "$(scheme.name) advection" : string(typeof(scheme))
+    # User-written functional schemes are not classified and behave as on master.
+    unsafe = (scheme isa UpwindScheme && scheme.order > 1) ||
+        (scheme isa FunctionalScheme && scheme.interior === weno_f)
+    (vectors || !unsafe) && return nothing
+    label = scheme isa UpwindScheme ? "UpwindScheme($(scheme.order))" : "$(scheme.name) advection"
     return "first-order derivatives discretized with $label"
 end
 
