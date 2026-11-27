@@ -165,6 +165,8 @@ domains = [t ∈ Interval(0.0, 0.15),
     [t, x1, x2], [c1(t, x1), c2(t, x2)])
 ```
 
+Connected axes whose grids have different spacings at the interface are supported only for first-order derivatives with `UpwindScheme()` (the default), whose stencils use the actual node coordinates; `get_discrete` and `symbolic_discretize` reject other cases with an `ArgumentError` naming the two gaps and the offending derivative. Centered and higher-order derivatives (for example diffusion), mixed derivatives, `UpwindScheme` of order above one, `WENOScheme()` and user-defined `FunctionalScheme`s require equal gaps on both sides of the interface, compared on the actual grid nodes. Known limitation: with the wind pointing from the upper domain towards the lower one on uniform grids, the interface point itself is still differenced with the spacing of the lower domain.
+
 Note that if you want to use a higher order interface condition, this may not work if you have no simple condition of the form `c1(t, 0.5) ~ c2(t, 0.5)`.
 
 Interfaces require the connected variables to use the same step size, except when `WENOScheme()` is used with nonuniform grid vectors supplied for both connected variables, in which case the grids may differ: advection stencils that cross the interface are evaluated with the exact physical coordinates of the neighbouring grid. This exception covers first-order (advection) derivatives only — systems containing higher-order spatial derivatives (e.g. diffusion) in the connected variables are rejected with an error at discretization time.

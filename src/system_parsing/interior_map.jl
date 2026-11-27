@@ -50,12 +50,93 @@ function validate_interface_orders(pdes, boundarymap, discretization)
     return
 end
 
+# Gaps of `grid` next to the seam of interface `b`, at most `n` of them, nearest first.
+function _seam_gaps(grid, n, atupper)
+    m = min(n, length(grid) - 1)
+    return atupper ? [grid[end - i + 1] - grid[end - i] for i in 1:m] :
+        [grid[1 + i] - grid[i] for i in 1:m]
+end
+
+# The bound is tied to the gaps (not to the coordinate magnitude): rounding of two adjacent
+# node coordinates is below sqrt(eps) of a gap unless the gaps are tiny against the coordinates.
+function _gaps_match(gaps)
+    lo, hi = extrema(gaps)
+    return hi - lo <= sqrt(maximum(g -> eps(float(typeof(g))), gaps)) * hi
+end
+
+# d_orders reports Dx(Dy(u)) as first order in x, but the cross-derivative stencil is centered in x.
+function mixes_derivative_in(x, term)
+    iscall(term) || return false
+    op = operation(term)
+    args = arguments(term)
+    if op isa Differential
+        inner = reduce(vcat, differential_variables.(args); init = [])
+        isequal(op.x, x) && any(!isequal(x), inner) && return true
+        !isequal(op.x, x) && any(isequal(x), inner) && return true
+    end
+    return any(a -> mixes_derivative_in(x, a), args)
+end
+
+function differential_variables(term)
+    iscall(term) || return []
+    inner = reduce(vcat, differential_variables.(arguments(term)); init = [])
+    return operation(term) isa Differential ? push!(inner, operation(term).x) : inner
+end
+
+# What, in the equations `pdes`, discretizes with a stencil that is not coordinate-aware across
+# a seam with unequal gaps; `nothing` when only first-order `UpwindScheme()` derivatives occur.
+function seam_unsafe_derivative(pdes, xs, scheme)
+    xs = safe_unwrap.(xs)
+    orders = sort(union((d_orders(x, pdes) for x in xs)...))
+    higher = filter(>(1), orders)
+    isempty(higher) || return "derivative order $(join(higher, ", "))"
+    sides = [safe_unwrap(side) for pde in pdes for side in (pde.lhs, pde.rhs)]
+    any(x -> any(side -> mixes_derivative_in(x, side), sides), xs) && return "a mixed derivative"
+    isempty(orders) && return nothing
+    scheme isa UpwindScheme && scheme.order == 1 && return nothing
+    label = scheme isa UpwindScheme ? "UpwindScheme($(scheme.order))" :
+        scheme isa FunctionalScheme ? "$(scheme.name) advection" : string(typeof(scheme))
+    return "first-order derivatives discretized with $label"
+end
+
+validate_interface_seams(pdes, boundarymap, s, discretization) = nothing
+
+# Connected axes may have unequal grid spacings at the seam only for first-order `UpwindScheme()`,
+# whose stencils use the actual coordinates (src/discretization/schemes/upwind_difference). Every
+# other stencil that straddles the seam would use one spacing and be silently wrong.
+function validate_interface_seams(
+        pdes, boundarymap, s, discretization::MOLFiniteDifference
+    )
+    for b in filter_interfaces(flatten_vardict(boundarymap))
+        isequal(b.x, b.x2) && continue
+        mismatched_interface_dxs(b, discretization) && continue
+        n = discretization.approx_order
+        gaps1 = _seam_gaps(s.grid[b.x], n, isupper(b))
+        gaps2 = _seam_gaps(s.grid[b.x2], n, !isupper(b))
+        _gaps_match(vcat(gaps1, gaps2)) && continue
+        what = seam_unsafe_derivative(pdes, (b.x, b.x2), discretization.advection_scheme)
+        what === nothing && continue
+        throw(
+            ArgumentError(
+                "Interface $(b.eq) connects $(b.x) and $(b.x2), whose grid gaps next to the interface " *
+                    "differ (nearest first: $gaps1 in $(b.x), $gaps2 in $(b.x2)), but the system contains " *
+                    "$what in these variables. Only first-order `UpwindScheme()` derivatives are " *
+                    "coordinate-aware across such an interface; the other stencils would use a single " *
+                    "spacing and be silently inaccurate. Use equal gaps on both sides of the interface " *
+                    "(for example equal step sizes on intervals of equal length)."
+            )
+        )
+    end
+    return
+end
+
 function PDEBase.construct_var_equation_mapping(
         pdes::Vector{Equation}, boundarymap, s::DiscreteSpace{N, M},
         discretization::MOLDiscretization
     ) where {N, M}
     @assert length(pdes) == M "There must be the same number of equations and unknowns, got $(length(pdes)) equations and $(M) unknowns"
     validate_interface_orders(pdes, boundarymap, discretization)
+    validate_interface_seams(pdes, boundarymap, s, discretization)
     m = buildmatrix(pdes, s)
     varmap = Dict(build_variable_mapping(m, s.ū, pdes))
 

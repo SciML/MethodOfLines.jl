@@ -748,3 +748,190 @@ end
     outflow_slope = (sol_u2[end] - sol_u2[end - 1]) / (xs2[end] - xs2[end - 1])
     @test abs(outflow_slope) < 5.0
 end
+
+# Two connected domains [lo, mid] and [mid, hi] with the same equation on both. `kind` is
+# :advection (u_t = -u_x, exact solution f(x - t)) or :heat (u_t = u_xx, steady for affine f).
+function build_seam_system(kind, lo, mid, hi; f = x -> x - lo)
+    rhs(u, X, D) = kind == :advection ? -D(u(t, X)) : D(D(u(t, X)))
+    Dt = Differential(t)
+    eqs = [
+        Dt(u1(t, x1)) ~ rhs(u1, x1, Differential(x1)),
+        Dt(u2(t, x2)) ~ rhs(u2, x2, Differential(x2)),
+    ]
+    inflow = kind == :advection ? f(lo - t) : f(lo)
+    outflow = kind == :advection ? f(hi - t) : f(hi)
+    bcs = [
+        u1(0.0, x1) ~ f(x1),
+        u2(0.0, x2) ~ f(x2),
+        u1(t, mid) ~ u2(t, mid),
+        u1(t, lo) ~ inflow,
+        u2(t, hi) ~ outflow,
+    ]
+    domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(lo, mid), x2 ∈ Interval(mid, hi)]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)],
+    )
+    return pdesys
+end
+
+function seam_rhs(pdesys, disc)
+    prob = ode_discretize(pdesys, disc)
+    du = similar(prob.u0)
+    prob.f(du, prob.u0, prob.p, 0.0)
+    return du, prob.u0
+end
+
+# The error a public entry point raises, or nothing.
+function thrown(f)
+    try
+        f()
+    catch err
+        return err
+    end
+    return nothing
+end
+
+seam_message(f) = sprint(showerror, thrown(f))
+
+# Both public entry points reject, and the message names the interface and derivative.
+function test_seam_rejected(pdesys, disc, what)
+    for entry in (get_discrete, ode_discretize)
+        err = thrown(() -> entry(pdesys, disc))
+        @test err isa ArgumentError
+        err isa ArgumentError && @test occursin(what, err.msg) && occursin("grid gaps", err.msg)
+    end
+    return
+end
+
+@testset "First-order upwind across unequal seam gaps matches the backward difference" begin
+    # u = x^2 at t = 0, so u_t = -(x_i + x_{i-1}) with the true node coordinates, seam state included.
+    for n in (9, 17)
+        pdesys = build_seam_system(:advection, 0.0, 0.5, 1.5; f = x -> x^2)
+        disc = MOLFiniteDifference([x1 => n, x2 => n], t; advection_scheme = UpwindScheme())
+        grids = get_discrete(pdesys, disc)
+        nodes = sort(unique(vcat(grids[x1], grids[x2])))
+        @test (length(grids[x1]), length(grids[x2])) == (n, n)
+        @test grids[x1][end] - grids[x1][end - 1] == 0.5 / (n - 1)
+        @test grids[x2][2] - grids[x2][1] == 1.0 / (n - 1)
+
+        du, u0 = seam_rhs(pdesys, disc)
+        @test length(du) == 2n - 3
+        for (k, uk) in enumerate(u0)
+            i = findfirst(==(sqrt(uk)), nodes)
+            @test i !== nothing
+            @test du[k] ≈ -(nodes[i] + nodes[i - 1]) atol = 1.0e-12
+        end
+        @test any(==(0.5), sqrt.(u0))
+    end
+end
+
+@testset "Affine first-order advection is exact across unequal seam gaps" begin
+    pdesys = build_seam_system(:advection, 0.0, 0.5, 1.5)
+    disc = MOLFiniteDifference([x1 => 9, x2 => 9], t; advection_scheme = UpwindScheme())
+    du, = seam_rhs(pdesys, disc)
+    @test all(≈(-1.0; atol = 1.0e-12), du)
+end
+
+@testset "Equal-count and scalar-step first-order advection stay accepted" begin
+    for (specs, mid, hi) in (((12, 12), 0.1, 0.2), ((0.06, 0.06), 0.5, 1.0))
+        pdesys = build_seam_system(:advection, 0.0, mid, hi)
+        disc = MOLFiniteDifference(
+            [x1 => specs[1], x2 => specs[2]], t; advection_scheme = UpwindScheme(),
+        )
+        @test get_discrete(pdesys, disc) isa Dict
+        du, = seam_rhs(pdesys, disc)
+        @test maximum(abs.(du .+ 1.0)) < 1.0e-12
+    end
+end
+
+@testset "Heat across unequal seam gaps is rejected from both entry points" begin
+    pdesys = build_seam_system(:heat, 0.0, 0.5, 1.5)
+    disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
+    test_seam_rejected(pdesys, disc, "derivative order 2")
+
+    # Gaps 1.0 and 1.125 exactly, at an offset where the coordinate spacing is 0.0625.
+    a = 2.0^48
+    pdesys = build_seam_system(:heat, a, a + 4, a + 8.5; f = x -> x - a)
+    disc = MOLFiniteDifference([x1 => 5, x2 => 5], t)
+    test_seam_rejected(pdesys, disc, "derivative order 2")
+    err = thrown(() -> get_discrete(pdesys, disc))
+    @test occursin("[1.0, 1.0]", err.msg)
+    @test occursin("[1.125, 1.125]", err.msg)
+
+    # Equal gaps at the same offset: accepted, and the steady affine profile has a zero RHS.
+    pdesys = build_seam_system(:heat, a, a + 4, a + 8; f = x -> x - a)
+    du, = seam_rhs(pdesys, disc)
+    @test all(iszero, du)
+end
+
+@testset "Schemes that are not coordinate-aware reject unequal seam gaps" begin
+    pdesys = build_seam_system(:advection, 0.0, 0.5, 1.5)
+    for (label, scheme) in (("UpwindScheme(2)", UpwindScheme(2)), ("WENO advection", WENOScheme()))
+        disc = MOLFiniteDifference([x1 => 9, x2 => 9], t; advection_scheme = scheme)
+        test_seam_rejected(pdesys, disc, label)
+    end
+
+    # The same schemes are fine when the gaps match.
+    pdesys = build_seam_system(:advection, 0.0, 0.5, 1.0)
+    for scheme in (UpwindScheme(2), WENOScheme())
+        disc = MOLFiniteDifference([x1 => 11, x2 => 11], t; advection_scheme = scheme)
+        du, = seam_rhs(pdesys, disc)
+        @test maximum(abs.(du .+ 1.0)) < 1.0e-8
+    end
+end
+
+@testset "Nested and mixed derivatives reject unequal seam gaps" begin
+    Dt = Differential(t)
+    Dx1, Dx2 = Differential(x1), Differential(x2)
+    eqs = [
+        Dt(u1(t, x1)) ~ Dx1((1 + u1(t, x1)) * Dx1(u1(t, x1))),
+        Dt(u2(t, x2)) ~ Dx2((1 + u2(t, x2)) * Dx2(u2(t, x2))),
+    ]
+    bcs = [
+        u1(0.0, x1) ~ x1, u2(0.0, x2) ~ x2, u1(t, 0.5) ~ u2(t, 0.5),
+        u1(t, 0.0) ~ 0.0, u2(t, 1.5) ~ 1.5,
+    ]
+    domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.5)]
+    @named nonlinear = PDESystem(eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)])
+    disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
+    test_seam_rejected(nonlinear, disc, "derivative order 2")
+
+    @parameters y
+    @variables w1(..) w2(..)
+    Dy = Differential(y)
+    eqs = [
+        Dt(w1(t, x1, y)) ~ Dx1(Dy(w1(t, x1, y))),
+        Dt(w2(t, x2, y)) ~ Dx2(Dy(w2(t, x2, y))),
+    ]
+    bcs = [
+        w1(0.0, x1, y) ~ x1 * y, w2(0.0, x2, y) ~ x2 * y, w1(t, 0.5, y) ~ w2(t, 0.5, y),
+        w1(t, 0.0, y) ~ 0.0, w2(t, 1.5, y) ~ 1.5 * y,
+        w1(t, x1, 0.0) ~ 0.0, w1(t, x1, 1.0) ~ x1,
+        w2(t, x2, 0.0) ~ 0.0, w2(t, x2, 1.0) ~ x2,
+    ]
+    domains = [
+        t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.5),
+        y ∈ Interval(0.0, 1.0),
+    ]
+    @named mixed = PDESystem(
+        eqs, bcs, domains, [t, x1, x2, y], [w1(t, x1, y), w2(t, x2, y)],
+    )
+    disc = MOLFiniteDifference([x1 => 9, x2 => 9, y => 9], t)
+    test_seam_rejected(mixed, disc, "a mixed derivative")
+    disc = MOLFiniteDifference([x1 => 11, x2 => 11, y => 9], t)
+    domains[3] = x2 ∈ Interval(0.5, 1.0)
+    bcs[5] = w2(t, 1.0, y) ~ y
+    @named mixed_equal = PDESystem(
+        eqs, bcs, domains, [t, x1, x2, y], [w1(t, x1, y), w2(t, x2, y)],
+    )
+    @test get_discrete(mixed_equal, disc) isa Dict
+end
+
+@testset "Float32 equal-width interface grids stay accepted" begin
+    for kind in (:advection, :heat)
+        pdesys = build_seam_system(kind, 0.1f0, 0.2f0, 0.3f0; f = x -> x)
+        disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
+        @test get_discrete(pdesys, disc) isa Dict
+        @test symbolic_discretize(pdesys, disc) isa Tuple
+    end
+end
