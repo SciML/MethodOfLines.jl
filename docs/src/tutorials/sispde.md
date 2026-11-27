@@ -77,7 +77,7 @@ domains = [t ∈ Interval(0.0, 10.0),
 # Need a small dx here for accuracy
 dx = 0.01
 order = 2
-discretization = MOLFiniteDifference([x => dx], t)
+discretization = MOLFiniteDifference([x => dx], t, approx_order = order)
 
 # Convert the PDE system into a DAE problem
 prob = discretize(pdesys, discretization);
