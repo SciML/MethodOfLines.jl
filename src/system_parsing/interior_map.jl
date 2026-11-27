@@ -50,18 +50,18 @@ function validate_interface_orders(pdes, boundarymap, discretization)
     return
 end
 
-# Gaps of `grid` next to the seam of interface `b`, at most `n` of them, nearest first.
-function _seam_gaps(grid, n, atupper)
+# The (at most `n`) nodes of `grid` next to the seam of an interface, ordered away from the seam.
+function _seam_nodes(grid, n, atupper)
     m = min(n, length(grid) - 1)
-    return atupper ? [grid[end - i + 1] - grid[end - i] for i in 1:m] :
-        [grid[1 + i] - grid[i] for i in 1:m]
+    return atupper ? [grid[end - i] for i in 0:m] : [grid[1 + i] for i in 0:m]
 end
 
-# The bound is tied to the gaps (not to the coordinate magnitude): rounding of two adjacent
-# node coordinates is below sqrt(eps) of a gap unless the gaps are tiny against the coordinates.
-function _gaps_match(gaps)
+# Gaps of equal nominal steps differ by at most one unit in the last place of the node coordinates
+# (nodes are correctly rounded), and the rounded interval endpoints add at most half of one more.
+# Anything beyond that is a real difference, however large the coordinates are.
+function _gaps_match(gaps, nodes)
     lo, hi = extrema(gaps)
-    return hi - lo <= sqrt(maximum(g -> eps(float(typeof(g))), gaps)) * hi
+    return hi - lo <= 3 * eps(float(maximum(abs, nodes))) / 2
 end
 
 # d_orders reports Dx(Dy(u)) as first order in x, but the cross-derivative stencil is centered in x.
@@ -99,6 +99,12 @@ function seam_unsafe_derivative(pdes, xs, scheme)
     return "first-order derivatives discretized with $label"
 end
 
+mentions_operation(eq::Equation, op) = mentions_operation(eq.lhs, op) || mentions_operation(eq.rhs, op)
+function mentions_operation(term, op)
+    term = safe_unwrap(term)
+    return iscall(term) && (isequal(operation(term), op) || any(a -> mentions_operation(a, op), arguments(term)))
+end
+
 validate_interface_seams(pdes, boundarymap, s, discretization) = nothing
 
 # Connected axes may have unequal grid spacings at the seam only for first-order `UpwindScheme()`,
@@ -111,10 +117,15 @@ function validate_interface_seams(
         isequal(b.x, b.x2) && continue
         mismatched_interface_dxs(b, discretization) && continue
         n = discretization.approx_order
-        gaps1 = _seam_gaps(s.grid[b.x], n, isupper(b))
-        gaps2 = _seam_gaps(s.grid[b.x2], n, !isupper(b))
-        _gaps_match(vcat(gaps1, gaps2)) && continue
-        what = seam_unsafe_derivative(pdes, (b.x, b.x2), discretization.advection_scheme)
+        nodes1 = _seam_nodes(s.grid[b.x], n, isupper(b))
+        nodes2 = _seam_nodes(s.grid[b.x2], n, !isupper(b))
+        gaps1 = abs.(diff(nodes1))
+        gaps2 = abs.(diff(nodes2))
+        _gaps_match(vcat(gaps1, gaps2), vcat(nodes1, nodes2)) && continue
+        # Only the equations of the connected variables have stencils across the seam.
+        ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
+        connected = filter(pde -> any(op -> mentions_operation(pde, op), ops), pdes)
+        what = seam_unsafe_derivative(connected, (b.x, b.x2), discretization.advection_scheme)
         what === nothing && continue
         throw(
             ArgumentError(

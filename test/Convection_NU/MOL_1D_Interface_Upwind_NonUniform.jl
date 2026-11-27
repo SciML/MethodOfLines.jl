@@ -981,3 +981,42 @@ end
     @test grids[x2] isa StepRangeLen
     @test symbolic_discretize(pdesys, disc) isa Tuple
 end
+
+@testset "Gap differences of one rounding unit pass and larger ones are rejected" begin
+    # Steps 2^-11 and 2^-11 + 2^-23 in Float32 differ by 2^-12 of a gap, far above the rounding of the nodes.
+    mid = 0.25f0
+    hi = mid + 512 * (2.0f0^-11 + 2.0f0^-23)
+    pdesys = build_seam_system(:heat, 0.0f0, mid, hi; f = x -> x)
+    disc = MOLFiniteDifference([x1 => 513, x2 => 513], t)
+    test_seam_rejected(pdesys, disc, "derivative order 2")
+
+    # Equal nominal widths typed as decimals pick up rounding differences between the two gaps.
+    for (lo, mid, hi) in ((0.1, 0.2, 0.3), (0.7, 1.4, 2.1), (3.3, 4.4, 5.5))
+        pdesys = build_seam_system(:heat, lo, mid, hi; f = x -> x - lo)
+        disc = MOLFiniteDifference([x1 => 101, x2 => 101], t)
+        @test get_discrete(pdesys, disc) isa Dict
+    end
+end
+
+@testset "Only the connected fields are checked for derivatives across the seam" begin
+    Dt = Differential(t)
+    Dx1, Dx2 = Differential(x1), Differential(x2)
+    @variables w(..)
+    eqs = [
+        Dt(u1(t, x1)) ~ -Dx1(u1(t, x1)),
+        Dt(u2(t, x2)) ~ -Dx2(u2(t, x2)),
+        Dt(w(t, x2)) ~ Dx2(Dx2(w(t, x2))),
+    ]
+    bcs = [
+        u1(0.0, x1) ~ x1, u2(0.0, x2) ~ x2, w(0.0, x2) ~ x2,
+        u1(t, 0.5) ~ u2(t, 0.5), u1(t, 0.0) ~ -t, u2(t, 1.5) ~ 1.5 - t,
+        w(t, 0.5) ~ 0.5, w(t, 1.5) ~ 1.5,
+    ]
+    domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.5)]
+    @named pdesys = PDESystem(
+        eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2), w(t, x2)],
+    )
+    disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
+    @test get_discrete(pdesys, disc) isa Dict
+    @test symbolic_discretize(pdesys, disc) isa Tuple
+end
