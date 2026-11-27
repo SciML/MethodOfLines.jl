@@ -152,7 +152,8 @@ function validate_interface_seams(
             nothing
         else
             ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
-            vectors = !(s.grid[b.x] isa StepRangeLen) && !(s.grid[b.x2] isa StepRangeLen)
+            # The stencils dispatch on the spacing type: explicit ranges are node vectors there too.
+            vectors = s.dxs[b.x] isa AbstractVector && s.dxs[b.x2] isa AbstractVector
             staggered = discretization.grid_align isa StaggeredGrid
             seam_unsafe_derivative(
                 pdes, (b.x, b.x2), ops, discretization.advection_scheme, vectors, staggered

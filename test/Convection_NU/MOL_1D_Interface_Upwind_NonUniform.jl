@@ -1168,6 +1168,16 @@ end
     disc = MOLFiniteDifference([x1 => 0.0625, x2 => 0.0625], t; advection_scheme = UpwindScheme(2))
     test_seam_rejected(pdesys, disc, "UpwindScheme(2)")
 
+    # Explicit ranges are node vectors to the stencils as well (their spacing is a vector), whatever
+    # the grid type.
+    pdesys = build_seam_system(:advection, 0.0, 0.5, 1.5)
+    ranges = [x1 => range(0.0, 0.5; length = 9), x2 => range(0.5, 1.5; length = 9)]
+    disc = MOLFiniteDifference(ranges, t; advection_scheme = WENOScheme())
+    @test get_discrete(pdesys, disc) isa Dict
+    du, = seam_rhs(pdesys, disc)
+    @test maximum(abs.(du .+ 1.0)) < 1.0e-12
+    test_seam_rejected(build_seam_system(:heat, 0.0, 0.5, 1.5), MOLFiniteDifference(ranges, t), "derivative order 2")
+
     # One vector and one uniform axis: the uniform side runs scalar-step WENO across the short gap.
     pdesys = build_seam_system(:advection, 0.0, 0.53125, 1.03125)
     disc = MOLFiniteDifference([x1 => 0.0625, x2 => 0.0625], t; advection_scheme = WENOScheme())
