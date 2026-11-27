@@ -1,18 +1,3 @@
-# A forward stencil of a uniform axis that reaches across an upper interface to an axis with another
-# step: the uniform weights would divide by the wrong spacing, so the coordinates of the taps are used.
-@inline function _uniform_seam_needs_coordinates(D, II, s, bs, jx)
-    j, x = jx
-    II[j] + D.stencil_length - 1 > length(s, x) || return false
-    for b in bs
-        if b isa InterfaceBoundary && isupper(b) && !isequal(b.x, b.x2)
-            dx = s.dxs[x]
-            dx2 = s.dxs[b.x2]
-            return !(dx2 isa Number && isapprox(dx2, dx; rtol = sqrt(eps(float(typeof(dx))))))
-        end
-    end
-    return false
-end
-
 @inline function _upwind_difference(
         D::DerivativeOperator{T, N, Wind, DX}, II, s, bs,
         ispositive, u, jx
@@ -25,8 +10,6 @@ end
             weights = D.high_boundary_coefs[length(s, x) - II[j] + 1]
             offset = length(s, x) - II[j]
             Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):0]
-        elseif hasupper && _uniform_seam_needs_coordinates(D, II, s, bs, jx)
-            return _nonuniform_upwind_interface_difference(D, II, s, bs, ispositive, u, jx)
         else
             weights = D.stencil_coefs
             Itap = [bwrap(II + i * I1, bs, s, jx) for i in 0:(D.stencil_length - 1)]
@@ -123,8 +106,9 @@ end
 # dynamically here, as this is the point where the specific variable's
 # boundary map (bs) and cross-domain coordinates are naturally accessible.
 @inline function _nonuniform_upwind_interface_difference(
-        D::DerivativeOperator, II, s, bs, ispositive, u, jx
-    )
+        D::DerivativeOperator{T, N, Wind, DX}, II, s, bs,
+        ispositive, u, jx
+    ) where {T, N, Wind, DX <: AbstractVector}
     j, x = jx
     I1 = unitindex(ndims(u, s), j)
     offsets = _nonuniform_upwind_stencil_offsets(D, ispositive)

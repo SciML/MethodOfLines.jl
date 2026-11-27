@@ -750,22 +750,21 @@ end
 end
 
 # Two connected domains [lo, mid] and [mid, hi] with the same equation on both. `kind` is
-# :advection (u_t = -u_x, exact solution f(x - t)), :reverse (u_t = u_x, f(x + t), for f = x^2 only)
-# or :heat (u_t = u_xx, steady for affine f).
+# :advection (u_t = -u_x, exact solution f(x - t)) or :heat (u_t = u_xx, steady for affine f).
 function build_seam_system(kind, lo, mid, hi; f = x -> x - lo)
-    rhs(u, X, D) = kind == :advection ? -D(u(t, X)) : kind == :reverse ? D(u(t, X)) : D(D(u(t, X)))
+    rhs(u, X, D) = kind == :advection ? -D(u(t, X)) : D(D(u(t, X)))
     Dt = Differential(t)
     eqs = [
         Dt(u1(t, x1)) ~ rhs(u1, x1, Differential(x1)),
         Dt(u2(t, x2)) ~ rhs(u2, x2, Differential(x2)),
     ]
     inflow = kind == :advection ? f(lo - t) : f(lo)
-    outflow = kind == :advection ? f(hi - t) : kind == :reverse ? f(hi + t) : f(hi)
+    outflow = kind == :advection ? f(hi - t) : f(hi)
     bcs = [
         u1(0.0, x1) ~ f(x1),
         u2(0.0, x2) ~ f(x2),
         u1(t, mid) ~ u2(t, mid),
-        kind == :reverse ? Differential(x1)(u1(t, lo)) ~ 2 * (lo + t) : u1(t, lo) ~ inflow,
+        u1(t, lo) ~ inflow,
         u2(t, hi) ~ outflow,
     ]
     domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(lo, mid), x2 ∈ Interval(mid, hi)]
@@ -945,26 +944,6 @@ end
     end
 end
 
-@testset "Integer point counts give exact node counts and endpoints at the seam" begin
-    for (lo, mid, hi) in ((0.0, 0.09, 0.18), (0.0, 0.1, 0.2), (0.0, sqrt(2), 2 * sqrt(2)))
-        for n in (9, 12, 13, 20)
-            pdesys = build_seam_system(:heat, lo, mid, hi; f = x -> x - lo)
-            disc = MOLFiniteDifference([x1 => n, x2 => n], t)
-            grids = get_discrete(pdesys, disc)
-            @test length(grids[x1]) == n
-            @test length(grids[x2]) == n
-            @test (grids[x1][1], grids[x1][end]) == (lo, mid)
-            @test (grids[x2][1], grids[x2][end]) == (mid, hi)
-        end
-    end
-
-    # The 12-point grids on [0, 0.09] and [0.09, 0.18] used to gain a 1.4e-17 cell and fail in codegen.
-    pdesys = build_seam_system(:heat, 0.0, 0.09, 0.18)
-    disc = MOLFiniteDifference([x1 => 12, x2 => 12], t)
-    du, = seam_rhs(pdesys, disc)
-    @test maximum(abs, du) < 1.0e-6
-end
-
 @testset "A scalar step with a short final cell rejects heat at the seam" begin
     # Steps of 0.06 on [0, 0.5] end in a 0.02 cell next to the interface.
     pdesys = build_seam_system(:heat, 0.0, 0.5, 1.0)
@@ -980,15 +959,6 @@ end
     for entry in (get_discrete, ode_discretize)
         @test_throws ArgumentError entry(pdesys, disc)
     end
-end
-
-@testset "Integer counts on BigFloat intervals keep a uniform step" begin
-    pdesys = build_seam_system(:heat, big"0.0", big"1.0", big"2.0"; f = x -> x)
-    disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
-    grids = get_discrete(pdesys, disc)
-    @test grids[x1] isa StepRangeLen
-    @test grids[x2] isa StepRangeLen
-    @test symbolic_discretize(pdesys, disc) isa Tuple
 end
 
 @testset "Gap differences of one rounding unit pass and larger ones are rejected" begin
@@ -1103,18 +1073,12 @@ end
     end
 end
 
-@testset "Reverse-flow first-order upwind uses the coordinates across unequal seam gaps" begin
-    # u = x^2 at t = 0, so u_t = u_x is the forward difference x_i + x_{i+1} with the true node coordinates.
-    for (mid, hi, n) in ((0.5, 1.5, 9), (0.5, 1.5, 17), (0.09, 0.27, 12), (0.5, 1.0, 11))
-        pdesys = build_seam_system(:reverse, 0.0, mid, hi; f = x -> x^2)
-        disc = MOLFiniteDifference([x1 => n, x2 => n], t; advection_scheme = UpwindScheme())
-        grids = get_discrete(pdesys, disc)
-        nodes = sort(unique(vcat(grids[x1], grids[x2])))
-        du, u0 = seam_rhs(pdesys, disc)
-        for (k, uk) in enumerate(u0)
-            i = argmin(abs.(nodes .^ 2 .- uk))
-            i < length(nodes) && @test du[k] ≈ nodes[i] + nodes[i + 1] atol = 1.0e-12
-        end
-        @test any(==(mid), sqrt.(u0))
-    end
+@testset "A short final cell from the integer count rejects heat at the seam" begin
+    # 12 points on [0, 0.09] gain a 1.4e-17 final cell (#752); first-order advection on them still works.
+    pdesys = build_seam_system(:heat, 0.0, 0.09, 0.18)
+    disc = MOLFiniteDifference([x1 => 12, x2 => 12], t)
+    test_seam_rejected(pdesys, disc, "derivative order 2")
+    pdesys = build_seam_system(:advection, 0.0, 0.09, 0.18)
+    du, = seam_rhs(pdesys, disc)
+    @test maximum(abs.(du .+ 1.0)) < 1.0e-9
 end

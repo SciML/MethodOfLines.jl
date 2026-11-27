@@ -267,15 +267,6 @@ Discretize space
         xdomain = vars.intervals[x]
         dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
         discx = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
-        count = discretization.dxs[x]
-        if count isa Integer && discretization.grid_align isa CenterAlignedGrid &&
-                !(length(discx) == count && discx[end] == xdomain[2])
-            # The colon range with a rounded dx stopped one cell short of hi (or overshot); the count and
-            # both endpoints cannot. Other element types (BigFloat, Rational) give a LinRange, which would
-            # read as a nonuniform grid.
-            exact = range(xdomain[1], xdomain[2]; length = count)
-            exact isa StepRangeLen && (discx = exact)
-        end
         xhigh = xdomain[2]
         if discx[end] != xhigh
             @warn "d$x for $x does not divide domain exactly, adding grid point at $x = $(xhigh))."
