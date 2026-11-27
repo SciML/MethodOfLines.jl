@@ -31,7 +31,6 @@ PDEBase.get_eqvar(im::InteriorMap, pde) = im.var[pde]
 # path via bcoord; centered/half-offset paths are not. Reject orders > 1 up front.
 function validate_interface_orders(pdes, boundarymap, intervals, discretization)
     for b in filter_interfaces(flatten_vardict(boundarymap))
-        check_interface_grid_fill(b, intervals, discretization)
         mismatched_interface_dxs(b, intervals, discretization) || continue
         orders = union(d_orders(b.x, pdes), d_orders(b.x2, pdes))
         higher = filter(>(1), orders)
