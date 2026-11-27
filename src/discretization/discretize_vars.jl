@@ -266,7 +266,13 @@ Discretize space
     axies = map(x̄) do x
         xdomain = vars.intervals[x]
         dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
-        discx = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
+        count = discretization.dxs[x]
+        discx = if count isa Integer && discretization.grid_align isa CenterAlignedGrid
+            # Both endpoints and the count fix the nodes; lo:dx:hi with a rounded dx can stop one cell short.
+            range(xdomain[1], xdomain[2]; length = count)
+        else
+            dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
+        end
         xhigh = xdomain[2]
         if discx[end] != xhigh
             @warn "d$x for $x does not divide domain exactly, adding grid point at $x = $(xhigh))."

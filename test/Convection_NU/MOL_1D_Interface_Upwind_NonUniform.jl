@@ -935,3 +935,30 @@ end
         @test symbolic_discretize(pdesys, disc) isa Tuple
     end
 end
+
+@testset "Integer point counts give exact node counts and endpoints at the seam" begin
+    for (lo, mid, hi) in ((0.0, 0.09, 0.18), (0.0, 0.1, 0.2), (0.0, sqrt(2), 2 * sqrt(2)))
+        for n in (9, 12, 13, 20)
+            pdesys = build_seam_system(:heat, lo, mid, hi; f = x -> x - lo)
+            disc = MOLFiniteDifference([x1 => n, x2 => n], t)
+            grids = get_discrete(pdesys, disc)
+            @test length(grids[x1]) == n
+            @test length(grids[x2]) == n
+            @test (grids[x1][1], grids[x1][end]) == (lo, mid)
+            @test (grids[x2][1], grids[x2][end]) == (mid, hi)
+        end
+    end
+
+    # The 12-point grids on [0, 0.09] and [0.09, 0.18] used to gain a 1.4e-17 cell and fail in codegen.
+    pdesys = build_seam_system(:heat, 0.0, 0.09, 0.18)
+    disc = MOLFiniteDifference([x1 => 12, x2 => 12], t)
+    du, = seam_rhs(pdesys, disc)
+    @test maximum(abs, du) < 1.0e-6
+end
+
+@testset "A scalar step with a short final cell rejects heat at the seam" begin
+    # Steps of 0.06 on [0, 0.5] end in a 0.02 cell next to the interface.
+    pdesys = build_seam_system(:heat, 0.0, 0.5, 1.0)
+    disc = MOLFiniteDifference([x1 => 0.06, x2 => 0.06], t)
+    test_seam_rejected(pdesys, disc, "derivative order 2")
+end
