@@ -167,4 +167,26 @@ domains = [t ∈ Interval(0.0, 0.15),
 
 Note that if you want to use a higher order interface condition, this may not work if you have no simple condition of the form `c1(t, 0.5) ~ c2(t, 0.5)`.
 
-Interfaces require the connected variables to use the same step size, except when `WENOScheme()` is used with nonuniform grid vectors supplied for both connected variables, in which case the grids may differ: advection stencils that cross the interface are evaluated with the exact physical coordinates of the neighbouring grid. This exception covers first-order (advection) derivatives only — systems containing higher-order spatial derivatives (e.g. diffusion) in the connected variables are rejected with an error at discretization time.
+Interfaces require both connected variables to use the same grid representation. Use matching scalar grid specifications (equal step sizes, or equal integer point counts on intervals of equal length so that the resulting steps match), or supply explicit node vectors on both sides. Unequal explicit node vectors are supported for first-order (advection) derivatives: with `UpwindScheme()` use first-order upwinding and matching physical interface coordinates, and `WENOScheme()` is supported as well. Advection stencils that cross the interface are evaluated with the exact physical coordinates of the neighbouring grid. Systems containing higher-order spatial derivatives (e.g. diffusion) in the connected variables are rejected with an error at discretization time when the grid specifications differ (for example unequal node vectors or unequal step sizes). Equal integer point counts are compared as counts, not as resulting step sizes, so they must be used only on intervals of equal length.
+
+## Supported conditions
+
+The conditions each discretizer supports are declared by `PDEBase.supported_conditions`, and the tables below are rendered from those declarations.
+
+### MOLFiniteDifference
+
+```@eval
+import Markdown
+using MethodOfLines, ModelingToolkit, PDEBase
+@parameters t x
+Markdown.parse(sprint(show, MIME"text/markdown"(), PDEBase.supported_conditions(MOLFiniteDifference([x => 0.1], t))))
+```
+
+### PseudospectralDiscretization
+
+```@eval
+import Markdown
+using MethodOfLines, ModelingToolkit, PDEBase
+@parameters t x
+Markdown.parse(sprint(show, MIME"text/markdown"(), PDEBase.supported_conditions(PseudospectralDiscretization([x => 8], t))))
+```
