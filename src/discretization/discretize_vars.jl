@@ -266,12 +266,13 @@ Discretize space
     axies = map(x̄) do x
         xdomain = vars.intervals[x]
         dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
+        discx = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
         count = discretization.dxs[x]
-        discx = if count isa Integer && discretization.grid_align isa CenterAlignedGrid
-            # Both endpoints and the count fix the nodes; lo:dx:hi with a rounded dx can stop one cell short.
-            range(xdomain[1], xdomain[2]; length = count)
-        else
-            dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
+        if count isa Integer && discretization.grid_align isa CenterAlignedGrid
+            # lo:dx:hi with a rounded dx can stop one cell short of hi; the count and both endpoints cannot.
+            # Other element types (BigFloat, Rational) give a LinRange, which would read as a nonuniform grid.
+            exact = range(xdomain[1], xdomain[2]; length = count)
+            exact isa StepRangeLen && (discx = exact)
         end
         xhigh = xdomain[2]
         if discx[end] != xhigh

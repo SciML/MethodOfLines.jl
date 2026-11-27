@@ -962,3 +962,22 @@ end
     disc = MOLFiniteDifference([x1 => 0.06, x2 => 0.06], t)
     test_seam_rejected(pdesys, disc, "derivative order 2")
 end
+
+@testset "Explicit node vectors with different gaps reject heat from both entry points" begin
+    pdesys = build_seam_system(:heat, 0.0, 0.5, 1.5)
+    disc = MOLFiniteDifference(
+        [x1 => collect(range(0.0, 0.5; length = 9)), x2 => collect(range(0.5, 1.5; length = 9))], t,
+    )
+    for entry in (get_discrete, ode_discretize)
+        @test_throws ArgumentError entry(pdesys, disc)
+    end
+end
+
+@testset "Integer counts on BigFloat intervals keep a uniform step" begin
+    pdesys = build_seam_system(:heat, big"0.0", big"1.0", big"2.0"; f = x -> x)
+    disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
+    grids = get_discrete(pdesys, disc)
+    @test grids[x1] isa StepRangeLen
+    @test grids[x2] isa StepRangeLen
+    @test symbolic_discretize(pdesys, disc) isa Tuple
+end
