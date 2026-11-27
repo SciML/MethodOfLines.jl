@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Boundary Conditions · MethodOfLines.jl</title><script async src="https://www.googletagmanager.com/gtag/js?id=UA-90474609-3"></script><script>  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'UA-90474609-3', {'page_path': location.pathname + location.search + location.hash});
+</script><script data-outdated-warner src="../assets/warner.js"></script><link rel="canonical" href="https://docs.sciml.ai/MethodOfLines/stable/boundary_conditions/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script><link href="../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="MethodOfLines.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../">MethodOfLines.jl</a></span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../tutorials/brusselator/">Tutorial</a></li><li><a class="tocitem" href="../tutorials/heat/">Solving the Heat Equation</a></li><li><a class="tocitem" href="../tutorials/params/">Adding parameters</a></li><li><a class="tocitem" href="../tutorials/heatss/">Steady State Heat Equation - No Time Dependance - NonlinearProblem</a></li><li><a class="tocitem" href="../tutorials/sispde/">Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li><li><a class="tocitem" href="../tutorials/icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data</a></li></ul></li><li><a class="tocitem" href="../MOLFiniteDifference/">MOLFiniteDifference</a></li><li><a class="tocitem" href="../solutions/">Solution Interface - PDESolutions</a></li><li><a class="tocitem" href="../get_grid/">Grid and Solution Retrieval - Deprecated</a></li><li class="is-active"><a class="tocitem" href>Boundary Conditions</a><ul class="internal"><li><a class="tocitem" href="#Definitions"><span>Definitions</span></a></li><li><a class="tocitem" href="#Dirichlet"><span>Dirichlet</span></a></li><li><a class="tocitem" href="#Neumann/Robin"><span>Neumann/Robin</span></a></li><li><a class="tocitem" href="#Periodic"><span>Periodic</span></a></li><li><a class="tocitem" href="#Interfaces"><span>Interfaces</span></a></li></ul></li><li><a class="tocitem" href="../advection_schemes/">Advection Schemes</a></li><li><a class="tocitem" href="../nonuniform/">Non-Uniform Rectilinear Grids</a></li><li><a class="tocitem" href="../curvilinear_grids/">Curvilinear Grids</a></li><li><a class="tocitem" href="../howitworks/">How it Works</a></li><li><a class="tocitem" href="../devnotes/">Notes for Developers: Implement a Scheme</a></li><li><span class="tocitem">Generated Examples</span><ul><li><a class="tocitem" href="../generated/bruss_code/">Generated Code for the Brusselator Equation</a></li><li><a class="tocitem" href="../generated/bruss_ode_eqs/">Generated ODE system for the Brusselator Equation</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../api/discretization/">Discretization</a></li><li><a class="tocitem" href="../api/utils/">Utilities</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Boundary Conditions</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Boundary Conditions</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/MethodOfLines.jl/blob/master/docs/src/boundary_conditions.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="[Boundary-Conditions](@ref-bcs)"><a class="docs-heading-anchor" href="#[Boundary-Conditions](@ref-bcs)"><a href="@ref bcs">Boundary Conditions</a></a><a id="[Boundary-Conditions](@ref-bcs)-1"></a><a class="docs-heading-anchor-permalink" href="#[Boundary-Conditions](@ref-bcs)" title="Permalink"></a></h1><p>What follows is a set of allowable boundary conditions, please note that this is not exhaustive - try your condition and see if it works, the handling is quite general. If it doesn&#39;t please post an issue and we&#39;ll try to support it. At the moment boundary conditions have to be supplied at the edge of the domain, but there are plans to support conditions embedded in the domain.</p><h2 id="Definitions"><a class="docs-heading-anchor" href="#Definitions">Definitions</a><a id="Definitions-1"></a><a class="docs-heading-anchor-permalink" href="#Definitions" title="Permalink"></a></h2><pre><code class="language-julia hljs">using ModelingToolkit, MethodOfLines, Domainsets
+
+@parameters x y t
+@variables u(..) v(..)
+Dt = Differential(t)
+Dx = Differential(x)
+Dy = Differential(y)
+Dxx = Differential(x)^2
+Dyy = Differential(y)^2
+
+x_min = y_min = 0.0
+
+x_max = y_max = 1.0</code></pre><h2 id="Dirichlet"><a class="docs-heading-anchor" href="#Dirichlet">Dirichlet</a><a id="Dirichlet-1"></a><a class="docs-heading-anchor-permalink" href="#Dirichlet" title="Permalink"></a></h2><pre><code class="language-julia hljs">v(t, 0, y) ~ 1.0</code></pre><h3 id="Time-dependant"><a class="docs-heading-anchor" href="#Time-dependant">Time dependant</a><a id="Time-dependant-1"></a><a class="docs-heading-anchor-permalink" href="#Time-dependant" title="Permalink"></a></h3><pre><code class="language-julia hljs">u(t, 0., y) ~ x_min*y+ 0.5t</code></pre><h3 id="Julia-function"><a class="docs-heading-anchor" href="#Julia-function">Julia function</a><a id="Julia-function-1"></a><a class="docs-heading-anchor-permalink" href="#Julia-function" title="Permalink"></a></h3><pre><code class="language-julia hljs">v(t, x, y_max) ~ sin(x)</code></pre><h3 id="User-defined-function"><a class="docs-heading-anchor" href="#User-defined-function">User defined function</a><a id="User-defined-function-1"></a><a class="docs-heading-anchor-permalink" href="#User-defined-function" title="Permalink"></a></h3><pre><code class="language-julia hljs">alpha = 9
+
+f(t,x,y) = x*y - t
+
+function g(x,y) 
+    z = sin(x*y)+cos(y)
+    # Note that symbolic conditionals require the use of IfElse.ifelse, or registration
+    return IfElse.ifelse(z &gt; 0, x, 1.0)
+end
+
+u(t,x,y_min) ~ f(t,x,y_min) + alpha/g(x,y_min)</code></pre><h3 id="Registered-User-Defined-Function"><a class="docs-heading-anchor" href="#Registered-User-Defined-Function">Registered User Defined Function</a><a id="Registered-User-Defined-Function-1"></a><a class="docs-heading-anchor-permalink" href="#Registered-User-Defined-Function" title="Permalink"></a></h3><pre><code class="language-julia hljs">alpha = 9
+
+f(t,x,y) = x*y - t
+
+function g(x,y) 
+    z = sin(x*y)+cos(y)
+    # This function must be registered as it contains a symbolic conditional
+    if z &gt; 0
+        return x
+    else
+        return 1.0
+    end
+end
+
+@register g(x, y)
+
+u(t,x,y_min) ~ f(t,x,y_min) + alpha/g(x,y_min)</code></pre><h2 id="Neumann/Robin"><a class="docs-heading-anchor" href="#Neumann/Robin">Neumann/Robin</a><a id="Neumann/Robin-1"></a><a class="docs-heading-anchor-permalink" href="#Neumann/Robin" title="Permalink"></a></h2><pre><code class="language-julia hljs">v(t, x_min, y) ~ 2. * Dx(v(t, x_min, y))</code></pre><h3 id="Time-dependant-2"><a class="docs-heading-anchor" href="#Time-dependant-2">Time dependant</a><a class="docs-heading-anchor-permalink" href="#Time-dependant-2" title="Permalink"></a></h3><pre><code class="language-julia hljs">u(t, x_min, y) ~ x_min*Dy(v(t,x_min,y)) + 0.5t</code></pre><h3 id="Higher-order"><a class="docs-heading-anchor" href="#Higher-order">Higher order</a><a id="Higher-order-1"></a><a class="docs-heading-anchor-permalink" href="#Higher-order" title="Permalink"></a></h3><pre><code class="language-julia hljs">v(t, x, 1.0) ~ sin(x) + Dyy(v(t, x, y_max))</code></pre><h3 id="Time-derivative"><a class="docs-heading-anchor" href="#Time-derivative">Time derivative</a><a id="Time-derivative-1"></a><a class="docs-heading-anchor-permalink" href="#Time-derivative" title="Permalink"></a></h3><pre><code class="language-julia hljs">Dt(u(t, x_min, y)) ~ 0.2</code></pre><h3 id="User-defined-function-2"><a class="docs-heading-anchor" href="#User-defined-function-2">User defined function</a><a class="docs-heading-anchor-permalink" href="#User-defined-function-2" title="Permalink"></a></h3><pre><code class="language-julia hljs">function f(u, v)
+    (u + Dyy(v) - Dy(u))/(1 + v)
+end
+
+Dyy(u(t, x, y_min)) ~ f(u(t, x, y_min), v(t, x, y_min)) + 1</code></pre><h3 id="lhs"><a class="docs-heading-anchor" href="#lhs">0 lhs</a><a id="lhs-1"></a><a class="docs-heading-anchor-permalink" href="#lhs" title="Permalink"></a></h3><pre><code class="language-julia hljs">0 ~ u(t, x, y_max) - Dy(v(t, x, y_max))</code></pre><h2 id="Periodic"><a class="docs-heading-anchor" href="#Periodic">Periodic</a><a id="Periodic-1"></a><a class="docs-heading-anchor-permalink" href="#Periodic" title="Permalink"></a></h2><pre><code class="language-julia hljs">u(t, x_min, y) ~ u(t, x_max, y)
+
+v(t, x, y_max) ~ u(t, x_max, y)</code></pre><p>Please note that if you want to use a periodic condition on a dimension with WENO schemes, please use a periodic condition on all variables in that dimension.</p><h2 id="Interfaces"><a class="docs-heading-anchor" href="#Interfaces">Interfaces</a><a id="Interfaces-1"></a><a class="docs-heading-anchor-permalink" href="#Interfaces" title="Permalink"></a></h2><p>You may want to connect regions with differing dynamics together, to do this follow the following example, splitting the variable that spans these domains:</p><pre><code class="language-julia hljs">    @parameters t x1 x2
+    @variables c1(..)
+    @variables c2(..)
+    Dt = Differential(t)
+
+    Dx1 = Differential(x1)
+    Dxx1 = Dx1^2
+
+    Dx2 = Differential(x2)
+    Dxx2 = Dx2^2
+
+    D1(c) = 1 + c / 10
+    D2(c) = 1 / 10 + c / 10
+
+    eqs = [Dt(c1(t, x1)) ~ Dx1(D1(c1(t, x1)) * Dx1(c1(t, x1))),
+        Dt(c2(t, x2)) ~ Dx2(D2(c2(t, x2)) * Dx2(c2(t, x2)))]
+
+    bcs = [c1(0, x1) ~ 1 + cospi(2 * x1),
+        c2(0, x2) ~ 1 + cospi(2 * x2),
+        Dx1(c1(t, 0)) ~ 0,
+        c1(t, 0.5) ~ c2(t, 0.5), # Relevant interface boundary condition
+        -D1(c1(t, 0.5)) * Dx1(c1(t, 0.5)) ~ -D2(c2(t, 0.5)) * Dx2(c2(t, 0.5)), # Higher order interface condition
+        Dx2(c2(t, 1)) ~ 0]
+
+    domains = [t ∈ Interval(0.0, 0.15),
+        x1 ∈ Interval(0.0, 0.5),
+        x2 ∈ Interval(0.5, 1.0)]
+
+    @named pdesys = PDESystem(eqs, bcs, domains,
+        [t, x1, x2], [c1(t, x1), c2(t, x2)])</code></pre><p>Note that if you want to use a higher order interface condition, this may not work if you have no simple condition of the form <code>c1(t, 0.5) ~ c2(t, 0.5)</code>.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../get_grid/">« Grid and Solution Retrieval - Deprecated</a><a class="docs-footer-nextpage" href="../advection_schemes/">Advection Schemes »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Tuesday 6 December 2022 19:59">Tuesday 6 December 2022</span>. Using Julia version 1.8.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

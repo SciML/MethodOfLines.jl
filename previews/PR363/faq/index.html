@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>FAQs · MethodOfLines.jl</title><meta name="title" content="FAQs · MethodOfLines.jl"/><meta property="og:title" content="FAQs · MethodOfLines.jl"/><meta property="twitter:title" content="FAQs · MethodOfLines.jl"/><meta name="description" content="Documentation for MethodOfLines.jl."/><meta property="og:description" content="Documentation for MethodOfLines.jl."/><meta property="twitter:description" content="Documentation for MethodOfLines.jl."/><meta property="og:url" content="https://docs.sciml.ai/MethodOfLines/stable/faq/"/><meta property="twitter:url" content="https://docs.sciml.ai/MethodOfLines/stable/faq/"/><link rel="canonical" href="https://docs.sciml.ai/MethodOfLines/stable/faq/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script><link href="../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="MethodOfLines.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../">MethodOfLines.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../tutorials/brusselator/">Getting Started</a></li><li><a class="tocitem" href="../tutorials/heat/">Solving the Heat Equation</a></li><li><a class="tocitem" href="../tutorials/params/">Adding parameters</a></li><li><a class="tocitem" href="../tutorials/heatss/">Steady State Heat Equation - No Time Dependence - NonlinearProblem</a></li><li><a class="tocitem" href="../tutorials/sispde/">Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li><li><a class="tocitem" href="../tutorials/icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data</a></li><li><a class="tocitem" href="../tutorials/PIDE/">Solving PIDEs (Integrals)</a></li><li><a class="tocitem" href="../tutorials/schroedinger/">Schrödinger Equation</a></li></ul></li><li><a class="tocitem" href="../performance/">Performance Tips</a></li><li><a class="tocitem" href="../MOLFiniteDifference/">MOLFiniteDifference</a></li><li><a class="tocitem" href="../solutions/">Solution Interface - PDESolutions</a></li><li><a class="tocitem" href="../get_grid/">Grid and Solution Retrieval - Deprecated</a></li><li><a class="tocitem" href="../boundary_conditions/">Boundary Conditions</a></li><li><a class="tocitem" href="../advection_schemes/">Advection Schemes</a></li><li><a class="tocitem" href="../nonuniform/">Non-Uniform Rectilinear Grids</a></li><li><a class="tocitem" href="../curvilinear_grids/">Curvilinear Grids</a></li><li class="is-active"><a class="tocitem" href>FAQs</a><ul class="internal"><li><a class="tocitem" href="#Why-is-my-result-reducing-over-time,-it-shouldn&#39;t-be!"><span>Why is my result reducing over time, it shouldn&#39;t be!</span></a></li><li><a class="tocitem" href="#Why-is-my-large-discretized-system-taking-so-long-to-compile?"><span>Why is my large discretized system taking so long to compile?</span></a></li><li><a class="tocitem" href="#Why-are-the-corners-of-my-domain-held-at-0?"><span>Why are the corners of my domain held at 0?</span></a></li></ul></li><li><a class="tocitem" href="../howitworks/">How it Works</a></li><li><a class="tocitem" href="../devnotes/">Notes for Developers: Implement a Scheme</a></li><li><span class="tocitem">Generated Examples</span><ul><li><a class="tocitem" href="../generated/bruss_code/">Generated Code for the Brusselator Equation</a></li><li><a class="tocitem" href="../generated/bruss_ode_eqs/">Generated ODE system for the Brusselator Equation</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../api/discretization/">Discretization</a></li><li><a class="tocitem" href="../api/utils/">Utilities</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>FAQs</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>FAQs</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/MethodOfLines.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/MethodOfLines.jl/blob/master/docs/src/faq.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="FAQ"><a class="docs-heading-anchor" href="#FAQ">FAQ</a><a id="FAQ-1"></a><a class="docs-heading-anchor-permalink" href="#FAQ" title="Permalink"></a></h1><h2 id="Why-is-my-result-reducing-over-time,-it-shouldn&#39;t-be!"><a class="docs-heading-anchor" href="#Why-is-my-result-reducing-over-time,-it-shouldn&#39;t-be!">Why is my result reducing over time, it shouldn&#39;t be!</a><a id="Why-is-my-result-reducing-over-time,-it-shouldn&#39;t-be!-1"></a><a class="docs-heading-anchor-permalink" href="#Why-is-my-result-reducing-over-time,-it-shouldn&#39;t-be!" title="Permalink"></a></h2><p>Looks like you&#39;ve been using the upwind scheme! This is the default scheme for odd ordered derivatives, and while it is very fast and uses low memory, it suffers from a property called numerical dispersion. This causes sharp peaks and discontinuities to smooth out over time, and is the reason that we have the <a href="../advection_schemes/#adschemes">WENO Scheme</a>, which while resource intensive and sometimes problematic with exotic BCs, does not have this problem.</p><p>To see numerical dispersion in action, take a look at this example:</p><pre><code class="language-julia hljs">using ModelingToolkit, MethodOfLines, LinearAlgebra, OrdinaryDiffEq, DomainSets
+using ModelingToolkit: Differential
+using Plots
+plotlyjs()
+
+@parameters t x y
+@variables u(..)
+Dx = Differential(x)
+Dy = Differential(y)
+Dt = Differential(t)
+
+
+t_min = 0.0
+t_max = 7.0
+x_min = -5.0
+x_max = 5.0
+y_min = -5.0
+y_max = 5.0
+dx = 0.25
+dy = 0.25
+order = 3
+
+A = 1.0
+x0 = 0.0
+y0 = 0.0
+
+sigma_x = 1.0
+sigma_y = 1.0
+theta = 0.0
+
+# create function for bivariate gaussian
+
+function bivariate_gaussian(x, y; A=1.0, x0=0.0, y0=0.0, sigma_x=1.0, sigma_y=1.0, theta=0.0)
+    
+    a = cos(theta)^2/(2*sigma_x^2) + sin(theta)^2/(2*sigma_y^2)
+    b = -1*sin(2*theta)/(4*sigma_x^2) + sin(2*theta)/(4*sigma_y^2)
+    c = sin(theta)^2/(2*sigma_x^2) + cos(theta)^2/(2*sigma_y^2)
+    return A*exp(-(a*(x - x0)^2 + 2*b*(x - x0)*(y - y0) + c*(y - y0)^2 ))
+end;
+
+
+# equation system
+
+eq = Dt(u(t, x, y)) - Dx(u(t, x, y)) - Dy(u(t, x, y)) ~ 0 
+
+# boundary conditions
+
+bcs = [
+        u(t_min, x, y) ~ bivariate_gaussian(x, y; A=A, x0=x0, y0=y0, sigma_x=sigma_x, sigma_y=sigma_y, theta=theta),
+        u(t, x_min, y) ~ u(t, x_max, y),    # &lt;--- SHOULD BE A PERIODIC BOUNDARY CONDITION
+        u(t, x, y_min) ~ u(t, x, y_max),    # &lt;--- SHOULD BE A PERIODIC BOUNDARY CONDITION
+]
+
+domains = [
+            t ∈ Interval(t_min, t_max),
+            x ∈ Interval(x_min, x_max),
+            y ∈ Interval(y_min, y_max)
+]
+
+@named pdesys = PDESystem([eq], bcs, domains, [t, x, y], [u(t, x, y)])
+
+discretization = MOLFiniteDifference([x =&gt; dx, y =&gt; dy], t; advection_scheme=UpwindScheme())
+
+prob = discretize(pdesys, discretization)
+
+sol = solve(prob, SSPRK54(), dt=0.01, saveat=0.1)
+
+discrete_t = sol[t]
+solu = sol[u(t, x, y)]
+
+
+anim = @animate for i=1:length(discrete_t)
+    surface(solu[i,:,:], camera=(55.0, 30.0), size=(500,500), zlabel=(&quot;z&quot;), 
+            zlims=(0.0, 1.2), xlabel = (&quot;x&quot;), ylabel=(&quot;y&quot;), clims=(0.0,1.0), 
+            title=&quot;t = $i&quot; )
+end
+
+gif(anim, &quot;mol_convection_2d_test.gif&quot;, fps=5)</code></pre><p><img src="https://github.com/SciML/MethodOfLines.jl/assets/9698054/45f4ace0-6291-478d-abb8-93d68ae3c9aa" alt="convection test"/></p><h2 id="Why-is-my-large-discretized-system-taking-so-long-to-compile?"><a class="docs-heading-anchor" href="#Why-is-my-large-discretized-system-taking-so-long-to-compile?">Why is my large discretized system taking so long to compile?</a><a id="Why-is-my-large-discretized-system-taking-so-long-to-compile?-1"></a><a class="docs-heading-anchor-permalink" href="#Why-is-my-large-discretized-system-taking-so-long-to-compile?" title="Permalink"></a></h2><p>At the moment, MOL effectively generates an assignment statement to a calculation in its generated code for all points in space, for all variables. Due to the configuration of LLVM for Julia, this leads the compiler to check all operations against all other operations to see what to <a href="https://en.wikipedia.org/wiki/Single_instruction,_multiple_data">SIMD</a>, leading to bad scaling properties with increasing point count.</p><p>There are changes in the works to roll this back in to <code>for</code> loops over each point, by maintaining some structural information, which will remedy this problem. Watch this space!</p><h2 id="Why-are-the-corners-of-my-domain-held-at-0?"><a class="docs-heading-anchor" href="#Why-are-the-corners-of-my-domain-held-at-0?">Why are the corners of my domain held at 0?</a><a id="Why-are-the-corners-of-my-domain-held-at-0?-1"></a><a class="docs-heading-anchor-permalink" href="#Why-are-the-corners-of-my-domain-held-at-0?" title="Permalink"></a></h2><p>The corner points do not have a valid discretization, and as such are held at 0.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../curvilinear_grids/">« Curvilinear Grids</a><a class="docs-footer-nextpage" href="../howitworks/">How it Works »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.2.1 on <span class="colophon-date" title="Monday 19 February 2024 19:21">Monday 19 February 2024</span>. Using Julia version 1.10.1.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Solving the Heat Equation · MethodOfLines.jl</title><script async src="https://www.googletagmanager.com/gtag/js?id=UA-90474609-3"></script><script>  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'UA-90474609-3', {'page_path': location.pathname + location.search + location.hash});
+</script><script data-outdated-warner src="../../assets/warner.js"></script><link rel="canonical" href="https://docs.sciml.ai/MethodOfLines/stable/tutorials/heat/"/><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="MethodOfLines.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">MethodOfLines.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../brusselator/">Getting Started</a></li><li class="is-active"><a class="tocitem" href>Solving the Heat Equation</a></li><li><a class="tocitem" href="../params/">Adding parameters</a></li><li><a class="tocitem" href="../heatss/">Steady State Heat Equation - No Time Dependence - NonlinearProblem</a></li><li><a class="tocitem" href="../sispde/">Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li><li><a class="tocitem" href="../icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data</a></li><li><a class="tocitem" href="../PIDE/">Solving PIDEs (Integrals)</a></li></ul></li><li><a class="tocitem" href="../../MOLFiniteDifference/">MOLFiniteDifference</a></li><li><a class="tocitem" href="../../solutions/">Solution Interface - PDESolutions</a></li><li><a class="tocitem" href="../../get_grid/">Grid and Solution Retrieval - Deprecated</a></li><li><a class="tocitem" href="../../boundary_conditions/">Boundary Conditions</a></li><li><a class="tocitem" href="../../advection_schemes/">Advection Schemes</a></li><li><a class="tocitem" href="../../nonuniform/">Non-Uniform Rectilinear Grids</a></li><li><a class="tocitem" href="../../curvilinear_grids/">Curvilinear Grids</a></li><li><a class="tocitem" href="../../howitworks/">How it Works</a></li><li><a class="tocitem" href="../../devnotes/">Notes for Developers: Implement a Scheme</a></li><li><span class="tocitem">Generated Examples</span><ul><li><a class="tocitem" href="../../generated/bruss_code/">Generated Code for the Brusselator Equation</a></li><li><a class="tocitem" href="../../generated/bruss_ode_eqs/">Generated ODE system for the Brusselator Equation</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../../api/discretization/">Discretization</a></li><li><a class="tocitem" href="../../api/utils/">Utilities</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Solving the Heat Equation</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Solving the Heat Equation</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/SciML/MethodOfLines.jl/blob/master/docs/src/tutorials/heat.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="heat"><a class="docs-heading-anchor" href="#heat">Solving the Heat Equation</a><a id="heat-1"></a><a class="docs-heading-anchor-permalink" href="#heat" title="Permalink"></a></h1><p>In this tutorial, we will use the symbolic interface to solve the heat equation.</p><h3 id="Dirichlet-boundary-conditions"><a class="docs-heading-anchor" href="#Dirichlet-boundary-conditions">Dirichlet boundary conditions</a><a id="Dirichlet-boundary-conditions-1"></a><a class="docs-heading-anchor-permalink" href="#Dirichlet-boundary-conditions" title="Permalink"></a></h3><pre><code class="language-julia hljs">using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
+# Method of Manufactured Solutions: exact solution
+u_exact = (x,t) -&gt; exp.(-t) * cos.(x)
+
+# Parameters, variables, and derivatives
+@parameters t x
+@variables u(..)
+Dt = Differential(t)
+Dxx = Differential(x)^2
+
+# 1D PDE and boundary conditions
+eq  = Dt(u(t, x)) ~ Dxx(u(t, x))
+bcs = [u(0, x) ~ cos(x),
+        u(t, 0) ~ exp(-t),
+        u(t, 1) ~ exp(-t) * cos(1)]
+
+# Space and time domains
+domains = [t ∈ Interval(0.0, 1.0),
+           x ∈ Interval(0.0, 1.0)]
+
+# PDE system
+@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+# Method of lines discretization
+dx = 0.1
+order = 2
+discretization = MOLFiniteDifference([x =&gt; dx], t)
+
+# Convert the PDE problem into an ODE problem
+prob = discretize(pdesys,discretization)
+
+# Solve ODE problem
+using OrdinaryDiffEq
+sol = solve(prob, Tsit5(), saveat=0.2)
+
+# Plot results and compare with exact solution
+discrete_x = sol[x]
+discrete_t = sol[t]
+solu = sol[u(t, x)]
+
+using Plots
+plt = plot()
+
+for i in 1:length(discrete_t)
+    plot!(discrete_x, solu[i, :], label=&quot;Numerical, t=$(discrete_t[i])&quot;)
+    scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label=&quot;Exact, t=$(discrete_t[i])&quot;)
+end
+display(plt)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(1,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(1,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(11,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(11,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(2,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(2,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(3,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(3,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(4,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(4,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(5,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(5,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(6,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(6,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(7,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(7,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(8,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(8,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(9,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(9,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(10,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 0) ~ exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(11,), CartesianIndex(10,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], u(t, 1) ~ 0.5403023058681398exp(-t))</code></pre><h3 id="Neumann-boundary-conditions"><a class="docs-heading-anchor" href="#Neumann-boundary-conditions">Neumann boundary conditions</a><a id="Neumann-boundary-conditions-1"></a><a class="docs-heading-anchor-permalink" href="#Neumann-boundary-conditions" title="Permalink"></a></h3><pre><code class="language-julia hljs">using OrdinaryDiffEq, ModelingToolkit, MethodOfLines, DomainSets
+# Method of Manufactured Solutions: exact solution
+u_exact = (x,t) -&gt; exp.(-t) * cos.(x)
+
+# Parameters, variables, and derivatives
+@parameters t x
+@variables u(..)
+Dt = Differential(t)
+Dx = Differential(x)
+Dxx = Differential(x)^2
+
+# 1D PDE and boundary conditions
+eq  = Dt(u(t, x)) ~ Dxx(u(t, x))
+bcs = [u(0, x) ~ cos(x),
+        Dx(u(t, 0)) ~ 0.0,
+        Dx(u(t, 1)) ~ -exp(-t) * sin(1)]
+
+# Space and time domains
+domains = [t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(0.0, 1.0)]
+
+# PDE system
+@named pdesys = PDESystem(eq, bcs, domains,[t, x],[u(t, x)])
+
+# Method of lines discretization
+# Need a small dx here for accuracy
+dx = 0.01
+order = 2
+discretization = MOLFiniteDifference([x =&gt; dx],t)
+
+# Convert the PDE problem into an ODE problem
+prob = discretize(pdesys, discretization)
+
+# Solve ODE problem
+using OrdinaryDiffEq
+sol = solve(prob, Tsit5(), saveat=0.2)
+
+# Plot results and compare with exact solution
+discrete_x = sol[x]
+discrete_t = sol[t]
+
+solu = sol[u(t, x)]
+
+using Plots
+plt = plot()
+
+for i in 1:length(discrete_t)
+    plot!(discrete_x, solu[i, :], label=&quot;Numerical, t=$(discrete_t[i])&quot;)
+    scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label=&quot;Exact, t=$(discrete_t[i])&quot;)
+end
+display(plt)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(1,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(1,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(101,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(101,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(2,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(2,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(3,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(3,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(4,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(4,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(5,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(5,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(6,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(6,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(7,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(7,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(8,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(8,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(9,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(9,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(10,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(10,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(11,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(11,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(12,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(12,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(13,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(13,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(14,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(14,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(15,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(15,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(16,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(16,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(17,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(17,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(18,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(18,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(19,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(19,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(20,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(20,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(21,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(21,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(22,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(22,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(23,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(23,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(24,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(24,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(25,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(25,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(26,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(26,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(27,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(27,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(28,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(28,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(29,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(29,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(30,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(30,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(31,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(31,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(32,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(32,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(33,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(33,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(34,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(34,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(35,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(35,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(36,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(36,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(37,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(37,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(38,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(38,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(39,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(39,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(40,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(40,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(41,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(41,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(42,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(42,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(43,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(43,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(44,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(44,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(45,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(45,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(46,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(46,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(47,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(47,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(48,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(48,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(49,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(49,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(50,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(50,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(51,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(51,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(52,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(52,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(53,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(53,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(54,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(54,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(55,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(55,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(56,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(56,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(57,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(57,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(58,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(58,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(59,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(59,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(60,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(60,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(61,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(61,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(62,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(62,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(63,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(63,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(64,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(64,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(65,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(65,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(66,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(66,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(67,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(67,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(68,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(68,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(69,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(69,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(70,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(70,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(71,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(71,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(72,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(72,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(73,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(73,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(74,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(74,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(75,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(75,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(76,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(76,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(77,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(77,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(78,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(78,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(79,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(79,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(80,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(80,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(81,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(81,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(82,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(82,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(83,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(83,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(84,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(84,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(85,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(85,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(86,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(86,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(87,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(87,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(88,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(88,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(89,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(89,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(90,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(90,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(91,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(91,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(92,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(92,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(93,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(93,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(94,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(94,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(95,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(95,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(96,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(96,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(97,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(97,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(98,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(98,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(99,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(99,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 0.0)], CartesianIndex(1,), CartesianIndex(100,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 0)) ~ 0.0)
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(101,), CartesianIndex(100,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1)) ~ -0.8414709848078965exp(-t))</code></pre><h3 id="Robin-boundary-conditions"><a class="docs-heading-anchor" href="#Robin-boundary-conditions">Robin boundary conditions</a><a id="Robin-boundary-conditions-1"></a><a class="docs-heading-anchor-permalink" href="#Robin-boundary-conditions" title="Permalink"></a></h3><pre><code class="language-julia hljs">using ModelingToolkit, MethodOfLines, DomainSets, OrdinaryDiffEq
+# Method of Manufactured Solutions
+u_exact = (x,t) -&gt; exp.(-t) * sin.(x)
+
+# Parameters, variables, and derivatives
+@parameters t x
+@variables u(..)
+Dt = Differential(t)
+Dx = Differential(x)
+Dxx = Differential(x)^2
+
+# 1D PDE and boundary conditions
+eq  = Dt(u(t, x)) ~ Dxx(u(t, x))
+bcs = [u(0, x) ~ sin(x),
+        u(t, -1.0) + 3Dx(u(t, -1.0)) ~ exp(-t) * (sin(-1.0) + 3cos(-1.0)),
+        u(t, 1.0) + Dx(u(t, 1.0)) ~ exp(-t) * (sin(1.0) + cos(1.0))]
+
+# Space and time domains
+domains = [t ∈ Interval(0.0, 1.0),
+        x ∈ Interval(-1.0, 1.0)]
+
+# PDE system
+@named pdesys = PDESystem(eq, bcs, domains, [t, x], [u(t, x)])
+
+# Method of lines discretization
+# Need a small dx here for accuracy
+dx = 0.05
+order = 2
+discretization = MOLFiniteDifference([x =&gt; dx], t)
+
+# Convert the PDE problem into an ODE problem
+prob = discretize(pdesys, discretization)
+
+# Solve ODE problem
+using OrdinaryDiffEq
+sol = solve(prob, Tsit5(), saveat=0.2)
+
+# Plot results and compare with exact solution
+discrete_x = sol[x]
+discrete_t = sol[t]
+
+solu = sol[u(t, x)]
+
+using Plots
+plt = plot()
+
+for i in 1:length(discrete_t)
+    plot!(discrete_x, solu[i, :], label=&quot;Numerical, t=$(discrete_t[i])&quot;)
+    scatter!(discrete_x, u_exact(discrete_x, discrete_t[i]), label=&quot;Exact, t=$(discrete_t[i])&quot;)
+end
+display(plt)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(1,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(1,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(41,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(41,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(2,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(2,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(3,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(3,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(4,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(4,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(5,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(5,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(6,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(6,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(7,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(7,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(8,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(8,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(9,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(9,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(10,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(10,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(11,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(11,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(12,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(12,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(13,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(13,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(14,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(14,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(15,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(15,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(16,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(16,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(17,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(17,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(18,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(18,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(19,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(19,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(20,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(20,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(21,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(21,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(22,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(22,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(23,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(23,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(24,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(24,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(25,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(25,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(26,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(26,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(27,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(27,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(28,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(28,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(29,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(29,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(30,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(30,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(31,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(31,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(32,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(32,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(33,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(33,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(34,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(34,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(35,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(35,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(36,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(36,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(37,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(37,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(38,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(38,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(39,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(39,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, -1.0)], CartesianIndex(1,), CartesianIndex(40,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], 3Differential(x)(u(t, -1.0)) + u(t, -1.0) ~ 0.7794359327965228exp(-t))
+(othervars, II, IIold, boundary.depvars, boundary.eq) = (SymbolicUtils.BasicSymbolic{Real}[u(t, 1.0)], CartesianIndex(41,), CartesianIndex(40,), SymbolicUtils.BasicSymbolic{Real}[u(t, x)], Differential(x)(u(t, 1.0)) + u(t, 1.0) ~ 1.3817732906760363exp(-t))</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../brusselator/">« Getting Started</a><a class="docs-footer-nextpage" href="../params/">Adding parameters »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.24 on <span class="colophon-date" title="Monday 24 April 2023 15:08">Monday 24 April 2023</span>. Using Julia version 1.8.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

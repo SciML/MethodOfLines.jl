@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model · MethodOfLines.jl</title><meta name="title" content="Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model · MethodOfLines.jl"/><meta property="og:title" content="Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model · MethodOfLines.jl"/><meta property="twitter:title" content="Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model · MethodOfLines.jl"/><meta name="description" content="Documentation for MethodOfLines.jl."/><meta property="og:description" content="Documentation for MethodOfLines.jl."/><meta property="twitter:description" content="Documentation for MethodOfLines.jl."/><meta property="og:url" content="https://docs.sciml.ai/MethodOfLines/stable/tutorials/sispde/"/><meta property="twitter:url" content="https://docs.sciml.ai/MethodOfLines/stable/tutorials/sispde/"/><link rel="canonical" href="https://docs.sciml.ai/MethodOfLines/stable/tutorials/sispde/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script><link href="../../assets/favicon.ico" rel="icon" type="image/x-icon"/></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="MethodOfLines.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">MethodOfLines.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">MethodOfLines.jl: Automated Finite Difference for Physics-Informed Learning</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../brusselator/">Getting Started</a></li><li><a class="tocitem" href="../heat/">Solving the Heat Equation</a></li><li><a class="tocitem" href="../params/">Adding parameters</a></li><li><a class="tocitem" href="../heatss/">Steady State Heat Equation - No Time Dependence - NonlinearProblem</a></li><li class="is-active"><a class="tocitem" href>Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li><li><a class="tocitem" href="../icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data</a></li><li><a class="tocitem" href="../PIDE/">Solving PIDEs (Integrals)</a></li></ul></li><li><a class="tocitem" href="../../performance/">Performance Tips</a></li><li><a class="tocitem" href="../../MOLFiniteDifference/">MOLFiniteDifference</a></li><li><a class="tocitem" href="../../solutions/">Solution Interface - PDESolutions</a></li><li><a class="tocitem" href="../../get_grid/">Grid and Solution Retrieval - Deprecated</a></li><li><a class="tocitem" href="../../boundary_conditions/">Boundary Conditions</a></li><li><a class="tocitem" href="../../advection_schemes/">Advection Schemes</a></li><li><a class="tocitem" href="../../nonuniform/">Non-Uniform Rectilinear Grids</a></li><li><a class="tocitem" href="../../curvilinear_grids/">Curvilinear Grids</a></li><li><a class="tocitem" href="../../faq/">FAQs</a></li><li><a class="tocitem" href="../../howitworks/">How it Works</a></li><li><a class="tocitem" href="../../devnotes/">Notes for Developers: Implement a Scheme</a></li><li><span class="tocitem">Generated Examples</span><ul><li><a class="tocitem" href="../../generated/bruss_code/">Generated Code for the Brusselator Equation</a></li><li><a class="tocitem" href="../../generated/bruss_ode_eqs/">Generated ODE system for the Brusselator Equation</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../../api/discretization/">Discretization</a></li><li><a class="tocitem" href="../../api/utils/">Utilities</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/SciML/MethodOfLines.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/SciML/MethodOfLines.jl/blob/master/docs/src/tutorials/sispde.md" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Steady-state-of-SIS-(suspected-infected-suspected)-reaction-diffusion-model"><a class="docs-heading-anchor" href="#Steady-state-of-SIS-(suspected-infected-suspected)-reaction-diffusion-model">Steady state of SIS (suspected-infected-suspected) reaction-diffusion  model</a><a id="Steady-state-of-SIS-(suspected-infected-suspected)-reaction-diffusion-model-1"></a><a class="docs-heading-anchor-permalink" href="#Steady-state-of-SIS-(suspected-infected-suspected)-reaction-diffusion-model" title="Permalink"></a></h1><p>Considering the following SIS reaction diffusion model:</p><p class="math-container">\[\left\{\begin{array}{l}
+S_{t} = d_{S} S_{x x}-\beta(x) \frac{S I}{S+I}+\gamma(x) I=0, \quad 0&lt;x&lt;1 \\
+I_{t} = d_{I} I_{x x}+\beta(x) \frac{S I}{S+I}-\gamma(x) I=0, \quad 0&lt;x&lt;1 \\
+S_{x}=I_{x}=0, \quad x=0,1,
+\end{array}\right.\]</p><p>where <span>$\int_{0}^{1} S(x,t)+I(x,t)dx = 1$</span>. <span>$S(x,t)$</span> and <span>$I(x,t)$</span>  denote the density of susceptible and  infected  populations at location <span>$x$</span> and time <span>$t$</span>,  <span>$d_{S}$</span> and <span>$d_{I}$</span> represent the  diffusion coefficients for susceptible and infected  individuals, and  <span>$\beta(x)$</span>, <span>$\gamma(x)$</span> are transmission  and recovery rates at <span>$x$</span>, respectively.</p><p>We want to solve the steady state problem (same notations for convenience):</p><p class="math-container">\[\left\{\begin{array}{l}
+d_{S} S_{x x}-\beta(x) \frac{S I}{S+I}+\gamma(x) I=0, \quad 0&lt;x&lt;1 \\
+d_{I} I_{x x}+\beta(x) \frac{S I}{S+I}-\gamma(x) I=0, \quad 0&lt;x&lt;1 \\
+S_{x}=I_{x}=0, \quad x=0,1,
+\end{array}\right.\]</p><p>where <span>$\int_{0}^{1} S(x)+I(x)dx = 1$</span>.</p><p>Note here elliptic problem has condition <span>$\int_{0}^{1} S(x)+I(x)dx = 1$</span>.</p><pre><code class="language-julia hljs">using DifferentialEquations, ModelingToolkit, MethodOfLines, DomainSets, Plots
+
+# Parameters, variables, and derivatives
+@parameters t x
+@parameters dS dI brn ϵ
+@variables S(..) I(..)
+Dt = Differential(t)
+Dx = Differential(x)
+Dxx = Differential(x)^2
+
+# Define functions
+function γ(x)
+    y = x + 1.0
+    return y
+end
+
+function ratio(x, brn, ϵ)
+    y = brn + ϵ * sin(2 * pi * x)
+    return y
+end
+
+# 1D PDE and boundary conditions
+eq = [Dt(S(t, x)) ~ dS * Dxx(S(t, x)) - ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) + γ(x) * I(t, x),
+    Dt(I(t, x)) ~ dI * Dxx(I(t, x)) + ratio(x, brn, ϵ) * γ(x) * S(t, x) * I(t, x) / (S(t, x) + I(t, x)) - γ(x) * I(t, x)]
+bcs = [S(0, x) ~ 0.9 + 0.1 * sin(2 * pi * x),
+    I(0, x) ~ 0.1 + 0.1 * cos(2 * pi * x),
+    Dx(S(t, 0)) ~ 0.0,
+    Dx(S(t, 1)) ~ 0.0,
+    Dx(I(t, 0)) ~ 0.0,
+    Dx(I(t, 1)) ~ 0.0]
+
+# Space and time domains
+domains = [t ∈ Interval(0.0, 10.0),
+    x ∈ Interval(0.0, 1.0)]
+
+# PDE system
+@named pdesys = PDESystem(eq, bcs, domains, [t, x], [S(t, x), I(t, x)], [dS =&gt; 0.5, dI =&gt; 0.1, brn =&gt; 3, ϵ =&gt; 0.1])
+
+# Method of lines discretization
+# Need a small dx here for accuracy
+dx = 0.01
+order = 2
+discretization = MOLFiniteDifference([x =&gt; dx], t)
+
+# Convert the PDE problem into an ODE problem
+prob = discretize(pdesys, discretization);</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi"><span class="sgr38_2" style="color:#56b6c2">ODEProblem</span> with uType <span class="sgr38_2" style="color:#56b6c2">Vector{Float64}</span> and tType <span class="sgr38_2" style="color:#56b6c2">Float64</span>. In-place: <span class="sgr38_2" style="color:#56b6c2">true</span>
+timespan: (0.0, 10.0)
+u0: 198-element Vector{Float64}:
+ 0.9062790519529313
+ 0.9125333233564304
+ 0.9187381314585725
+ 0.9248689887164855
+ 0.9309016994374948
+ 0.9368124552684678
+ 0.9425779291565073
+ 0.9481753674101716
+ 0.9535826794978997
+ 0.9587785252292473
+ ⋮
+ 0.18443279255020154
+ 0.18763066800438638
+ 0.190482705246602
+ 0.19297764858882513
+ 0.19510565162951538
+ 0.1968583161128631
+ 0.19822872507286887
+ 0.1992114701314478
+ 0.19980267284282716</code></pre><h3 id="Solving-time-dependent-SIS-epidemic-model"><a class="docs-heading-anchor" href="#Solving-time-dependent-SIS-epidemic-model">Solving time-dependent SIS epidemic model</a><a id="Solving-time-dependent-SIS-epidemic-model-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-time-dependent-SIS-epidemic-model" title="Permalink"></a></h3><pre><code class="language-julia hljs"># Solving SIS reaction diffusion model
+sol = solve(prob, Tsit5(), saveat=0.2);
+
+# Retriving the results
+discrete_x = sol[x]
+discrete_t = sol[t]
+S_solution = sol[S(t, x)]
+I_solution = sol[I(t, x)]
+
+p = surface(discrete_x, discrete_t, S_solution)
+display(p)</code></pre><h3 id="Solving-steady-state-problem"><a class="docs-heading-anchor" href="#Solving-steady-state-problem">Solving steady state problem</a><a id="Solving-steady-state-problem-1"></a><a class="docs-heading-anchor-permalink" href="#Solving-steady-state-problem" title="Permalink"></a></h3><p>Change the elliptic problem to steady state problem of reaction diffusion equation.</p><p>See more solvers in <a href="https://docs.sciml.ai/DiffEqDocs/stable/solvers/steady_state_solve/">Steady State Solvers · DifferentialEquations.jl</a></p><pre><code class="language-julia hljs">steadystateprob = SteadyStateProblem(prob)
+steadystate = solve(steadystateprob, DynamicSS(Tsit5()))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">u: 198-element Vector{Float64}:
+ 0.3317836646210077
+ 0.3317732755346262
+ 0.3317891113928477
+ 0.33175474345802314
+ 0.33179088720150746
+ 0.33173373143278306
+ 0.33179111779052045
+ 0.33171244226430213
+ 0.33179191509999756
+ 0.3316930492696892
+ ⋮
+ 0.6560941213703403
+ 0.6561639796904541
+ 0.6562347277323771
+ 0.6563041441210961
+ 0.6563698199305195
+ 0.6564293278188778
+ 0.6564800894273904
+ 0.656519489448634
+ 0.656544799858111</code></pre><h3 id="The-effect-of-human-mobility-on-endemic-size"><a class="docs-heading-anchor" href="#The-effect-of-human-mobility-on-endemic-size">The effect of human mobility on endemic size</a><a id="The-effect-of-human-mobility-on-endemic-size-1"></a><a class="docs-heading-anchor-permalink" href="#The-effect-of-human-mobility-on-endemic-size" title="Permalink"></a></h3><p>Set the endemic size <span>$f(d_{S},d_{I}) = \int_{0}^{1}I(x;d_{S},d_{I}).$</span></p><pre><code class="language-julia hljs">function episize!(dS, dI)
+    newprob = remake(prob, p=[dS, dI, 3, 0.1])
+    steadystateprob = SteadyStateProblem(newprob)
+    state = solve(steadystateprob, DynamicSS(Tsit5()))
+    y = sum(state[100:end]) / 99
+    return y
+end
+episize!(exp(1.0),exp(0.5))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">0.6656214868928503</code></pre><p>References:</p><ul><li>Allen L J S, Bolker B M, Lou Y, et al. Asymptotic profiles of the steady states for an SIS epidemic reaction-diffusion model[J]. Discrete &amp; Continuous Dynamical Systems, 2008, 21(1): 1.</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../heatss/">« Steady State Heat Equation - No Time Dependence - NonlinearProblem</a><a class="docs-footer-nextpage" href="../icbc_sampled/">Initial and Boundary Conditions with sampled/measured Data »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="auto">Automatic (OS)</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.1.0 on <span class="colophon-date" title="Wednesday 11 October 2023 14:47">Wednesday 11 October 2023</span>. Using Julia version 1.9.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
