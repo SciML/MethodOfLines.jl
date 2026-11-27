@@ -831,12 +831,12 @@ end
     @test !MethodOfLines.mismatched_interface_dxs(b, intervals, narrowdisc)
 end
 
-# Interior right-hand side of the manufactured solution u = x - t, whose exact value is -1.
+# Error of the right-hand side of the manufactured solution u = x - t, whose exact value is -1.
 function advection_rhs_error(pdesys, disc)
     prob = ode_discretize(pdesys, disc)
     du = similar(prob.u0)
     prob.f(du, prob.u0, prob.p, 0.0)
-    return maximum(abs.(du[abs.(du) .> 0.5] .+ 1))
+    return maximum(abs.(du .+ 1))
 end
 
 @testset "Equal specifications whose grids end short of the interface keep working" begin
