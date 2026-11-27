@@ -918,6 +918,14 @@ end
     )
     disc = MOLFiniteDifference([x1 => 9, x2 => 9, y => 9], t)
     test_seam_rejected(mixed, disc, "a mixed derivative")
+    # The same unequal intervals as explicit node vectors.
+    disc = MOLFiniteDifference(
+        [
+            x1 => collect(range(0.0, 0.5; length = 9)), x2 => collect(range(0.5, 1.5; length = 9)),
+            y => 9,
+        ], t,
+    )
+    test_seam_rejected(mixed, disc, "a mixed derivative")
     disc = MOLFiniteDifference([x1 => 11, x2 => 11, y => 9], t)
     domains[3] = x2 ∈ Interval(0.5, 1.0)
     bcs[5] = w2(t, 1.0, y) ~ y
@@ -994,6 +1002,10 @@ end
     a = 2.0^52
     pdesys = build_seam_system(:heat, a, a + 8, a + 24; f = x -> x - a)
     disc = MOLFiniteDifference([x1 => 9, x2 => 9], t)
+    test_seam_rejected(pdesys, disc, "derivative order 2")
+
+    # Every sampled node gap rounds to 1.0, but the right-hand stencil uses the step 1.125.
+    pdesys = build_seam_system(:heat, a, a + 8, a + 17; f = x -> x - a)
     test_seam_rejected(pdesys, disc, "derivative order 2")
 
     # Equal nominal widths typed as decimals pick up rounding differences between the two gaps.

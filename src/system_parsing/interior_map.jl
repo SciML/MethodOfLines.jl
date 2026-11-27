@@ -121,13 +121,16 @@ function validate_interface_seams(
     )
     for b in filter_interfaces(flatten_vardict(boundarymap))
         isequal(b.x, b.x2) && continue
-        mismatched_interface_dxs(b, discretization) && continue
         n = discretization.approx_order
         nodes1 = _seam_nodes(s.grid[b.x], n, isupper(b))
         nodes2 = _seam_nodes(s.grid[b.x2], n, !isupper(b))
         gaps1 = abs.(diff(nodes1))
         gaps2 = abs.(diff(nodes2))
-        _gaps_match(vcat(gaps1, gaps2), vcat(nodes1, nodes2)) && continue
+        # The stencils on a uniform axis use its step, which rounded node gaps can hide at large offsets.
+        steps = filter(d -> d isa Number, [s.dxs[b.x], s.dxs[b.x2]])
+        gaps_match = _gaps_match(vcat(gaps1, gaps2, steps), vcat(nodes1, nodes2))
+        # Different step specifications (node vectors) keep the derivative checks but have no gap test.
+        gaps_match && !mismatched_interface_dxs(b, discretization) && continue
         ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
         vectors = !(s.grid[b.x] isa StepRangeLen) && !(s.grid[b.x2] isa StepRangeLen)
         what = seam_unsafe_derivative(
@@ -137,7 +140,7 @@ function validate_interface_seams(
         throw(
             ArgumentError(
                 "Interface $(b.eq) connects $(b.x) and $(b.x2), whose grid gaps next to the interface " *
-                    "differ (nearest first: $gaps1 in $(b.x), $gaps2 in $(b.x2)), but the system contains " *
+                    "differ (nearest first: $gaps1 in $(b.x), $gaps2 in $(b.x2); step sizes $(steps)), but the system contains " *
                     "$what in these variables. Only first-order `UpwindScheme()` derivatives are " *
                     "coordinate-aware across such an interface; the other stencils would use a single " *
                     "spacing and be silently inaccurate. Use equal gaps on both sides of the interface " *
