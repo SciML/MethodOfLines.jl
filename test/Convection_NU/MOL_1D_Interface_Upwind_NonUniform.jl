@@ -1175,7 +1175,7 @@ upwind_taps(u, p, t, x, dx) = (u[2] - u[1]) / dx
 end
 
 @testset "A short final cell from the integer count rejects heat at the seam" begin
-    # 12 points on [0, 0.09] gain a 1.4e-17 final cell (#752); first-order advection on them still works.
+    # 12 points on [0, 0.09] gain a 1.4e-17 final cell (#752, not fixed here); forward advection of an affine profile is still exact.
     pdesys = build_seam_system(:heat, 0.0, 0.09, 0.18)
     disc = MOLFiniteDifference([x1 => 12, x2 => 12], t)
     test_seam_rejected(pdesys, disc, "derivative order 2")
