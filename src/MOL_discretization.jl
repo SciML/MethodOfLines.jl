@@ -247,6 +247,8 @@ those whose initialization equations `BrownFullBasicInit` would not honour. Thos
 back to `mtkcompile` plus an `ODEProblem`, which scalarizes the array equations at the
 `System` level. Pass `fallback = false` to make that an error instead.
 
+On the DAE path, pass `build_initializeprob = true` here or on the discretization to recompute parameter-dependent initial conditions when the remade problem is initialized. If `fully_determined = true` rejects an overdetermined initialization system, `discretize` can fall back to an `ODEProblem`. Pass `fallback = false` to surface the error.
+
 Supplying `analytic` selects the compiled `ODEProblem` path because analytic solutions
 are attached through the compiled `ODEFunction`.
 

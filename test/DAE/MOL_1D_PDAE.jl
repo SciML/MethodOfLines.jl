@@ -3,6 +3,7 @@
 # Packages and inclusions
 using ModelingToolkit, MethodOfLines, LinearAlgebra, Test, OrdinaryDiffEq, DomainSets
 using ModelingToolkit: Differential
+import Logging
 
 # Tests
 @testset "Dt(u(t,x)) ~ Dxx(u(t,x)), 0 ~ Dxx(v(t,x)) + sin(x), Dirichlet BCs" begin
@@ -61,4 +62,88 @@ using ModelingToolkit: Differential
         @test all(isapprox.(u_exact(x_sol, t_sol[i]), solu[i, :], atol = 0.01))
         @test all(isapprox.(v_exact(x_sol, t_sol[i]), solv[i, :], atol = 0.01))
     end
+end
+
+@testset "remake with a parameter in the initial condition" begin
+    using SymbolicIndexingInterface: setp_oop
+    import SciMLBase
+    @parameters t x α
+    @variables u(..)
+    Dt = Differential(t)
+    Dxx = Differential(x)^2
+    bcs = [
+        u(0, x) ~ α * cos(x), u(t, 0) ~ α * exp(-t), u(t, 1) ~ α * exp(-t) * cos(1),
+    ]
+    domains = [t ∈ Interval(0.0, 1.0), x ∈ Interval(0.0, 1.0)]
+    build(α0) = PDESystem(
+        Dt(u(t, x)) ~ Dxx(u(t, x)), bcs, domains, [t, x], [u(t, x)], [α => α0];
+        name = :heat
+    )
+    disc = MOLFiniteDifference([x => 0.1], t)
+    fresh = discretize(build(2.4), disc; fallback = false)
+    newp(prob) = setp_oop(prob, [α])(prob, [2.4])
+
+    # opt-in: remake(p) recomputes the initial condition
+    prob = discretize(build(1.2), disc; fallback = false, build_initializeprob = true)
+    @test prob isa SciMLBase.DAEProblem
+    sol2 = solve(remake(prob; p = newp(prob)); saveat = 0.1)
+    sol_fresh = solve(fresh; saveat = 0.1)
+    @test sol2.t[end] ≈ 1.0
+    # `prob2.u0` is refreshed by the initialization at solve time
+    @test sol2[u(t, x)][1, :] ≈ 2.4 .* cos.(sol2[x])
+    @test sol2[u(t, x)] ≈ sol_fresh[u(t, x)] atol = 1.0e-6
+
+    # default: a stale parameter-dependent initial condition is warned about, once per
+    # discretize, naming the opt-in; an explicit `build_initializeprob = false`, per call
+    # or stored, and an initial condition without a parameter stay quiet
+    @test_logs (:warn, r"build_initializeprob = true") discretize(
+        build(1.2), disc; fallback = false
+    )
+    @test_logs discretize(build(1.2), disc; fallback = false, build_initializeprob = false)
+    disc_stored_off = MOLFiniteDifference([x => 0.1], t; build_initializeprob = false)
+    @test_logs discretize(build(1.2), disc_stored_off; fallback = false)
+    disc_init = MOLFiniteDifference([x => 0.1], t; build_initializeprob = true)
+    io = IOBuffer()
+    prob_init = Logging.with_logger(Logging.SimpleLogger(io)) do
+        discretize(build(1.2), disc_init; fallback = false)
+    end
+    @test !occursin("build_initializeprob", String(take!(io)))
+    @test SciMLBase.has_initialization_data(prob_init.f)
+
+    # a per-call keyword wins over the one stored on the discretization, both ways
+    probo = discretize(
+        build(1.2), disc_stored_off; fallback = false, build_initializeprob = true
+    )
+    @test SciMLBase.has_initialization_data(probo.f)
+    prob_off = discretize(
+        build(1.2), disc_init; fallback = false, build_initializeprob = false
+    )
+    @test !SciMLBase.has_initialization_data(prob_off.f)
+
+    # the stored opt-in reaches a directly constructed DAEProblem, and a per-call
+    # `false` overrides it
+    dae_init = SciMLBase.DAEProblem(build(1.2), disc_init)
+    @test SciMLBase.has_initialization_data(dae_init.f)
+    solp = solve(remake(dae_init; p = newp(dae_init)); saveat = 0.1)
+    @test solp[u(t, x)][1, :] ≈ 2.4 .* cos.(solp[x])
+    @test !SciMLBase.has_initialization_data(
+        SciMLBase.DAEProblem(build(1.2), disc_init; build_initializeprob = false).f
+    )
+    bcs_const = [u(0, x) ~ cos(x), u(t, 0) ~ α * exp(-t), u(t, 1) ~ α * exp(-t) * cos(1)]
+    @test_logs discretize(
+        PDESystem(
+            Dt(u(t, x)) ~ Dxx(u(t, x)), bcs_const, domains, [t, x], [u(t, x)], [α => 1.2];
+            name = :heat_const
+        ), disc; fallback = false
+    )
+
+    # default: remake(u0) is honoured
+    prob = discretize(build(1.2), disc; fallback = false)
+    @test prob isa SciMLBase.DAEProblem
+    prob3 = remake(prob; u0 = fill(4.0, length(prob.u0)))
+    @test solve(prob3; saveat = 0.1)[u(t, x)][1, 2:(end - 1)] ≈ fill(4.0, 9)
+
+    # default: fully_determined still builds
+    @test discretize(build(1.2), disc; fallback = false, fully_determined = true) isa
+        SciMLBase.DAEProblem
 end
