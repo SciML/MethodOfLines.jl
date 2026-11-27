@@ -750,21 +750,22 @@ end
 end
 
 # Two connected domains [lo, mid] and [mid, hi] with the same equation on both. `kind` is
-# :advection (u_t = -u_x, exact solution f(x - t)) or :heat (u_t = u_xx, steady for affine f).
+# :advection (u_t = -u_x, exact solution f(x - t)), :reverse (u_t = u_x, f(x + t), for f = x^2 only)
+# or :heat (u_t = u_xx, steady for affine f).
 function build_seam_system(kind, lo, mid, hi; f = x -> x - lo)
-    rhs(u, X, D) = kind == :advection ? -D(u(t, X)) : D(D(u(t, X)))
+    rhs(u, X, D) = kind == :advection ? -D(u(t, X)) : kind == :reverse ? D(u(t, X)) : D(D(u(t, X)))
     Dt = Differential(t)
     eqs = [
         Dt(u1(t, x1)) ~ rhs(u1, x1, Differential(x1)),
         Dt(u2(t, x2)) ~ rhs(u2, x2, Differential(x2)),
     ]
     inflow = kind == :advection ? f(lo - t) : f(lo)
-    outflow = kind == :advection ? f(hi - t) : f(hi)
+    outflow = kind == :advection ? f(hi - t) : kind == :reverse ? f(hi + t) : f(hi)
     bcs = [
         u1(0.0, x1) ~ f(x1),
         u2(0.0, x2) ~ f(x2),
         u1(t, mid) ~ u2(t, mid),
-        u1(t, lo) ~ inflow,
+        kind == :reverse ? Differential(x1)(u1(t, lo)) ~ 2 * (lo + t) : u1(t, lo) ~ inflow,
         u2(t, hi) ~ outflow,
     ]
     domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(lo, mid), x2 ∈ Interval(mid, hi)]
@@ -1099,5 +1100,21 @@ end
         disc = MOLFiniteDifference([x1 => n, x2 => n], t)
         @test get_discrete(pdesys, disc)[x1] == collect(colon)
         @test get_discrete(pdesys, disc)[x1] isa StepRangeLen
+    end
+end
+
+@testset "Reverse-flow first-order upwind uses the coordinates across unequal seam gaps" begin
+    # u = x^2 at t = 0, so u_t = u_x is the forward difference x_i + x_{i+1} with the true node coordinates.
+    for (mid, hi, n) in ((0.5, 1.5, 9), (0.5, 1.5, 17), (0.09, 0.27, 12), (0.5, 1.0, 11))
+        pdesys = build_seam_system(:reverse, 0.0, mid, hi; f = x -> x^2)
+        disc = MOLFiniteDifference([x1 => n, x2 => n], t; advection_scheme = UpwindScheme())
+        grids = get_discrete(pdesys, disc)
+        nodes = sort(unique(vcat(grids[x1], grids[x2])))
+        du, u0 = seam_rhs(pdesys, disc)
+        for (k, uk) in enumerate(u0)
+            i = argmin(abs.(nodes .^ 2 .- uk))
+            i < length(nodes) && @test du[k] ≈ nodes[i] + nodes[i + 1] atol = 1.0e-12
+        end
+        @test any(==(mid), sqrt.(u0))
     end
 end
