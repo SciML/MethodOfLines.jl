@@ -215,7 +215,7 @@ With an identical budget of grid points, the clustered grid places about five ti
 
 ## Verifying accuracy: manufactured-solution convergence
 
-Sharpness alone is not enough — we should verify that the non-uniform WENO discretization converges at the expected rate. We use the [method of manufactured solutions](https://www.osti.gov/biblio/759450): pick a smooth exact solution of the advection equation, impose it as initial and boundary data, and measure the error under grid refinement. The nominal spacing ``h = (b - a)/(N - 1)`` serves as the refinement parameter; refining a ``\sinh``-stretched grid at fixed stretching intensity ``\beta`` is self-similar, so the estimated order of convergence (EOC) is well-defined.
+Sharpness alone is not enough — we should verify that the non-uniform WENO discretization converges at the expected rate. We use the [method of manufactured solutions](https://digital.library.unt.edu/ark:/67531/metadc702130/m2/1/high_res_d/759450.pdf): pick a smooth exact solution of the advection equation, impose it as initial and boundary data, and measure the error under grid refinement. The nominal spacing ``h = (b - a)/(N - 1)`` serves as the refinement parameter; refining a ``\sinh``-stretched grid at fixed stretching intensity ``\beta`` is self-similar, so the estimated order of convergence (EOC) is well-defined.
 
 ```@example weno
 L = 2π
