@@ -2294,6 +2294,11 @@ function array_upwind_difference(
     haskey(periodic, x) && !(Dop.dx isa Number) && throw(
         ArrayFormFallback("upwind derivative in a periodic nonuniform direction")
     )
+    # The pointwise path differences the interface row with the tap coordinates.
+    haskey(periodic, x) && periodic[x].upper isa NamedTuple &&
+        _upper_seam_gap_differs(s, x, periodic[x].upper.x) && throw(
+        ArrayFormFallback("upwind derivative across an interface onto an axis with another spacing")
+    )
     N = length(ranges)
     j = indexmap[x]
     rng = ranges[j]

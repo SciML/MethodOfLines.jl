@@ -1,3 +1,20 @@
+# Whether the first gap of `x2`, which a forward stencil of the uniform axis `x` reaches across an
+# upper interface, differs from the step of `x` (equal point counts on intervals of different length).
+function _upper_seam_gap_differs(s, x, x2)
+    dx2 = s.dxs[x2]
+    gap = dx2 isa Number ? dx2 : dx2[1]
+    return !isapprox(gap, s.dxs[x]; rtol = sqrt(eps(float(typeof(s.dxs[x])))))
+end
+
+@inline function _upper_seam_gap_differs(D, II, s, bs, jx)
+    j, x = jx
+    II[j] + D.stencil_length - 1 > length(s, x) || return false
+    for b in bs
+        isupper(b) && !isequal(b.x2, x) && return _upper_seam_gap_differs(s, x, b.x2)
+    end
+    return false
+end
+
 @inline function _upwind_difference(
         D::DerivativeOperator{T, N, Wind, DX}, II, s, bs,
         ispositive, u, jx
@@ -10,6 +27,11 @@
             weights = D.high_boundary_coefs[length(s, x) - II[j] + 1]
             offset = length(s, x) - II[j]
             Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):0]
+        elseif hasupper && _upper_seam_gap_differs(D, II, s, bs, jx)
+            Iraw = [II + i * I1 for i in 0:(D.stencil_length - 1)]
+            Itap = [bwrap(I, bs, s, jx) for I in Iraw]
+            coords = [bcoord(I, bs, s, jx) for I in Iraw]
+            weights = calculate_weights(D.derivative_order, s.grid[x][II[j]], coords)
         else
             weights = D.stencil_coefs
             Itap = [bwrap(II + i * I1, bs, s, jx) for i in 0:(D.stencil_length - 1)]
