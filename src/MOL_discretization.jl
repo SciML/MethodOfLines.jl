@@ -126,7 +126,7 @@ function get_discrete(pdesys, discretization)
 
     # Create discretized space and variables, this is called `s` throughout
     s = PDEBase.construct_discrete_space(v, discretization)
-    validate_interface_seams(pdeeqs, boundarymap, s, discretization)
+    validate_interface_seams(pdeeqs, boundarymap, s, discretization; stencils = false)
 
     return Dict(
         vcat(

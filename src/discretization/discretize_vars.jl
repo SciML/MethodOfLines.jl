@@ -268,6 +268,13 @@ Discretize space
         dx = prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
         discx = dx isa Number ? (xdomain[1]:dx:xdomain[2]) : dx
         xhigh = xdomain[2]
+        count = discretization.dxs[x]
+        if count isa Integer && discretization.grid_align isa CenterAlignedGrid &&
+                length(discx) + (discx[end] != xhigh) != count
+            # The rounded dx left the colon range one ulp short of hi, so appending hi would add a
+            # near-zero final cell. Ranges that already give `count` nodes are kept as they are.
+            discx = range(xdomain[1], xhigh; length = count)
+        end
         if discx[end] != xhigh
             @warn "d$x for $x does not divide domain exactly, adding grid point at $x = $(xhigh))."
             discx = collect(discx)
@@ -284,7 +291,8 @@ generate dxs
 @inline function generate_dxs(x̄, grid, vars, discretization)
     dxs = map(x̄) do x
         discx = Dict(grid)[x]
-        if discx isa StepRangeLen
+        # A count-based LinRange (BigFloat, Rational) is uniform too; supplied vectors never are.
+        if discx isa StepRangeLen || (discx isa LinRange && discretization.dxs[x] isa Integer)
             xdomain = vars.intervals[x]
             x => prepare_dx(discretization.dxs[x], xdomain, discretization.grid_align)
         elseif discx isa AbstractVector # is an abstract vector but not StepRangeLen

@@ -113,7 +113,7 @@ function seam_unsafe_derivative(pdes, xs, ops, scheme, vectors, staggered = fals
     return "first-order derivatives discretized with $label"
 end
 
-validate_interface_seams(pdes, boundarymap, s, discretization) = nothing
+validate_interface_seams(pdes, boundarymap, s, discretization; stencils = true) = nothing
 
 # The centered and wider upwind stencils of a node-vector axis do not support interface boundaries,
 # and they are built for every variable on the axis, so an order above one in any field is rejected.
@@ -138,9 +138,11 @@ end
 # Connected axes may have unequal grid spacings at the seam, or different node vectors, only for
 # first-order `UpwindScheme()` off staggered grids, whose stencils use the actual coordinates
 # (src/discretization/schemes/upwind_difference), and for WENO on node vectors. Every other stencil
-# that straddles the seam would use one spacing and be silently wrong.
+# that straddles the seam would use one spacing and be silently wrong. On matching grids the
+# axis-wide node-vector check concerns stencil construction only, so `get_discrete`
+# (`stencils = false`) returns the grids and symbolic construction raises it.
 function validate_interface_seams(
-        pdes, boundarymap, s, discretization::MOLFiniteDifference
+        pdes, boundarymap, s, discretization::MOLFiniteDifference; stencils = true
     )
     for b in filter_interfaces(flatten_vardict(boundarymap))
         isequal(b.x, b.x2) && continue
@@ -148,7 +150,8 @@ function validate_interface_seams(
             s, b.x, b.x2, isupper(b), discretization.approx_order
         )
         # Different step specifications (node vectors) keep the derivative checks but have no spacing test.
-        what = if spacings_match && !mismatched_interface_dxs(b, discretization)
+        matching = spacings_match && !mismatched_interface_dxs(b, discretization)
+        what = if matching
             nothing
         else
             ops = [operation(safe_unwrap(b.u)), operation(safe_unwrap(b.u2))]
@@ -160,7 +163,7 @@ function validate_interface_seams(
             )
         end
         if what === nothing
-            validate_node_vector_orders(b, pdes, s)
+            (stencils || !matching) && validate_node_vector_orders(b, pdes, s)
             continue
         end
         gaps = "(nearest first: $spacings1 in $(b.x), $spacings2 in $(b.x2))"

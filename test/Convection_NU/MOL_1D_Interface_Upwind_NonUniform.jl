@@ -832,14 +832,14 @@ end
     @test all(≈(-1.0; atol = 1.0e-12), du)
 end
 
-# u_t = c u_x on [0, 0.5] and [0.5, 1.5] with 9 points each (gaps 0.0625 and 0.125); `ring` also joins
-# x = 0 to x = 1.5.
-function wind_seam_system(c, f; ring = false)
+# u_t = c u_x on [lo, mid] and [mid, hi], by default [0, 0.5] and [0.5, 1.5], where 9 points each give
+# gaps 0.0625 and 0.125; `ring` also joins x = lo to x = hi.
+function wind_seam_system(c, f; ring = false, lo = 0.0, mid = 0.5, hi = 1.5)
     Dt, Dx1, Dx2 = Differential(t), Differential(x1), Differential(x2)
     eqs = [Dt(u1(t, x1)) ~ c * Dx1(u1(t, x1)), Dt(u2(t, x2)) ~ c * Dx2(u2(t, x2))]
-    bcs = [u1(0.0, x1) ~ f(x1), u2(0.0, x2) ~ f(x2), u1(t, 0.5) ~ u2(t, 0.5)]
-    append!(bcs, ring ? [u1(t, 0.0) ~ u2(t, 1.5)] : [u1(t, 0.0) ~ f(0.0), u2(t, 1.5) ~ f(1.5)])
-    domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0, 0.5), x2 ∈ Interval(0.5, 1.5)]
+    bcs = [u1(0.0, x1) ~ f(x1), u2(0.0, x2) ~ f(x2), u1(t, mid) ~ u2(t, mid)]
+    append!(bcs, ring ? [u1(t, lo) ~ u2(t, hi)] : [u1(t, lo) ~ f(lo), u2(t, hi) ~ f(hi)])
+    domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(lo, mid), x2 ∈ Interval(mid, hi)]
     @named pdesys = PDESystem(eqs, bcs, domains, [t, x1, x2], [u1(t, x1), u2(t, x2)])
     return pdesys
 end
@@ -1138,6 +1138,27 @@ end
         @test err isa ArgumentError
         err isa ArgumentError && @test occursin("the grid of x2 is a node vector", err.msg)
     end
+
+    # The same node vector on both sides matches at the interface: grid lookup returns the grids and
+    # only symbolic construction, which builds the centered stencils, rejects the axis.
+    nodes = collect(range(0.0, 1.0; length = 9))
+    bcs = [
+        u1(0.0, x1) ~ x1, u2(0.0, x2) ~ 1 + x2, w(0.0, x2) ~ x2,
+        u1(t, 1.0) ~ u2(t, 0.0), u1(t, 0.0) ~ -t, u2(t, 1.0) ~ 2 - t,
+        w(t, 0.0) ~ 0.0, w(t, 1.0) ~ 1.0,
+    ]
+    domains = [t ∈ Interval(0.0, 0.2), x1 ∈ Interval(0.0, 1.0), x2 ∈ Interval(0.0, 1.0)]
+    @named matching = PDESystem(
+        eqs[1:2] ∪ [Dt(w(t, x2)) ~ Dx2(Dx2(w(t, x2)))], bcs, domains, [t, x1, x2],
+        [u1(t, x1), u2(t, x2), w(t, x2)],
+    )
+    same = MOLFiniteDifference([x1 => nodes, x2 => nodes], t)
+    grids = get_discrete(matching, same)
+    @test grids[x1] == nodes && grids[x2] == nodes
+    @test length(grids[w(t, x2)]) == 9
+    err = thrown(() -> symbolic_discretize(matching, same))
+    @test err isa ArgumentError
+    err isa ArgumentError && @test occursin("the grid of x2 is a node vector", err.msg)
 end
 
 @testset "Different node vectors with equal gaps at the interface name the actual reason" begin
@@ -1248,12 +1269,36 @@ upwind_taps(u, p, t, x, dx) = (u[2] - u[1]) / dx
     end
 end
 
-@testset "A short final cell from the integer count rejects heat at the seam" begin
-    # 12 points on [0, 0.09] gain a 1.4e-17 final cell (#752, not fixed here); forward advection of an affine profile is still exact.
-    pdesys = build_seam_system(:heat, 0.0, 0.09, 0.18)
+@testset "Integer counts give the requested nodes and both endpoints" begin
+    # The colon range for 12 points on [0, 0.09] (and 6 on [0, sqrt(2)]) ends one unit below the upper
+    # endpoint, which used to be appended as a near-zero final cell (#752).
+    for (n, lo, mid, hi) in ((12, 0.0, 0.09, 0.18), (6, 0.0, sqrt(2), 2 * sqrt(2)))
+        disc = MOLFiniteDifference([x1 => n, x2 => n], t)
+        grids = get_discrete(build_seam_system(:advection, lo, mid, hi), disc)
+        @test (length(grids[x1]), length(grids[x2])) == (n, n)
+        @test (grids[x1][1], grids[x1][end], grids[x2][1], grids[x2][end]) == (lo, mid, mid, hi)
+        @test minimum(diff(grids[x1])) > 0.99 * (mid - lo) / (n - 1)
+    end
+
+    # u = 1 + x moves at unit speed in either direction: the two values across a near-zero cell round
+    # to the same number, which gave a zero derivative there.
     disc = MOLFiniteDifference([x1 => 12, x2 => 12], t)
-    test_seam_rejected(pdesys, disc, "derivative order 2")
-    pdesys = build_seam_system(:advection, 0.0, 0.09, 0.18)
+    for c in (-1.0, 1.0)
+        du, = seam_rhs(wind_seam_system(c, x -> 1 + x; lo = 0.0, mid = 0.09, hi = 0.18), disc)
+        @test length(du) == 21
+        @test maximum(abs.(du .- c)) < 1.0e-9
+    end
+    du, = seam_rhs(build_seam_system(:heat, 0.0, 0.09, 0.18; f = x -> 1 + x), disc)
+    @test maximum(abs, du) < 1.0e-9
+
+    # BigFloat endpoints give a LinRange, which uses the uniform stencils as well.
+    lo, mid, hi = big"0.1", big"0.2", big"0.3"
+    pdesys = build_seam_system(:heat, lo, mid, hi; f = x -> x - lo)
+    disc = MOLFiniteDifference([x1 => 24, x2 => 24], t)
+    grids = get_discrete(pdesys, disc)
+    @test (length(grids[x1]), length(grids[x2])) == (24, 24)
+    @test (grids[x1][1], grids[x1][end], grids[x2][1], grids[x2][end]) == (lo, mid, mid, hi)
+    @test allunique(grids[x1]) && allunique(grids[x2])
     du, = seam_rhs(pdesys, disc)
-    @test maximum(abs.(du .+ 1.0)) < 1.0e-9
+    @test maximum(abs, du) < 1.0e-9
 end
