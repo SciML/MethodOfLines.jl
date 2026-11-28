@@ -2302,6 +2302,19 @@ function array_upwind_difference(
         array_slice(u, s, ranges, indexmap; shiftx = x, offset = k, periodic = periodic)
             for k in taps
     ]
+    # Mirrors the seam branch of `_upwind_difference`: a forward stencil that reaches across an upper
+    # interface onto an axis with another first gap. `array_bands` gives such points a band each.
+    crossing = Dop.dx isa Number && !ispositive && haskey(periodic, x) &&
+        periodic[x].upper isa NamedTuple && last(rng) + last(taps) > length(s, x) &&
+        _upper_seam_gap_differs(s, x, periodic[x].upper.x)
+    if crossing
+        length(rng) == 1 || throw(
+            ArrayFormFallback("upwind stencil across an interface onto an axis with another spacing")
+        )
+        offsets = _upper_seam_tap_offsets(s, x, periodic[x].upper.x, only(rng), taps)
+        weights = calculate_weights(Dop.derivative_order, zero(eltype(offsets)), offsets)
+        return array_stencil(weights, slices)
+    end
     weights = if Dop.dx isa Number
         collect(Dop.stencil_coefs)
     else

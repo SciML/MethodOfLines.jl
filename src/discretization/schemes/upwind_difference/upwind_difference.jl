@@ -1,3 +1,28 @@
+# Whether the first gap of `x2`, which a forward stencil of the uniform axis `x` reaches across an
+# upper interface, differs from the step of `x` (equal point counts on intervals of different length),
+# by the same comparison as the interface grid validation.
+_upper_seam_gap_differs(s, x, x2) = !last(seam_spacings(s, x, x2, true, 1))
+
+# The axis across the upper interface that the forward stencil at `II` reaches, when its first gap
+# differs from the step of `x`; otherwise `nothing`.
+@inline function _upper_seam_partner(D, II, s, bs, jx)
+    j, x = jx
+    II[j] + D.stencil_length - 1 > length(s, x) || return nothing
+    for b in bs
+        isupper(b) && !isequal(b.x2, x) && return _upper_seam_gap_differs(s, x, b.x2) ? b.x2 : nothing
+    end
+    return nothing
+end
+
+# Offsets from node `i0` of `x` to the taps `i0 + k`, those past the last node continuing onto `x2`.
+# They are sums of gaps within each grid, so a large coordinate offset of `x2` cannot round a tap
+# onto the seam.
+function _upper_seam_tap_offsets(s, x, x2, i0, taps)
+    g, g2 = s.grid[x], s.grid[x2]
+    n = length(g)
+    return [i0 + k <= n ? g[i0 + k] - g[i0] : (g[n] - g[i0]) + (g2[i0 + k - n + 1] - g2[1]) for k in taps]
+end
+
 @inline function _upwind_difference(
         D::DerivativeOperator{T, N, Wind, DX}, II, s, bs,
         ispositive, u, jx
@@ -10,6 +35,11 @@
             weights = D.high_boundary_coefs[length(s, x) - II[j] + 1]
             offset = length(s, x) - II[j]
             Itap = [II + (i + offset) * I1 for i in (-D.boundary_stencil_length + 1):0]
+        elseif hasupper && (x2 = _upper_seam_partner(D, II, s, bs, jx)) !== nothing
+            taps = 0:(D.stencil_length - 1)
+            Itap = [bwrap(II + i * I1, bs, s, jx) for i in taps]
+            offsets = _upper_seam_tap_offsets(s, x, x2, II[j], taps)
+            weights = calculate_weights(D.derivative_order, zero(eltype(offsets)), offsets)
         else
             weights = D.stencil_coefs
             Itap = [bwrap(II + i * I1, bs, s, jx) for i in 0:(D.stencil_length - 1)]

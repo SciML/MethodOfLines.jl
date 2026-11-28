@@ -45,7 +45,7 @@ function PDEBase.construct_differential_discretizer(
         orders_ = orders[x]
         _orders = Set(vcat(orders_, [1, 2]))
 
-        if s.grid[x] isa StepRangeLen # Uniform grid case
+        if s.dxs[x] isa Number # Uniform grid case
             dx = s.dxs[x]
 
             nonlinlap_outer = push!(
