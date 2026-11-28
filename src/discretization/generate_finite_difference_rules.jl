@@ -54,9 +54,15 @@ function generate_finite_difference_rules(
         # (dummy-upper-bound) integrals cannot — those need every IV in `indexmap`.
         stencilvars = idx_depvars(depvars, s, indexmap)
         # Standard cartesian centered difference scheme
-        central_deriv_rules_cartesian = generate_cartesian_rules(
-            II, s, stencilvars, derivweights, bmap, indexmap, terms
-        )
+        central_deriv_rules_cartesian = if derivweights.advection_scheme isa HermiteScheme
+            generate_hermite_rules(
+                II, s, stencilvars, derivweights, bmap, indexmap, terms
+            )
+        else
+            generate_cartesian_rules(
+                II, s, stencilvars, derivweights, bmap, indexmap, terms
+            )
+        end
         # Mixed derivative rules
         mixed_deriv_rules_cartesian = generate_mixed_rules(
             II, s, stencilvars, derivweights, bmap, indexmap, terms
@@ -78,6 +84,8 @@ function generate_finite_difference_rules(
                     indexmap, terms; skip = [1]
                 )
             )
+        elseif derivweights.advection_scheme isa HermiteScheme
+            advection_rules = []
         else
             error("Unsupported advection scheme $(derivweights.advection_scheme) encountered.")
         end

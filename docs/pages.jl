@@ -22,6 +22,7 @@ pages = [
     "Boundary Conditions" => "boundary_conditions.md",
     "Connector Ports" => "connectors.md",
     "Advection Schemes" => "advection_schemes.md",
+    "Hermite Finite Differences" => "fornberg_hermite_weights.md",
     "Non-Uniform Rectilinear Grids" => "nonuniform.md",
     "Curvilinear Grids" => "curvilinear_grids.md",
     "FAQs" => "faq.md",

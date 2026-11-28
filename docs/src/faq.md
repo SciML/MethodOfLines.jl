@@ -105,3 +105,5 @@ boundary points along one direction. Otherwise nothing reads the corners and the
 at 0. They are also held at 0 next to a periodic direction or an interface between domains,
 when a boundary band is wider than one point, when the interior is too short for the
 extrapolation stencil, and for array-valued dependent variables such as `u(..)[1:n]`.
+For HermiteScheme, corners and edges shared by Dirichlet faces take the prescribed values
+where the boundary data can be evaluated.

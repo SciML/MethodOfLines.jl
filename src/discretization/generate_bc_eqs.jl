@@ -63,6 +63,8 @@ function generate_bc_eqs!(
 end
 
 function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
+    hermite = derivweights isa DifferentialDiscretizer &&
+        derivweights.advection_scheme isa HermiteScheme
     return mapreduce(vcat, values(boundarymap)) do boundaries
         map(mapreduce(x -> boundaries[x], vcat, s.x̄)) do b
             # No interface values in equations
@@ -73,7 +75,12 @@ function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivwei
                     x -> haskey(indexmap, x),
                     filter(x -> !(unwrap_const(safe_unwrap(x)) isa Number), b.indvars)
                 )
-                II -> boundary_value_maps(II, s, b, derivweights, indexmap)
+                hermite ? (
+                        II -> vcat(
+                            boundary_value_maps(II, s, b, derivweights, indexmap),
+                            hermite_boundary_derivative_rules(derivweights, s, b, II, indexmap, boundarymap)
+                        )
+                    ) : (II -> boundary_value_maps(II, s, b, derivweights, indexmap))
             else
                 II -> []
             end
@@ -282,6 +289,12 @@ function boundary_value_maps(
         )
             for d in derivweights.orders[x_]
     ]
+    hrule = hermite_partner_derivative_rule(derivweights, s, u_, II, x_)
+    if hrule !== nothing
+        depvarderivbcmaps = [
+            filter(r -> !isequal(r.first, hrule.first), depvarderivbcmaps); hrule
+        ]
+    end
     depvarbcmaps = [v_ => s.discvars[depvar(v_, s)][II] for v_ in [u_; othervars]]
 
     # Only make a map if the integral will actually come out to the same number of dimensions as the boundary value

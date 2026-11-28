@@ -9,6 +9,11 @@ function PDEBase.transform_pde_system!(
     )
     eqs = copy(get_eqs(sys))
     bcs = copy(get_bcs(sys))
+
+    if disc isa MOLFiniteDifference && disc.advection_scheme isa HermiteScheme
+        hermite_transform!(eqs, bcs, boundarymap, v, disc)
+    end
+
     done = false
     # Replace bad terms with a greedy strategy until the system comes up clean.
     while !done
@@ -49,9 +54,18 @@ end
 
 function PDEBase.should_transform(pdesys::PDESystem, disc::MOLFiniteDifference, boundarymap)
     if !disc.should_transform
+        scheme = disc.advection_scheme
+        scheme isa HermiteScheme && scheme.automatic && throw(
+            ArgumentError(
+                "`HermiteScheme()` introduces its derivative partners by transforming " *
+                    "the PDE system, which `should_transform = false` disables. Set " *
+                    "`should_transform = true`, or give the partners explicitly with " *
+                    "`HermiteScheme(deriv_var = u => v)`."
+            )
+        )
         return false
     end
-    if has_interfaces(boundarymap)
+    if has_interfaces(boundarymap) && !(disc.advection_scheme isa HermiteScheme)
         @warn "The system contains interface boundaries, which are not compatible with system transformation. The system will not be transformed. Please post an issue if you need this feature."
         return false
     end
@@ -196,6 +210,593 @@ function descend_to_incompatible(term, v)
         end
     end
     return (nothing, nothing, false)
+end
+
+function _x_derivative_orders!(acc, ex, x)
+    ex = Symbolics.value(ex)
+    (ex isa SymbolicUtils.BasicSymbolic && iscall(ex)) || return acc
+    if operation(ex) isa Differential
+        n = 0
+        e = ex
+        while e isa SymbolicUtils.BasicSymbolic && iscall(e) && operation(e) isa Differential
+            op = operation(e)
+            isequal(op.x, x) && (n += op.order)
+            e = arguments(e)[1]
+        end
+        n > 0 && push!(acc, n)
+        return _x_derivative_orders!(acc, e, x)
+    end
+    foreach(a -> _x_derivative_orders!(acc, a, x), arguments(ex))
+    return acc
+end
+
+function _hermite_dependent_terms!(acc, ex, x, ops)
+    ex = Symbolics.value(ex)
+    (ex isa SymbolicUtils.BasicSymbolic && iscall(ex)) || return acc
+    op = operation(ex)
+    if op isa Differential
+        n = 0
+        others = Differential[]
+        e = ex
+        while e isa SymbolicUtils.BasicSymbolic && iscall(e) && operation(e) isa Differential
+            d = operation(e)
+            isequal(d.x, x) ? (n += d.order) : push!(others, d)
+            e = arguments(e)[1]
+        end
+        if e isa SymbolicUtils.BasicSymbolic && iscall(e) && any(o -> isequal(operation(e), o), ops)
+            acc[ex] = (operation(e), n, others)
+            return acc
+        end
+        acc[ex] = nothing
+        return acc
+    end
+    if any(o -> isequal(op, o), ops)
+        acc[ex] = (op, 0, Differential[])
+        return acc
+    end
+    foreach(a -> _hermite_dependent_terms!(acc, a, x, ops), arguments(ex))
+    return acc
+end
+
+function _hermite_wall_dirichlet_data(q, x, upper, boundarymap, ops)
+    for b in get(get(boundarymap, q, Dict()), x, [])
+        b isa InterfaceBoundary && continue
+        (upper ? b isa UpperBoundary : b isa LowerBoundary) || continue
+        b.order == 0 || continue
+        g = symbolic_linear_solve(b.eq, b.u)
+        isequal(Symbolics.value(g), NaN) && continue
+        isempty(_hermite_dependent_terms!(Dict{Any, Any}(), g, x, ops)) || continue
+        return g
+    end
+    return nothing
+end
+
+function _hermite_wall_normal_derivative(q, k, t, x, xval, upper, R, boundarymap, depth)
+    ops = collect(keys(R))
+    if k == 0
+        g = _hermite_wall_dirichlet_data(q, x, upper, boundarymap, ops)
+        g === nothing || return g
+    end
+    depth > 0 || return nothing
+    for (r, Rr) in R, j in 0:k
+        (isequal(r, q) && j == k) && continue
+        hr = _hermite_wall_normal_derivative(r, j, t, x, xval, upper, R, boundarymap, depth - 1)
+        hr === nothing && continue
+        ex = j == 0 ? Symbolics.value(Rr) : expand_derivatives((Differential(x)^j)(Rr))
+        terms = _hermite_dependent_terms!(Dict{Any, Any}(), ex, x, ops)
+        any(isnothing, values(terms)) && continue
+        targets = [te for (te, (op, n, ds)) in terms if isequal(op, q) && n == k && isempty(ds)]
+        length(targets) == 1 || continue
+        target = only(targets)
+        z = Symbolics.unwrap(only(Symbolics.@variables __hermite_wall_unknown))
+        rules = Dict{Any, Any}(target => z)
+        ok = true
+        for (te, (op, n, ds)) in terms
+            isequal(te, target) && continue
+            h = _hermite_wall_normal_derivative(op, n, t, x, xval, upper, R, boundarymap, depth - 1)
+            h === nothing && (ok = false; break)
+            for d in reverse(ds)
+                h = expand_derivatives(d(h))
+            end
+            rules[te] = h
+        end
+        ok || continue
+        rhs = substitute(substitute(ex, rules), Dict(x => xval))
+        lhs = expand_derivatives(Differential(t)(hr))
+        sol = symbolic_linear_solve(lhs ~ rhs, z)
+        isequal(Symbolics.value(sol), NaN) && continue
+        return sol
+    end
+    return nothing
+end
+
+function _hermite_wall_partner_condition(uop, t, x, xval, upper, v_at_boundary, Dx, R, boundarymap)
+    for k in 1:2
+        h = _hermite_wall_normal_derivative(uop, k, t, x, xval, upper, R, boundarymap, 3)
+        h === nothing && continue
+        return k == 1 ? (v_at_boundary, h, 0) : ((Dx^1)(v_at_boundary), h, 1)
+    end
+    return nothing
+end
+
+function _hermite_fresh_variable(var, v)
+    taken = Set{Symbol}(nameof(o) for o in v.depvar_ops)
+    union!(taken, nameof(Symbolics.unwrap(y)) for y in all_ivs(v))
+    for p in v.ps
+        q = Symbolics.unwrap(p isa Pair ? first(p) : p)
+        push!(taken, nameof(iscall(q) ? operation(q) : q))
+    end
+    op = operation(var)
+    nameof(op) in taken || return var
+    k = 1
+    while Symbol(nameof(op), :_, k) in taken
+        k += 1
+    end
+    fresh = Symbolics.unwrap(Symbolics.variable(Symbol(nameof(op), :_, k); T = SymbolicUtils.symtype(op)))
+    return fresh(arguments(var)...)
+end
+
+function _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
+    t = v.time
+    Dt = Differential(t)
+    for uop in copy(v.depvar_ops)
+        u = uop(v.args[uop]...)
+        dt2 = Symbolics.value(Dt(Dt(u)))
+        dt1 = Symbolics.value(Dt(u))
+        has(ex, term) = subsmatch(Symbolics.value(ex.lhs - ex.rhs), term => nothing)
+        idx2 = findall(eq -> has(eq, dt2), eqs)
+        isempty(idx2) && continue
+        any(eq -> has(eq, dt1) && !has(eq, dt2), eqs) && continue
+        length(idx2) == 1 || throw(
+            ArgumentError(
+                "HermiteScheme needs exactly one equation with $(Dt(Dt(u))), found " *
+                    "$(length(idx2)): $(eqs[idx2])."
+            )
+        )
+        tbcs = get(get(boundarymap, uop, Dict()), t, [])
+        ic1 = filter(b -> !(b isa InterfaceBoundary) && b.order == 1, tbcs)
+        length(ic1) == 1 || throw(
+            ArgumentError(
+                "HermiteScheme needs an initial condition for $(Dt(u)) to rewrite " *
+                    "$(eqs[only(idx2)]) as a first-order system in time."
+            )
+        )
+        ic1 = only(ic1)
+        g = symbolic_linear_solve(ic1.eq, Dt(ic1.u))
+        isequal(Symbolics.value(g), NaN) && throw(
+            ArgumentError("HermiteScheme could not solve $(ic1.eq) for $(Dt(ic1.u)).")
+        )
+
+        newvar = _hermite_fresh_variable(diff2term(dt1), v)
+        newop = operation(newvar)
+        update_varmap!(v, newvar)
+        subs_alleqs!(eqs, bcs, dt2 => Symbolics.value(Dt(newvar)))
+        subs_alleqs!(eqs, bcs, dt1 => newvar)
+        push!(eqs, Dt(u) ~ newvar)
+
+        filter!(b -> b !== ic1, boundarymap[uop][t])
+        filter!(eq -> !isequal(eq, ic1.eq), bcs)
+
+        newbcs = []
+        t0 = v.intervals[t][1]
+        bcdv = newop(substitute.(arguments(newvar), (t => t0,))...)
+        push!(newbcs, LowerBoundary(bcdv, t, t, 0, bcdv ~ g, v))
+        for x in filter(!isequal(t), v.args[uop])
+            for bc in get(boundarymap[uop], x, [])
+                xval = isupper(bc) ? v.intervals[x][2] : v.intervals[x][1]
+                bcdv = newop(substitute.(arguments(newvar), (x => xval,))...)
+                if bc isa InterfaceBoundary
+                    other = newop(arguments(bc.u2)...)
+                    push!(newbcs, typeof(bc)(bcdv, other, bc.x, bc.x2, bcdv ~ other))
+                    continue
+                end
+                deriv = bc.order == 0 ? identity : (Differential(x)^bc.order)
+                h = symbolic_linear_solve(bc.eq, deriv(bc.u))
+                isdata = !isequal(Symbolics.value(h), NaN) &&
+                    isempty(_hermite_dependent_terms!(Dict{Any, Any}(), h, x, v.depvar_ops))
+                isdata || throw(
+                    ArgumentError(
+                        "HermiteScheme can rewrite $(Dt(Dt(u))) as a first-order system " *
+                            "only with Dirichlet, Neumann or periodic conditions on $u; " *
+                            "got $(bc.eq). Write the system out instead, e.g. " *
+                            "`Dt(u) ~ p` and `Dt(p) ~ ...`, with conditions on `p`."
+                    )
+                )
+                eq = deriv(bcdv) ~ expand_derivatives(Dt(h))
+                push!(
+                    newbcs, isupper(bc) ? UpperBoundary(bcdv, t, x, bc.order, eq, v) :
+                        LowerBoundary(bcdv, t, x, bc.order, eq, v)
+                )
+            end
+        end
+        append!(
+            bcs, [b.eq for b in newbcs if !(b isa InterfaceBoundary) || !isupper(b)]
+        )
+        update_boundarymap!(boundarymap, newbcs, newop, v)
+    end
+    return
+end
+
+function _hermite_evolution_rhs(eq, dt_u)
+    a, _, islinear = Symbolics.linear_expansion(eq.lhs - eq.rhs, dt_u)
+    (islinear && !isequal(Symbolics.value(a), 0)) || throw(
+        ArgumentError("HermiteScheme needs $dt_u to appear linearly in its equation, got $eq.")
+    )
+    return expand_derivatives(symbolic_linear_solve(eq, dt_u))
+end
+
+_hermite_dt_equation_indices(eqs, dt_u) =
+    findall(eq -> subsmatch(Symbolics.value(eq.lhs - eq.rhs), Symbolics.value(dt_u) => nothing), eqs)
+
+function _hermite_outflow(rhs, v, partner_derivatives, upper)
+    r = pde_substitute(rhs, Dict{Any, Any}(d => 0 for d in partner_derivatives))
+    c, _, islinear = Symbolics.linear_expansion(r, v)
+    c = unwrap_const(Symbolics.value(c))
+    (islinear && c isa Real) || return false
+    return upper ? c < 0 : c > 0
+end
+
+function _hermite_dirichlet_partner_condition(
+        bc, bc_val, uop, u_applied, dt_u, original_rhs, newvar, v_at_boundary, t, x, xval,
+        evol_rhs, boundarymap, u_eq; partners = Dict{Any, Any}()
+    )
+    Dx = Differential(x)
+    u_t_boundary = expand_derivatives(Differential(t)(bc_val))
+    directional_orders = d_orders(x, [dt_u ~ original_rhs])
+    if !isempty(directional_orders)
+        partner_term(order) = order == 1 ? newvar : (Dx^(order - 1))(newvar)
+        boundary_partner_term(order) = order == 1 ?
+            v_at_boundary : (Dx^(order - 1))(v_at_boundary)
+        partner_rules = Dict{Any, Any}(
+            (Dx^order)(u_applied) => partner_term(order) for order in directional_orders
+        )
+        ops = Any[uop; collect(keys(partners)); collect(keys(boundarymap))]
+        wall_rules = Dict{Any, Any}()
+        for (te, info) in _hermite_dependent_terms!(Dict{Any, Any}(), original_rhs, x, ops)
+            info === nothing && continue
+            op, n, ds = info
+            if !isequal(op, uop) && !any(o -> isequal(o, op), keys(partners))
+                q = Symbolics.value(te)
+                while operation(q) isa Differential
+                    q = arguments(q)[1]
+                end
+                qb = operation(q)(substitute.(arguments(q), (x => xval,))...)
+                wall_rules[te] = foldr((d, r) -> d(r), ds; init = n == 0 ? qb : (Dx^n)(qb))
+                continue
+            end
+            n >= 1 || continue
+            if isequal(op, uop)
+                isempty(ds) && continue
+                r = partner_term(n)
+            else
+                z = only(z for (o, z) in partners if isequal(o, op))
+                r = Differential(z)(partner_term(n))
+            end
+            for d in reverse(ds)
+                r = d(r)
+            end
+            partner_rules[te] = r
+        end
+        rhs_at_boundary = pde_substitute(original_rhs, partner_rules)
+        rhs_at_boundary = expand_derivatives(
+            pde_substitute(rhs_at_boundary, Dict(u_applied => bc_val))
+        )
+        boundary_partner_rules = merge(
+            Dict{Any, Any}(
+                partner_term(order) => boundary_partner_term(order)
+                    for order in directional_orders
+            ),
+            wall_rules
+        )
+        rhs_at_boundary = pde_substitute(rhs_at_boundary, boundary_partner_rules)
+        rhs_at_boundary = substitute(rhs_at_boundary, x => xval)
+        boundary_eq = u_t_boundary ~ rhs_at_boundary
+        for order in reverse(0:(maximum(directional_orders) - 1))
+            target = order == 0 ? v_at_boundary : (Dx^order)(v_at_boundary)
+            candidate = symbolic_linear_solve(boundary_eq, target)
+            isequal(Symbolics.value(candidate), NaN) && continue
+            out = _hermite_outflow(
+                rhs_at_boundary, v_at_boundary,
+                [boundary_partner_term(o) for o in directional_orders if o > 1], isupper(bc)
+            )
+            out || return target, candidate, order
+            return v_at_boundary, Differential(x)(bc.u), 0
+        end
+    end
+    fb = _hermite_wall_partner_condition(
+        uop, t, x, xval, isupper(bc), v_at_boundary, Dx, evol_rhs, boundarymap
+    )
+    fb === nothing && throw(
+        ArgumentError(
+            isempty(directional_orders) ?
+                "HermiteScheme cannot infer a normal derivative " *
+                "condition for $newvar from $(bc.eq): the " *
+                "evolution equation contains no $x derivative of " *
+                "$u_applied, and the other equations do not " *
+                "determine one on this boundary." :
+                "HermiteScheme could not infer a normal derivative " *
+                "condition for $newvar from $(bc.eq) and " *
+                "evolution equation $u_eq."
+        )
+    )
+    return fb
+end
+
+"""
+    hermite_transform!(eqs, bcs, boundarymap, v, disc)
+
+Introduce the derivative partners of an automatic `HermiteScheme`: for each dependent
+variable `u` and spatial variable `x`, a variable `uˍx` for `Dx(u)` with the evolution
+equation `Dt(uˍx) ~ Dx(R)` from `Dt(u) ~ R`, and initial and boundary conditions derived
+from `u`'s. `Dx(u)` is replaced by `uˍx` everywhere, and the mapping is recorded in
+`disc.advection_scheme.deriv_var`, a scheme of its own for each discretization call.
+"""
+function hermite_transform!(eqs, bcs, boundarymap, v, disc)
+    scheme = disc.advection_scheme
+    scheme.automatic || return
+    v.time === nothing && throw(
+        ArgumentError(
+            "HermiteScheme() needs a time-dependent system: each derivative partner gets an " *
+                "evolution equation in time."
+        )
+    )
+    empty!(scheme.deriv_var)
+    empty!(scheme.diffusive)
+
+    t = v.time
+    Dt = Differential(t)
+    _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
+    original_depvar_ops = copy(v.depvar_ops)
+
+    evol_rhs = Dict{Any, Any}()
+    for uop in original_depvar_ops
+        uargs = v.args[uop]
+        dt_u = Symbolics.value(Dt(uop(uargs...)))
+        idxs = _hermite_dt_equation_indices(eqs, dt_u)
+        length(idxs) == 1 || continue
+        eq = eqs[only(idxs)]
+        evol_rhs[uop] = _hermite_evolution_rhs(eq, dt_u)
+        for x in filter(!isequal(t), uargs)
+            orders = _x_derivative_orders!(Set{Int}(), evol_rhs[uop], x)
+            maximum(orders; init = 0) > 3 && throw(
+                ArgumentError(
+                    "HermiteScheme() supports spatial derivatives up to third order; $eq has " *
+                        "order $(maximum(orders)) in $x."
+                )
+            )
+            for (te, info) in _hermite_dependent_terms!(Dict{Any, Any}(), evol_rhs[uop], x, original_depvar_ops)
+                (info === nothing || info[2] != 3) && continue
+                _hermite_self_periodic(get(boundarymap[info[1]], x, []), info[1]) || throw(
+                    ArgumentError(
+                        "HermiteScheme() supports third derivatives only along periodic axes; " *
+                            "$eq has $te and $(info[1]) is not periodic in $x."
+                    )
+                )
+            end
+            !isempty(orders) && all(iseven, orders) && push!(scheme.diffusive, (uop, x))
+        end
+    end
+    replaced_bcs = Pair[]
+    partner_rules = Pair[]
+
+    for uop in original_depvar_ops
+        uargs = v.args[uop]
+        u_applied = uop(uargs...)
+        spatial_ivs = filter(!isequal(t), uargs)
+
+        for x in spatial_ivs
+            Dx = Differential(x)
+            dx_u = Dx(u_applied)
+
+            newvar = _hermite_fresh_variable(diff2term(Symbolics.value(dx_u)), v)
+            newop = operation(newvar)
+
+            update_varmap!(v, newvar)
+
+            dt_u = Dt(u_applied)
+            u_eq_idxs = _hermite_dt_equation_indices(eqs, dt_u)
+            isempty(u_eq_idxs) && throw(
+                ArgumentError(
+                    "HermiteScheme needs an equation with the first time derivative " *
+                        "$dt_u to transform $u_applied; none of the equations contains it. " *
+                        "Time derivatives of third or higher order must be written as a " *
+                        "system with first or second time derivatives, e.g. `Dt(u) ~ p` and " *
+                        "`Dt(Dt(p)) ~ ...` for `Dt(Dt(Dt(u))) ~ ...`."
+                )
+            )
+            length(u_eq_idxs) == 1 || throw(
+                ArgumentError(
+                    "HermiteScheme needs exactly one equation with $dt_u to transform " *
+                        "$u_applied, found $(length(u_eq_idxs)): $(eqs[u_eq_idxs])."
+                )
+            )
+            u_eq_idx = only(u_eq_idxs)
+            original_rhs = _hermite_evolution_rhs(eqs[u_eq_idx], dt_u)
+
+            rule = Symbolics.value(dx_u) => newvar
+            subs_alleqs!(eqs, bcs, rule)
+
+            transformed_rhs = substitute(original_rhs, rule)
+            eqs[u_eq_idx] = dt_u ~ transformed_rhs
+
+            push!(partner_rules, rule)
+            v_rhs = pde_substitute(expand_derivatives(Dx(evol_rhs[uop])), Dict(partner_rules))
+            push!(eqs, Dt(newvar) ~ v_rhs)
+
+            bcivmap = reduce(
+                (d1, d2) -> mergewith(vcat, d1, d2), collect(values(boundarymap))
+            )
+
+            function rulesforeachboundary(iv, upper)
+                cond(b) = upper ? b isa UpperBoundary : b isa LowerBoundary
+                return generate_bc_rules(filter(cond, get(bcivmap, iv, [])), v)
+            end
+
+            newbcs = []
+            for iv in all_ivs(v)
+                boundaries = get(get(boundarymap, uop, Dict()), iv, [])
+                isempty(boundaries) && continue
+
+                if isequal(iv, t)
+                    generate_aux_bcs!(
+                        newbcs, newvar, Symbolics.value(dx_u),
+                        filter(isupper, boundaries), v,
+                        rulesforeachboundary(iv, true)
+                    )
+                    generate_aux_bcs!(
+                        newbcs, newvar, Symbolics.value(dx_u),
+                        filter(!isupper, boundaries), v,
+                        rulesforeachboundary(iv, false)
+                    )
+                else
+                    for bc in boundaries
+                        xval = isupper(bc) ? v.intervals[iv][2] : v.intervals[iv][1]
+                        newargs_sub = substitute.(arguments(newvar), (iv => xval,))
+                        bcdv = newop(newargs_sub...)
+
+                        if bc isa InterfaceBoundary
+                            other_bcdv = newop(arguments(bc.u2)...)
+                            eq = bcdv ~ other_bcdv
+                            push!(
+                                newbcs,
+                                typeof(bc)(bcdv, other_bcdv, bc.x, bc.x2, eq)
+                            )
+                            continue
+                        end
+
+                        v_at_boundary = bcdv
+                        bclhs = bcdv
+                        new_order = 0
+
+                        normal_derivative = Differential(iv)(bc.u)
+                        normal_rhs = symbolic_linear_solve(bc.eq, normal_derivative)
+                        constrains_normal_derivative =
+                            !isequal(Symbolics.value(normal_rhs), NaN)
+
+                        if constrains_normal_derivative
+                            if isequal(iv, x)
+                                rhs = normal_rhs
+                                push!(replaced_bcs, uop => bc)
+                            else
+                                continue
+                            end
+                        else
+                            Symbolics.linear_expansion(bc.eq.lhs - bc.eq.rhs, bc.u)[3] || throw(
+                                ArgumentError(
+                                    "HermiteScheme needs Dirichlet conditions linear in " *
+                                        "$(bc.u); got $(bc.eq)."
+                                )
+                            )
+                            bc_val = symbolic_linear_solve(bc.eq, bc.u)
+                            isempty(
+                                _hermite_dependent_terms!(
+                                    Dict{Any, Any}(), bc_val, iv, v.depvar_ops
+                                )
+                            ) || throw(
+                                ArgumentError(
+                                    "HermiteScheme does not support Dirichlet data that " *
+                                        "contain a dependent variable; got $(bc.eq)."
+                                )
+                            )
+                            if !isequal(iv, x)
+                                rhs = expand_derivatives(Dx(bc_val))
+                            else
+                                partners = Dict{Any, Any}(
+                                    op => k[2] for (k, op) in scheme.deriv_var
+                                        if k isa Tuple && isequal(k[1], uop)
+                                )
+                                bclhs, rhs, new_order = _hermite_dirichlet_partner_condition(
+                                    bc, bc_val, uop, u_applied, dt_u, original_rhs, newvar,
+                                    v_at_boundary, t, x, xval, evol_rhs, boundarymap,
+                                    eqs[u_eq_idx]; partners
+                                )
+                            end
+                        end
+
+                        eq = bclhs ~ rhs
+                        newbc = isupper(bc) ?
+                            UpperBoundary(bcdv, t, iv, new_order, eq, v) :
+                            LowerBoundary(bcdv, t, iv, new_order, eq, v)
+                        push!(newbcs, newbc)
+                    end
+                end
+            end
+            newbcs = unique(newbcs)
+            independent_bcs = filter(newbcs) do bc
+                !(bc isa InterfaceBoundary) || !isupper(bc)
+            end
+            append!(bcs, map(bc -> bc.eq, independent_bcs))
+            update_boundarymap!(boundarymap, newbcs, newop, v)
+
+            if length(spatial_ivs) == 1
+                scheme.deriv_var[uop] = newop
+            else
+                scheme.deriv_var[(uop, x)] = newop
+            end
+        end
+    end
+
+    for (uop, bc) in unique(replaced_bcs)
+        filter!(b -> b !== bc, boundarymap[uop][bc.x])
+        filter!(eq -> !isequal(eq, bc.eq), bcs)
+    end
+    _hermite_partner_wall_terms!(bcs, boundarymap, scheme, v, t)
+    return
+end
+
+function _hermite_partner_op(scheme, q, x)
+    for (k, p) in scheme.deriv_var
+        (k isa Tuple ? isequal(k[1], q) && isequal(k[2], x) : isequal(k, q)) && return p
+    end
+    return nothing
+end
+
+function _hermite_partner_wall_terms!(bcs, boundarymap, scheme, v, t)
+    ops = [k isa Tuple ? k[1] : k for k in keys(scheme.deriv_var)]
+    foreign(q, bop, x) = !isequal(q, bop) && !isequal(_hermite_partner_op(scheme, q, x), bop)
+    for byx in values(boundarymap), (x, list) in byx
+        isequal(x, t) && continue
+        for k in eachindex(list)
+            b = list[k]
+            b isa Union{LowerBoundary, UpperBoundary} || continue
+            bop = operation(b.u)
+            others = filter(q -> foreign(q, bop, x), ops)
+            rules = Dict{Any, Any}()
+            for side in (b.eq.lhs, b.eq.rhs)
+                for (te, info) in _hermite_dependent_terms!(Dict{Any, Any}(), side, x, others)
+                    info === nothing && continue
+                    q, n, ds = info
+                    p = _hermite_partner_op(scheme, q, x)
+                    (n >= 1 && p !== nothing) || continue
+                    e = Symbolics.value(te)
+                    while operation(e) isa Differential
+                        e = arguments(e)[1]
+                    end
+                    pb = p(arguments(e)...)
+                    rules[te] = foldr((d, r) -> d(r), ds; init = n == 1 ? pb : (Differential(x)^(n - 1))(pb))
+                end
+            end
+            eq = isempty(rules) ? b.eq : pde_substitute(b.eq.lhs, rules) ~ pde_substitute(b.eq.rhs, rules)
+            for side in (eq.lhs, eq.rhs)
+                for (te, info) in _hermite_dependent_terms!(Dict{Any, Any}(), side, x, collect(keys(boundarymap)))
+                    (info === nothing || info[2] == 0 || !foreign(info[1], bop, x)) && continue
+                    any(c -> !(c isa InterfaceBoundary) && isupper(c) == isupper(b), get(boundarymap[info[1]], x, [])) ||
+                        throw(
+                        ArgumentError(
+                            "HermiteScheme cannot discretize $te in the wall condition $eq: " *
+                                "$(info[1]) has no condition on that wall, as in a periodic direction."
+                        )
+                    )
+                end
+            end
+            isempty(rules) && continue
+            i = findfirst(isequal(b.eq), bcs)
+            i === nothing || (bcs[i] = eq)
+            list[k] = isupper(b) ? UpperBoundary(b.u, t, b.x, b.order, eq, v) :
+                LowerBoundary(b.u, t, b.x, b.order, eq, v)
+        end
+    end
+    return nothing
 end
 
 """
