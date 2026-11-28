@@ -5493,3 +5493,52 @@ end
         @test length(equations(sys3)) == 27
     end
 end
+
+bc_closure_allocations(f::F, II) where {F} = @allocated f(II)
+
+@testset "Boundary value closures add no Hermite work to other schemes" begin
+    PB = MethodOfLines.PDEBase
+    function closures(pdesys, disc, xs)
+        pb = PB.parsed_boundary_map(pdesys, disc)
+        tsys = PB.transform_pde_system!(pb.v, pb.boundarymap, pb.pdesys, disc)
+        s = PB.construct_discrete_space(pb.v, disc)
+        ivs = PB.indvars(pb.v)
+        orders = Dict(
+            y => collect(union(PB.d_orders(y, getfield(tsys, :eqs)), PB.d_orders(y, getfield(tsys, :bcs))))
+                for y in ivs
+        )
+        derivweights = PB.construct_differential_discretizer(tsys, s, disc, orders)
+        _, bcmap = PB.split_ics_bcs(pb.boundarymap, pb.v, disc)
+        indexmap = Dict(xs[i] => i for i in eachindex(xs))
+        funcs = MethodOfLines.generate_boundary_val_funcs(s, [], bcmap, indexmap, derivweights)
+        bs = mapreduce(byx -> mapreduce(y -> byx[y], vcat, s.x̄), vcat, values(bcmap))
+        k = findfirst(b -> !(b isa MethodOfLines.InterfaceBoundary), bs)
+        wall = bs[k]
+        direct(II) = MethodOfLines.boundary_value_maps(II, s, wall, derivweights, indexmap)
+        return funcs[k], direct
+    end
+    @parameters t x y
+    @variables u(..)
+    Dt, Dx, Dy = Differential(t), Differential(x), Differential(y)
+    @named heat = PDESystem(
+        Dt(u(t, x)) ~ Dx(Dx(u(t, x))), [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]
+    )
+    f, direct = closures(heat, MOLFiniteDifference([x => 1 / 16], t), [x])
+    II = CartesianIndex(2)
+    @test isequal(f(II), direct(II))
+    alloc(g) = minimum(bc_closure_allocations(g, II) for _ in 1:5)
+    @test alloc(f) <= alloc(direct)
+    @named heat2 = PDESystem(
+        Dt(u(t, x, y)) ~ Dx(Dx(u(t, x, y))) + Dy(Dy(u(t, x, y))),
+        [
+            u(0, x, y) ~ sin(π * x) * sin(π * y), u(t, 0, y) ~ 0.0, u(t, 1, y) ~ 0.0,
+            u(t, x, 0) ~ 0.0, u(t, x, 1) ~ 0.0,
+        ],
+        [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0), y ∈ Interval(0.0, 1.0)],
+        [t, x, y], [u(t, x, y)]
+    )
+    hdisc = MOLFiniteDifference([x => 1 / 8, y => 1 / 8], t; advection_scheme = HermiteScheme())
+    f2, direct2 = closures(heat2, hdisc, [x, y])
+    @test length(f2(CartesianIndex(3, 3))) > length(direct2(CartesianIndex(3, 3)))
+end

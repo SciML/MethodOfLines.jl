@@ -7,6 +7,9 @@ using MethodOfLines
 using OrdinaryDiffEq
 using SciMLBase: DAEProblem, successful_retcode
 
+used_scheme(sys) = getmetadata(sys, ModelingToolkit.ProblemTypeCtx, nothing).disc.advection_scheme
+used_scheme(pdesys, disc) = used_scheme(first(symbolic_discretize(pdesys, disc)))
+
 @testset "HermiteScheme constructor" begin
     @parameters t x
     @variables u(..) v(..)
@@ -181,7 +184,8 @@ end
     discrete_equations = string.(ModelingToolkit.equations(sys))
 
     @test tspan == (0.0, 0.1)
-    @test length(discretization.advection_scheme.deriv_var) == 2
+    @test length(used_scheme(sys).deriv_var) == 2
+    @test isempty(discretization.advection_scheme.deriv_var)
     @test !any(occursin("NaN", equation) for equation in discrete_equations)
     @test !any(
         occursin("Differential(x", equation) || occursin("Differential(y", equation)
@@ -209,7 +213,7 @@ end
 
     @test successful_retcode(sol_1d)
     @test maximum(abs.(sol_1d[u(t, x)][end, :] .- reference_1d)) < 2.0e-4
-    @test length(discretization_1d.advection_scheme.deriv_var) == 1
+    @test length(used_scheme(periodic_1d, discretization_1d).deriv_var) == 1
 
     nonuniform_periodic = MOLFiniteDifference(
         [x => [0.0, 0.1, 0.3, 0.6, 1.0]], t;
@@ -253,7 +257,7 @@ end
     numerical_interior = @view sol_2d[q(τ, ξ, η)][end, 2:(end - 1), 2:(end - 1)]
     reference_interior = @view reference_2d[2:(end - 1), 2:(end - 1)]
     @test maximum(abs.(numerical_interior .- reference_interior)) < 5.0e-2
-    @test length(discretization_2d.advection_scheme.deriv_var) == 2
+    @test length(used_scheme(periodic_2d, discretization_2d).deriv_var) == 2
 end
 
 @testset "HermiteScheme automatic Neumann and Robin boundaries" begin
@@ -299,7 +303,7 @@ end
 
         @test successful_retcode(sol)
         @test maximum(abs.(sol[u(t, x)][end, :] .- reference)) < 2.0e-3
-        @test length(discretization.advection_scheme.deriv_var) == 1
+        @test length(used_scheme(pdesys, discretization).deriv_var) == 1
     end
 
     @parameters τ ξ η
@@ -340,7 +344,7 @@ end
 
     @test successful_retcode(sol_2d)
     @test maximum(abs.(numerical_interior .- reference_interior)) < 5.0e-2
-    @test length(discretization_2d.advection_scheme.deriv_var) == 2
+    @test length(used_scheme(mixed_2d, discretization_2d).deriv_var) == 2
 end
 
 @testset "HermiteScheme automatic mapping is reusable" begin
@@ -369,13 +373,11 @@ end
     scheme = HermiteScheme()
     discretization = MOLFiniteDifference([x => 0.5], t; advection_scheme = scheme)
 
-    symbolic_discretize(system_u, discretization)
-    @test length(scheme.deriv_var) == 1
-    @test isequal(only(keys(scheme.deriv_var)), operation(Symbolics.value(u(t, x))))
-
-    symbolic_discretize(system_q, discretization)
-    @test length(scheme.deriv_var) == 1
-    @test isequal(only(keys(scheme.deriv_var)), operation(Symbolics.value(q(t, x))))
+    mapping_u = used_scheme(first(symbolic_discretize(system_u, discretization))).deriv_var
+    mapping_q = used_scheme(first(symbolic_discretize(system_q, discretization))).deriv_var
+    @test isequal(only(keys(mapping_u)), operation(Symbolics.value(u(t, x))))
+    @test isequal(only(keys(mapping_q)), operation(Symbolics.value(q(t, x))))
+    @test isempty(scheme.deriv_var) && isempty(scheme.diffusive)
 end
 
 @testset "HermiteScheme with should_transform = false" begin
@@ -403,8 +405,9 @@ end
     @test_throws ArgumentError discretize(advection, automatic)
 
     reused = HermiteScheme()
-    symbolic_discretize(advection, MOLFiniteDifference([x => 0.5], t; advection_scheme = reused))
-    @test !isempty(reused.deriv_var)
+    sys_reused, _ = symbolic_discretize(advection, MOLFiniteDifference([x => 0.5], t; advection_scheme = reused))
+    @test !isempty(used_scheme(sys_reused).deriv_var)
+    @test isempty(reused.deriv_var)
     @test_throws ArgumentError symbolic_discretize(
         advection,
         MOLFiniteDifference([x => 0.5], t; advection_scheme = reused, should_transform = false)
@@ -706,6 +709,73 @@ end
     @test isapprox(werr(system, 41), e41; rtol = 1.0e-3)
 end
 
+struct PausingGrid <: AbstractVector{Float64}
+    v::Vector{Float64}
+    armed::Base.RefValue{Bool}
+    paused::Channel{Nothing}
+    resume::Channel{Nothing}
+end
+Base.size(g::PausingGrid) = size(g.v)
+function Base.getindex(g::PausingGrid, i::Int)
+    if g.armed[]
+        g.armed[] = false
+        put!(g.paused, nothing)
+        take!(g.resume)
+    end
+    return g.v[i]
+end
+
+@testset "HermiteScheme() discretizations interleaved on one configuration" begin
+    @parameters t x
+    @variables u(..) q(..)
+    Dt, Dx = Differential(t), Differential(x)
+    domains = [t ∈ Interval(0.0, 0.1), x ∈ Interval(0.0, 1.0)]
+    @named sysu = PDESystem(
+        Dt(u(t, x)) ~ Dx(Dx(u(t, x))), [u(0, x) ~ sin(π * x), u(t, 0) ~ 0.0, u(t, 1) ~ 0.0],
+        domains, [t, x], [u(t, x)]
+    )
+    @named sysq = PDESystem(
+        Dt(q(t, x)) ~ Dx(Dx(q(t, x))), [q(0, x) ~ sin(2π * x), q(t, 0) ~ 0.0, q(t, 1) ~ 0.0],
+        domains, [t, x], [q(t, x)]
+    )
+    grid = PausingGrid(collect(range(0.0, 1.0; length = 17)), Ref(false), Channel{Nothing}(1), Channel{Nothing}(1))
+    disc = MOLFiniteDifference([x => grid], t; advection_scheme = HermiteScheme())
+    uexact(t, x) = exp(-π^2 * t) * sin(π * x)
+    function final_error(prob)
+        sol = solve(prob; saveat = [0.1], abstol = 1.0e-10, reltol = 1.0e-10)
+        @test successful_retcode(sol)
+        return maximum(abs, sol[u(t, x)][end, :] .- uexact.(0.1, sol[x]))
+    end
+    alone = final_error(discretize(sysu, disc))
+    function await_pause(task)
+        timedwait(() -> isready(grid.paused) || istaskdone(task), 600.0)
+        istaskdone(task) && fetch(task)
+        isready(grid.paused) || error("the first discretization did not reach the grid")
+        return take!(grid.paused)
+    end
+    grid.armed[] = true
+    first_call = @async discretize(sysu, disc)
+    await_pause(first_call)
+    discretize(sysq, disc)
+    put!(grid.resume, nothing)
+    @test isapprox(final_error(fetch(first_call)), alone; rtol = 1.0e-6)
+    grid.armed[] = true
+    first_sys = @async symbolic_discretize(sysu, disc)
+    await_pause(first_sys)
+    symbolic_discretize(sysq, disc)
+    put!(grid.resume, nothing)
+    sys, _ = fetch(first_sys)
+    @test any(eq -> occursin("uˍx", string(eq.rhs)) && occursin("u(t", string(eq.lhs)), ModelingToolkit.equations(sys))
+    @test isempty(disc.advection_scheme.deriv_var)
+    @test any(k -> occursin("uˍx", string(k)), keys(get_discrete(sysu, disc)))
+    @test isempty(disc.advection_scheme.deriv_var)
+end
+
+struct BranchReal <: Real
+    v::Float64
+end
+Base.:+(a::BranchReal, b::Int) = a.v < 2 ? Float32(a.v + b) : a.v + b
+
 @testset "FusedStencil matches broadcast in value and element type" begin
     SU = Symbolics.SymbolicUtils
     @variables A[1:3]
@@ -729,13 +799,17 @@ end
         @test isequal(r, g(a))
         @test eltype(r) == eltype(g(a))
     end
-    r = fused(A -> 2 .* A .+ 1)(Real[1.0f0, 2.0f0, 3.0f0])
-    @test r == Float32[3, 5, 7] && eltype(r) == Float32
+    a = Real[1.0f0, 2.0f0, 3.0f0]
+    r = fused(A -> 2 .* A .+ 1)(a)
+    @test isequal(r, 2 .* a .+ 1) && eltype(r) == eltype(2 .* a .+ 1)
     mixed = Real[1, big"2.1", 1 // 3]
     for a in (ones(Int, 3), ones(Float32, 3))
         r = fused(A -> A .+ mixed)(a)
         @test isequal(r, a .+ mixed) && eltype(r) == eltype(a .+ mixed)
     end
+    branch = [BranchReal(0.25), BranchReal(2.1234567890123452), BranchReal(3.123456789012345)]
+    r = fused(A -> A .+ 1)(branch)
+    @test isequal(r, branch .+ 1) && eltype(r) == eltype(branch .+ 1)
     @test_throws ArgumentError MethodOfLines._fused_node!(MethodOfLines._FusedStencilBuilder((3,)), 1 + 2im)
 end
 
@@ -886,7 +960,7 @@ end
         disc = MOLFiniteDifference([x => 1 / 16], t; approx_order = ao, advection_scheme = HermiteScheme())
         sol = solve(discretize(sys, disc); saveat = [0.05], abstol = 1.0e-13, reltol = 1.0e-13)
         @test successful_retcode(sol)
-        return sol, collect(disc.advection_scheme.diffusive)
+        return sol, collect(used_scheme(sys, disc).diffusive)
     end
     forced(t, x) = (π^2 + (1 - π^2) * exp(-π^2 * t)) * sin(π * x)
     for rhs in (D2(u(t, x)) + D2(D2(sin(π * x))), D2(u(t, x)) + π^4 * sin(π * x))
@@ -945,4 +1019,64 @@ end
     @named periodic = PDESystem([ueq, peq], pbcs, domains, [t, x], [u(t, x), p(t, x)])
     err = @test_throws ArgumentError discretize(periodic, disc())
     @test occursin("no condition on that wall", sprint(showerror, err.value))
+end
+
+@testset "HermiteScheme() third derivatives only along periodic axes" begin
+    @parameters t x
+    @variables u(..)
+    Dt, Dx = Differential(t), Differential(x)
+    uexact(t, x) = exp(-t) * (1 + x + x^2 + x^3)
+    @named wall = PDESystem(
+        Dt(u(t, x)) ~ -Dx(Dx(Dx(u(t, x)))) + exp(-t) * (5 - x - x^2 - x^3),
+        [u(0, x) ~ uexact(0, x), u(t, 0) ~ exp(-t), u(t, 1) ~ 4 * exp(-t), Dx(u(t, 1)) ~ 6 * exp(-t)],
+        [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 1.0)], [t, x], [u(t, x)]
+    )
+    err = @test_throws ArgumentError discretize(wall, MOLFiniteDifference([x => 0.05], t; advection_scheme = HermiteScheme()))
+    @test occursin("only along periodic axes", sprint(showerror, err.value))
+    @named periodic = PDESystem(
+        Dt(u(t, x)) ~ -Dx(Dx(Dx(u(t, x)))), [u(0, x) ~ sin(x), u(t, 0) ~ u(t, 2π)],
+        [t ∈ Interval(0.0, 0.05), x ∈ Interval(0.0, 2π)], [t, x], [u(t, x)]
+    )
+    errs = map((16, 32, 64)) do n
+        disc = MOLFiniteDifference([x => 2π / n], t; advection_scheme = HermiteScheme())
+        sol = solve(discretize(periodic, disc); saveat = [0.05], abstol = 1.0e-11, reltol = 1.0e-11)
+        @test successful_retcode(sol)
+        maximum(abs, sol[u(t, x)][end, :] .- sin.(sol[x] .+ 0.05))
+    end
+    @test errs[1] > errs[2] > errs[3]
+    @test errs[3] < 1.0e-9
+end
+
+@testset "HermiteScheme() generated names avoid user variables" begin
+    @parameters t x
+    @variables u(..)
+    w = only(@variables $(Symbol("uˍx"))(..))
+    z = only(@variables $(Symbol("uˍt"))(..))
+    Dt, Dx = Differential(t), Differential(x)
+    T = 0.05
+    domains = [t ∈ Interval(0.0, T), x ∈ Interval(0.0, 1.0)]
+    walls(f) = [f(t, 0) ~ 0.0, f(t, 1) ~ 0.0]
+    heat(t, x) = exp(-π^2 * t) * sin(π * x)
+    disc() = MOLFiniteDifference([x => 1 / 16], t; advection_scheme = HermiteScheme())
+    function check(sys, fields)
+        partners = collect(values(used_scheme(sys, disc()).deriv_var))
+        declared = [operation(Symbolics.value(f)) for (f, _) in fields]
+        @test !any(p -> any(d -> isequal(p, d), declared), partners)
+        sol = solve(discretize(sys, disc()); saveat = [T], abstol = 1.0e-10, reltol = 1.0e-10)
+        @test successful_retcode(sol)
+        for (f, g) in fields
+            @test maximum(abs, sol[f][end, :] .- g.(T, sol[x])) < 1.0e-5
+        end
+    end
+    @named partner = PDESystem(
+        [Dt(u(t, x)) ~ Dx(Dx(u(t, x))), Dt(w(t, x)) ~ Dx(Dx(w(t, x)))],
+        [u(0, x) ~ sin(π * x); w(0, x) ~ 2 * sin(π * x); walls(u); walls(w)], domains, [t, x], [u(t, x), w(t, x)]
+    )
+    check(partner, [(u(t, x), heat), (w(t, x), (t, x) -> 2 * heat(t, x))])
+    @named velocity = PDESystem(
+        [Dt(Dt(u(t, x))) ~ Dx(Dx(u(t, x))) / π^2 - 2 * Dt(u(t, x)), Dt(z(t, x)) ~ Dx(Dx(z(t, x)))],
+        [u(0, x) ~ sin(π * x); Dt(u(0, x)) ~ -sin(π * x); z(0, x) ~ sin(π * x); walls(u); walls(z)],
+        domains, [t, x], [u(t, x), z(t, x)]
+    )
+    check(velocity, [(u(t, x), (t, x) -> exp(-t) * sin(π * x)), (z(t, x), heat)])
 end

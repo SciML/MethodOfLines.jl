@@ -11,14 +11,14 @@ differences:
 
 With ``m`` points this has order ``2m - d``, about twice the order of the ordinary stencil on
 the same points. The first derivative is carried as an extra unknown, the derivative
-partner ``v = u_x`` (named `uˍx` in the code), with its own evolution equation.
+partner ``v = u_x`` (typically named `uˍx` in the code), with its own evolution equation.
 `HermiteScheme()` adds the partners and their equations, initial and boundary conditions to
 the system before it is discretized, so the PDE is written as usual.
 
 The plots on this page use this style:
 
 ```julia
-using Plots, LaTeXStrings
+using Plots
 plot_font = "Computer Modern"
 default(fontfamily = plot_font, margin = 5Plots.mm, dpi = 300, linewidth = 3,
     framestyle = :box, label = nothing, color = "blue", grid = false,
@@ -64,15 +64,15 @@ partner ``u_x`` are algebraic equations. The solutions and their pointwise error
 
 ```julia
 xs = sol_her[x]
-p1 = plot(xs, u_exact.(xs, T); color = :black, label = "exact", xlabel = L"x",
-    ylabel = L"u(x, T)", legend = :outerright)
+p1 = plot(xs, u_exact.(xs, T); color = :black, label = "exact", xlabel = "x",
+    ylabel = "u(x, T)", legend = :outerright)
 scatter!(p1, sol_mol[x], sol_mol[u(t, x)][end, :]; color = :orange, marker = :square, msw = 0,
     label = "MOL default")
 scatter!(p1, xs, sol_her[u(t, x)][end, :]; color = :blue, marker = :circle, msw = 0,
     label = "HermiteScheme")
 p2 = plot(xs, abs.(sol_mol[u(t, x)][end, :] .- u_exact.(xs, T)); yscale = :log10,
     color = :orange, linestyle = :dash, marker = :square, msw = 0, label = "MOL default",
-    xlabel = L"x", ylabel = L"|u - u^*|", legend = :outerright)
+    xlabel = "x", ylabel = "|u - u*|", legend = :outerright)
 plot!(p2, xs, abs.(sol_her[u(t, x)][end, :] .- u_exact.(xs, T)); color = :blue,
     marker = :circle, msw = 0, label = "HermiteScheme")
 plot(p1, p2; layout = (2, 1), size = (900, 900))
@@ -97,6 +97,9 @@ For the heat equation ``u_t = u_{xx}`` the partner equation is ``v_t = u_{xxx}``
 points. In ``n`` dimensions each variable gets one partner per direction, e.g. ``u_x`` and
 ``u_y`` in 2D. Each dependent variable needs exactly one equation that contains its first
 time derivative ``u_t``, and ``u_t`` must appear linearly in it.
+
+The names `uˍx` and `uˍt` (below) are the typical ones. If the system already has a variable or
+parameter with that name, the generated variable gets a suffix, such as `uˍx_1`.
 
 ### Second time derivatives
 
@@ -241,7 +244,7 @@ window = (-10.0, T + 10.0)         # a fixed window, so that the pulse travels a
 inside = findall(window[1] .<= xs .<= window[2])
 anim = @animate for (k, tk) in enumerate(ts)
     plot(xs[inside], u_exact.(xs[inside], tk); color = :black, linewidth = 6, label = "exact",
-        xlims = window, ylims = (-0.2, 1.1), xlabel = L"x", ylabel = L"u",
+        xlims = window, ylims = (-0.2, 1.1), xlabel = "x", ylabel = "u",
         title = "t = $(round(tk; digits = 1))", legend = :outerright, size = (1000, 400), dpi = 100)
     plot!(xs[inside], sm[u(t, x)][k, inside]; color = :orange, linestyle = :dash, label = "MOL default")
     plot!(xs[inside], sh[u(t, x)][k, inside]; color = :blue, linewidth = 2, label = "HermiteScheme")
@@ -277,7 +280,7 @@ println("t = $T:  MOL default ", err(sm), "   HermiteScheme ", err(sh))
 
 anim = @animate for (k, tk) in enumerate(ts)
     plot(xf, u_exact.(xf, tk); color = :black, label = "exact", ylims = (-1.6, 1.6),
-        xlabel = L"x", ylabel = L"u", title = "t = $(round(tk; digits = 1))",
+        xlabel = "x", ylabel = "u", title = "t = $(round(tk; digits = 1))",
         legend = :outerright, size = (900, 450), dpi = 100)
     scatter!(xs, sm[u(t, x)][k, :]; color = :orange, marker = :square, msw = 0, label = "MOL default")
     scatter!(xs, sh[u(t, x)][k, :]; color = :blue, marker = :circle, msw = 0, label = "HermiteScheme")
@@ -323,8 +326,8 @@ function logerror(s, k)
 end
 anim = @animate for k in eachindex(ts)
     surf = (zlims = (-1.1, 1.1), clims = (-1, 1), camera = (40, 30), colorbar = false,
-        color = :viridis, xlabel = L"x", ylabel = L"y")
-    errs = (clims = (-9, -2), color = :viridis, xlabel = L"x", ylabel = L"y")
+        color = :viridis, xlabel = "x", ylabel = "y")
+    errs = (clims = (-9, -2), color = :viridis, xlabel = "x", ylabel = "y")
     plot(surface(xs, ys, exact(k); title = "exact", surf...),
         surface(xs, ys, field(sm, k); title = "MOL default", surf...),
         surface(xs, ys, field(sh, k); title = "HermiteScheme", surf...),
@@ -383,7 +386,7 @@ println("t = $t_max:  MOL default ", err(sol_mol), "   HermiteScheme ", err(sol_
 
 anim = @animate for k in eachindex(ts)
     opts = (camera = (55, 30), zlims = (-0.1, 1.2), clims = (0, 1), colorbar = false,
-        color = :viridis, xlabel = L"x", ylabel = L"y", zlabel = L"u")
+        color = :viridis, xlabel = "x", ylabel = "y", zlabel = "u")
     plot(surface(xs, ys, exact(ts[k]); title = "exact", opts...),
         surface(xs, ys, field(sol_mol, k); title = "MOL default", opts...),
         surface(xs, ys, field(sol_her, k); title = "HermiteScheme", opts...);
@@ -474,6 +477,10 @@ These throw an `ArgumentError`:
   - an automatic `HermiteScheme()` for a PDE with a spatial derivative of a dependent
     variable of fourth or higher order after symbolic expansion, such as
     `Dx((1 + x) * Dx(Dx(Dx(u))))`;
+  - an automatic `HermiteScheme()` for a PDE with a third spatial derivative of a variable in
+    a direction in which that variable is not periodic, such as `Dt(u) ~ -Dx(Dx(Dx(u)))` with
+    walls in `x`: the Hermite closure of a third derivative at a wall is unstable. This
+    applies to the PDE as written, not to the partners' equations such as ``v_t = u_{xxx}``;
   - Dirichlet conditions that are not linear in ``u``, such as `u(t, 0)^2 ~ 1`;
   - a Dirichlet wall of ``u`` whose evolution equation has a second or higher derivative of
     another variable that is periodic in that direction;

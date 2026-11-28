@@ -63,6 +63,8 @@ function generate_bc_eqs!(
 end
 
 function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivweights)
+    hermite = derivweights isa DifferentialDiscretizer &&
+        derivweights.advection_scheme isa HermiteScheme
     return mapreduce(vcat, values(boundarymap)) do boundaries
         map(mapreduce(x -> boundaries[x], vcat, s.x̄)) do b
             # No interface values in equations
@@ -73,10 +75,12 @@ function generate_boundary_val_funcs(s, depvars, boundarymap, indexmap, derivwei
                     x -> haskey(indexmap, x),
                     filter(x -> !(unwrap_const(safe_unwrap(x)) isa Number), b.indvars)
                 )
-                II -> vcat(
-                    boundary_value_maps(II, s, b, derivweights, indexmap),
-                    hermite_boundary_derivative_rules(derivweights, s, b, II, indexmap, boundarymap)
-                )
+                hermite ? (
+                        II -> vcat(
+                            boundary_value_maps(II, s, b, derivweights, indexmap),
+                            hermite_boundary_derivative_rules(derivweights, s, b, II, indexmap, boundarymap)
+                        )
+                    ) : (II -> boundary_value_maps(II, s, b, derivweights, indexmap))
             else
                 II -> []
             end

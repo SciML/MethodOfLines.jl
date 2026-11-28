@@ -319,6 +319,23 @@ function _hermite_wall_partner_condition(uop, t, x, xval, upper, v_at_boundary, 
     return nothing
 end
 
+function _hermite_fresh_variable(var, v)
+    taken = Set{Symbol}(nameof(o) for o in v.depvar_ops)
+    union!(taken, nameof(Symbolics.unwrap(y)) for y in all_ivs(v))
+    for p in v.ps
+        q = Symbolics.unwrap(p isa Pair ? first(p) : p)
+        push!(taken, nameof(iscall(q) ? operation(q) : q))
+    end
+    op = operation(var)
+    nameof(op) in taken || return var
+    k = 1
+    while Symbol(nameof(op), :_, k) in taken
+        k += 1
+    end
+    fresh = Symbolics.unwrap(Symbolics.variable(Symbol(nameof(op), :_, k); T = SymbolicUtils.symtype(op)))
+    return fresh(arguments(var)...)
+end
+
 function _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
     t = v.time
     Dt = Differential(t)
@@ -350,7 +367,7 @@ function _hermite_reduce_second_order_in_time!(eqs, bcs, boundarymap, v)
             ArgumentError("HermiteScheme could not solve $(ic1.eq) for $(Dt(ic1.u)).")
         )
 
-        newvar = diff2term(dt1)
+        newvar = _hermite_fresh_variable(diff2term(dt1), v)
         newop = operation(newvar)
         update_varmap!(v, newvar)
         subs_alleqs!(eqs, bcs, dt2 => Symbolics.value(Dt(newvar)))
@@ -512,7 +529,7 @@ Introduce the derivative partners of an automatic `HermiteScheme`: for each depe
 variable `u` and spatial variable `x`, a variable `uˍx` for `Dx(u)` with the evolution
 equation `Dt(uˍx) ~ Dx(R)` from `Dt(u) ~ R`, and initial and boundary conditions derived
 from `u`'s. `Dx(u)` is replaced by `uˍx` everywhere, and the mapping is recorded in
-`disc.advection_scheme.deriv_var`.
+`disc.advection_scheme.deriv_var`, a scheme of its own for each discretization call.
 """
 function hermite_transform!(eqs, bcs, boundarymap, v, disc)
     scheme = disc.advection_scheme
@@ -547,6 +564,15 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
                         "order $(maximum(orders)) in $x."
                 )
             )
+            for (te, info) in _hermite_dependent_terms!(Dict{Any, Any}(), evol_rhs[uop], x, original_depvar_ops)
+                (info === nothing || info[2] != 3) && continue
+                _hermite_self_periodic(get(boundarymap[info[1]], x, []), info[1]) || throw(
+                    ArgumentError(
+                        "HermiteScheme() supports third derivatives only along periodic axes; " *
+                            "$eq has $te and $(info[1]) is not periodic in $x."
+                    )
+                )
+            end
             !isempty(orders) && all(iseven, orders) && push!(scheme.diffusive, (uop, x))
         end
     end
@@ -562,7 +588,7 @@ function hermite_transform!(eqs, bcs, boundarymap, v, disc)
             Dx = Differential(x)
             dx_u = Dx(u_applied)
 
-            newvar = diff2term(Symbolics.value(dx_u))
+            newvar = _hermite_fresh_variable(diff2term(Symbolics.value(dx_u)), v)
             newop = operation(newvar)
 
             update_varmap!(v, newvar)

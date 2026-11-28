@@ -7,6 +7,11 @@ end
     return isequal(_hermite_operation(a), _hermite_operation(b))
 end
 
+_hermite_self_periodic(bs, u) = !isempty(bs) && all(bs) do b
+    b isa InterfaceBoundary && isequal(b.x, b.x2) && _same_hermite_variable(b.u, u) &&
+        _same_hermite_variable(b.u2, u)
+end
+
 @inline function _resolve_hermite_variable(v, s)
     haskey(s.discvars, v) && return v
     for candidate in keys(s.discvars)
@@ -50,11 +55,7 @@ end
     _, Itap = central_difference_weights_and_stencil(D, II, s, bs, jx, u)
 
     if any(I -> I isa RefCartesianIndex, Itap)
-        self_periodic = !isempty(bs) && all(bs) do b
-            isequal(b.x, b.x2) && _same_hermite_variable(b.u, u) &&
-                _same_hermite_variable(b.u2, u)
-        end
-        self_periodic || throw(
+        _hermite_self_periodic(bs, u) || throw(
             ArgumentError(
                 "HermiteScheme does not yet support cross-variable interface stencils."
             )
@@ -471,10 +472,12 @@ const _fused_operations = (+, -, *, /)
     FusedStencil{N, S, K, C}
 
 One elementwise expression tree over a box of size `S`, evaluated by a compiled loop
-(`kernel`) instead of nested broadcasts over slice copies. The loop applies the same
-operations in the same order to the constants as given, and takes its element type from
-the value at the first point, so the values and the element type are those of the
-broadcasts. The node list is kept for scalarization.
+(`kernel`) instead of nested broadcasts over slice copies. The loop applies the
+broadcasts' operations in the same order to the constants as given and stores into an array
+of the first point's type. If a later point has another type, the tree is evaluated again
+point by point and collected with `map`, which widens the element type as broadcast does.
+So the values and the element type are those of the broadcasts. The node list is kept for
+scalarization.
 """
 struct FusedStencil{N, S, K, C} <: Function
     kind::Vector{Symbol}
@@ -521,11 +524,15 @@ function _fused_loop_expr(b, N, S, nargs)
         end
         push!(stmts, :($(v(n)) = $rhs))
     end
+    vout = v(length(b.kind))
     first_point = Expr(
         :block, [:($(is[d]) = 1) for d in 1:N]..., stmts...,
-        :(out = Array{typeof($(v(length(b.kind)))), $N}(undef, $S))
+        :(out = Array{typeof($vout), $N}(undef, $S))
     )
-    inner = Expr(:block, stmts..., :(out[$(is...)] = $(v(length(b.kind)))))
+    inner = Expr(
+        :block, stmts..., :($vout isa eltype(out) || return nothing),
+        :(out[$(is...)] = $vout)
+    )
     loop = inner
     for d in 1:N
         loop = :(
@@ -544,8 +551,8 @@ function _fused_loop_expr(b, N, S, nargs)
 end
 
 function (op::FusedStencil{N, S})(As::Vararg{Any, K}) where {N, S, K}
-    all(a -> isconcretetype(eltype(a)), (As..., op.constant_arrays...)) &&
-        return op.kernel(op.constant_arrays, As...)
+    out = op.kernel(op.constant_arrays, As...)
+    out === nothing || return out
     return map(I -> _fused_node_symbolic(op, As, length(op.kind), I), CartesianIndices(S))
 end
 

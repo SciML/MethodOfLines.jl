@@ -152,13 +152,18 @@ IMA Journal of Numerical Analysis 41 (2021), 801–813,
 [doi:10.1093/imanum/draa006](https://doi.org/10.1093/imanum/draa006).
 """
 struct HermiteScheme{D} <: AbstractScheme
-    """Map from `u` (one spatial dimension) or `(u, x)` to the derivative partner `Dx(u)`."""
+    """
+    Map from `u` (one spatial dimension) or `(u, x)` to the derivative partner `Dx(u)`. For
+    `HermiteScheme()`, the transformation fills it in the copy of the scheme that each
+    discretization call makes, so the user's scheme stays empty.
+    """
     deriv_var::D
     """Whether the partners are added by transforming the system (`HermiteScheme()`)."""
     automatic::Bool
     """
-    `(u, x)` pairs whose PDE has only even-order derivatives in `x`, set by the
-    transformation; their stencils near `x` boundaries are wider.
+    `(u, x)` pairs whose PDE has only even-order derivatives in `x`; their stencils near `x`
+    boundaries are wider. Filled by the transformation, like `deriv_var`, in each
+    discretization call's copy of the scheme.
     """
     diffusive::Set{Any}
 end
